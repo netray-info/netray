@@ -1,16 +1,18 @@
 {% macro check_row(view) %}
 <article class="check-row" data-tone="{{ view.tone.as_str() }}">
-  <header class="check-row__head">
-    <span class="check-row__code">{{ view.code }}</span>
-    <span class="check-row__tone">{{ view.tone.as_str() }}</span>
-    <h3 class="check-row__title">{{ view.title }}</h3>
-    {% if let Some(since) = view.since %}<span class="check-row__since">{{ since }}</span>{% endif %}
-  </header>
-  <p class="check-row__body">{{ view.body }}</p>
-  {% if let Some(fix) = view.fix %}<p class="check-row__fix"><span class="check-row__fix-label">Fix:</span> {{ fix }}</p>{% endif %}
-  <p class="check-row__links">
-    {% if let Some(href) = view.evidence_href %}<a class="check-row__link" href="{{ href }}">Evidence</a>{% endif %}
-    {% if let Some(href) = view.guide_href %}<a class="check-row__link" href="{{ href }}">Guide</a>{% endif %}
-  </p>
+  <div class="check-row__side">
+    <span class="check-row__bar" data-tone="{{ view.tone.as_str() }}"></span>
+    <span class="check-row__sev">{{ view.tone.as_str() }}</span>
+    <span class="check-row__code">{% if let Some(line) = view.line %}{{ line }}{% else %}{{ view.code }}{% endif %}</span>
+  </div>
+  <div class="check-row__main" data-check="{{ view.code }}">
+    <div class="check-row__head">
+      <h3 class="check-row__title">{{ view.title }}</h3>
+      {% if let Some(since) = view.since %}<span class="check-row__since">{{ since }}</span>{% endif %}
+    </div>
+    <p class="check-row__body">{{ view.body }}</p>
+    {% if let Some(fix) = view.fix %}<p class="check-row__fix"><span class="check-row__fix-label">Fix:</span> {{ fix }}</p>{% endif %}
+    {% if view.meta.is_some() || view.evidence_href.is_some() || view.guide_href.is_some() %}<p class="check-row__meta">{% if let Some(meta) = view.meta %}<span>{{ meta }}</span>{% endif %}{% if let Some(href) = view.evidence_href %}<a class="check-row__link" href="{{ href }}">evidence →</a>{% endif %}{% if let Some(href) = view.guide_href %}<a class="check-row__link" href="{{ href }}">guide →</a>{% endif %}</p>{% endif %}
+  </div>
 </article>
 {% endmacro %}

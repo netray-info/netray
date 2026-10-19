@@ -88,7 +88,11 @@ async fn page(failing: &[&str]) -> String {
     }
     let app: Router = router(ResultState::new(store, Arc::new(StubRuns), 300));
     let resp = app
-        .oneshot(Request::get(format!("/{DOMAIN}")).body(Body::empty()).unwrap())
+        .oneshot(
+            Request::get(format!("/{DOMAIN}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     let bytes = resp.into_body().collect().await.unwrap().to_bytes();
@@ -179,7 +183,10 @@ fn r31_check_row_css_follows_the_board() {
     assert!(css_rules(".check-row__bar").contains("height: 34px"));
     let sev = css_rules(".check-row__sev");
     assert!(sev.contains("text-transform: uppercase"), "{sev}");
-    assert!(sev.contains("font-weight: var(--font-weight-bold)"), "{sev}");
+    assert!(
+        sev.contains("font-weight: var(--font-weight-bold)"),
+        "{sev}"
+    );
     assert!(css_rules(".check-row__code").contains("var(--color-muted)"));
     let body = css_rules(".check-row__body");
     assert!(body.contains("font-size: var(--font-size-text)"), "{body}");
@@ -204,11 +211,17 @@ async fn r30_issue_groups_are_cards_with_label_and_line_count() {
     );
 
     let card = css_rules(".issue-group");
-    assert!(card.contains("border: var(--line-hair) solid var(--color-line)"), "{card}");
+    assert!(
+        card.contains("border: var(--line-hair) solid var(--color-line)"),
+        "{card}"
+    );
     assert!(card.contains("border-radius: var(--radius-max)"), "{card}");
     assert!(card.contains("background: var(--color-surface)"), "{card}");
     let label = css_rules(".issue-group__label");
-    assert!(label.contains("font-size: var(--font-size-text)"), "{label}");
+    assert!(
+        label.contains("font-size: var(--font-size-text)"),
+        "{label}"
+    );
     assert!(css_rules(".issue-group__count").contains("font-size: var(--font-size-label)"));
 }
 

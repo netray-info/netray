@@ -1,6 +1,6 @@
 //! Result page evidence section (spec v2-result-page, Phase 2, requirement 14; criteria C6, C13):
-//! `GET /{domain}` holds one `evidence-<protocol>` element per protocol, linking the stored entry's
-//! protocol view and naming the section outcome, and renders no evidence block itself.
+//! `GET /{domain}` holds one `evidence-<protocol>` element per protocol, without a coverage line
+//! (v2-result-fidelity requirement 33), and renders no evidence block itself.
 use std::net::IpAddr;
 use std::sync::Arc;
 
@@ -122,7 +122,7 @@ fn element<'a>(body: &'a str, protocol: &str) -> &'a str {
 }
 
 #[tokio::test]
-async fn c6_evidence_section_has_one_linked_element_per_protocol() {
+async fn c6_evidence_section_has_one_bare_element_per_protocol() {
     let (app, id, _dir) = app_with_entry().await;
 
     let (status, body) = get(&app, "/example.com").await;
@@ -131,30 +131,21 @@ async fn c6_evidence_section_has_one_linked_element_per_protocol() {
     for protocol in ["dns", "tls", "http", "email", "ip"] {
         let el = element(&body, protocol);
         let href = format!("href=\"/r/{id}/{protocol}\"");
-        assert!(el.contains(&href), "{protocol} lacks {href}: {el}");
+        assert!(!el.contains(&href), "{protocol} still links {href}: {el}");
+        assert!(
+            !el.contains(REASON),
+            "{protocol} names a section reason: {el}"
+        );
     }
-    assert!(
-        element(&body, "email").contains(REASON),
-        "email element lacks its reason: {}",
-        element(&body, "email")
-    );
-    assert!(
-        !element(&body, "dns").contains(REASON),
-        "dns element shows another section's reason"
-    );
 }
 
 #[tokio::test]
 async fn c13_page_renders_no_evidence_block_markup() {
-    let (app, id, _dir) = app_with_entry().await;
+    let (app, _id, _dir) = app_with_entry().await;
 
     let (status, body) = get(&app, "/example.com").await;
 
     assert_eq!(status, StatusCode::OK);
-    assert!(
-        body.contains(&format!("href=\"/r/{id}/tls\"")),
-        "tls link missing: {body}"
-    );
     assert!(!body.contains("evidence-block"), "block markup in: {body}");
     assert!(!body.contains(BLOCK_TITLE), "block title in: {body}");
 }

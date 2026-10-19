@@ -502,11 +502,15 @@ pub struct TraceView {
 #[derive(Debug, Clone)]
 pub struct CheckRowView {
     pub code: String,
+    /// The line code shown in the side column ("HTTP\u{b7}21"); `code` shows when it is `None`.
+    pub line: Option<String>,
     pub tone: Tone,
     pub title: String,
     pub since: Option<String>,
     pub body: String,
     pub fix: Option<String>,
+    /// The meta line's text, "<Protocol> \u{b7} <source>".
+    pub meta: Option<String>,
     pub evidence_href: Option<String>,
     pub guide_href: Option<String>,
 }

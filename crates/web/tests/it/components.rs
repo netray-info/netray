@@ -249,11 +249,13 @@ fn trace_renders_rows_cells_and_single_current_marker() {
 fn check_row_renders_values_links_and_escapes() {
     let full = CheckRowView {
         code: "HTML-042".into(),
+        line: None,
         tone: Tone::Fix,
         title: "Missing <b> & tag".into(),
         since: Some("since v0.9".into()),
         body: "The page lacks a canonical link.".into(),
         fix: Some("Add a canonical link element.".into()),
+        meta: None,
         evidence_href: Some("/check/example.com#ev-1".into()),
         guide_href: Some("https://netray.info/guide/html-042".into()),
     };

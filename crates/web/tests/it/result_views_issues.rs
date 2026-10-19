@@ -81,23 +81,23 @@ fn issues_by_owner_hold_each_warn_and_fail_once_with_catalogue_texts() {
     let groups = build();
 
     let keys: Vec<&str> = groups.iter().map(|g| g.key.as_str()).collect();
-    assert_eq!(keys, ["dns_provider", "certificate_provider", "web_server"]);
+    assert_eq!(keys, ["certificate_provider", "dns_provider", "web_server"]);
     let labels: Vec<&str> = groups.iter().map(|g| g.label.as_str()).collect();
     assert_eq!(
         labels,
         [
-            "your DNS provider",
-            "your certificate provider",
-            "your web server configuration"
+            "Your certificate provider",
+            "Your DNS provider",
+            "Your web server configuration"
         ]
     );
 
     let rows: Vec<_> = groups.iter().flat_map(|g| g.rows.iter()).collect();
     let codes: Vec<&str> = rows.iter().map(|r| r.view.code.as_str()).collect();
-    assert_eq!(codes, ["dns.dnssec", "tls.hostname_match", "http.hsts"]);
+    assert_eq!(codes, ["tls.hostname_match", "dns.dnssec", "http.hsts"]);
 
     // dns.dnssec: warn without findings -> catalogue finding
-    let dnssec = rows[0];
+    let dnssec = rows[1];
     assert!(matches!(dnssec.view.tone, Tone::Warn));
     assert_eq!(dnssec.view.title, "DNSSEC signed");
     assert_eq!(
@@ -121,7 +121,7 @@ fn issues_by_owner_hold_each_warn_and_fail_once_with_catalogue_texts() {
     );
 
     // tls.hostname_match: the fail, stored findings as body
-    let host = rows[1];
+    let host = rows[0];
     assert!(matches!(host.view.tone, Tone::Fail));
     assert_eq!(host.view.title, "Hostname match");
     assert_eq!(host.view.body, "netray.info is not covered");

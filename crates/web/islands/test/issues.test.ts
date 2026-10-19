@@ -78,9 +78,9 @@ describe("issues island (requirement 10)", () => {
     const rows = ["4", "44", "11", "32", "53"].map(rowOf);
 
     option("protocol").click();
-    expect(keys()).toEqual(["dns", "tls", "http", "email", "ip"]);
+    expect(keys()).toEqual(["tls", "ip", "email", "http", "dns"]);
     expect(groups().map((g) => g.querySelector("h3")?.textContent?.trim())).toEqual([
-      "DNS", "TLS", "HTTP", "email", "IP",
+      "TLS", "IP", "Email", "HTTP", "DNS",
     ]);
     expect(rowOf("4")).toBe(rows[0]);
     expect(rowOf("53")).toBe(rows[4]);
@@ -97,18 +97,18 @@ describe("issues island (requirement 10)", () => {
     expect(rowOf("44")).toBe(rows[1]);
 
     option("owner").click();
-    expect(keys()).toEqual(["dns_provider", "web_server", "hosting"]);
+    expect(keys()).toEqual(["web_server", "hosting", "dns_provider"]);
     expect(groups().map((g) => g.querySelector("h3")?.textContent?.trim())).toEqual([
-      "your DNS provider", "your web server configuration", "your hosting provider",
+      "Your web server configuration", "Your hosting provider", "Your DNS provider",
     ]);
-    expect(groups().map(orders)).toEqual([["44", "4"], ["11", "32"], ["53"]]);
+    expect(groups().map(orders)).toEqual([["11", "32"], ["53"], ["44", "4"]]);
     expect(pressed()).toEqual(["owner=true", "severity=false", "protocol=false"]);
     expect(rowOf("11")).toBe(rows[2]);
   });
 
   it("severity regroups without a request, is stored, and applies after a reload", () => {
     mount();
-    expect(keys()).toEqual(["dns_provider", "web_server", "hosting"]);
+    expect(keys()).toEqual(["web_server", "hosting", "dns_provider"]);
     option("severity").click();
     expect(keys()).toEqual(["critical", "high", "medium"]);
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -125,7 +125,7 @@ describe("issues island (requirement 10)", () => {
     useStorage(throwingStorage());
 
     expect(() => mount()).not.toThrow();
-    expect(keys()).toEqual(["dns_provider", "web_server", "hosting"]);
+    expect(keys()).toEqual(["web_server", "hosting", "dns_provider"]);
     expect(() => option("severity").click()).not.toThrow();
     expect(fetchSpy).not.toHaveBeenCalled();
   });

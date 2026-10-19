@@ -62,7 +62,7 @@ fn run(i: usize) -> Run {
                 reason: None,
             },
         ],
-        checks: ["dns.dnssec_valid", "tls.chain_trusted"]
+        checks: ["dns.dnssec", "tls.chain_trusted"]
             .iter()
             .map(|id| RunCheck {
                 id: CheckId::parse(id).unwrap(),

@@ -15,11 +15,13 @@ const COUNTS: &str = "1 pass · 0 warn · 2 fail · 0 not applicable · 0 not te
 fn row(code: &str, title: &str, tone: Tone) -> CheckRowView {
     CheckRowView {
         code: code.into(),
+        line: None,
         tone,
         title: title.into(),
         since: None,
         body: "body".into(),
         fix: None,
+        meta: None,
         evidence_href: None,
         guide_href: None,
     }

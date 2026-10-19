@@ -12,6 +12,7 @@ use crate::components::{
     TreeItem,
 };
 use crate::entries::view::{epoch_days_to_ymd, status_tone};
+use crate::pages::result::views::{line_code, meta_text};
 
 /// The display text of a value: text and time verbatim, a duration in milliseconds.
 pub fn format_value(value: &Value) -> String {
@@ -251,11 +252,13 @@ fn build_section(
         rows.push(EvidenceRow {
             check: CheckRowView {
                 code: spec.short.clone(),
+                line: line_code(&spec.id),
                 tone: status_tone(status),
                 title: spec.title.clone(),
                 since: None,
                 body,
                 fix: flagged.then(|| spec.fix_hint.clone()),
+                meta: Some(meta_text(spec)),
                 evidence_href: None,
                 guide_href: Some(spec.guide.clone()),
             },

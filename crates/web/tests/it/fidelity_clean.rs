@@ -96,7 +96,11 @@ async fn render() -> String {
         .unwrap();
     let app: Router = router(ResultState::new(store, Arc::new(StubRuns), 300));
     let resp = app
-        .oneshot(Request::get(format!("/{DOMAIN}")).body(Body::empty()).unwrap())
+        .oneshot(
+            Request::get(format!("/{DOMAIN}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
@@ -123,7 +127,11 @@ async fn c6_c14_passed_section_is_a_clean_bar_over_the_35_rows() {
             r#"</span><span class="clean-bar__show">show</span>"#
         )
     );
-    assert_eq!(details.matches(r#"class="check-row""#).count(), 35, "{details}");
+    assert_eq!(
+        details.matches(r#"class="check-row""#).count(),
+        35,
+        "{details}"
+    );
 }
 
 #[tokio::test]

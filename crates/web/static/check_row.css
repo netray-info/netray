@@ -1,9 +1,11 @@
 .check-row {
   --check-row-mark: var(--color-muted);
   --check-row-text: var(--color-muted);
-  padding: var(--space-3) var(--space-4);
-  border-inline-start: var(--line-hair) solid var(--color-line);
-  border-inline-start-color: var(--check-row-mark);
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: var(--space-4);
+  padding: 14px var(--space-4);
+  border-top: var(--line-hair) solid var(--color-line);
   background: var(--color-surface);
 }
 .check-row[data-tone="pass"] { --check-row-mark: var(--status-pass-mark); --check-row-text: var(--status-pass-text); }
@@ -11,28 +13,51 @@
 .check-row[data-tone="fail"] { --check-row-mark: var(--status-fail-mark); --check-row-text: var(--status-fail-text); }
 .check-row[data-tone="fix"] { --check-row-mark: var(--status-fix-mark); --check-row-text: var(--status-fix-text); }
 .check-row[data-tone="untested"] { --check-row-mark: var(--status-untested-mark); --check-row-text: var(--status-untested-text); }
-.check-row[data-tone="pass"] { border-inline-start-width: var(--line-pass); }
-.check-row[data-tone="warn"] { border-inline-start-width: var(--line-warn); }
-.check-row[data-tone="fail"] { border-inline-start-width: var(--line-fail); }
-.check-row[data-tone="fix"] { border-inline-start-width: var(--line-fix); }
-.check-row__head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
+.check-row__side {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-content: start;
+  align-items: start;
+  column-gap: 10px;
+  row-gap: 2px;
+}
+.check-row__side > :not(.check-row__bar) {
+  grid-column: 2;
+}
+.check-row__bar {
+  grid-row: 1 / 3;
+  display: block;
+  width: var(--line-hair);
+  height: 34px;
+  background: var(--check-row-mark);
+}
+.check-row__bar[data-tone="pass"] { width: var(--line-pass); }
+.check-row__bar[data-tone="warn"] { width: var(--line-warn); }
+.check-row__bar[data-tone="fail"] { width: var(--line-fail); }
+.check-row__bar[data-tone="fix"] { width: var(--line-fix); }
+.check-row__sev {
+  color: var(--check-row-text);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
 }
 .check-row__code {
-  color: var(--check-row-text);
+  color: var(--color-muted);
   font-family: var(--font-mono);
-  font-size: var(--font-size-label);
-  letter-spacing: var(--font-tracking-caps);
-  text-transform: uppercase;
+  font-size: var(--font-size-caption);
 }
-.check-row__tone {
-  color: var(--check-row-text);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-label);
-  letter-spacing: var(--font-tracking-caps);
-  text-transform: uppercase;
+.check-row__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.check-row__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
 }
 .check-row__title {
   margin: 0;
@@ -40,19 +65,34 @@
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-strong);
 }
-.check-row__since,
-.check-row__links {
+.check-row__since {
   color: var(--color-muted);
-  font-size: var(--font-size-small);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
 }
 .check-row__body,
 .check-row__fix,
-.check-row__links {
-  margin: var(--space-2) 0 0;
+.check-row__meta {
+  margin: 0;
 }
-.check-row__body { color: var(--color-ink); }
-.check-row__fix-label {
+.check-row__body {
+  color: var(--color-muted);
+  font-size: var(--font-size-text);
+}
+.check-row__fix {
   color: var(--color-ink);
-  font-weight: var(--font-weight-strong);
+  font-size: var(--font-size-text);
 }
-.check-row__link { margin-inline-end: var(--space-3); color: var(--color-ink); }
+.check-row__fix-label { font-weight: var(--font-weight-strong); }
+.check-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+}
+.check-row__link {
+  color: var(--color-muted);
+  text-decoration: underline;
+}

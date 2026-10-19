@@ -147,8 +147,8 @@ async fn the_page_reads_since_from_the_stored_entries() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = String::from_utf8_lossy(&resp.into_body().collect().await.unwrap().to_bytes())
-        .into_owned();
+    let body =
+        String::from_utf8_lossy(&resp.into_body().collect().await.unwrap().to_bytes()).into_owned();
     let row = body
         .split(r#"<article class="check-row""#)
         .skip(1)

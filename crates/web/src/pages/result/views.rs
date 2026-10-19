@@ -56,15 +56,6 @@ pub struct IssueGroup {
     pub rows: Vec<IssueRow>,
 }
 
-const OWNERS: [FixOwner; 6] = [
-    FixOwner::DnsProvider,
-    FixOwner::Registrar,
-    FixOwner::CertificateProvider,
-    FixOwner::WebServer,
-    FixOwner::MailProvider,
-    FixOwner::Hosting,
-];
-
 const SEVERITIES: [Severity; 4] = [
     Severity::Critical,
     Severity::High,
@@ -93,12 +84,12 @@ fn owner_word(owner: FixOwner) -> &'static str {
 
 fn owner_label(owner: FixOwner) -> &'static str {
     match owner {
-        FixOwner::DnsProvider => "your DNS provider",
-        FixOwner::Registrar => "your registrar",
-        FixOwner::CertificateProvider => "your certificate provider",
-        FixOwner::WebServer => "your web server configuration",
-        FixOwner::MailProvider => "your mail provider",
-        FixOwner::Hosting => "your hosting provider",
+        FixOwner::DnsProvider => "Your DNS provider",
+        FixOwner::Registrar => "Your registrar",
+        FixOwner::CertificateProvider => "Your certificate provider",
+        FixOwner::WebServer => "Your web server configuration",
+        FixOwner::MailProvider => "Your mail provider",
+        FixOwner::Hosting => "Your hosting provider",
     }
 }
 
@@ -123,7 +114,7 @@ fn protocol_label(protocol: Protocol) -> &'static str {
         Protocol::Dns => "DNS",
         Protocol::Tls => "TLS",
         Protocol::Http => "HTTP",
-        Protocol::Email => "email",
+        Protocol::Email => "Email",
         Protocol::Ip => "IP",
     }
 }
@@ -155,11 +146,6 @@ fn is_open(status: Status) -> bool {
     matches!(status, Status::Warn | Status::Fail)
 }
 
-/// The number of warn and fail checks of `run`.
-pub fn open_count(run: &Run) -> usize {
-    run.checks.iter().filter(|c| is_open(c.status)).count()
-}
-
 fn index_of(catalogue: &Catalogue, id: &CheckId) -> Option<usize> {
     catalogue.entries().iter().position(|s| &s.id == id)
 }
@@ -179,11 +165,13 @@ fn issue_row(
     IssueRow {
         view: CheckRowView {
             code: check.id.to_string(),
+            line: line_code(&check.id),
             tone: status_tone(Some(check.status)),
             title: spec.title.clone(),
             since: since.get(&check.id).cloned(),
             body,
             fix: Some(spec.fix_hint.clone()),
+            meta: Some(meta_text(spec)),
             evidence_href: Some(evidence_href(check, links)),
             guide_href: Some(spec.guide.clone()),
         },
@@ -200,9 +188,9 @@ fn issue_row(
     }
 }
 
-/// Every warn and fail check of `run` that the catalogue knows, once, grouped. Groups run in
-/// a fixed order and empty ones are left out; inside a group rows run by severity, fail before
-/// warn, then catalogue order.
+/// Every warn and fail check of `run` that the catalogue knows, once, grouped. Rows run fail
+/// before warn, then by severity, then catalogue order, as the board lists them; groups run by
+/// their first row, so the group holding the worst line comes first.
 pub fn issues(
     run: &Run,
     catalogue: &Catalogue,
@@ -220,42 +208,41 @@ pub fn issues(
             Some((issue_row(c, spec, order, &links, since), spec.severity))
         })
         .collect();
-    rows.sort_by_key(|(r, severity)| (severity_rank(*severity), r.status == "warn", r.order));
+    rows.sort_by_key(|(r, severity)| (r.status == "warn", severity_rank(*severity), r.order));
 
-    let keyed: Vec<(String, String)> = match grouping {
-        Grouping::Owner => OWNERS
-            .iter()
-            .map(|o| (owner_word(*o).to_string(), owner_label(*o).to_string()))
-            .collect(),
-        Grouping::Severity => SEVERITIES
-            .iter()
-            .map(|s| (severity_word(*s).to_string(), severity_word(*s).to_string()))
-            .collect(),
-        Grouping::Protocol => PROTOCOLS
-            .iter()
-            .map(|p| (p.as_str().to_string(), protocol_label(*p).to_string()))
-            .collect(),
-    };
-    let key_of = |row: &IssueRow| match grouping {
-        Grouping::Owner => row.owner,
-        Grouping::Severity => row.severity,
-        Grouping::Protocol => row.protocol,
-    };
-    keyed
-        .into_iter()
-        .filter_map(|(key, label)| {
-            let group: Vec<IssueRow> = rows
-                .iter()
-                .filter(|(r, _)| key_of(r) == key)
-                .map(|(r, _)| r.clone())
-                .collect();
-            (!group.is_empty()).then_some(IssueGroup {
-                key,
-                label,
-                rows: group,
-            })
-        })
-        .collect()
+    let mut groups: Vec<IssueGroup> = Vec::new();
+    for (row, _) in rows {
+        let (key, label) = match grouping {
+            Grouping::Owner => (row.owner, row.owner_label),
+            Grouping::Severity => (row.severity, row.severity),
+            Grouping::Protocol => (
+                row.protocol,
+                PROTOCOLS
+                    .into_iter()
+                    .find(|p| p.as_str() == row.protocol)
+                    .map_or(row.protocol, protocol_label),
+            ),
+        };
+        match groups.iter_mut().find(|g| g.key == key) {
+            Some(group) => group.rows.push(row),
+            None => groups.push(IssueGroup {
+                key: key.to_string(),
+                label: label.to_string(),
+                rows: vec![row],
+            }),
+        }
+    }
+    groups
+}
+
+/// The number of checks the clean bar counts: those that pass or do not apply and that the
+/// catalogue still knows.
+pub fn clean_count(run: &Run, catalogue: &Catalogue) -> usize {
+    run.checks
+        .iter()
+        .filter(|c| matches!(c.status, Status::Pass | Status::NotApplicable))
+        .filter(|c| index_of(catalogue, &c.id).is_some())
+        .count()
 }
 
 /// Every check that is not an open issue: pass, not applicable, not tested, unmeasured, each in
@@ -287,6 +274,7 @@ pub fn passed_checks(run: &Run, catalogue: &Catalogue) -> Vec<CheckRowView> {
             (rank, spec_at.unwrap_or(pos)),
             CheckRowView {
                 code: check.id.to_string(),
+                line: line_code(&check.id),
                 tone: status_tone(Some(check.status)),
                 title: spec_at.map_or_else(
                     || check.id.to_string(),
@@ -295,6 +283,7 @@ pub fn passed_checks(run: &Run, catalogue: &Catalogue) -> Vec<CheckRowView> {
                 since: None,
                 body,
                 fix: None,
+                meta: spec_at.map(|i| meta_text(&catalogue.entries()[i])),
                 evidence_href: None,
                 guide_href: None,
             },
@@ -302,6 +291,11 @@ pub fn passed_checks(run: &Run, catalogue: &Catalogue) -> Vec<CheckRowView> {
     }
     rows.sort_by_key(|(key, _)| *key);
     rows.into_iter().map(|(_, row)| row).collect()
+}
+
+/// The meta line of an item: its protocol and the catalogue's source, "HTTP \u{b7} RFC 6797".
+pub fn meta_text(spec: &CheckSpec) -> String {
+    format!("{} \u{b7} {}", section_name(spec.protocol), spec.source)
 }
 
 /// A check's code: its protocol tag and its 1-based position in the spectrum's line order, two
@@ -662,23 +656,27 @@ pub fn history_sentences(points: &[(i64, &Run)]) -> Vec<(String, String)> {
         .collect()
 }
 
-/// The start of the current span, unless it covers every point.
-pub fn issue_since(points: &[(i64, Status)]) -> Option<String> {
-    let spans = spans(points);
-    match spans.as_slice() {
-        [] | [_] => None,
-        [.., (_, start, _, _)] => Some(month_day(*start)),
-    }
-}
-
-/// As `issue_since` over points where `None` marks a run that lacks the check, which counts as a
-/// state of its own.
-pub fn issue_since_present(points: &[(i64, Option<Status>)]) -> Option<String> {
-    let spans = spans(points);
-    match spans.as_slice() {
-        [] | [_] => None,
-        [.., (_, start, _, _)] => Some(month_day(*start)),
-    }
+/// What an open check's history says, from its statuses over the shown runs, oldest first
+/// (`None` marks a run without the check, which counts as not open) and the number of the first
+/// run. `None` when the check is not open in the latest run.
+pub fn since_text(statuses: &[Option<Status>], first_run_no: usize) -> Option<String> {
+    let now = (*statuses.last()?).filter(|s| is_open(*s))?;
+    let start = statuses
+        .iter()
+        .rposition(|s| *s != Some(now))
+        .map_or(0, |i| i + 1);
+    let run = first_run_no + start;
+    Some(match start.checked_sub(1).map(|i| statuses[i]) {
+        None if statuses.len() == 1 => "first run".to_string(),
+        None => format!("in all {} runs", statuses.len()),
+        Some(Some(Status::Fail)) if now == Status::Warn => {
+            format!("down from fail since run {run}")
+        }
+        Some(Some(Status::Warn)) if now == Status::Fail => {
+            format!("up from warn since run {run}")
+        }
+        Some(_) => format!("lit up in run {run}"),
+    })
 }
 
 /// The layout input of a stored run; `None` when its profile version is unknown.
@@ -881,21 +879,4 @@ pub fn refusal_line(refusal: &RunRefusal) -> (String, u64) {
         }
     };
     (lead, refusal.retry_after_s)
-}
-
-/// What a run says about one protocol's section: "measured", "not applicable: <reason>" or
-/// "incomplete: <reason>"; a section the run does not list counts as measured.
-pub fn section_outcome(run: &Run, protocol: Protocol) -> String {
-    let Some(section) = run.sections.iter().find(|s| s.protocol == protocol) else {
-        return "measured".to_string();
-    };
-    let word = match section.outcome {
-        SectionKind::Measured => return "measured".to_string(),
-        SectionKind::NotApplicable => "not applicable",
-        SectionKind::Incomplete | SectionKind::TimedOut => "incomplete",
-    };
-    match &section.reason {
-        Some(reason) => format!("{word}: {reason}"),
-        None => word.to_string(),
-    }
 }

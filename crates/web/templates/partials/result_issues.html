@@ -1,11 +1,13 @@
 {% import "components/grouping_switch.html" as grouping_switch %}
 {% import "components/check_row.html" as check_row %}
 <section id="issues" data-island="issues">
-{% if count > 0 %}<h2>{{ heading }}</h2>
-{% endif %}<div hidden>{% call grouping_switch::grouping_switch(switch) %}{% endcall %}</div>
-{% for group in groups %}
+{% if count > 0 %}<div class="section-head section-head--split">
+<h2>{{ heading }}</h2>
+<p class="attention-meta">{{ fails }} fail · {{ warns }} warn</p>
+{% call grouping_switch::grouping_switch(switch) %}{% endcall %}</div>
+{% endif %}{% for group in groups %}
 <section class="issue-group" data-group="{{ group.key }}">
-<h3>{{ group.label }}</h3>
+<header class="issue-group__head"><h3 class="issue-group__label">{{ group.label }}</h3><span class="issue-group__count">{% if group.rows.len() == 1 %}1 line{% else %}{{ group.rows.len() }} lines{% endif %}</span></header>
 {% for row in group.rows %}
 <div class="issue" data-owner="{{ row.owner }}" data-owner-label="{{ row.owner_label }}" data-severity="{{ row.severity }}" data-protocol="{{ row.protocol }}" data-status="{{ row.status }}" data-order="{{ row.order }}">
 {% call check_row::check_row(row.view) %}{% endcall %}

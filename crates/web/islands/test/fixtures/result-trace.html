@@ -1295,99 +1295,62 @@
 
 </section>
 <section id="issues" data-island="issues">
+<div class="section-head section-head--split">
 <h2>5 lines need attention</h2>
-<div hidden>
-<div class="grouping-switch" role="group" aria-label="Group issues by">
+<p class="attention-meta">5 fail · 0 warn</p>
+
+<div class="grouping-switch" role="group" aria-label="Group lines by">
   
-  <button type="button" class="grouping-switch__option marker" data-group="owner" aria-pressed="true">owner</button>
+  <button type="button" class="grouping-switch__option marker" data-group="owner" aria-pressed="true">Owner</button>
   
-  <button type="button" class="grouping-switch__option marker" data-group="severity" aria-pressed="false">severity</button>
+  <button type="button" class="grouping-switch__option marker" data-group="severity" aria-pressed="false">Severity</button>
   
-  <button type="button" class="grouping-switch__option marker" data-group="protocol" aria-pressed="false">protocol</button>
+  <button type="button" class="grouping-switch__option marker" data-group="protocol" aria-pressed="false">Protocol</button>
   
 </div>
 </div>
-
-<section class="issue-group" data-group="dns_provider">
-<h3>your DNS provider</h3>
-
-<div class="issue" data-owner="dns_provider" data-owner-label="your DNS provider" data-severity="medium" data-protocol="dns" data-status="fail" data-order="4">
-
-<article class="check-row" data-tone="fail">
-  <header class="check-row__head">
-    <span class="check-row__code">dns.ns</span>
-    <span class="check-row__tone">fail</span>
-    <h3 class="check-row__title">Nameserver redundancy</h3>
-    <span class="check-row__since">10-11</span>
-  </header>
-  <p class="check-row__body">The domain has fewer than two NS records.</p>
-  <p class="check-row__fix"><span class="check-row__fix-label">Fix:</span> Delegate the zone to at least two authoritative nameservers.</p>
-  <p class="check-row__links">
-    <a class="check-row__link" href="/r/ENTRY0/dns">Evidence</a>
-    <a class="check-row__link" href="/guide/record-types">Guide</a>
-  </p>
-</article>
-
-</div>
-
-<div class="issue" data-owner="dns_provider" data-owner-label="your DNS provider" data-severity="medium" data-protocol="email" data-status="fail" data-order="44">
-
-<article class="check-row" data-tone="fail">
-  <header class="check-row__head">
-    <span class="check-row__code">email.spf</span>
-    <span class="check-row__tone">fail</span>
-    <h3 class="check-row__title">SPF</h3>
-    <span class="check-row__since">10-11</span>
-  </header>
-  <p class="check-row__body">The domain&#39;s SPF record is missing or invalid, leaves out the addresses of MX hosts the domain operates itself, or lacks -all although the domain publishes a Null MX.</p>
-  <p class="check-row__fix"><span class="check-row__fix-label">Fix:</span> Publish one SPF record that lists every server sending mail for the domain, including its own MX hosts that also send, and ends in -all, or ~all where the domain does not publish a Null MX.</p>
-  <p class="check-row__links">
-    <a class="check-row__link" href="/r/ENTRY0/email">Evidence</a>
-    <a class="check-row__link" href="/guide/email-auth">Guide</a>
-  </p>
-</article>
-
-</div>
-
-</section>
 
 <section class="issue-group" data-group="web_server">
-<h3>your web server configuration</h3>
+<header class="issue-group__head"><h3 class="issue-group__label">Your web server configuration</h3><span class="issue-group__count">2 lines</span></header>
 
-<div class="issue" data-owner="web_server" data-owner-label="your web server configuration" data-severity="critical" data-protocol="tls" data-status="fail" data-order="11">
+<div class="issue" data-owner="web_server" data-owner-label="Your web server configuration" data-severity="critical" data-protocol="tls" data-status="fail" data-order="11">
 
 <article class="check-row" data-tone="fail">
-  <header class="check-row__head">
-    <span class="check-row__code">tls.chain_trusted</span>
-    <span class="check-row__tone">fail</span>
-    <h3 class="check-row__title">Chain trusted</h3>
-    <span class="check-row__since">10-11</span>
-  </header>
-  <p class="check-row__body">The served certificate chain does not build to a trust anchor in the public trust stores.</p>
-  <p class="check-row__fix"><span class="check-row__fix-label">Fix:</span> Install a certificate from a public CA together with its full intermediate chain.</p>
-  <p class="check-row__links">
-    <a class="check-row__link" href="/r/ENTRY0/tls">Evidence</a>
-    <a class="check-row__link" href="/guide/certificate-chain">Guide</a>
-  </p>
+  <div class="check-row__side">
+    <span class="check-row__bar" data-tone="fail"></span>
+    <span class="check-row__sev">fail</span>
+    <span class="check-row__code">TLS·12</span>
+  </div>
+  <div class="check-row__main" data-check="tls.chain_trusted">
+    <div class="check-row__head">
+      <h3 class="check-row__title">Chain trusted</h3>
+      <span class="check-row__since">up from warn since run 3</span>
+    </div>
+    <p class="check-row__body">The served certificate chain does not build to a trust anchor in the public trust stores.</p>
+    <p class="check-row__fix"><span class="check-row__fix-label">Fix:</span> Install a certificate from a public CA together with its full intermediate chain.</p>
+    <p class="check-row__meta"><span>TLS · RFC 5280</span><a class="check-row__link" href="/r/ENTRY0/tls">evidence →</a><a class="check-row__link" href="/guide/certificate-chain">guide →</a></p>
+  </div>
 </article>
 
 </div>
 
-<div class="issue" data-owner="web_server" data-owner-label="your web server configuration" data-severity="high" data-protocol="http" data-status="fail" data-order="32">
+<div class="issue" data-owner="web_server" data-owner-label="Your web server configuration" data-severity="high" data-protocol="http" data-status="fail" data-order="32">
 
 <article class="check-row" data-tone="fail">
-  <header class="check-row__head">
-    <span class="check-row__code">http.hsts</span>
-    <span class="check-row__tone">fail</span>
-    <h3 class="check-row__title">HSTS</h3>
-    <span class="check-row__since">10-11</span>
-  </header>
-  <p class="check-row__body">HTTPS responses carry no Strict-Transport-Security header, or one with a max-age below one year.</p>
-  <p class="check-row__fix"><span class="check-row__fix-label">Fix:</span> Send Strict-Transport-Security with max-age=31536000 on all HTTPS responses.</p>
-  <p class="check-row__links">
-    <a class="check-row__link" href="/r/ENTRY0/http">Evidence</a>
-    <a class="check-row__link" href="/guide/hsts">Guide</a>
-  </p>
+  <div class="check-row__side">
+    <span class="check-row__bar" data-tone="fail"></span>
+    <span class="check-row__sev">fail</span>
+    <span class="check-row__code">HTTP·33</span>
+  </div>
+  <div class="check-row__main" data-check="http.hsts">
+    <div class="check-row__head">
+      <h3 class="check-row__title">HSTS</h3>
+      <span class="check-row__since">up from warn since run 3</span>
+    </div>
+    <p class="check-row__body">HTTPS responses carry no Strict-Transport-Security header, or one with a max-age below one year.</p>
+    <p class="check-row__fix"><span class="check-row__fix-label">Fix:</span> Send Strict-Transport-Security with max-age=31536000 on all HTTPS responses.</p>
+    <p class="check-row__meta"><span>HTTP · RFC 6797</span><a class="check-row__link" href="/r/ENTRY0/http">evidence →</a><a class="check-row__link" href="/guide/hsts">guide →</a></p>
+  </div>
 </article>
 
 </div>
@@ -1395,23 +1358,72 @@
 </section>
 
 <section class="issue-group" data-group="hosting">
-<h3>your hosting provider</h3>
+<header class="issue-group__head"><h3 class="issue-group__label">Your hosting provider</h3><span class="issue-group__count">1 line</span></header>
 
-<div class="issue" data-owner="hosting" data-owner-label="your hosting provider" data-severity="high" data-protocol="ip" data-status="fail" data-order="53">
+<div class="issue" data-owner="hosting" data-owner-label="Your hosting provider" data-severity="high" data-protocol="ip" data-status="fail" data-order="53">
 
 <article class="check-row" data-tone="fail">
-  <header class="check-row__head">
-    <span class="check-row__code">ip.reputation</span>
-    <span class="check-row__tone">fail</span>
-    <h3 class="check-row__title">IP reputation</h3>
-    <span class="check-row__since">10-11</span>
-  </header>
-  <p class="check-row__body">An address of the domain is listed by Spamhaus, flagged as a Tor exit node or a command-and-control server, or flagged as a VPN endpoint.</p>
-  <p class="check-row__fix"><span class="check-row__fix-label">Fix:</span> Investigate the flagged address, request delisting where the source offers it, or stop using the address for the service.</p>
-  <p class="check-row__links">
-    <a class="check-row__link" href="/r/ENTRY0/ip">Evidence</a>
-    <a class="check-row__link" href="/guide/ip-enrichment">Guide</a>
-  </p>
+  <div class="check-row__side">
+    <span class="check-row__bar" data-tone="fail"></span>
+    <span class="check-row__sev">fail</span>
+    <span class="check-row__code">IP·54</span>
+  </div>
+  <div class="check-row__main" data-check="ip.reputation">
+    <div class="check-row__head">
+      <h3 class="check-row__title">IP reputation</h3>
+      <span class="check-row__since">up from warn since run 3</span>
+    </div>
+    <p class="check-row__body">An address of the domain is listed by Spamhaus, flagged as a Tor exit node or a command-and-control server, or flagged as a VPN endpoint.</p>
+    <p class="check-row__fix"><span class="check-row__fix-label">Fix:</span> Investigate the flagged address, request delisting where the source offers it, or stop using the address for the service.</p>
+    <p class="check-row__meta"><span>IP · RFC 5782</span><a class="check-row__link" href="/r/ENTRY0/ip">evidence →</a><a class="check-row__link" href="/guide/ip-enrichment">guide →</a></p>
+  </div>
+</article>
+
+</div>
+
+</section>
+
+<section class="issue-group" data-group="dns_provider">
+<header class="issue-group__head"><h3 class="issue-group__label">Your DNS provider</h3><span class="issue-group__count">2 lines</span></header>
+
+<div class="issue" data-owner="dns_provider" data-owner-label="Your DNS provider" data-severity="medium" data-protocol="dns" data-status="fail" data-order="4">
+
+<article class="check-row" data-tone="fail">
+  <div class="check-row__side">
+    <span class="check-row__bar" data-tone="fail"></span>
+    <span class="check-row__sev">fail</span>
+    <span class="check-row__code">DNS·05</span>
+  </div>
+  <div class="check-row__main" data-check="dns.ns">
+    <div class="check-row__head">
+      <h3 class="check-row__title">Nameserver redundancy</h3>
+      <span class="check-row__since">up from warn since run 3</span>
+    </div>
+    <p class="check-row__body">The domain has fewer than two NS records.</p>
+    <p class="check-row__fix"><span class="check-row__fix-label">Fix:</span> Delegate the zone to at least two authoritative nameservers.</p>
+    <p class="check-row__meta"><span>DNS · RFC 2182</span><a class="check-row__link" href="/r/ENTRY0/dns">evidence →</a><a class="check-row__link" href="/guide/record-types">guide →</a></p>
+  </div>
+</article>
+
+</div>
+
+<div class="issue" data-owner="dns_provider" data-owner-label="Your DNS provider" data-severity="medium" data-protocol="email" data-status="fail" data-order="44">
+
+<article class="check-row" data-tone="fail">
+  <div class="check-row__side">
+    <span class="check-row__bar" data-tone="fail"></span>
+    <span class="check-row__sev">fail</span>
+    <span class="check-row__code">MAIL·45</span>
+  </div>
+  <div class="check-row__main" data-check="email.spf">
+    <div class="check-row__head">
+      <h3 class="check-row__title">SPF</h3>
+      <span class="check-row__since">up from warn since run 3</span>
+    </div>
+    <p class="check-row__body">The domain&#39;s SPF record is missing or invalid, leaves out the addresses of MX hosts the domain operates itself, or lacks -all although the domain publishes a Null MX.</p>
+    <p class="check-row__fix"><span class="check-row__fix-label">Fix:</span> Publish one SPF record that lists every server sending mail for the domain, including its own MX hosts that also send, and ends in -all, or ~all where the domain does not publish a Null MX.</p>
+    <p class="check-row__meta"><span>Email · RFC 7208</span><a class="check-row__link" href="/r/ENTRY0/email">evidence →</a><a class="check-row__link" href="/guide/email-auth">guide →</a></p>
+  </div>
 </article>
 
 </div>
@@ -1422,23 +1434,20 @@
 <section id="evidence">
 <h2>Evidence</h2>
 <div id="evidence-dns">
-<a href="/r/ENTRY0/dns">dns</a> <span>measured</span>
+
 </div>
 <div id="evidence-tls">
-<a href="/r/ENTRY0/tls">tls</a> <span>measured</span>
+
 </div>
 <div id="evidence-http">
-<a href="/r/ENTRY0/http">http</a> <span>measured</span>
+
 </div>
 <div id="evidence-email">
-<a href="/r/ENTRY0/email">email</a> <span>measured</span>
+
 </div>
 <div id="evidence-ip">
-<a href="/r/ENTRY0/ip">ip</a> <span>measured</span>
+
 </div>
 </section>
-<details id="passed">
-<summary>Checks that passed or do not apply</summary>
-
-</details>
+<details id="passed" class="clean-bar" hidden></details>
 </div>

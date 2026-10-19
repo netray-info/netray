@@ -1,3 +1,3 @@
 <div id="evidence-{{ protocol }}">
-{% match inner %}{% when EvidenceInner::Empty %}{% when EvidenceInner::Link with { href, outcome } %}<a href="{{ href }}">{{ protocol }}</a> <span>{{ outcome }}</span>{% when EvidenceInner::Section(html) %}{{ html|safe }}{% endmatch %}
+{% match inner %}{% when EvidenceInner::Empty %}{% when EvidenceInner::Section(html) %}{{ html|safe }}{% endmatch %}
 </div>

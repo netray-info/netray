@@ -328,9 +328,12 @@ fn full_page(
     let state_word = state_word(entries, state.ttl_seconds);
     let autostart = refusal.is_none() && (state_word != "fresh" || selectors.is_some());
     let cached = refusal.is_none() && state_word == "fresh" && selectors.is_none();
-    let Some(parts) = stored_parts(
-        domain, entries, autostart, None, cached, refusal, true, selectors,
-    ) else {
+    let how = StoredHow {
+        recorded: None,
+        cached,
+        ordinal_known: true,
+    };
+    let Some(parts) = stored_parts(domain, entries, autostart, how, refusal, selectors) else {
         return server_error();
     };
     result_page(status, cache_control, domain, state_word, parts)
@@ -390,7 +393,6 @@ enum RunLineBody {
 /// What one protocol's evidence element holds.
 enum EvidenceInner {
     Empty,
-    Link { href: String, outcome: String },
     Section(String),
 }
 
@@ -410,8 +412,8 @@ struct Shown {
     diff_meta: Option<String>,
     diff: Option<DiffBlockView>,
     hard_fail: Option<HardFailView>,
-    open: usize,
     groups: Vec<IssueGroup>,
+    clean: usize,
     passed: Vec<CheckRowView>,
     evidence: Vec<EvidenceInner>,
     recheck: bool,
@@ -434,8 +436,8 @@ impl Shown {
             diff_meta: None,
             diff: None,
             hard_fail: None,
-            open: 0,
             groups: Vec::new(),
+            clean: 0,
             passed: Vec::new(),
             evidence: PROTOCOLS.iter().map(|_| EvidenceInner::Empty).collect(),
             recheck: false,
@@ -496,20 +498,27 @@ fn warn_render<T>(what: &str, result: Result<T, askama::Error>) -> Option<T> {
 /// entry, `run_line` replaces the run line.
 /// `ordinal_known` is false when the head of `entries` stands in for a record the history read
 /// did not return: its place in the history is then unknown.
+/// How the stored entries reached the page: `recorded` the store's answer to a run that just
+/// finished, `cached` when a fresh entry answered without a run, `ordinal_known` when the newest
+/// entry's place in the history is known.
+struct StoredHow<'a> {
+    recorded: Option<&'a Recorded>,
+    cached: bool,
+    ordinal_known: bool,
+}
+
 fn stored_parts(
     domain: &str,
     entries: &[Entry],
     autostart: bool,
-    recorded: Option<&Recorded>,
-    cached: bool,
+    how: StoredHow<'_>,
     run_line: Option<RunLineBody>,
-    ordinal_known: bool,
     selectors: Option<&str>,
 ) -> Option<Parts> {
     let mut shown = if entries.is_empty() {
         Shown::none()
     } else {
-        stored_shown(entries, recorded, cached, ordinal_known)?
+        stored_shown(entries, how.recorded, how.cached, how.ordinal_known)?
     };
     if let Some(run_line) = run_line {
         shown.run_line = run_line;
@@ -825,17 +834,22 @@ fn stored_shown(
     )?;
     let chosen: Vec<&Entry> = entries.iter().take(SHOWN).collect();
     let mut since: BTreeMap<CheckId, String> = BTreeMap::new();
-    for check in &entry.run.checks {
-        let points: Vec<(i64, Option<Status>)> = chosen
-            .iter()
-            .rev()
-            .map(|e| {
-                let c = e.run.checks.iter().find(|c| c.id == check.id);
-                (e.created_at, c.map(|c| c.status))
-            })
-            .collect();
-        if let Some(start) = views::issue_since_present(&points) {
-            since.insert(check.id.clone(), start);
+    if ordinal_known {
+        for check in &entry.run.checks {
+            let statuses: Vec<Option<Status>> = entries
+                .iter()
+                .rev()
+                .map(|e| {
+                    e.run
+                        .checks
+                        .iter()
+                        .find(|c| c.id == check.id)
+                        .map(|c| c.status)
+                })
+                .collect();
+            if let Some(text) = views::since_text(&statuses, 1) {
+                since.insert(check.id.clone(), text);
+            }
         }
     }
     let diff = match recorded {
@@ -872,7 +886,6 @@ fn stored_shown(
         hard_fail: score
             .as_ref()
             .and_then(|s| views::hard_fail_view(s, cat, entry.grade)),
-        open: views::open_count(&entry.run),
         groups: views::issues(
             &entry.run,
             cat,
@@ -880,14 +893,9 @@ fn stored_shown(
             Grouping::Owner,
             &since,
         ),
+        clean: views::clean_count(&entry.run, cat),
         passed: views::passed_checks(&entry.run, cat),
-        evidence: PROTOCOLS
-            .iter()
-            .map(|p| EvidenceInner::Link {
-                href: format!("/r/{}/{}", entry.id, p.as_str()),
-                outcome: views::section_outcome(&entry.run, *p),
-            })
-            .collect(),
+        evidence: PROTOCOLS.iter().map(|_| EvidenceInner::Empty).collect(),
         recheck: true,
     })
 }
@@ -961,8 +969,8 @@ fn not_stored_shown(
         diff_meta: since_meta(&diff.grade, entries.first()),
         diff: Some(boxed(diff.block)),
         hard_fail: done_banner(done, grade),
-        open: views::open_count(done),
         groups: views::issues(done, cat, Links::Live, Grouping::Owner, &BTreeMap::new()),
+        clean: views::clean_count(done, cat),
         passed: views::passed_checks(done, cat),
         evidence,
         recheck: true,
@@ -997,8 +1005,8 @@ fn unrecorded_shown(domain: &str, done: &Run, entries: &[Entry]) -> Option<Shown
         diff_meta: None,
         diff: Some(boxed(views::not_recorded_view().block)),
         hard_fail: done_banner(done, done.grade),
-        open: views::open_count(done),
         groups: views::issues(done, cat, Links::Live, Grouping::Owner, &BTreeMap::new()),
+        clean: views::clean_count(done, cat),
         passed: views::passed_checks(done, cat),
         evidence,
         recheck: true,
@@ -1050,17 +1058,17 @@ fn recorded_entry(domain: &str, done: &Run, recorded: &Recorded) -> Option<Entry
 }
 
 fn grouping_switch() -> GroupingSwitchView {
-    let option = |value: &str, pressed| GroupingOption {
+    let option = |value: &str, label: &str, pressed| GroupingOption {
         value: value.to_string(),
-        label: value.to_string(),
+        label: label.to_string(),
         pressed,
     };
     GroupingSwitchView {
-        label: "Group issues by".to_string(),
+        label: "Group lines by".to_string(),
         options: vec![
-            option("owner", true),
-            option("severity", false),
-            option("protocol", false),
+            option("owner", "Owner", true),
+            option("severity", "Severity", false),
+            option("protocol", "Protocol", false),
         ],
     }
 }
@@ -1143,6 +1151,8 @@ struct IssuesPart<'a> {
     switch: &'a GroupingSwitchView,
     groups: &'a [IssueGroup],
     count: usize,
+    fails: usize,
+    warns: usize,
     heading: String,
 }
 
@@ -1157,6 +1167,7 @@ struct EvidencePart<'a> {
 #[template(path = "partials/result_passed.html")]
 struct PassedPart<'a> {
     rows: &'a [CheckRowView],
+    clean: usize,
 }
 
 fn trimmed<T: Template>(template: &T) -> Result<String, askama::Error> {
@@ -1211,8 +1222,12 @@ fn spectrum_part(
     )
 }
 
-fn issues_part(groups: &[IssueGroup], count: usize) -> Option<String> {
+fn issues_part(groups: &[IssueGroup]) -> Option<String> {
     let switch = grouping_switch();
+    let rows = || groups.iter().flat_map(|g| &g.rows);
+    let fails = rows().filter(|r| r.status == "fail").count();
+    let warns = rows().filter(|r| r.status == "warn").count();
+    let count = fails + warns;
     let heading = if count == 1 {
         "1 line needs attention".to_string()
     } else {
@@ -1224,6 +1239,8 @@ fn issues_part(groups: &[IssueGroup], count: usize) -> Option<String> {
             switch: &switch,
             groups,
             count,
+            fails,
+            warns,
             heading,
         }),
     )
@@ -1303,6 +1320,7 @@ fn assemble(domain: &str, autostart: bool, shown: Shown, selectors: Option<&str>
         "passed",
         trimmed(&PassedPart {
             rows: &shown.passed,
+            clean: shown.clean,
         }),
     )?;
     let evidence = PROTOCOLS
@@ -1327,7 +1345,7 @@ fn assemble(domain: &str, autostart: bool, shown: Shown, selectors: Option<&str>
             shown.refreshing,
         )?,
         diff,
-        issues: issues_part(&shown.groups, shown.open)?,
+        issues: issues_part(&shown.groups)?,
         evidence,
         passed,
     })

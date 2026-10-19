@@ -57,14 +57,19 @@ fn run() -> Run {
         evidence_schema_version: EVIDENCE_SCHEMA_VERSION,
         grade: Grade::C,
         complete: true,
-        sections: [Protocol::Dns, Protocol::Tls, Protocol::Http, Protocol::Email]
-            .into_iter()
-            .map(|protocol| RunSection {
-                protocol,
-                outcome: SectionKind::Measured,
-                reason: None,
-            })
-            .collect(),
+        sections: [
+            Protocol::Dns,
+            Protocol::Tls,
+            Protocol::Http,
+            Protocol::Email,
+        ]
+        .into_iter()
+        .map(|protocol| RunSection {
+            protocol,
+            outcome: SectionKind::Measured,
+            reason: None,
+        })
+        .collect(),
         checks: rows
             .iter()
             .map(|(id, status)| RunCheck {
@@ -90,7 +95,11 @@ async fn page() -> String {
         .unwrap();
     let app: Router = router(ResultState::new(Arc::new(store), Arc::new(StubRuns), 3600));
     let resp = app
-        .oneshot(Request::get(format!("/{DOMAIN}")).body(Body::empty()).unwrap())
+        .oneshot(
+            Request::get(format!("/{DOMAIN}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
@@ -104,12 +113,16 @@ fn squash(s: &str) -> String {
 
 /// The declaration blocks of every rule whose selector list contains `selector` exactly.
 fn blocks(file: &str, selector: &str) -> Vec<String> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("static").join(file);
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("static")
+        .join(file);
     let css = fs::read_to_string(&path).unwrap_or_else(|_| panic!("missing {}", path.display()));
     let mut out = Vec::new();
     let mut rest = css.as_str();
     while let Some(open) = rest.find('{') {
-        let Some(close) = rest[open..].find('}') else { break };
+        let Some(close) = rest[open..].find('}') else {
+            break;
+        };
         let sel = squash(&rest[..open]);
         if sel.split(',').any(|s| s == squash(selector)) {
             out.push(squash(&rest[open + 1..open + close]));
@@ -134,7 +147,9 @@ async fn c1_c8_the_attention_head_row_carries_title_meta_and_a_visible_switch() 
         .find(&format!(r#"<div class="{HEAD_CLASS}">"#))
         .unwrap_or_else(|| panic!("head row `{HEAD_CLASS}` missing in #issues: {issues}"));
     let head = &issues[head_at..];
-    let end = head.find("</div>\n</div>").or_else(|| head.find("</div></div>"));
+    let end = head
+        .find("</div>\n</div>")
+        .or_else(|| head.find("</div></div>"));
     let head = &head[..end.map_or(head.len().min(1500), |e| e + 12)];
 
     assert!(head.contains("<h2>5 lines need attention</h2>"), "{head}");
@@ -144,9 +159,15 @@ async fn c1_c8_the_attention_head_row_carries_title_meta_and_a_visible_switch() 
     );
     assert!(head.contains(r#"role="group""#), "{head}");
     assert!(head.contains(r#"aria-label="Group lines by""#), "{head}");
-    assert!(!head.contains("hidden"), "switch hidden in server markup: {head}");
+    assert!(
+        !head.contains("hidden"),
+        "switch hidden in server markup: {head}"
+    );
     for label in ["Owner", "Severity", "Protocol"] {
-        assert!(head.contains(&format!(">{label}</button>")), "{label}: {head}");
+        assert!(
+            head.contains(&format!(">{label}</button>")),
+            "{label}: {head}"
+        );
     }
     assert_eq!(head.matches(r#"aria-pressed="true""#).count(), 1, "{head}");
     assert!(
@@ -160,7 +181,11 @@ fn c1_the_switch_styles_resolve_to_the_board_values() {
     let f = "grouping_switch.css";
     let opt = ".grouping-switch__option";
     let rows: [(&str, &str, &str); 11] = [
-        (f, ".grouping-switch", "border-bottom:var(--line-hair)solidvar(--color-line)"),
+        (
+            f,
+            ".grouping-switch",
+            "border-bottom:var(--line-hair)solidvar(--color-line)",
+        ),
         (f, ".grouping-switch", "display:flex"),
         (f, opt, "min-height:36px"),
         (f, opt, "font-family:var(--font-mono)"),
@@ -168,8 +193,16 @@ fn c1_the_switch_styles_resolve_to_the_board_values() {
         (f, opt, "border:0"),
         (f, opt, "background:transparent"),
         (f, opt, "color:var(--color-muted)"),
-        (f, r#".grouping-switch__option[aria-pressed="true"]"#, "color:var(--color-ink)"),
-        (f, r#".grouping-switch__option[aria-pressed="true"]"#, "font-weight:var(--font-weight-bold)"),
+        (
+            f,
+            r#".grouping-switch__option[aria-pressed="true"]"#,
+            "color:var(--color-ink)",
+        ),
+        (
+            f,
+            r#".grouping-switch__option[aria-pressed="true"]"#,
+            "font-weight:var(--font-weight-bold)",
+        ),
         (f, ".grouping-switch", "gap:var(--space-1)"),
     ];
     let missing: Vec<String> = rows
@@ -182,14 +215,19 @@ fn c1_the_switch_styles_resolve_to_the_board_values() {
 
 #[test]
 fn c7_sections_are_36px_apart_at_1280() {
-    let tokens = fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tokens.json"))
-        .unwrap();
+    let tokens =
+        fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tokens.json")).unwrap();
     assert!(tokens.contains("\"9\""), "space.9 token missing");
     let gap = |sel| has("pages.css", sel, "gap:var(--space-9)");
     assert!(
         gap("#result") || gap(".result"),
         "#result needs `display:flex; flex-direction:column; gap:var(--space-9)` (36px)"
     );
-    let col = |sel| has("pages.css", sel, "flex-direction:column") && has("pages.css", sel, "display:flex");
-    assert!(col("#result") || col(".result"), "#result is not a flex column");
+    let col = |sel| {
+        has("pages.css", sel, "flex-direction:column") && has("pages.css", sel, "display:flex")
+    };
+    assert!(
+        col("#result") || col(".result"),
+        "#result is not a flex column"
+    );
 }

@@ -272,10 +272,10 @@ main td {
   font-weight: var(--font-weight-regular);
 }
 #spectrum {
+  margin: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 84px;
   column-gap: 14px;
-  margin: var(--space-6) 0;
 }
 #spectrum > :is(#spectrum-sentence, #spectrum-stepper, .legend-row) {
   grid-column: 1 / -1;
@@ -283,8 +283,79 @@ main td {
 #trace {
   display: contents;
 }
+#result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-9);
+}
+#hard-fail-slot:empty,
+#diff:not(:has(*)) {
+  display: none;
+}
 #issues {
-  margin-block-start: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.section-head--split {
+  justify-content: space-between;
+}
+.attention-meta {
+  flex: 1 1 auto;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+}
+.issue-group {
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: var(--color-surface);
+}
+.issue-group__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 10px var(--space-4);
+}
+.issue-group__label {
+  margin: 0;
+  font-size: var(--font-size-text);
+  font-weight: var(--font-weight-strong);
+}
+.issue-group__count {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-regular);
+}
+.clean-bar {
+  padding: 0 var(--space-4);
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: transparent;
+}
+.clean-bar__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  cursor: pointer;
+  list-style: none;
+}
+.clean-bar__summary::-webkit-details-marker {
+  display: none;
+}
+.clean-bar__count {
+  color: var(--status-pass-text);
+  font-weight: var(--font-weight-strong);
+}
+.clean-bar__label {
+  color: var(--color-muted);
+}
+.clean-bar__show {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
 }
 .legend-row {
   margin-block-start: var(--space-5);
@@ -423,19 +494,6 @@ main td {
   border: var(--line-hair) dashed var(--color-line);
 }
 .first-run__dashed:last-child { opacity: .5; }
-#issues .issue header {
-  flex-wrap: wrap;
-}
-#evidence {
-  margin-block: var(--space-6) var(--space-4);
-}
-#evidence > div:has(> a) {
-  display: inline-block;
-  margin-inline-end: var(--space-4);
-  margin-block-end: var(--space-2);
-  color: var(--color-muted);
-  font-size: var(--font-size-small);
-}
 #spectrum-stepper {
   display: none;
 }

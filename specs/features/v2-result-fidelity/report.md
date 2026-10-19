@@ -183,3 +183,61 @@ Accepted (operator decision, Decision log): board F light and dark "history rows
 | AMENDMENT | phone half of requirement 26 had no owner | moved to Phase 6 |
 | NIT | empty run number in the hint | fixed: "replaying this run" |
 | NIT | the line-code oracle repeats the implementation's loop | listed |
+
+## Phase 4 — Open issues and passed checks
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R28 Attention heading and switch: h2 "n lines need attention" with mono meta "f fail · w warn"; right-aligned on that line the grouping switch as unboxed tabs, mono 12 px, 36 px tall, the marker bar on the current tab, a rule below | green | crates/web/tests/it/fidelity_attention.rs |
+| C2 | R29 Line codes: protocol tag and 1-based spectrum position, two digits ("HTTP·21"), used in items, diff rows and the evidence feeds line | already_implemented | crates/web/tests/it/fidelity_items.rs |
+| C3 | R30 Group cards: bordered card per group with a header row, owner label 14 px weight 650 and right-aligned "n lines" ("1 line") mono | green | crates/web/tests/it/fidelity_items.rs |
+| C4 | R31 Item layout: two-column grid, 84 px left column with a 34 px tone bar, severity word mono 11 px 700 uppercase in tone colour, code mono 11 px muted; right column title with since text, body 14 px muted, "Fix:" with the hint 14 px ink, meta "Protocol · source" then links "evidence →" and "guide →" mono 12 px muted underlined; phone one column with "SEV · code · since" above the title | green | crates/web/tests/it/fidelity_items.rs |
+| C5 | R32 Since text from the stored entries: "first run", "in all n runs", "lit up in run k", "down from fail since run k", "up from warn since run k"; one pure function, table-tested | green | crates/web/tests/it/fidelity_since.rs |
+| C6 | R33 Clean bar: bordered 48 px bar "n lines clean · checks that pass" with the count in the pass colour and "show" right-aligned, on details without JavaScript; the coverage line goes, its links live in the evidence tabs | green | crates/web/tests/it/fidelity_clean.rs |
+| C7 | R34 Section rhythm: 36 px between consecutive sections at 1280 px | green | crates/web/tests/it/fidelity_attention.rs |
+| C8 | GIVEN a run with one fail and four warns WHEN rendered THEN an h2 reads "5 lines need attention" and its meta "1 fail · 4 warn" | green | crates/web/tests/it/fidelity_attention.rs |
+| C9 | GIVEN http.hsts at spectrum position p WHEN its code is built THEN it is "HTTP·p" (two digits); GIVEN an email check THEN "MAIL·p" | already_implemented | crates/web/tests/it/fidelity_items.rs |
+| C10 | GIVEN two items owned by the web server WHEN grouped by owner THEN one card's header reads the owner label and "2 lines" | green | crates/web/tests/it/fidelity_items.rs |
+| C11 | GIVEN an item of http.hsts WHEN rendered THEN the left column with severity "FAIL" and code, the title, the body, "Fix:" with the hint, the meta "HTTP · RFC 6797" and the links "evidence →" and "guide →" | green | crates/web/tests/it/fidelity_items.rs |
+| C12 | GIVEN statuses pass, pass, warn, warn over entries 1 to 4 WHEN the since text is built THEN "lit up in run 3" | green | crates/web/tests/it/fidelity_since.rs |
+| C13 | GIVEN warn in all 12 entries THEN "in all 12 runs"; GIVEN fail, fail, warn THEN "down from fail since run 3"; GIVEN one entry THEN "first run" | green | crates/web/tests/it/fidelity_since.rs |
+| C14 | GIVEN 35 passed checks WHEN rendered THEN the clean bar reads "35 lines clean · checks that pass" and "show", and opening it without JavaScript lists the 35 checks | green | crates/web/tests/it/fidelity_clean.rs |
+| C15 | GIVEN the result page WHEN rendered THEN no coverage line element exists | green | crates/web/tests/it/fidelity_clean.rs |
+| C16 | GIVEN board F WHEN just design-check runs THEN no row names the attention heading, switch, group card, item parts, clean bar or the section gaps | green | design-check |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 issues head, switch, group cards, check row, since text, clean bar, rhythm | 5 (over budget, re-runs to read output; `stored_parts` argument struct by the orchestrator for clippy) | sonnet | 175765 | 483 |
+| G2 design-check | run by the orchestrator; clean bar border and padding on the details, item side column as a grid, the figure's default margin removed | n/a | n/a | n/a |
+| review fixes | 3 + 1 island-only | sonnet | 136677 | 328 |
+
+### Behavioural verification
+
+`just design-check` (manifest netray-ops f6a99b7: attention meta, switch and tab, group card, head, label, count, item, bar, severity, code, body, meta, clean bar, count, show, section rhythm on the six desktop boards):
+
+```
+D3 · Mobile result — light (Play: ‹ › and tap lines): 2 deviation(s)
+2 open deviation(s), 0 stale accepted entries
+```
+
+The desktop boards report no open row (C16). Side-by-side of board F light: head row with the switch on the right, group cards in board order (the fail group first), two-column items with bar, severity and code, the meta row with the links, the clean bar at the end.
+
+### Reader
+
+| class | finding | disposition |
+|---|---|---|
+| BLOCKER | the since text read only the 24-entry window ("in all 24 runs") | fixed: all stored entries; test |
+| BLOCKER | an unknown run position invented run numbers ("first run") | fixed: no since text; test |
+| BLOCKER | the clean bar counted unmeasured and not-tested lines as clean | fixed: counts pass and not applicable; test |
+| AMENDMENT | heading count and meta disagreed for uncatalogued checks | repaired: both count listed rows |
+| AMENDMENT | groups in a fixed owner order, not the board's | repaired: fail first, groups by their first row (server and island) |
+| AMENDMENT | capitalised owner labels not in the SDD | SDD amended |
+| AMENDMENT | the switch was inert without JavaScript | repaired: hidden until the island is ready |
+| AMENDMENT | phone half of requirement 31 had no owner | moved to Phase 6 |
+| AMENDMENT | "0 lines clean" without a run | repaired: the bar is hidden |
+| DEFERRED | evidence section without links until Phase 5 | Phase 5 |
+| NIT | protocol group label "email" | fixed: "Email" |
