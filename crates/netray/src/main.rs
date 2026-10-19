@@ -1,18 +1,14 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
-use netray_engine::{
-    BoxFuture, Domain, EvidencePath, Facts, FactsProvider, Module, Registry, ResolveError,
-    RunContext, SectionOutcome,
-};
-use netray_model::{CheckId, Protocol};
-use netray_web::host::HostRouters;
 
 mod config;
 mod legacy;
+mod registry;
+mod serve;
 mod site;
+mod v1;
 
 #[derive(Parser)]
 #[command(
@@ -107,252 +103,12 @@ fn check_config<T, E: std::fmt::Display>(
     }
 }
 
-/// A module behind a shared handle: the IP module is shared by the registry and the SIGHUP
-/// task, the DNS module by the registry's module and its resolve stage.
-struct Shared<T>(Arc<T>);
-
-impl<T: Module> Module for Shared<T> {
-    fn protocol(&self) -> Protocol {
-        self.0.protocol()
-    }
-
-    fn checks(&self) -> &'static [CheckId] {
-        self.0.checks()
-    }
-
-    fn volatile(&self) -> &'static [EvidencePath] {
-        self.0.volatile()
-    }
-
-    fn needs_addresses(&self) -> bool {
-        self.0.needs_addresses()
-    }
-
-    fn wants_facts(&self) -> bool {
-        self.0.wants_facts()
-    }
-
-    fn needs_address_records(&self) -> bool {
-        self.0.needs_address_records()
-    }
-
-    fn run<'a>(&'a self, ctx: &'a RunContext, facts: &'a Facts) -> BoxFuture<'a, SectionOutcome> {
-        self.0.run(ctx, facts)
-    }
-}
-
-impl<T: FactsProvider> FactsProvider for Shared<T> {
-    fn resolve<'a>(
-        &'a self,
-        ctx: &'a RunContext,
-        domain: &'a Domain,
-    ) -> BoxFuture<'a, Result<Facts, ResolveError>> {
-        self.0.resolve(ctx, domain)
-    }
-}
-
-/// The IP module the lens config names in `[modules.ip]`: `None` when the table is absent (with
-/// a warning) or when `startup` is false, where the table is parsed and its keys checked but the
-/// data files are neither checked nor read.
-async fn ip_module(
-    cfg: &lens::config::Config,
-    startup: bool,
-) -> Result<Option<Arc<netray_ip::IpModule>>, String> {
-    let Some(table) = cfg.modules.get("ip").cloned() else {
-        tracing::warn!("modules.ip is not configured: the IP section is off");
-        return Ok(None);
-    };
-    let ip_config: netray_ip::ModuleConfig =
-        table.try_into().map_err(|e| format!("modules.ip: {e}"))?;
-    if ip_config.geoip_city_db.is_none() || ip_config.geoip_asn_db.is_none() {
-        return Err(
-            "modules.ip: geoip_city_db and geoip_asn_db are required when [modules.ip] is set"
-                .into(),
-        );
-    }
-    if !startup {
-        return Ok(None);
-    }
-    for (key, path) in [
-        ("geoip_city_db", &ip_config.geoip_city_db),
-        ("geoip_asn_db", &ip_config.geoip_asn_db),
-    ] {
-        if let Some(path) = path
-            && !std::path::Path::new(path).is_file()
-        {
-            return Err(format!("modules.ip: {key}: no file at {path}"));
-        }
-    }
-    let ip = netray_ip::IpModule::new(ip_config)
-        .await
-        .map_err(|e| format!("modules.ip: {e}"))?;
-    Ok(Some(Arc::new(ip)))
-}
-
-/// The registry and the modules the API and the data reload share.
-struct LensModules {
-    registry: Registry,
-    ip: Option<Arc<netray_ip::IpModule>>,
-    tls: Arc<netray_tls::TlsModule>,
-    http: Arc<netray_http::HttpModule>,
-    email: Arc<netray_email::EmailModule>,
-    dns: Arc<netray_dns::DnsModule>,
-    dns_band: Arc<netray_dns::DnsModule>,
-}
-
-impl LensModules {
-    /// The registry, the IP module for its data reload, and the parts `/api/v1` calls.
-    fn split(
-        self,
-    ) -> (
-        Registry,
-        Option<Arc<netray_ip::IpModule>>,
-        netray_web::api::ApiParts,
-    ) {
-        let parts = netray_web::api::ApiParts {
-            ip: self
-                .ip
-                .clone()
-                .map(|module| module as Arc<dyn netray_ip::IpLookup>),
-            tls: Some(self.tls.inspector()),
-            http: Some(self.http as Arc<dyn netray_http::HttpInspect>),
-            email: Some(Arc::new(self.email.inspector()) as Arc<dyn netray_email::EmailInspect>),
-            dns: Some(self.dns.jobs()),
-            dns_module: Some(self.dns_band as Arc<dyn netray_engine::Module>),
-        };
-        (self.registry, self.ip, parts)
-    }
-}
-
-/// Builds the modules the lens config names in `[modules.*]`; a table for a module the binary
-/// does not know is refused, and an absent `[modules.http]`, `[modules.email]`, `[modules.tls]` or
-/// `[modules.dns]` builds the module on its defaults. The IP module needs data: an absent `[modules.ip]` leaves the IP section off
-/// (with a warning), a present one must name `geoip_city_db` and `geoip_asn_db`. The IP module is
-/// returned as well, for its data reload, and so are the TLS, HTTP, email and DNS modules, for
-/// the API. With `startup` false (`--check-config`) the IP table is
-/// parsed and its keys checked, but the data files are neither checked nor read and no IP module
-/// is built.
-async fn lens_registry(cfg: &lens::config::Config, startup: bool) -> Result<LensModules, String> {
-    if let Some(name) = cfg
-        .modules
-        .keys()
-        .find(|k| !matches!(k.as_str(), "http" | "email" | "ip" | "tls" | "dns"))
-    {
-        return Err(format!("modules.{name}: unknown module"));
-    }
-    let ip = ip_module(cfg, startup).await?;
-    let enrichment = netray_ip::enrichment_client(ip.as_ref());
-    let table = cfg.modules.get("http").cloned().unwrap_or_default();
-    let module_config: netray_http::ModuleConfig =
-        table.try_into().map_err(|e| format!("modules.http: {e}"))?;
-    let http = Arc::new(
-        netray_http::HttpModule::new(module_config, enrichment.clone())
-            .map_err(|e| format!("modules.http: {e}"))?,
-    );
-    let table = cfg.modules.get("email").cloned().unwrap_or_default();
-    let email_config: netray_email::ModuleConfig = table
-        .try_into()
-        .map_err(|e| format!("modules.email: {e}"))?;
-    let email = Arc::new(
-        netray_email::EmailModule::new(email_config, enrichment.clone())
-            .await
-            .map_err(|e| format!("modules.email: {e}"))?,
-    );
-    let table = match cfg.modules.get("tls") {
-        Some(table) => table.clone(),
-        None => {
-            tracing::warn!(
-                "modules.tls is not configured: TLS runs on tlsight's defaults (certificate transparency off)"
-            );
-            Default::default()
-        }
-    };
-    let tls_config: netray_tls::ModuleConfig =
-        table.try_into().map_err(|e| format!("modules.tls: {e}"))?;
-    let tls = Arc::new(
-        netray_tls::TlsModule::new(tls_config, enrichment.clone())
-            .await
-            .map_err(|e| format!("modules.tls: {e}"))?,
-    );
-    let table = match cfg.modules.get("dns") {
-        Some(table) => table.clone(),
-        None => {
-            tracing::warn!("modules.dns is not configured: DNS runs on prism's defaults");
-            Default::default()
-        }
-    };
-    let dns_config: netray_dns::ModuleConfig =
-        table.try_into().map_err(|e| format!("modules.dns: {e}"))?;
-    let dns_band = Arc::new(
-        netray_dns::DnsModule::new(dns_config.clone(), enrichment.clone())
-            .await
-            .map_err(|e| format!("modules.dns: {e}"))?
-            .admitted_by_caller(),
-    );
-    let dns = Arc::new(
-        netray_dns::DnsModule::new(dns_config, enrichment)
-            .await
-            .map_err(|e| format!("modules.dns: {e}"))?,
-    );
-    let mut registry = Registry::new()
-        .with(Box::new(Shared(dns.clone())))
-        .with_facts(Box::new(Shared(dns.clone())))
-        .with(Box::new(Shared(http.clone())))
-        .with(Box::new(Shared(email.clone())))
-        .with(Box::new(Shared(tls.clone())));
-    if let Some(ip) = &ip {
-        registry = registry.with(Box::new(Shared(ip.clone())));
-    }
-    Ok(LensModules {
-        registry,
-        ip,
-        tls,
-        http,
-        email,
-        dns,
-        dns_band,
-    })
-}
-
-/// Removes the enrichment-backend keys `netray lens` still accepts in its old tables: the
-/// modules enrich through the in-process ip module now. Warns when lens named no `ip_url` for the
-/// http module and has no `[modules.ip]` either, as lens did before.
-fn strip_lens_enrichment(cfg: &mut lens::config::Config) {
-    let ip_url_set = cfg
-        .modules
-        .get("http")
-        .and_then(|t| t.get("enrichment"))
-        .and_then(|e| e.get("ip_url"))
-        .is_some();
-    if cfg.backends.http.is_some() && !ip_url_set && !cfg.modules.contains_key("ip") {
-        tracing::warn!(
-            "modules.http.enrichment.ip_url is not set: server org and network type stay empty"
-        );
-    }
-    for (module, key) in [
-        ("dns", "backends"),
-        ("tls", "backends"),
-        ("http", "enrichment"),
-        ("email", "backends"),
-    ] {
-        if let Some(table) = cfg.modules.get_mut(module) {
-            table.remove(key);
-            if table.is_empty() {
-                cfg.modules.remove(module);
-            }
-        }
-    }
-}
-
-/// Reloads the IP module's data on every SIGHUP.
-fn reload_ip_on_sighup(ip: Arc<netray_ip::IpModule>) {
-    tokio::spawn(async move {
-        let mut sig = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())
-            .expect("failed to register the SIGHUP handler");
-        while sig.recv().await.is_some() {
-            ip.reload().await;
-        }
-    });
+/// Logs up to `level` to stderr, so `--check-config` keeps stdout to its one line.
+fn init_check_logging(level: tracing::Level) {
+    tracing_subscriber::fmt()
+        .with_max_level(level)
+        .with_writer(std::io::stderr)
+        .init();
 }
 
 #[tokio::main]
@@ -362,31 +118,18 @@ async fn main() -> anyhow::Result<()> {
             check_config: Some(path),
             ..
         } => {
-            tracing_subscriber::fmt()
-                .with_max_level(tracing::Level::WARN)
-                .with_writer(std::io::stderr)
-                .init();
-            let loaded = match config::Config::load(Some(&path), std::env::vars_os().collect()) {
-                Ok(cfg) => lens_registry(&cfg.to_lens(), false).await.map(drop),
-                Err(e) => Err(e.to_string()),
-            };
+            // `serve --check-config` answers with its one line alone: an absent module table is
+            // a default, not a finding.
+            init_check_logging(tracing::Level::ERROR);
+            let loaded = serve::check_config(&path).await;
             check_config(&path, |_| loaded)
         }
         Command::Lens {
             check_config: Some(path),
             ..
         } => {
-            tracing_subscriber::fmt()
-                .with_max_level(tracing::Level::WARN)
-                .with_writer(std::io::stderr)
-                .init();
-            let loaded = match lens::config::Config::load(Some(&path)) {
-                Ok(mut cfg) => {
-                    strip_lens_enrichment(&mut cfg);
-                    lens_registry(&cfg, false).await.map(drop)
-                }
-                Err(e) => Err(e.to_string()),
-            };
+            init_check_logging(tracing::Level::WARN);
+            let loaded = v1::check_config(&path).await;
             check_config(&path, |_| loaded)
         }
         Command::Dns {
@@ -412,59 +155,8 @@ async fn main() -> anyhow::Result<()> {
             check_config: Some(path),
             ..
         } => check_config(&path, netray_ip::config::Config::load),
-        Command::Serve { config, .. } => {
-            let path = config.or_else(|| std::env::var("NETRAY_CONFIG").ok());
-            let netray_cfg =
-                match config::Config::load(path.as_deref(), std::env::vars_os().collect()) {
-                    Ok(cfg) => cfg,
-                    Err(e) => {
-                        eprintln!("failed to load configuration: {e}");
-                        std::process::exit(1)
-                    }
-                };
-            let cfg = netray_cfg.to_lens();
-            lens::init_telemetry(&cfg);
-            let metrics = lens::install_metrics();
-            let (registry, ip, parts) = lens_registry(&cfg, true)
-                .await
-                .map_err(|e| anyhow::anyhow!(e))?
-                .split();
-            if let Some(ip) = ip {
-                reload_ip_on_sighup(ip);
-            }
-            let prepared = lens::prepare(&cfg, registry, parts).await;
-            let app = netray_web::host::router(HostRouters {
-                apex: netray_cfg.server.apex.clone(),
-                probes: lens::probe_router(),
-                apex_router: prepared.routes,
-                dns: None,
-                tls: None,
-                http: None,
-                ip: None,
-            });
-            lens::serve(
-                &cfg,
-                lens::layers(app, cfg.api.enabled),
-                prepared.background,
-                metrics,
-            )
-            .await
-        }
-        Command::Lens { config, .. } => {
-            let path = config.or_else(|| std::env::var("LENS_CONFIG").ok());
-            let mut cfg = lens::config::Config::load(path.as_deref())
-                .map_err(|e| anyhow::anyhow!("failed to load configuration: {e}"))?;
-            lens::init_telemetry(&cfg);
-            strip_lens_enrichment(&mut cfg);
-            let (registry, ip, parts) = lens_registry(&cfg, true)
-                .await
-                .map_err(|e| anyhow::anyhow!(e))?
-                .split();
-            if let Some(ip) = ip {
-                reload_ip_on_sighup(ip);
-            }
-            lens::run_with(path, registry, parts).await
-        }
+        Command::Serve { config, .. } => serve::run(config).await?,
+        Command::Lens { config, .. } => v1::run(config).await?,
         Command::Dns { config, .. } => netray_dns::run(config).await,
         Command::Tls { config, .. } => netray_tls::run(config).await,
         Command::Http { config, .. } => netray_http::run(config).await,

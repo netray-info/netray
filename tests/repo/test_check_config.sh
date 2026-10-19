@@ -376,6 +376,11 @@ serve_rejects=(
     "admission|global_per_minute = 0|"
     "admission|global_burst = 0|"
     "badges|ttl_seconds = 0|"
+    "api|per_ip_burst = 0|api.per_ip_burst"
+    "api.ip|batch_max_size = 101|api.ip.batch_max_size"
+    "api.dns|per_ip_burst = 17|api.dns.per_ip_burst"
+    "inspect.tls|deadline_ms = 0|inspect.tls.deadline_ms"
+    "inspect.http|max_concurrent = 0|inspect.http.max_concurrent"
     "telemetry|enabled = true\\notlp_endpoint = \"http://bad host:4318\"|telemetry.otlp_endpoint"
 )
 n=0

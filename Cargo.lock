@@ -2914,6 +2914,8 @@ dependencies = [
  "axum",
  "clap",
  "lens",
+ "metrics",
+ "metrics-util",
  "mime_guess",
  "netray-common",
  "netray-dns",

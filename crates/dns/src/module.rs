@@ -155,6 +155,11 @@ impl DnsModule {
         self
     }
 
+    /// Whether the registry handed this module an enrichment client.
+    pub fn has_enrichment(&self) -> bool {
+        self.enrichment.is_some()
+    }
+
     /// The DNS jobs over this module's configuration, circuit breakers and query semaphore, with
     /// no enrichment and no `prism_*` metrics.
     pub fn jobs(&self) -> DnsJobs {

@@ -160,6 +160,11 @@ impl EmailModule {
             inspect_semaphore: Arc::new(Semaphore::new(max_concurrent)),
         })
     }
+
+    /// Whether the registry handed this module an enrichment client.
+    pub fn has_enrichment(&self) -> bool {
+        self.enrichment_client.is_some()
+    }
 }
 
 impl EmailModule {

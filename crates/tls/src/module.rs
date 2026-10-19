@@ -156,6 +156,11 @@ impl TlsModule {
         self.state.inspector()
     }
 
+    /// Whether the registry handed this module an enrichment client.
+    pub fn has_enrichment(&self) -> bool {
+        self.state.enrichment_client.is_some()
+    }
+
     async fn measure(&self, ctx: &RunContext, facts: &Facts) -> Result<InspectResponse, AppError> {
         let start = Instant::now();
         let config = self.state.config.load();

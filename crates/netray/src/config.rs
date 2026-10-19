@@ -5,10 +5,30 @@ use std::ffi::OsString;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
+use std::time::Duration;
+
 use netray_common::config::ConfigError;
+use netray_model::Protocol;
+use netray_web::api::{AdmissionLimits, ApiConfig};
+use netray_web::config::{ApexConfig, BadgesConfig, OgCardsConfig};
+use netray_web::pages::InspectConfig;
 use serde::Deserialize;
 
 const MODULES: [&str; 5] = ["dns", "tls", "http", "email", "ip"];
+
+/// The defaults lens gave the keys `netray.toml` took over (`crates/lens/src/config.rs`).
+const DEFAULT_BIND: ([u8; 4], u16) = ([0, 0, 0, 0], 8082);
+const DEFAULT_METRICS_BIND: ([u8; 4], u16) = ([127, 0, 0, 1], 9090);
+const DEFAULT_RESOLVE_TIMEOUT_MS: u64 = 1500;
+const DEFAULT_DEADLINE_MS: u64 = 2000;
+const DEFAULT_DB_PATH: &str = "history.db";
+const DEFAULT_CLIENT_BUDGET_PER_HOUR: u32 = 30;
+const DEFAULT_DOMAIN_RUN_SLOTS: u32 = 8;
+const DEFAULT_PER_IP_PER_MINUTE: u32 = 10;
+const DEFAULT_PER_IP_BURST: u32 = 3;
+const DEFAULT_GLOBAL_PER_MINUTE: u32 = 100;
+const DEFAULT_GLOBAL_BURST: u32 = 20;
+const DEFAULT_CACHE_WINDOW_SECONDS: u64 = 300;
 
 const LEGACY_PREFIXES: [&str; 11] = [
     "LENS_",
@@ -31,8 +51,12 @@ pub struct Config {
     pub engine: EngineConfig,
     pub store: StoreConfig,
     pub admission: AdmissionConfig,
-    pub badges: lens::config::BadgesConfig,
-    pub og_cards: lens::config::OgCardsConfig,
+    pub badges: BadgesConfig,
+    pub og_cards: OgCardsConfig,
+    /// `[api]` with its `[api.<inspector>]` tables.
+    pub api: ApiConfig,
+    /// `[inspect.<tool>]`: the inspector pages' budgets.
+    pub inspect: InspectConfig,
     pub telemetry: netray_common::telemetry::TelemetryConfig,
     /// Per-module tables (`[modules.http]`): each module's own keys and its section window
     /// `deadline_ms`.
@@ -50,11 +74,10 @@ pub struct ServerConfig {
 
 impl Default for ServerConfig {
     fn default() -> Self {
-        let lens = lens::config::ServerConfig::default();
         Self {
-            bind: lens.bind,
-            metrics_bind: lens.metrics_bind,
-            trusted_proxies: lens.trusted_proxies,
+            bind: DEFAULT_BIND.into(),
+            metrics_bind: DEFAULT_METRICS_BIND.into(),
+            trusted_proxies: Vec::new(),
             apex: "netray.info".into(),
         }
     }
@@ -71,7 +94,7 @@ pub struct EngineConfig {
 impl Default for EngineConfig {
     fn default() -> Self {
         Self {
-            resolve_timeout_ms: lens::config::BackendsConfig::default().resolve_timeout_ms,
+            resolve_timeout_ms: DEFAULT_RESOLVE_TIMEOUT_MS,
             profile_path: None,
         }
     }
@@ -86,10 +109,9 @@ pub struct StoreConfig {
 
 impl Default for StoreConfig {
     fn default() -> Self {
-        let lens = lens::config::HistoryConfig::default();
         Self {
-            enabled: lens.enabled,
-            db_path: lens.db_path,
+            enabled: true,
+            db_path: PathBuf::from(DEFAULT_DB_PATH),
         }
     }
 }
@@ -109,18 +131,15 @@ pub struct AdmissionConfig {
 
 impl Default for AdmissionConfig {
     fn default() -> Self {
-        let admission = lens::config::AdmissionConfig::default();
-        let rate = lens::config::RateLimitConfig::default();
-        let cache = lens::config::CacheConfig::default();
         Self {
-            client_budget_per_hour: admission.client_budget_per_hour,
-            domain_run_slots: admission.domain_run_slots,
-            per_ip_per_minute: rate.per_ip_per_minute,
-            per_ip_burst: rate.per_ip_burst,
-            global_per_minute: rate.global_per_minute,
-            global_burst: rate.global_burst,
-            cache_enabled: cache.enabled,
-            cache_window_seconds: cache.ttl_seconds,
+            client_budget_per_hour: DEFAULT_CLIENT_BUDGET_PER_HOUR,
+            domain_run_slots: DEFAULT_DOMAIN_RUN_SLOTS,
+            per_ip_per_minute: DEFAULT_PER_IP_PER_MINUTE,
+            per_ip_burst: DEFAULT_PER_IP_BURST,
+            global_per_minute: DEFAULT_GLOBAL_PER_MINUTE,
+            global_burst: DEFAULT_GLOBAL_BURST,
+            cache_enabled: true,
+            cache_window_seconds: DEFAULT_CACHE_WINDOW_SECONDS,
         }
     }
 }
@@ -155,7 +174,7 @@ impl Config {
             ))
         };
         match self.modules.get(name).and_then(|t| t.get("deadline_ms")) {
-            None => Ok(lens::config::BackendConfig::default().timeout_ms),
+            None => Ok(DEFAULT_DEADLINE_MS),
             Some(toml::Value::Integer(n)) => {
                 u64::try_from(*n).map_err(|_| bad("must not be negative".into()))
             }
@@ -181,13 +200,15 @@ impl Config {
             reject_zero(name, u64::from(value))?;
         }
         reject_zero("badges.ttl_seconds", self.badges.ttl_seconds)?;
+        self.api.validate().map_err(ConfigError::Message)?;
+        self.inspect.validate().map_err(ConfigError::Message)?;
         netray_common::telemetry::validate(&self.telemetry).map_err(ConfigError::Message)?;
 
         let [dns, tls, http, email, ip] = MODULES.map(|m| self.deadline_ms(m));
         let (dns, tls, http, email, ip) = (dns?, tls?, http?, email?, ip?);
         let wave1_ms = dns.max(tls).max(http).max(email);
         let budget_ms = wave1_ms.saturating_add(ip);
-        let hard_ms = lens::check::HARD_DEADLINE.as_millis() as u64;
+        let hard_ms = netray_engine::domain_run::HARD_DEADLINE.as_millis() as u64;
         if budget_ms >= hard_ms {
             return Err(ConfigError::Message(format!(
                 "invalid configuration: module deadline_ms (slowest wave-1 deadline_ms {wave1_ms} + modules.ip.deadline_ms {ip}) = {budget_ms} ms must stay below the {hard_ms} ms hard deadline"
@@ -204,65 +225,48 @@ impl Config {
         Ok(())
     }
 
-    /// The lens configuration `serve` starts lens's application with. `validate` has run.
-    pub fn to_lens(&self) -> lens::config::Config {
-        let window = |name: &str| lens::config::BackendConfig {
-            url: None,
-            timeout_ms: self.deadline_ms(name).expect("deadline validated at load"),
-        };
+    /// The section window of `protocol` (`[modules.<m>] deadline_ms`). `validate` has run.
+    pub fn section_window(&self, protocol: Protocol) -> Duration {
+        Duration::from_millis(
+            self.deadline_ms(protocol.as_str())
+                .expect("deadline validated at load"),
+        )
+    }
+
+    /// The budget of the resolve stage (`[engine] resolve_timeout_ms`).
+    pub fn resolve_budget(&self) -> Duration {
+        Duration::from_millis(self.engine.resolve_timeout_ms)
+    }
+
+    /// The module tables without the section windows, as the module registry reads them.
+    pub fn module_tables(&self) -> BTreeMap<String, toml::Table> {
         let mut modules = self.modules.clone();
         for table in modules.values_mut() {
             table.remove("deadline_ms");
         }
         modules.retain(|_, table| !table.is_empty());
+        modules
+    }
+
+    /// What the apex's routes read: proxies, limits, cache, badges, OG cards, `[api]`, `[inspect]`.
+    pub fn apex_config(&self) -> ApexConfig {
         let a = &self.admission;
-        lens::config::Config {
-            server: lens::config::ServerConfig {
-                bind: self.server.bind,
-                metrics_bind: self.server.metrics_bind,
-                trusted_proxies: self.server.trusted_proxies.clone(),
-            },
-            backends: lens::config::BackendsConfig {
-                resolve_timeout_ms: self.engine.resolve_timeout_ms,
-                dns: window("dns"),
-                tls: window("tls"),
-                ip: window("ip"),
-                http: Some(window("http")),
-                email: Some(window("email")),
-            },
-            ecosystem: Default::default(),
-            cache: lens::config::CacheConfig {
-                enabled: a.cache_enabled,
-                ttl_seconds: a.cache_window_seconds,
-            },
-            rate_limit: lens::config::RateLimitConfig {
-                per_ip_per_minute: a.per_ip_per_minute,
-                per_ip_burst: a.per_ip_burst,
-                global_per_minute: a.global_per_minute,
-                global_burst: a.global_burst,
-            },
-            admission: lens::config::AdmissionConfig {
+        ApexConfig {
+            trusted_proxies: self.server.trusted_proxies.clone(),
+            limits: AdmissionLimits {
                 client_budget_per_hour: a.client_budget_per_hour,
                 domain_run_slots: a.domain_run_slots,
+                rate_limit_per_ip_per_minute: a.per_ip_per_minute,
+                rate_limit_per_ip_burst: a.per_ip_burst,
+                rate_limit_global_per_minute: a.global_per_minute,
+                rate_limit_global_burst: a.global_burst,
             },
-            scoring: lens::config::ScoringConfig {
-                profile_path: self.engine.profile_path.clone(),
-            },
-            site: Default::default(),
+            cache_enabled: a.cache_enabled,
+            cache_window_seconds: a.cache_window_seconds,
             badges: self.badges.clone(),
             og_cards: self.og_cards.clone(),
-            api: Default::default(),
-            inspect: Default::default(),
-            snapshots: lens::config::SnapshotsConfig {
-                enabled: false,
-                ..Default::default()
-            },
-            history: lens::config::HistoryConfig {
-                enabled: self.store.enabled,
-                db_path: self.store.db_path.clone(),
-            },
-            modules,
-            telemetry: self.telemetry.clone(),
+            api: self.api.clone(),
+            inspect: self.inspect.clone(),
         }
     }
 }

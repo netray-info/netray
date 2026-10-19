@@ -157,6 +157,11 @@ impl HttpModule {
         })
     }
 
+    /// Whether the registry handed this module an enrichment client.
+    pub fn has_enrichment(&self) -> bool {
+        self.enrichment.is_some()
+    }
+
     async fn measure(&self, ctx: &RunContext, facts: &Facts) -> Result<InspectResponse, AppError> {
         let start = Instant::now();
         let url = crate::input::parse_url(&format!("https://{}", ctx.domain.as_str()))?;

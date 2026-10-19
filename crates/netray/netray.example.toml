@@ -35,6 +35,65 @@
 [og_cards]
 # enabled = true
 
+[api]
+# enabled = true                     # false: no /api/v1 routes
+# per_ip_per_minute = 60             # the read endpoints, per client
+# per_ip_burst = 10
+
+[api.dns]
+# per_ip_per_minute = 120
+# per_ip_burst = 64                  # bursts must stay at or above 18, the smallest job's cost
+# per_target_per_minute = 60
+# per_target_burst = 20
+# global_per_minute = 1000
+# global_burst = 50
+# per_ip_max_streams = 10
+
+[api.tls]
+# per_ip_per_minute = 30
+# per_ip_burst = 10
+# per_target_per_minute = 60
+# per_target_burst = 20
+
+[api.http]
+# per_ip_per_minute = 10
+# per_ip_burst = 5
+# per_target_per_minute = 30
+# per_target_burst = 10
+
+[api.email]
+# per_ip_per_minute = 10
+# per_ip_burst = 10
+# max_concurrent_inspections = 16
+
+[api.ip]
+# internal_mode = false
+# filtered_headers = []
+# per_ip_per_minute = 60
+# per_ip_burst = 10                  # at least 2, the cost of a diff
+# per_target_per_minute = 120
+# per_target_burst = 20
+# batch_max_size = 100               # at most 100
+# batch_addresses_per_minute = 60
+# batch_addresses_burst = 100        # at least batch_max_size
+
+# The inspector pages' budgets: the job deadline and the jobs in flight per inspector.
+[inspect.dns]
+# deadline_ms = 30000
+# max_concurrent = 8
+
+[inspect.tls]
+# deadline_ms = 15000
+# max_concurrent = 8
+
+[inspect.http]
+# deadline_ms = 30000
+# max_concurrent = 8
+
+[inspect.ip]
+# deadline_ms = 5000
+# max_concurrent = 8
+
 [telemetry]
 # enabled = false
 # otlp_endpoint = "http://localhost:4318"

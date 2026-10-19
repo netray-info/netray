@@ -10,6 +10,7 @@ netray-common = { workspace = true, features = ["server"] }
 netray-engine = { workspace = true }
 netray-model = { workspace = true }
 netray-web = { workspace = true }
+netray-store = { workspace = true }
 
 netray-email = { workspace = true }
 netray-ip = { workspace = true }
@@ -31,7 +32,12 @@ clap = { version = "4", features = ["derive"] }
 
 [dev-dependencies]
 netray-ip = { path = "../ip", features = ["testing"] }
-netray-store = { workspace = true }
+netray-tls = { workspace = true, features = ["testing"] }
+netray-http = { workspace = true, features = ["testing"] }
+netray-email = { workspace = true, features = ["testing"] }
+netray-dns = { workspace = true, features = ["testing"] }
+metrics = { workspace = true }
+metrics-util = { version = "0.20", default-features = false, features = ["debugging"] }
 serde_json = { workspace = true }
 tempfile = "3"
 tower = { workspace = true, features = ["util"] }
