@@ -36,28 +36,42 @@ for pkg in meta["packages"]:
         if not t.get("harness", True):
             continue
         fails.append(f"{n}: test target {tn} ({sp}) belongs in {cdir}/tests/it/ as a module")
-    # every file under tests/it is a module of main.rs
+    # every file under tests/it is a module, declared unconditionally in its parent module file
     itdir = os.path.join(cdir, "tests", "it")
     files = subprocess.run(["git", "ls-files", itdir], capture_output=True, text=True).stdout.split()
-    main = os.path.join(itdir, "main.rs")
-    decl = set()
-    if os.path.isfile(main):
-        import re
-        decl = set(re.findall(r"^\s*mod (\w+);", open(main).read(), re.M))
+    import re
+    def declared(parent, name):
+        if not os.path.isfile(parent):
+            return False
+        lines = open(parent).read().splitlines()
+        for i, l in enumerate(lines):
+            if re.match(rf"^\s*(pub(\([^)]*\))? )?mod {name};", l):
+                return not (i > 0 and lines[i - 1].strip().startswith("#[cfg"))
+        return False
     for f in files:
         rel = os.path.relpath(f, itdir)
         if not rel.endswith(".rs") or rel == "main.rs":
             continue
-        top = rel.split("/")[0]
-        mod = top[:-3] if top.endswith(".rs") else top
-        if mod not in decl:
-            fails.append(f"{f}: not declared in {main} (mod {mod};), so it never compiles")
+        parts = rel[:-3].split("/")
+        if parts[-1] == "mod":
+            parts = parts[:-1]
+        parent = os.path.join(itdir, "main.rs")
+        for depth, name in enumerate(parts):
+            if not declared(parent, name):
+                fails.append(f"{f}: mod {name}; is not declared unconditionally in {parent}, so it never compiles")
+                break
+            parent = os.path.join(itdir, *parts[: depth + 1], "mod.rs")
+# a tests/it outside the merged crates is never run by the contract, yet ADLC-RAN would name it
+for f in subprocess.run(["git", "ls-files", "crates/*/tests/it/main.rs"], capture_output=True, text=True).stdout.split():
+    pdir = f.split("/")[1]
+    if not any(os.path.relpath(os.path.dirname(p["manifest_path"]), root) == f"crates/{pdir}" and p["name"] in merged for p in meta["packages"]):
+        fails.append(f"{f}: crate is not in MERGED; add it there (and check test-rust-offline runs its it target)")
 print("\n".join(fails))
 ' <<<"$meta") || { echo "FAIL: check crashed: $out"; exit 1; }
 
 # adlc counts a Rust test file as run only when it is a target's src_path; the contract names the
 # module files of each `it` target after its cargo test passed (ADLC-RAN lines).
-just --show test-rust-offline 2>/dev/null | grep -q 'ADLC-RAN' \
+just --show test-rust-offline 2>/dev/null | grep -vE '^[[:space:]]*#' | grep -qF "sed 's/^/ADLC-RAN /'" \
     || out+=$'\n'"justfile: test-rust-offline prints no ADLC-RAN line for the tests/it module files (adlc orphans)"
 out=$(sed '/^$/d' <<<"$out")
 

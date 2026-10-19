@@ -2026,7 +2026,7 @@ pub mod tests {
         assert_eq!(cache_header1.as_deref(), Some("MISS"));
         // The test state's backends are unreachable, so the result is incomplete and never
         // cached (grade-integrity requirement 4); a cache HIT for a complete result is pinned
-        // by `complete_result_is_snapshotted_and_cached` in tests/incomplete_results.rs.
+        // by `complete_result_is_snapshotted_and_cached` in tests/it/incomplete_results.rs.
         assert_eq!(cache_header2.as_deref(), Some("MISS"));
     }
 

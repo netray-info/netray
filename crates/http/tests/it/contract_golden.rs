@@ -3,7 +3,7 @@
 // The golden `tests/fixtures/contracts/spectra-inspect.json` is written here from spectra's
 // real `InspectResponse` (built through its own `Deserialize`, so every field the type
 // requires is present), serialized by axum's `Json` exactly as the route does.
-// lens's `tests/contract_backends.rs` reads the same file.
+// lens's `tests/it/contract_backends.rs` reads the same file.
 //
 // UPDATE_GOLDEN=1 cargo test -p netray-http --test it contract_golden   writes the golden.
 

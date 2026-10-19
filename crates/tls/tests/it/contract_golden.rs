@@ -2,7 +2,7 @@
 //
 // The golden `tests/fixtures/contracts/tlsight-inspect.json` is written here from tlsight's
 // real `InspectResponse` (and the types it nests), serialized by axum's `Json` exactly as the
-// route does. lens's `tests/contract_backends.rs` reads the same file.
+// route does. lens's `tests/it/contract_backends.rs` reads the same file.
 //
 // UPDATE_GOLDEN=1 cargo test -p netray-tls --test it contract_golden   writes the golden.
 

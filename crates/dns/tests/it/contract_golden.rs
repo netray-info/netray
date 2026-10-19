@@ -2,7 +2,7 @@
 //
 // The golden `tests/fixtures/contracts/prism.sse` is written here, from prism's real
 // `BatchEvent` and mhost's real lint functions, framed by axum's real `Sse` response.
-// lens's `tests/contract_backends.rs` reads the same file.
+// lens's `tests/it/contract_backends.rs` reads the same file.
 //
 // The `/api/check` handler needs live DNS, so the stream is assembled here from prism's real
 // `LintEvent` and `CheckDoneEvent`; the lint results inside are mhost's `CheckResult` values.

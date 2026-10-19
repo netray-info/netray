@@ -119,7 +119,7 @@ Requirements:
 
 ## Measured or Unmeasured
 
-- A failed lookup or probe (timeout, SERVFAIL, REFUSED, a policy-refused redirect, a local network error) makes a check `unmeasured`, never `pass`, `warn`, `fail` or `not_applicable`; a partial failure keeps what answered and names what did not. Enforced by the per-module contract tables `crates/{dns,tls,http,email,ip}/tests/contract_status.rs`, which hold a worst-measured and an `unmeasured` row per catalogue check and a guard against the catalogue.
+- A failed lookup or probe (timeout, SERVFAIL, REFUSED, a policy-refused redirect, a local network error) makes a check `unmeasured`, never `pass`, `warn`, `fail` or `not_applicable`; a partial failure keeps what answered and names what did not. Enforced by the per-module contract tables `crates/{dns,email,ip}/tests/contract_status.rs` and `crates/{tls,http}/tests/it/contract_status.rs`, which hold a worst-measured and an `unmeasured` row per catalogue check and a guard against the catalogue.
 
 ## Evidence
 
