@@ -8,6 +8,7 @@ mod admission_join;
 mod admission_metrics;
 mod admission_prefetch;
 mod admission_record;
+mod admission_selectors;
 mod admission_slots;
 mod admission_stream;
 mod admission_throttle;
