@@ -61,6 +61,7 @@ mod entries_router;
 mod entries_view;
 mod evidence_address_domain;
 mod evidence_entry;
+mod evidence_idna_domain;
 mod evidence_latest;
 mod evidence_latest_missing;
 mod evidence_readonly;
