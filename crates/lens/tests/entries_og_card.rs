@@ -319,8 +319,9 @@ fn svg_for_entry_is_the_v1_card_without_the_score_line() {
     use lens::og::render::{format_utc_timestamp, svg_for_entry, svg_for_grade};
 
     let t = SystemTime::UNIX_EPOCH + Duration::from_secs(1_800_000_000);
-    let entry = svg_for_entry("a.example.com", "A", DEFAULT_LABEL, t);
-    let v1 = svg_for_grade("a.example.com", "A", DEFAULT_LABEL, 95.0, t);
+    let plate = "<g class=\"plate\"><line class=\"plate__line\" data-code=\"x\"/></g>";
+    let entry = svg_for_entry("a.example.com", "A", DEFAULT_LABEL, t, plate);
+    let v1 = svg_for_grade("a.example.com", "A", DEFAULT_LABEL, 95.0, t, Some(plate));
 
     assert!(entry.contains(">A<"));
     assert!(entry.contains("a.example.com"));

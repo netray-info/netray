@@ -1,0 +1,6 @@
+event: fragment
+data: {"id":"run-line","html":"<div id=\"run-line\">too many checks from your address; try again in <span data-island=\"countdown\" data-retry-after=\"2\">2</span> s</div>"}
+
+event: end
+data: {}
+

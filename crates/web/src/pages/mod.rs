@@ -9,6 +9,7 @@ pub mod guides;
 mod headers;
 mod inspect;
 mod jsonld;
+pub mod result;
 mod status;
 
 use askama::Template;

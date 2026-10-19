@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% import "components/query_input.html" as c %}
+{% block main %}
+<h1>Check a domain</h1>
+{% call c::query_input(query) %}{% endcall %}
+<p>{% include "partials/tagline.html" %}</p>
+<p>One run covers the DNS, TLS, HTTP, email and IP setup of a domain and keeps the history of its results.</p>
+<p>Try <a href="/example.com">example.com</a> or <a href="/netray.info">netray.info</a>.</p>
+<p>One protocol only: <a href="/inspect/dns">DNS</a>, <a href="/inspect/tls">TLS</a>, <a href="/inspect/http">HTTP</a>, <a href="/inspect/ip">IP</a>.</p>
+<ul id="recent" data-island="recent" hidden></ul>
+{% endblock %}

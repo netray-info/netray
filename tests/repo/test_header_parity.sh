@@ -87,7 +87,19 @@ for row in "${rows[@]}"; do
         expect "$l" "$h" referrer-policy strict-origin-when-cross-origin
         expect "$l" "$h" permissions-policy "$PP"
         expect "$l" "$h" cross-origin-opener-policy same-origin
-        expect "$l" "$h" content-security-policy "$CSP"
+        if [ "$sub $path" = "lens /" ]; then
+            # Spec v2-result-page R31: lens's `/` (the result router's idle page) answers the
+            # CSP of a v2-pages route on the same instance, with no inline or eval script.
+            fetch "$port" "$tmp/$sub.guide.h" "$base/guide/" >/dev/null
+            guide_csp=$(hdr "$tmp/$sub.guide.h" content-security-policy)
+            [ -n "$guide_csp" ] || bad "$l: lens GET /guide/ carries no CSP to compare with"
+            expect "$l" "$h" content-security-policy "$guide_csp"
+            script_src=$(tr ';' '\n' <<<"$(hdr "$h" content-security-policy)" | grep -E '^[[:space:]]*script-src([[:space:]]|$)')
+            [ -n "$script_src" ] || bad "$l: CSP has no script-src"
+            case "$script_src" in *"'unsafe-inline'"* | *"'unsafe-eval'"*) bad "$l: script-src '$script_src' holds unsafe-inline or unsafe-eval" ;; esac
+        else
+            expect "$l" "$h" content-security-policy "$CSP"
+        fi
         expect "$l" "$h" access-control-allow-origin '*'
         expect "$l" "$h" cross-origin-resource-policy cross-origin
         absent "$l" "$h" server

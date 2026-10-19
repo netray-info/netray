@@ -204,6 +204,11 @@ impl SpectrumBand {
     fn boundary_pct(&self) -> Option<String> {
         self.boundary.map(|b| format!("{b:.4}"))
     }
+
+    /// Whether `live`, a space-separated list of protocol names, names this band.
+    fn is_live(&self, live: &str) -> bool {
+        live.split(' ').any(|p| p == self.protocol)
+    }
 }
 
 /// One label: `x` the leader in percent of the plate, `width` the box width in px.
@@ -260,7 +265,7 @@ pub struct SpectrumView {
     pub regions: Vec<SpectrumRegion>,
 }
 
-fn line_tone(tone: crate::spectrum::LineTone) -> Tone {
+pub(crate) fn line_tone(tone: crate::spectrum::LineTone) -> Tone {
     use crate::spectrum::LineTone;
     match tone {
         LineTone::Pass => Tone::Pass,
@@ -272,6 +277,11 @@ fn line_tone(tone: crate::spectrum::LineTone) -> Tone {
 }
 
 impl SpectrumView {
+    /// One line's share of the plate width, the width of its hit target.
+    fn pitch_pct(&self) -> String {
+        format!("{:.4}", 100.0 / self.line_count.max(1) as f64)
+    }
+
     /// The view of a layout: percent positions from px, one band per protocol group, one run
     /// group and one label set per run, `shown` marking the run on display.
     pub fn from_layout(layout: &crate::spectrum::Layout, label: &str, shown: usize) -> Self {
@@ -468,8 +478,24 @@ component!(
     spectrum,
     SpectrumTemplate,
     SpectrumView,
-    "{% import \"components/spectrum.html\" as c %}{% call c::spectrum(view) %}{% endcall %}"
+    "{% import \"components/spectrum.html\" as c %}{% call c::spectrum(view, \"\") %}{% endcall %}"
 );
+
+#[derive(Template)]
+#[template(
+    source = "{% import \"components/spectrum.html\" as c %}{% call c::spectrum(view, live) %}{% endcall %}",
+    ext = "html"
+)]
+struct SpectrumLiveTemplate<'a> {
+    view: &'a SpectrumView,
+    live: &'a str,
+}
+
+/// Renders the `spectrum` component with the bands named in `live` (space-separated protocol
+/// names) marked as measured by the run on display.
+pub fn spectrum_live(view: &SpectrumView, live: &str) -> askama::Result<String> {
+    SpectrumLiveTemplate { view, live }.render()
+}
 component!(
     trace,
     TraceTemplate,

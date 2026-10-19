@@ -77,6 +77,7 @@ fn stub(
             domain: card.domain.clone(),
             grade: card.grade.clone(),
             created_at: card.created_at,
+            plate: card.plate.clone(),
         });
         result()
     });

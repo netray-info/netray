@@ -6,6 +6,7 @@ use axum::response::{IntoResponse, Response};
 use netray_engine::history::score_run;
 use netray_engine::profile::Profiles;
 use netray_store::Head;
+use netray_web::plate::{card_layout, card_plate};
 use xxhash_rust::xxh3::xxh3_64;
 
 use crate::admission::{Admit, Trigger, admit, until_done};
@@ -21,8 +22,18 @@ pub struct OgQueryParams {
     pub label: Option<String>,
 }
 
-fn compute_etag(domain: &str, grade: &str, label: &str, score_pct: f64) -> String {
-    let input = format!("{domain}\x00{grade}\x00{label}\x00{score_pct:.1}");
+fn compute_etag(
+    domain: &str,
+    grade: &str,
+    label: &str,
+    score_pct: f64,
+    plate: Option<&str>,
+) -> String {
+    let mut input = format!("{domain}\x00{grade}\x00{label}\x00{score_pct:.1}");
+    if let Some(plate) = plate {
+        input.push('\x00');
+        input.push_str(plate);
+    }
     let hash = xxh3_64(input.as_bytes());
     format!("\"{hash:016x}\"")
 }
@@ -50,11 +61,17 @@ fn render_error_from(e: RenderError) -> Response {
     AppError::RenderFailed(e.to_string()).into_response()
 }
 
-/// Renders an entry's card in the V1 layout, without a score.
+/// Renders an entry's card in the V1 layout with the plate of its run, without a score.
 pub(crate) fn entry_card_renderer(state: &AppState) -> netray_web::entries::CardRenderer {
     let font_db = state.font_db.clone();
     std::sync::Arc::new(move |card: &netray_web::entries::EntryCard| {
-        let svg = svg_for_entry(&card.domain, &card.grade, DEFAULT_LABEL, card.created_at);
+        let svg = svg_for_entry(
+            &card.domain,
+            &card.grade,
+            DEFAULT_LABEL,
+            card.created_at,
+            &card.plate,
+        );
         svg_to_png(&svg, font_db.clone()).map_err(|e| Box::new(render_error_from(e)))
     })
 }
@@ -140,6 +157,7 @@ struct Card {
     grade: String,
     score_pct: f64,
     checked_at: SystemTime,
+    plate: Option<String>,
 }
 
 impl Card {
@@ -148,12 +166,14 @@ impl Card {
             grade: grade.to_string(),
             score_pct,
             checked_at,
+            plate: None,
         }
     }
 }
 
 /// The card of the head entry: its grade, the percentage of its stored run under the profile
-/// it was scored with, and when it was last seen. `None` when the entry is gone.
+/// it was scored with, when it was last seen, and the plate of its run over its predecessor's;
+/// with the stored run. `None` when the entry is gone.
 async fn head_card(state: &AppState, head: &Head) -> Option<Card> {
     let store = state.history_store.as_ref()?;
     let entry = match store.get(&head.id).await {
@@ -171,11 +191,26 @@ async fn head_card(state: &AppState, head: &Head) -> Option<Card> {
         Profiles::get(entry.profile_version).unwrap_or(configured)
     };
     let seen = u64::try_from(head.last_seen_at).unwrap_or(0);
-    Some(Card::new(
+    let predecessor = match &entry.predecessor_id {
+        Some(id) => match store.get(id).await {
+            Ok(found) => found,
+            Err(e) => {
+                tracing::warn!(error = %e, id = %id, "history predecessor lookup failed");
+                None
+            }
+        },
+        None => None,
+    };
+    let mut card = Card::new(
         grade_label(head.grade),
         score_run(&entry.run, profile).overall_percentage,
         UNIX_EPOCH + Duration::from_secs(seen),
-    ))
+    );
+    card.plate = Some(card_plate(&card_layout(
+        &entry.run,
+        predecessor.as_ref().map(|p| &p.run),
+    )));
+    Some(card)
 }
 
 /// The card PNG; `long` asks for the long `Cache-Control`, which an unscored grade never gets.
@@ -187,11 +222,24 @@ fn og_response(
     card: &Card,
     long: bool,
 ) -> Response {
-    let etag = compute_etag(domain, &card.grade, label, card.score_pct);
+    let etag = compute_etag(
+        domain,
+        &card.grade,
+        label,
+        card.score_pct,
+        card.plate.as_deref(),
+    );
     if is_not_modified(req_headers, &etag) {
         return StatusCode::NOT_MODIFIED.into_response();
     }
-    let svg = svg_for_grade(domain, &card.grade, label, card.score_pct, card.checked_at);
+    let svg = svg_for_grade(
+        domain,
+        &card.grade,
+        label,
+        card.score_pct,
+        card.checked_at,
+        card.plate.as_deref(),
+    );
     let png = match svg_to_png(&svg, state.font_db.clone()) {
         Ok(b) => b,
         Err(e) => return render_error_from(e),

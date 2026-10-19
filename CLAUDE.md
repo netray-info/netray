@@ -53,6 +53,10 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - A paused tokio clock times out sqlx pool acquires: never combine `start_paused` or `pause()` with a `HistoryStore`.
 - governor's `check` spends a token whatever follows: take a keyed limiter after every refusal that must cost nothing.
 - Adding a field to a protected test's struct literal still needs `ADLC-Test-Change`: the gate's tamper check flags any change.
+- lens reads every `LENS_*` variable as a config key, `LENS_EXTRA` included: `acceptance-local` unsets it after building lens's env row.
+- Node 26 defines a global `localStorage` that shadows happy-dom's: an island test installs its own storage, as `islands/test/theme.test.ts`'s `useStorage` does.
+- A golden over live-run markup carries the wall clock: normalise it (`NOW` in `crates/web/tests/result_islands_fixtures.rs`), or the golden breaks at midnight.
+- `HistoryStore::sweep` always keeps the head's predecessor: a swept-predecessor test needs a third entry as head.
 - Never put `|` in a `report.md` criteria cell, even in backticks: `adlc next` splits cells on it and keeps the phase open.
 
 The adlc working rules (receipt, baseline trailer, test changes, review) are in `AGENTS.md`.

@@ -6,6 +6,7 @@
 //! its explore-live links.
 
 pub mod api;
+mod client;
 pub mod components;
 pub mod contrast;
 pub mod entries;
@@ -13,6 +14,7 @@ pub mod evidence;
 pub mod explore;
 pub mod gate;
 pub mod pages;
+pub mod plate;
 pub mod spectrum;
 pub mod stream;
 pub mod tokens;

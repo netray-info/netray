@@ -422,12 +422,14 @@ async fn admission_prefetch_c10_a_prefetched_og_card_renders_the_stale_entry_sho
     let h = harness(100, None, true).await;
     let (run, seen) = seed_head(&h, "example.com", Grade::A, 400).await;
     let pct = netray_engine::history::score_run(&run, &h.state.scoring_profile).overall_percentage;
+    let plate = netray_web::plate::card_plate(&netray_web::plate::card_layout(&run, None));
     let svg = lens::og::render::svg_for_grade(
         "example.com",
         "A",
         lens::og::layout::DEFAULT_LABEL,
         pct,
         UNIX_EPOCH + Duration::from_secs(seen as u64),
+        Some(&plate),
     );
     let expected = lens::og::render::svg_to_png(&svg, h.state.font_db.clone()).unwrap();
 

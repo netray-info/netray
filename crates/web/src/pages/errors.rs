@@ -25,6 +25,7 @@ struct NotFoundPage {
     frame: Frame,
     query: QueryInputView,
     invalid: bool,
+    reason: Option<String>,
 }
 
 #[derive(Template)]
@@ -33,7 +34,7 @@ struct ServerErrorPage {
     frame: Frame,
 }
 
-fn query_view(value: Option<String>) -> QueryInputView {
+pub(super) fn query_view(value: Option<String>) -> QueryInputView {
     QueryInputView {
         action: "/".to_string(),
         name: "d".to_string(),
@@ -44,7 +45,12 @@ fn query_view(value: Option<String>) -> QueryInputView {
     }
 }
 
-fn not_found_page(status: StatusCode, value: Option<String>, invalid: bool) -> Response {
+fn not_found_page(
+    status: StatusCode,
+    value: Option<String>,
+    invalid: bool,
+    reason: Option<String>,
+) -> Response {
     let (title, description) = if invalid {
         (
             "Not a domain name - netray",
@@ -63,13 +69,24 @@ fn not_found_page(status: StatusCode, value: Option<String>, invalid: bool) -> R
             frame: Frame::new(title, description, "/"),
             query: query_view(value),
             invalid,
+            reason,
         },
+    )
+}
+
+/// The 400 page of a refused domain segment: the input refilled, the reason stated.
+pub(super) fn refused_page(input: &str, reason: &str) -> Response {
+    not_found_page(
+        StatusCode::BAD_REQUEST,
+        Some(input.to_string()),
+        true,
+        Some(reason.to_string()),
     )
 }
 
 /// The 404 page.
 pub async fn not_found() -> Response {
-    not_found_page(StatusCode::NOT_FOUND, None, false)
+    not_found_page(StatusCode::NOT_FOUND, None, false, None)
 }
 
 /// The 500 page; a plain-text body when even that does not render.
@@ -126,6 +143,6 @@ pub async fn query_redirect(uri: Uri) -> Response {
             let location = format!("/{}", utf8_percent_encode(&domain, LOCATION_SET));
             secure((StatusCode::MOVED_PERMANENTLY, [(LOCATION, location)]).into_response())
         }
-        None => not_found_page(StatusCode::BAD_REQUEST, Some(raw.clone()), true),
+        None => not_found_page(StatusCode::BAD_REQUEST, Some(raw.clone()), true, None),
     }
 }

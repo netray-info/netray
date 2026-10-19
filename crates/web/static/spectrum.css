@@ -90,3 +90,13 @@
 .spectrum__line-label[data-tone="warn"] { color: var(--status-warn-text); }
 .spectrum__line-label[data-tone="fail"] { color: var(--status-fail-text); }
 .spectrum__line-label[data-tone="fix"] { color: var(--status-fix-text); }
+.spectrum__targets {
+  position: relative;
+  height: 0;
+}
+.spectrum__target {
+  position: absolute;
+  top: calc(-1 * var(--spectrum-plate-height));
+  height: var(--spectrum-plate-height);
+  transform: translateX(-50%);
+}

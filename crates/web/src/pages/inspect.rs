@@ -4,7 +4,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::convert::Infallible;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -14,7 +14,7 @@ use axum::extract::connect_info::ConnectInfo;
 use axum::extract::rejection::PathRejection;
 use axum::extract::{Form, FromRequest, Path, Query, Request, State};
 use axum::http::header::{CACHE_CONTROL, RETRY_AFTER};
-use axum::http::{HeaderMap, StatusCode, Uri};
+use axum::http::{StatusCode, Uri};
 use axum::response::sse::Event;
 use axum::response::{IntoResponse, Response, Sse};
 use axum::routing::{get, post};
@@ -34,6 +34,7 @@ use url::{Host, Url};
 use super::errors::LOCATION_SET;
 use super::headers::secure;
 use super::{Frame, not_found, page, server_error};
+use crate::client::client_ip;
 use crate::components::{self, QueryInputView, SpectrumView};
 use crate::evidence::{block_view, live_run_line};
 use crate::spectrum::{RunInput, layout};
@@ -398,14 +399,6 @@ fn backlink(tool: Tool, input: &str) -> Option<(String, String)> {
     Some((href, domain))
 }
 
-/// The caller address: `CF-Connecting-IP` dropped, then the configured extractor.
-fn client(extractor: &IpExtractor, headers: &HeaderMap, peer: Option<SocketAddr>) -> IpAddr {
-    let mut headers = headers.clone();
-    headers.remove("cf-connecting-ip");
-    let peer = peer.unwrap_or_else(|| SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 0));
-    extractor.extract(&headers, peer)
-}
-
 type Events = BoxStream<'static, Result<Event, Infallible>>;
 
 fn sse(status: StatusCode, events: Vec<Event>) -> Response {
@@ -450,7 +443,7 @@ async fn run(
         .extensions
         .get::<ConnectInfo<SocketAddr>>()
         .map(|c| c.0);
-    let client = client(&deps.extractor, &parts.headers, peer);
+    let client = client_ip(&deps.extractor, &parts.headers, peer);
     let req = Request::from_parts(parts, body);
     let mut form = match Form::<HashMap<String, String>>::from_request(req, &()).await {
         Ok(Form(form)) => form,

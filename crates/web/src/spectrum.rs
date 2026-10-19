@@ -65,7 +65,7 @@ pub enum LayoutError {
     NoLines,
 }
 
-fn px(value: &str) -> f64 {
+pub(crate) fn px(value: &str) -> f64 {
     value
         .strip_suffix("px")
         .and_then(|n| n.parse().ok())

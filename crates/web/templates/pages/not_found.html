@@ -3,6 +3,7 @@
 {% block main %}
 <h1>Nothing here</h1>
 {% call c::query_input(query) %}{% endcall %}
+{% if let Some(reason) = reason %}<p>{{ reason }}</p>{% endif %}
 {% if invalid %}
 <p>
 Enter a domain name, e.g. example.com.

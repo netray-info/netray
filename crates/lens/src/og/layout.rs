@@ -6,6 +6,10 @@ pub const GRADE_FONT_SIZE: f32 = 260.0;
 pub const GRADE_CENTER_X: f32 = 240.0;
 pub const GRADE_BASELINE_Y: f32 = 400.0;
 
+// Plate (the spectrum of the run, 1104 x 56 px, labels rising above it)
+pub const PLATE_X: f32 = 48.0;
+pub const PLATE_Y: f32 = 72.0;
+
 // Right column — shared X origin
 pub const RIGHT_X: f32 = 500.0;
 

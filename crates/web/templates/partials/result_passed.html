@@ -1,0 +1,5 @@
+{% import "components/check_row.html" as check_row %}
+<details id="passed">
+<summary>Checks that passed or do not apply</summary>
+{% for row in rows %}{% call check_row::check_row(row) %}{% endcall %}{% endfor %}
+</details>
