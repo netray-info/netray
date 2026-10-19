@@ -99,6 +99,11 @@ pub struct CaaInfo {
     #[serde(skip)]
     #[schema(ignore)]
     pub answered: Option<CaaSource>,
+    /// The records the verdict was judged from, so each port's leaf can be judged against them;
+    /// `None` when the response was read from JSON.
+    #[serde(skip)]
+    #[schema(ignore)]
+    pub lookup: Option<CaaLookup>,
 }
 
 /// The CAA records TLS judged by: the facts' records, or its own climb's answered records with
@@ -848,6 +853,7 @@ pub async fn inspect(
                 issuer_allowed,
                 issuewild_present: caa.issuewild_present(),
                 answered: caa_answered.clone(),
+                lookup: Some(caa.clone()),
             }
         });
 

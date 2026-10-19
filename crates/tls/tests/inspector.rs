@@ -33,7 +33,8 @@ fn limits() -> RateLimitState {
 fn req(host: &str, port: u16) -> TlsInspectRequest {
     TlsInspectRequest {
         host: host.into(),
-        port,
+        port: Some(port),
+        ports: None,
     }
 }
 

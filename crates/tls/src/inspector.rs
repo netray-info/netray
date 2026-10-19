@@ -13,18 +13,29 @@ use crate::routes::{self, InspectRequest, InspectResponse};
 use crate::security::RateLimitState;
 use crate::state::AppState;
 
-fn default_port() -> u16 {
-    443
-}
-
-/// One host and port to inspect.
+/// One host and its port or ports to inspect.
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TlsInspectRequest {
     pub host: String,
-    #[serde(default = "default_port")]
-    #[schema(default = 443)]
-    pub port: u16,
+    /// The port; 443 by default.
+    #[serde(default)]
+    #[schema(default = 443, value_type = u16)]
+    pub port: Option<u16>,
+    /// Several ports instead of `port`, at most `limits.max_ports`, each inspected once.
+    #[serde(default)]
+    #[schema(value_type = Vec<u16>)]
+    pub ports: Option<Vec<u16>>,
+}
+
+fn dedup_ports(ports: impl IntoIterator<Item = u16>) -> Vec<u16> {
+    let mut out: Vec<u16> = Vec::new();
+    for p in ports {
+        if !out.contains(&p) {
+            out.push(p);
+        }
+    }
+    out
 }
 
 /// Why an inspection did not run to an answer.
@@ -76,10 +87,13 @@ impl TlsInspector {
 
     /// tlsight's input rules with this inspector's `limits.max_ports`.
     pub fn parse(&self, input: &str) -> Result<ParsedInput, AppError> {
-        input::parse_input(input, self.state.config.load().limits.max_ports)
+        let mut parsed = input::parse_input(input, self.state.config.load().limits.max_ports)?;
+        parsed.ports = dedup_ports(parsed.ports);
+        Ok(parsed)
     }
 
-    /// Inspects `req.host` on `req.port`; a port in `host` is ignored, as tlsight's POST does.
+    /// Inspects `req.host` on `req.port` or `req.ports` (443 when neither is given); a port in
+    /// `host` is ignored, as tlsight's POST does.
     pub async fn inspect(
         &self,
         req: &TlsInspectRequest,
@@ -88,10 +102,32 @@ impl TlsInspector {
         request_id: String,
     ) -> Result<InspectResponse, TlsRefusal> {
         let mut parsed = self.parse(&req.host)?;
-        if req.port == 0 {
+        let ports = match (req.port, &req.ports) {
+            (Some(_), Some(_)) => {
+                return Err(
+                    AppError::InvalidPort("give port or ports, not both".to_string()).into(),
+                );
+            }
+            (None, Some(list)) if list.is_empty() => {
+                return Err(AppError::InvalidPort("ports must not be empty".to_string()).into());
+            }
+            (None, Some(list)) => list.clone(),
+            (Some(p), None) => vec![p],
+            (None, None) => vec![443],
+        };
+        if ports.contains(&0) {
             return Err(AppError::InvalidPort("port must be 1-65535".to_string()).into());
         }
-        parsed.ports = vec![req.port];
+        let ports = dedup_ports(ports);
+        let max = self.state.config.load().limits.max_ports;
+        if ports.len() > max {
+            return Err(AppError::TooManyPorts {
+                requested: ports.len(),
+                max,
+            }
+            .into());
+        }
+        parsed.ports = ports;
         Ok(self
             .inspect_parsed(parsed, client, limits, request_id)
             .await?)
