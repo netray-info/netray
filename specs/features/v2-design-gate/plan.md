@@ -49,3 +49,18 @@ G3 imports G1 and G2 without editing them.
   naming it before service URLs or the browser; per board: page side (a `no state` deviation for
   HTTP >= 400 or a non-fresh result), board side, deviations, side-by-side; then `applyAccepted`,
   `target/design/report.md`, the summary lines, exit `summary.status`.
+
+## Phase 3 — Rules, manifest for the result boards, verification on main
+
+### Groups
+
+G1: C1, C4 (rules document and the CLAUDE.md row). C2, C3 are the run against main with the
+private manifest (no committed test).
+
+### Plan
+
+- **G1** `specs/rules/design-rules.md` (new): when, the check, the five classes and tolerances,
+  what does not count, the dispositions and how a row closes; `CLAUDE.md` rules-table row (prose
+  commit at the end).
+- Private manifest `netray-ops/specs/netray/design/canvas/manifest.json` (five binding result
+  boards), committed in netray-ops; `just design-check` on the branch, whose pages equal main's.

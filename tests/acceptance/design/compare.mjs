@@ -58,6 +58,8 @@ function pxWithin(b, p, tol) {
 const firstFamily = (v) =>
   String(v).split(',')[0].trim().replace(/^["']|["']$/g, '').trim().toLowerCase();
 
+const zeroNormal = (v) => (String(v).trim() === 'normal' ? '0px' : v);
+
 function within(cls, prop, b, p) {
   // An empty value is a property the browser cannot read (a misspelt name): never a match.
   if (b == null || p == null || String(b).trim() === '' || String(p).trim() === '') return false;
@@ -65,6 +67,8 @@ function within(cls, prop, b, p) {
   if (cls === 'typography') {
     if (prop === 'font-weight') return String(b).trim() === String(p).trim();
     if (prop === 'font-family') return firstFamily(b) === firstFamily(p);
+    // Chromium reads letter-spacing 0 back as `normal`.
+    if (prop === 'letter-spacing') return pxWithin(zeroNormal(b), zeroNormal(p), 1);
     return pxWithin(b, p, 1);
   }
   if (cls === 'colour') {

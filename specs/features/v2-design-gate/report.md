@@ -102,3 +102,73 @@ inside each frame. With missing export: exit 2 naming the path (`test_design_exp
 | AMENDMENT | an `accepted` entry of a board without a state was reported stale | fixed: neither matched nor stale; test row added |
 | DEFERRED | inspector boards (HTTP 200, result over a stream) never become `no state` | deferred to the first feature whose manifest names an inspector board; decision log |
 | NIT | duplicate `accepted` entries made one always stale | loader refuses duplicates; test row added |
+
+## Phase 3 — Rules, manifest for the result boards, verification on main
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R8 Rules: `specs/rules/design-rules.md` states the five classes and tolerances, what does not count, the three dispositions, rows start `open` and keep `adlc next` on implement, the visual channel, and that a UI feature runs `just design-check` before review; CLAUDE.md's rules table names it for the three frontend paths | green | tests/repo/test_design_rules.sh |
+| C2 | R9 Verified on main: a manifest covering the binding result boards (history and first visit, light and dark, 1280; mobile 390 light) reports at least the h1 domain's size or weight, the re-check button's height and background, and the missing score line | test-unwritable | design-check |
+| C3 | GIVEN the result-board manifest and main WHEN `just design-check` runs THEN it exits 1 and the report lists the h1 domain's size or weight, the re-check button's height or background, and the score line as missing | test-unwritable | design-check |
+| C4 | GIVEN CLAUDE.md WHEN read THEN its rules table names `specs/rules/design-rules.md` with the three frontend paths | green | tests/repo/test_design_rules.sh |
+
+C2 and C3 need the private canvas and a browser, so no committed test can hold them; they are
+verified by the run below (`test-unwritable` for the gate).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 rules and CLAUDE.md row | written by the orchestrator (prose) | n/a | n/a | n/a |
+
+### Behavioural verification
+
+Manifest (private): `netray-ops/specs/netray/design/canvas/manifest.json`, committed there as
+e33e9eb: the five binding result boards (history light and dark 1280 on `/shop.example.com`, first
+visit light and dark 1280 on `/new.example.com`, mobile light 390 on `/shop.example.com`), eight
+named elements each (h1 typography and colour, grade letter, score line, re-check button spacing,
+text and colour, section heading). The branch changes nothing under `crates/` or `site/` against
+main (`git diff --stat c3bc3980 HEAD -- crates site` is empty), so the run is main's pages.
+
+`just design-check` (default manifest): exit 1.
+
+```
+D3 · Analyzer — history (option 1+2), light: 12 deviation(s)
+D3 · Analyzer — history (option 1+2), dark: 12 deviation(s)
+D3 · Analyzer — first visit, light: 12 deviation(s)
+D3 · Analyzer — first visit, dark: 12 deviation(s)
+D3 · Mobile result — light (Play: ‹ › and tap lines): 10 deviation(s)
+58 open deviation(s), 0 stale accepted entries
+```
+
+The twelve per desktop board (the same on all four, colours per theme):
+
+- h1 domain font-weight board 650, page 700; line-height board 44px, page `normal` (size 40px matches)
+- grade letter line-height board 74.8px, page 88px
+- score line: element missing on page
+- re-check button height board 44px, page 21px; padding-left and padding-right board 18px, page 6px
+- re-check button font-weight board 600, page 400
+- re-check button background board rgb(15, 18, 22) (dark: rgb(231, 233, 236)), page rgb(239, 239, 239) (dark: rgb(107, 107, 107)), the browser's default button; text colour and border colour likewise
+- section heading: element missing on page (no `h2` in `#result`)
+
+Mobile 390 light: the same, except the button's height and padding are within tolerance and its
+font size differs (board 15px, page 13.3333px); h1 line-height board 29.9px, page `normal`.
+
+Visual channel (side-by-side of history light, read once): the page lacks the board's run
+meta line above the h1, sets re-check and share as an unstyled button and a link instead of the
+board's button pair beside the domain, and renders the issue list without the board's grouped
+cards. These belong to the gap-closure features that use this check.
+
+### Reader
+
+| class | finding | disposition |
+|---|---|---|
+| AMENDMENT | "deliberately different" via `accepted` works for measured value rows only | rules say how missing-element and visual rows are dispositioned (element leaves the manifest; decision log) |
+| AMENDMENT | the rules named no closing status for a resolved row | rules: a resolved row is set to `green` |
+| AMENDMENT | "binding are the D3 boards" included the logo explorations | rules list the reference boards the canvas README names |
+| AMENDMENT | letter-spacing `normal` (Chromium's read of 0) compared as a string | fixed: `normal` reads as 0px for letter-spacing; test rows added |
+| NIT | "class 1" unnumbered in the rules | rules: class 1 is missing or extra elements |
+| NIT | outputs for a `no state` board and `page.json` unstated | rules state them |
+| NIT | "offsets" under measured spacing | removed; distances are hierarchy |
