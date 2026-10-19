@@ -162,9 +162,11 @@ GIVEN the inspect page with `[api.tls] per_ip_burst = 2` WHEN the TLS job runs `
   (operator, 2026-10-19).
 - The normal form is the ASCII (A-label) form, and it is what lens stores, links and displays: an
   IDN typed as Unicode and as `xn--` is one domain with one history, every module (TLS's hostname
-  rule is ASCII-only) gets a name it can use, and the 301 `location` is ASCII. An existing history
-  stored under a Unicode name stays reachable only under its A-label from now on; showing the
-  U-label is the UI half's choice (implementer under the operator's autonomy mandate, 2026-10-19).
+  rule is ASCII-only) gets a name it can use, and the 301 `location` is ASCII. A history already
+  stored under a Unicode name is orphaned: every domain route now asks for the A-label, the old
+  rows stay reachable only by `/r/<id>` and the retention sweep removes them; no re-key migration,
+  since V2's history is days old. Showing the U-label is the UI half's choice (implementer under
+  the operator's autonomy mandate, 2026-10-19; amended after the phase 1 reader).
 - The URL deny list, not STD3: STD3 refuses `_`, which `_dmarc`-style names carry; the URL list
   refuses exactly what a URL host cannot hold, whitespace included (implementer under the
   operator's autonomy mandate, 2026-10-19).
@@ -178,6 +180,11 @@ GIVEN the inspect page with `[api.tls] per_ip_burst = 2` WHEN the TLS job runs `
 - A `429` that could never pass becoming a `400` is a fix, not a change of meaning under API v1's
   additive rule: no client could have relied on the retry succeeding (implementer under the
   operator's autonomy mandate, 2026-10-19).
+
+- UTS #46's bidi rule comes with the mapping: in a name that also holds a right-to-left label, an
+  ASCII label starting with a digit or `_` is refused (`_dmarc.xn--4dbrk0ce.co.il`). The URL
+  Standard refuses the same hosts; lens takes registrable domains, not `_`-prefixed names, so the
+  case is left (implementer under the operator's autonomy mandate, 2026-10-19).
 
 ## Open decisions
 

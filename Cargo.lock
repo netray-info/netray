@@ -2940,6 +2940,7 @@ dependencies = [
  "config",
  "futures",
  "governor",
+ "idna",
  "ip_network",
  "metrics",
  "metrics-exporter-prometheus",

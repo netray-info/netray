@@ -25,7 +25,10 @@ fn c6_fullwidth_addresses_are_refused_as_addresses() {
 fn c7_a_fullwidth_numeric_last_label_is_refused() {
     let input = "０x７f.1";
     let err = validate(input).expect_err(input);
-    assert!(err.starts_with("the last label is a number"), "{input}: {err}");
+    assert!(
+        err.starts_with("the last label is a number"),
+        "{input}: {err}"
+    );
 }
 
 #[test]
@@ -52,7 +55,11 @@ fn c9_width_stop_and_case_variants_map_to_one_form() {
 #[test]
 fn c10_unicode_and_punycode_answer_one_ascii_form() {
     for input in ["bücher.de", "xn--bcher-kva.de"] {
-        assert_eq!(validate(input), Ok("xn--bcher-kva.de".to_string()), "{input}");
+        assert_eq!(
+            validate(input),
+            Ok("xn--bcher-kva.de".to_string()),
+            "{input}"
+        );
     }
 }
 
@@ -66,5 +73,16 @@ fn c11_ordinary_names_answer_unchanged() {
         "xn--nxasmq6b.xn--jxalpdlp",
     ] {
         assert_eq!(validate(input), Ok(input.to_string()), "{input}");
+    }
+}
+
+#[test]
+fn c7_a_last_label_numeric_only_after_mapping_is_refused() {
+    for input in ["a.１２３", "a.０x７f"] {
+        let err = validate(input).expect_err(input);
+        assert!(
+            err.starts_with("the last label is a number"),
+            "{input}: {err}"
+        );
     }
 }

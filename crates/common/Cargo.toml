@@ -25,6 +25,7 @@ backend = ["dep:reqwest", "dep:moka", "dep:tokio", "dep:bytes", "dep:thiserror"]
 fetch = ["dep:reqwest", "dep:tokio", "dep:url", "dep:thiserror", "dep:bytes"]
 
 [dependencies]
+idna = { workspace = true }
 # HTTP framework (for HeaderMap, StatusCode, IntoResponse)
 axum = { workspace = true, features = ["json"] }
 
