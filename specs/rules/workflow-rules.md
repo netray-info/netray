@@ -41,7 +41,7 @@ on:
 
 ## §2 `ci.yml`
 
-One job on `ubuntu-24.04-arm`. Setup steps provide the Rust toolchain, the caches, Node, `just` and the GeoIP data (from the private `ifconfig-rs-data` image); then `just adlc-setup` and `just check` run. The justfile is the single definition of what the gate contains.
+One job on `ubuntu-24.04-arm`. Setup steps provide the Rust toolchain, the mold linker (`rui314/setup-mold`, pinned `mold-version`), the caches, Node, `just` and the GeoIP data (from the private `ifconfig-rs-data` image); then `just adlc-setup` and `just check` run. The justfile is the single definition of what the gate contains.
 
 ```yaml
 concurrency:
