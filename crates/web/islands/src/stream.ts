@@ -99,6 +99,9 @@ export function stream(form: HTMLFormElement, mount: Mount): void {
 
     setState("running");
     errorBox()?.setAttribute("hidden", "");
+    // A refused job answers one fragment; elements a started job re-sends (the inspector's
+    // back-link) are emptied first, so a refusal never leaves the previous target's (v2-cutover C12).
+    for (const el of document.querySelectorAll("[data-stream-reset]")) el.replaceChildren();
 
     let ended = false;
     try {

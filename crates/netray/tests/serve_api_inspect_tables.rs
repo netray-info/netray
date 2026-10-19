@@ -108,11 +108,17 @@ fn api_ip_batch_max_size_out_of_range_is_refused_naming_the_key() {
     // The table must parse first: a deny_unknown_fields error names `api`, not the key.
     let (code, out) = run(&["serve", path], &dir);
     assert!(code.is_some_and(|c| c != 0), "serve exited {code:?}: {out}");
-    assert!(out.contains("batch_max_size"), "output lacks the key: {out}");
+    assert!(
+        out.contains("batch_max_size"),
+        "output lacks the key: {out}"
+    );
     // validate() runs at load, so --check-config refuses it too.
     let (code, out) = run(&["serve", "--check-config", path], &dir);
     assert_eq!(code, Some(1), "--check-config: {out}");
-    assert!(out.contains("batch_max_size"), "output lacks the key: {out}");
+    assert!(
+        out.contains("batch_max_size"),
+        "output lacks the key: {out}"
+    );
 }
 
 fn get_status(port: u16, path: &str) -> Option<String> {
@@ -137,7 +143,10 @@ fn serve_and_get(tag: &str, extra: &str, path: &str) -> String {
     let mut child = Killed(
         command(&["serve", cfg.to_str().unwrap()])
             .env("NETRAY_SERVER__BIND", format!("127.0.0.1:{port}"))
-            .env("NETRAY_SERVER__METRICS_BIND", format!("127.0.0.1:{metrics}"))
+            .env(
+                "NETRAY_SERVER__METRICS_BIND",
+                format!("127.0.0.1:{metrics}"),
+            )
             .stdout(log.try_clone().unwrap())
             .stderr(log)
             .spawn()

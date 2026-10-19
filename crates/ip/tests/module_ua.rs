@@ -29,7 +29,10 @@ async fn caller_user_agent_is_parsed_from_the_configured_regexes() {
         .expect("user_agent_regexes is a [modules.ip] key");
     let module = IpModule::new(cfg).await.expect("module loads without GeoIP data");
     let remote = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 0, 2, 1)), 4242);
-    let answer = module.lookup_caller(remote, Some(FIREFOX)).await.expect("caller answers");
+    let answer = module
+        .lookup_caller(remote, Some(FIREFOX))
+        .await
+        .expect("caller answers");
     let ua = answer.user_agent.expect("the caller carries a user agent");
     assert_eq!(ua.browser.family, "Firefox");
     assert_eq!(ua.browser.major.as_deref(), Some("128"));

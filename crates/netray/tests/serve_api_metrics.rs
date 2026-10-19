@@ -134,8 +134,6 @@ fn start(tag: &str, apex: Option<&str>) -> Server {
     panic!("GET /health never answered 200 within 30 s");
 }
 
-
-
 fn metrics_text(srv: &Server) -> String {
     let m = get(srv.metrics, Some("netray.info"), "/metrics");
     assert_eq!(m.status, 200);
@@ -145,7 +143,11 @@ fn metrics_text(srv: &Server) -> String {
 /// Sample lines as (name, [(label, value)], value text).
 fn samples(text: &str) -> Vec<(String, Vec<(String, String)>, String)> {
     let mut out = Vec::new();
-    for line in text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
+    for line in text
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+    {
         let (series, value) = line.rsplit_once(' ').unwrap_or((line, ""));
         let (name, labels) = match series.split_once('{') {
             Some((n, rest)) => (n, rest.trim_end_matches('}')),
@@ -154,7 +156,12 @@ fn samples(text: &str) -> Vec<(String, Vec<(String, String)>, String)> {
         let pairs = labels
             .split("\",")
             .filter_map(|p| p.split_once("=\""))
-            .map(|(k, v)| (k.trim_start_matches(',').trim().to_owned(), v.trim_end_matches('"').to_owned()))
+            .map(|(k, v)| {
+                (
+                    k.trim_start_matches(',').trim().to_owned(),
+                    v.trim_end_matches('"').to_owned(),
+                )
+            })
             .collect();
         out.push((name.to_owned(), pairs, value.to_owned()));
     }
@@ -174,7 +181,8 @@ fn api_v1_domain_route_is_counted_by_its_template() {
         .iter()
         .filter(|(n, l, _)| {
             n == "netray_api_requests_total"
-                && l.iter().any(|(k, v)| k == "endpoint" && v == "/api/v1/domains/{domain}")
+                && l.iter()
+                    .any(|(k, v)| k == "endpoint" && v == "/api/v1/domains/{domain}")
         })
         .filter_map(|(_, _, v)| v.parse::<f64>().ok())
         .sum();
@@ -192,7 +200,9 @@ fn exposition_labels_never_carry_request_values() {
     let _ = send(srv.port, APEX, "POST", "/inspect/ip/run", "ip=192.0.2.1");
 
     let text = metrics_text(&srv);
-    let banned = ["domain", "host", "address", "ip", "client", "target", "url", "query", "name", "id"];
+    let banned = [
+        "domain", "host", "address", "ip", "client", "target", "url", "query", "name", "id",
+    ];
     let mut bad = Vec::new();
     for (name, labels, _) in samples(&text) {
         for (k, v) in &labels {
@@ -209,5 +219,9 @@ fn exposition_labels_never_carry_request_values() {
             }
         }
     }
-    assert!(bad.is_empty(), "request values in labels:\n  {}\n--- exposition ---\n{text}", bad.join("\n  "));
+    assert!(
+        bad.is_empty(),
+        "request values in labels:\n  {}\n--- exposition ---\n{text}",
+        bad.join("\n  ")
+    );
 }

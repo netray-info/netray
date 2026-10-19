@@ -97,10 +97,10 @@ impl EnrichmentContext {
         Self::load_with(config, true).await
     }
 
-    /// Like [`load`](Self::load), for the engine module: no User-Agent parser, and no log line
-    /// about it, since the module never sees a User-Agent header.
+    /// Like [`load`](Self::load), for the engine module: the User-Agent parser loads only when
+    /// `user_agent_regexes` is set, and no log line says otherwise.
     pub async fn load_for_module(config: &Config) -> Result<Self, LoadError> {
-        Self::load_with(config, false).await
+        Self::load_with(config, config.user_agent_regexes.is_some()).await
     }
 
     async fn load_with(config: &Config, with_user_agent: bool) -> Result<Self, LoadError> {

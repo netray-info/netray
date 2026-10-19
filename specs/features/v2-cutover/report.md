@@ -313,3 +313,25 @@ skipped: the Phase 5 entry point is the Playwright `prod` project against a depl
 - AMENDMENT (repaired in phase): health, ready and header checks on `dns.`, `tls.`, `http.`, `ip.` pass against the V1 containers as well; `smoke/health.spec.ts` adds a per-host `/docs` → 301 to the apex's `/api/v1/docs` (row 13h), which only the one process answers.
 - DEFERRED: `just acceptance-local` neither sets `LOCAL_URL` nor starts `serve`, and its default list names the removed `static-site/assets.spec.ts`; Phase 7 (inventory).
 - Kept in the rewrite: the CORS preflight on `/health` (lens's layers answer it under `serve` since Phase 2).
+
+## Phase 6 — Survivors out of lens
+
+### Criteria
+
+C4–C13 are inventory items and deferred halves of Phases 1–5 folded into this phase now that all eight features are merged (Decision log 2026-10-19).
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R5: what `serve` still calls in `crates/lens` moves to the crate §3.1 names, behaviour unchanged: orchestration to netray-engine, recording to netray-store, routes, badge, OG, admission, the `DomainRuns` implementation, the card renderers, `validate_domain`, `client_ip_from` and the middleware stack to netray-web, the module registry and the real `InspectorJobs` to `crates/netray`; tests move with their code; one `/privacy` route | open | |
+| C2 | GIVEN the moved code WHEN `just adlc-verify` runs THEN it passes, and the agreement test of Phase 5 is unchanged | open | |
+| C3 | GIVEN `crates/netray/Cargo.toml` and `crates/web/Cargo.toml` WHEN read THEN neither depends on `lens` (read until Phase 7 as: web does not, and in `crates/netray` only `src/v1.rs`, the kept `netray lens`, names lens; Decision log 2026-10-19) | open | tests/repo/test_no_lens_dependency.sh |
+| C4 | Phase 1 C15 and C18's second half: `[api]`, `[api.<inspector>]` and `[inspect.<tool>]` in `netray.toml`; `[api.ip] batch_max_size = 50` and `[inspect.tls] deadline_ms = 15000` check exit 0; `batch_max_size = 101` at `serve` exits 1 naming the key; `[inspect.http] max_concurrent = 4` exits 0 | open | |
+| C5 | Phase 4 C8 and C3's halves: `GET /api/v1/domains/example.com` counts `netray_api_requests_total{endpoint="/api/v1/domains/{domain}"}`; after `/api/v1` and an inspector job no label name is forbidden and no label value is the domain, the address or an entry ID | green | crates/netray/tests/serve_api_metrics.rs |
+| C6 | inventory: the ip module parses the user agent from `[modules.ip] user_agent_regexes`; `?field=user_agent` answers the parsed family, as V1 did; top-level `user_agent_regexes` names `[modules.ip].user_agent_regexes` | green | crates/ip/tests/module_ua.rs, crates/netray/tests/serve_ua_key.rs |
+| C7 | inventory (Phase 2 review): a wiring test shows the composition root's registry hands the in-process enrichment client to the dns, tls, http and email modules when the ip module is registered, and none without | open | |
+| C8 | Phase 2 C4, C8 and C13's halves: `dns.`, `tls.`, `http.` and `ip.` serve their inspector at `/`; `Host: dns.netray.info` `GET /?q=example.com` gives the markup of apex `GET /inspect/dns?q=example.com`; with apex `localhost`, `dns.localhost` serves the DNS inspector | open | |
+| C9 | Phase 3 C11 and C17: `dns./?q=…`, `tls./?h=…`, `http./?url=…`, `ip./?ip=…` answer 200 with the inspector, `dns./?r=` is ignored; `ip./` with a curl user agent answers 200 `text/plain` with the caller's address, a browser the inspector | open | |
+| C10 | Phase 5 C1, C2, C4–C6's halves: the agreement test reads the result page, the open issues, every evidence view and `/api/v1/domains/{domain}` (and `/diff` for the fixed state) and finds the same grade and statuses; the incomplete state's stream and API run answer say `incomplete` | open | |
+| C11 | inventory: CI's check job, which ran 25m51s of its 30-minute timeout cold, gets headroom before tests are added (`specs/rules/workflow-rules.md`) | green | tests/repo/test_workflows.sh |
+| C12 | inventory (v2-inspectors review): a refused inspector job (busy, 429, bad input) leaves no back-link to the earlier target, while the refusal stays one fragment (v2-inspectors requirement 10) | green | crates/web/islands/test/stream-reset.test.ts, crates/web/tests/inspect_backlink_reset.rs |
+| C13 | inventory (v2-inspectors review): `inspect_no_store.rs`'s store half runs against the real `InspectorJobs`, and the inspector routes get the trusted-proxy extractor | open | |

@@ -150,7 +150,11 @@ const ROWS: &[(&str, &str, Fate)] = &[
     ("watch_data_files", "ifconfig", Table),
     ("dns_base_url", "ifconfig", Table),
     ("tls_base_url", "ifconfig", Table),
-    ("user_agent_regexes", "ifconfig", Table),
+    (
+        "user_agent_regexes",
+        "ifconfig",
+        Now("[modules.ip].user_agent_regexes"),
+    ),
     (
         "geoip_city_db",
         "ifconfig",

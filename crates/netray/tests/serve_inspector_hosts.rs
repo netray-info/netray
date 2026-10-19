@@ -52,7 +52,9 @@ fn request_ua(port: u16, host: Option<&str>, path: &str, ua: &str) -> Option<Res
     let mut s = TcpStream::connect(("127.0.0.1", port)).ok()?;
     s.set_read_timeout(Some(Duration::from_secs(10))).ok()?;
     let req = match host {
-        Some(h) => format!("GET {path} HTTP/1.1\r\nHost: {h}\r\nUser-Agent: {ua}\r\nConnection: close\r\n\r\n"),
+        Some(h) => format!(
+            "GET {path} HTTP/1.1\r\nHost: {h}\r\nUser-Agent: {ua}\r\nConnection: close\r\n\r\n"
+        ),
         None => format!("GET {path} HTTP/1.0\r\n\r\n"),
     };
     s.write_all(req.as_bytes()).ok()?;
@@ -75,7 +77,8 @@ fn request_ua(port: u16, host: Option<&str>, path: &str, ua: &str) -> Option<Res
 }
 
 fn get_ua(port: u16, host: &str, path: &str, ua: &str) -> Resp {
-    request_ua(port, Some(host), path, ua).unwrap_or_else(|| panic!("no response for {host} {path}"))
+    request_ua(port, Some(host), path, ua)
+        .unwrap_or_else(|| panic!("no response for {host} {path}"))
 }
 
 fn get(port: u16, host: Option<&str>, path: &str) -> Resp {
@@ -155,11 +158,24 @@ fn c8_inspector_hosts_serve_their_inspector_at_root() {
         let host = format!("{tool}.netray.info");
         let r = get(srv.port, Some(&host), "/");
         assert_eq!(r.status, 200, "{host} /");
-        assert!(r.content_type().starts_with("text/html"), "{host}: {}", r.content_type());
+        assert!(
+            r.content_type().starts_with("text/html"),
+            "{host}: {}",
+            r.content_type()
+        );
         let body = text(&r);
-        assert!(body.contains(&marker(tool)), "{host}: not the {tool} inspector");
-        assert!(body.contains(&format!(r#"name="{field}""#)), "{host}: no input {field}");
-        assert!(!body.contains("data-stream-autostart"), "{host}: autostart without a query");
+        assert!(
+            body.contains(&marker(tool)),
+            "{host}: not the {tool} inspector"
+        );
+        assert!(
+            body.contains(&format!(r#"name="{field}""#)),
+            "{host}: no input {field}"
+        );
+        assert!(
+            !body.contains("data-stream-autostart"),
+            "{host}: autostart without a query"
+        );
     }
 
     let apex = get(srv.port, Some("netray.info"), "/inspect/dns?q=example.com");
@@ -194,7 +210,10 @@ fn c9_v1_query_strings_prefill_the_inspector() {
         assert!(!r.headers.contains("\nlocation:"), "{host}{path}: redirect");
         let body = text(&r);
         assert!(body.contains(&marker(tool)), "{host}{path}");
-        assert!(body.contains(&format!(r#"value="{value}""#)), "{host}{path}: not prefilled");
+        assert!(
+            body.contains(&format!(r#"value="{value}""#)),
+            "{host}{path}: not prefilled"
+        );
     }
 
     let plain = get(srv.port, Some("dns.netray.info"), "/?q=example.com");
@@ -209,12 +228,20 @@ fn c9_ip_root_answers_curl_with_the_caller_and_browsers_with_the_page() {
     for ua in ["curl/8.0", "Wget/1.21", "HTTPie/3.2.1"] {
         let r = get_ua(srv.port, "ip.netray.info", "/", ua);
         assert_eq!(r.status, 200, "{ua}");
-        assert!(r.content_type().starts_with("text/plain"), "{ua}: {}", r.content_type());
+        assert!(
+            r.content_type().starts_with("text/plain"),
+            "{ua}: {}",
+            r.content_type()
+        );
         assert_eq!(text(&r).trim(), "127.0.0.1", "{ua}");
     }
     let r = get_ua(srv.port, "ip.netray.info", "/", BROWSER);
     assert_eq!(r.status, 200);
-    assert!(r.content_type().starts_with("text/html"), "{}", r.content_type());
+    assert!(
+        r.content_type().starts_with("text/html"),
+        "{}",
+        r.content_type()
+    );
     assert!(text(&r).contains(&marker("ip")));
     let _ = srv.metrics;
 }

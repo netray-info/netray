@@ -236,6 +236,7 @@ impl CacheConfig {
 pub struct ModuleConfig {
     pub geoip_city_db: Option<String>,
     pub geoip_asn_db: Option<String>,
+    pub user_agent_regexes: Option<String>,
     pub tor_exit_nodes: Option<String>,
     pub feodo_botnet_ips: Option<String>,
     pub cins_army_ips: Option<String>,
@@ -254,6 +255,7 @@ impl Config {
         let mut cfg: Self = toml::from_str("").expect("an empty config is the defaults");
         cfg.geoip_city_db = module.geoip_city_db;
         cfg.geoip_asn_db = module.geoip_asn_db;
+        cfg.user_agent_regexes = module.user_agent_regexes;
         cfg.tor_exit_nodes = module.tor_exit_nodes;
         cfg.feodo_botnet_ips = module.feodo_botnet_ips;
         cfg.cins_army_ips = module.cins_army_ips;
