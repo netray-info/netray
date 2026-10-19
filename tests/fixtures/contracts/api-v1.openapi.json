@@ -7216,16 +7216,6 @@
               }
             },
             "description": "Rate limited"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "The DNS module is off"
           }
         },
         "summary": "Parses a query string: its tokens with byte ranges, the completions at the cursor, and the\nparsed query or the reason it does not parse.",
@@ -7421,16 +7411,6 @@
               }
             },
             "description": "Rate limited"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "The DNS module is off"
           }
         },
         "summary": "The record types a query may ask for; the blocked and internal ones are left out.",
@@ -7534,16 +7514,6 @@
               }
             },
             "description": "Rate limited"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "The DNS module is off"
           }
         },
         "summary": "The predefined DNS providers with their transports, and the group aliases over them.",

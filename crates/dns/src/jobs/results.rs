@@ -147,10 +147,10 @@ impl DnsResultCache {
         }
     }
 
-    /// A key from the random bits of a UUID v7: its last 12 hex characters.
+    /// A key of random bits: the first 12 hex characters of a UUID v4, all random (its version
+    /// nibble is the 13th). A v7's tail holds counter bits shared by keys of one millisecond.
     pub fn fresh_key() -> String {
-        let id = uuid::Uuid::now_v7().simple().to_string();
-        id[id.len() - KEY_LENGTH..].to_owned()
+        uuid::Uuid::new_v4().simple().to_string()[..KEY_LENGTH].to_owned()
     }
 
     pub async fn insert(&self, result: DnsCachedResult) {

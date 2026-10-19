@@ -125,8 +125,8 @@ part), 2.29 and 2.30 (per-server split), 2.48, 2.52, 2.53, 2.54, 7.79, 7.84, 7.8
     `[api]` per-IP limiter.
 13. **Cache key.** Every v1 DNS job route (query, compare, authcompare, trace, dnssec, in both forms,
     POST and GET, and the check of requirement 15) stores its collected result when it finishes with
-    `done` (the check: when it answers) under a fresh key of 12 lowercase hex characters drawn from
-    random bits, and returns it in `done.cache_key` (the check: `cache_key`). The cache holds at most
+    `done` (the check: when it answers) under a fresh key of 12 lowercase hex characters, all random
+    bits (a UUID v4's first 12), and returns it in `done.cache_key` (the check: `cache_key`). The cache holds at most
     1 000 results for one hour each (V1's bounds). A job that ended without `done` stores nothing and
     carries no key. `DnsDnssecDone` gains an optional `cache_key`, absent on prism's wire.
 14. **Replay.** `GET /api/v1/dns/results/{key}` answers `{key, mode, query, result}`: `mode` one of
@@ -138,8 +138,11 @@ part), 2.29 and 2.30 (per-server split), 2.48, 2.52, 2.53, 2.54, 7.79, 7.84, 7.8
     domain is `q`'s first token) run the DNS module alone on that name, live and not stored, and
     answer `{protocol, outcome, reason, checks, blocks, cache_key}` as one section of a run
     (`RunSectionEvent`'s fields), JSON whatever the `Accept` header.
-    - The domain is validated by the query parser; an IP address, an empty or invalid name answers
-      `400 INVALID_INPUT`.
+    - The name is the POST body's whole `domain`, or `q`'s first token. It must pass lens's domain
+      rule (`netray_common::domain::validate`) and hold only ASCII letters, digits, `-`, `_` and
+      `.`; an IP address (a trailing dot included), an empty name, a name with whitespace or any
+      other character answers `400 INVALID_INPUT`. The check never runs on a name other than the
+      one asked.
     - It charges the `[api.dns]` limiter a flat 16 per caller and globally (as trace; V1 `/api/check`
       charged per step) and runs under a 30 s deadline.
     - With no DNS module built it answers `503 UNAVAILABLE`.
@@ -305,6 +308,14 @@ GIVEN `specs/sdd/v2.md` WHEN read THEN §7.1 lists the new endpoints and §7.3 a
   the two record printers write differently (DNSSEC types) compare by record count. The `summary`
   event is a variant of each batch job's event schema (implementer under the operator's autonomy
   mandate, 2026-10-19).
+
+- Final review: the check's name rule replaces the query parser (which validates no syntax: an
+  over-long name ran, `example.com other` checked `example.com`); internationalised names are
+  refused until the A-label is given, as lens's rule leaves IDNA out. Keys come from a UUID v4: a
+  v7's last 48 bits hold 16 counter bits shared by keys of one millisecond. `/dns/servers`,
+  `/dns/record-types` and `/dns/parse` answer without a DNS part (parse then offers no `@system`).
+  The SDD amendment landed in Phase 6's commit, not with each phase's code: a bisect onto phases
+  2 to 5 reads the older §7 (implementer under the operator's autonomy mandate, 2026-10-19).
 
 ## Open decisions
 

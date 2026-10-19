@@ -672,19 +672,18 @@ pub(super) fn dns_doc_routes() -> OpenApiRouter<ApiState> {
         (status = 400, description = "Malformed body", body = ErrorResponse),
         (status = 413, description = "Request body over the 8 KiB limit", body = ErrorResponse),
         (status = 429, description = "Rate limited", body = ErrorResponse),
-        (status = 503, description = "The DNS module is off", body = ErrorResponse),
     )
 )]
 pub(super) async fn dns_parse(
     State(state): State<ApiState>,
     body: Result<Json<DnsParseRequest>, JsonRejection>,
 ) -> Result<Json<DnsParseAnswer>, V1Error> {
-    let jobs = jobs_of(&state)?;
     let request = json_body(body)?;
-    Ok(Json(netray_dns::parse_answer(
-        &request,
-        jobs.allows_system_resolvers(),
-    )))
+    // Without a DNS part nothing could run `@system`: it is not offered.
+    let allow_system = state
+        .dns_jobs()
+        .is_some_and(DnsJobs::allows_system_resolvers);
+    Ok(Json(netray_dns::parse_answer(&request, allow_system)))
 }
 
 /// The predefined DNS providers with their transports, and the group aliases over them.
@@ -695,14 +694,10 @@ pub(super) async fn dns_parse(
     responses(
         (status = 200, description = "Providers and groups", body = DnsServerCatalogue),
         (status = 429, description = "Rate limited", body = ErrorResponse),
-        (status = 503, description = "The DNS module is off", body = ErrorResponse),
     )
 )]
-pub(super) async fn dns_servers(
-    State(state): State<ApiState>,
-) -> Result<Json<DnsServerCatalogue>, V1Error> {
-    jobs_of(&state)?;
-    Ok(Json(netray_dns::server_catalogue()))
+pub(super) async fn dns_servers() -> Json<DnsServerCatalogue> {
+    Json(netray_dns::server_catalogue())
 }
 
 /// The record types a query may ask for; the blocked and internal ones are left out.
@@ -713,14 +708,10 @@ pub(super) async fn dns_servers(
     responses(
         (status = 200, description = "The record types", body = DnsRecordTypes),
         (status = 429, description = "Rate limited", body = ErrorResponse),
-        (status = 503, description = "The DNS module is off", body = ErrorResponse),
     )
 )]
-pub(super) async fn dns_record_types(
-    State(state): State<ApiState>,
-) -> Result<Json<DnsRecordTypes>, V1Error> {
-    jobs_of(&state)?;
-    Ok(Json(netray_dns::record_types()))
+pub(super) async fn dns_record_types() -> Json<DnsRecordTypes> {
+    Json(netray_dns::record_types())
 }
 
 /// The collected result of a DNS job, under the `cache_key` of its `done`, for up to an hour.
