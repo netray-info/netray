@@ -98,8 +98,9 @@ RESULT? findings on Referrer-Policy, `response_ms` and `set-cookie`
    a `directive` (text, repeated) per Cache-Control flag set (`public`, `private`, `no-store`,
    `no-cache`, `must-revalidate`, `immutable`), `max_age` (int, seconds), `etag` (text),
    `etag_weak` (bool), `last_modified` (time, from the HTTP date; omitted when unparsable), a
-   `vary` (text, repeated) per Vary entry and `age` (int, seconds). With none known there is no
-   block. `http.caching` (the check) references it beside `http.headers`.
+   `vary` (text, repeated) per Vary entry and `age` (int, seconds); without any of them the block
+   is empty. Cache-Control and Vary are read over every header line. `http.caching` (the check)
+   references it beside `http.headers`.
 10. When a CDN was detected, `http.cdn` is a fields block with `provider` (text), `cache_status`
     (text, when received) and an `indicator` (text, repeated) per signature header found. Without a
     detected CDN there is no block. No check references it.
@@ -108,8 +109,8 @@ RESULT? findings on Referrer-Policy, `response_ms` and `set-cookie`
     lowercase header name) for each of the three not received or not readable. No check references
     it.
 12. The HTTP register declares every new block and key with its shape and type, and
-    `http.caching/etag`, `http.caching/last_modified`, `http.caching/age`, `http.cdn/cache_status`
-    and `http.csp/source` are volatile.
+    `http.caching/etag`, `http.caching/etag_weak`, `http.caching/last_modified`,
+    `http.caching/age`, `http.cdn/cache_status` and `http.csp/source` are volatile.
 13. SDD `specs/sdd/v2.md` states the renamed key, the `Set-Cookie` rows, the row-repeat rule, the
     new blocks and volatile paths, and COOP/COEP/CORP as evidence, in the same commit as the code.
 
@@ -160,7 +161,7 @@ GIVEN a CSP with two issues WHEN translated THEN the `csp` check holds two findi
 GIVEN Strict-Transport-Security `max-age=31536000; includeSubDomains` WHEN translated THEN `http.hsts` holds `max_age` 31536000, `include_subdomains` true and `preload` false, and the hsts check references `http.headers` and `http.hsts`.
 GIVEN Strict-Transport-Security `includeSubDomains` without max-age WHEN translated THEN `http.hsts` holds no `max_age`; GIVEN no such header THEN no `http.hsts`.
 GIVEN Cache-Control `public, max-age=3600, must-revalidate`, ETag `W/"abc"`, Last-Modified `Mon, 01 Jan 2024 00:00:00 GMT`, Vary `Accept-Encoding, Accept-Language` and Age `42` WHEN translated THEN `http.caching` holds directives public and must-revalidate, `max_age` 3600, `etag` `W/"abc"`, `etag_weak` true, `last_modified` 2024-01-01T00:00:00Z, two `vary` values and `age` 42, and the caching check references `http.headers` and `http.caching`.
-GIVEN a Last-Modified that is no HTTP date WHEN translated THEN `http.caching` holds no `last_modified`; GIVEN no caching header at all THEN no `http.caching` and the caching check references `http.headers` only.
+GIVEN a Last-Modified that is no HTTP date WHEN translated THEN `http.caching` holds no `last_modified`; GIVEN no caching header at all THEN `http.caching` is empty and the caching check references `http.headers` and `http.caching`.
 GIVEN headers `cf-ray` and `cf-cache-status: HIT` WHEN translated THEN `http.cdn` holds `provider` Cloudflare, `cache_status` HIT and the indicators cf-ray and cf-cache-status; GIVEN no signature header THEN no `http.cdn`.
 GIVEN COOP `same-origin` and neither COEP nor CORP WHEN translated THEN `http.isolation` holds `coop` same-origin and `missing` cross-origin-embedder-policy and cross-origin-resource-policy; GIVEN all three THEN no `missing`.
 GIVEN a refused HTTPS probe WHEN translated THEN none of `http.csp`, `http.hsts`, `http.caching`, `http.cdn`, `http.isolation` is emitted and the evidence rule holds.
@@ -205,6 +206,12 @@ GIVEN the catalogue and the profile WHEN read THEN the HTTP check IDs are the sa
 - Review of Phase 1: Referrer-Policy grades every header line joined with `, ` (RFC 9110 §5.3), not
   only the first; a received header literally named `set-cookie#<n>` keeps its row and the cookie
   takes the next free ordinal (implementer under the operator's autonomy mandate, 2026-10-19).
+- Review of Phase 2: `http.caching` stands whenever the HTTPS probe answered (empty without cache
+  headers, as V1 listed each as "not set") and `etag_weak` is volatile, so a volatile key alone never
+  adds, removes or changes the block in a comparison; Cache-Control and Vary are read over every
+  header line (RFC 9110 §5.3), which also feeds V1's caching verdict the whole list; HTTP dates are
+  read in all three RFC 9110 forms; integers above i64 are omitted, never wrapped (implementer
+  under the operator's autonomy mandate, 2026-10-19).
 
 ## Open decisions
 

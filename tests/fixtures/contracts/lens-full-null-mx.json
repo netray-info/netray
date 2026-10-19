@@ -591,7 +591,8 @@
       },
       {
         "evidence": [
-          "http.headers"
+          "http.headers",
+          "http.hsts"
         ],
         "fix_hint": "Send Strict-Transport-Security with max-age=31536000 on all HTTPS responses.",
         "fix_owner": "your web server configuration",
@@ -719,7 +720,8 @@
       },
       {
         "evidence": [
-          "http.headers"
+          "http.headers",
+          "http.caching"
         ],
         "fix_hint": "Send an explicit Cache-Control header on each response and pair max-age=0 with no-cache or must-revalidate.",
         "fix_owner": "your web server configuration",
@@ -808,6 +810,74 @@
           "kind": "table"
         },
         "title": "Response headers"
+      },
+      {
+        "id": "http.hsts",
+        "shape": {
+          "data": [
+            [
+              "max_age",
+              {
+                "t": "int",
+                "v": 31536000
+              }
+            ],
+            [
+              "include_subdomains",
+              {
+                "t": "bool",
+                "v": false
+              }
+            ],
+            [
+              "preload",
+              {
+                "t": "bool",
+                "v": false
+              }
+            ]
+          ],
+          "kind": "fields"
+        },
+        "title": "HSTS"
+      },
+      {
+        "id": "http.caching",
+        "shape": {
+          "data": [],
+          "kind": "fields"
+        },
+        "title": "Caching"
+      },
+      {
+        "id": "http.isolation",
+        "shape": {
+          "data": [
+            [
+              "missing",
+              {
+                "t": "text",
+                "v": "cross-origin-opener-policy"
+              }
+            ],
+            [
+              "missing",
+              {
+                "t": "text",
+                "v": "cross-origin-embedder-policy"
+              }
+            ],
+            [
+              "missing",
+              {
+                "t": "text",
+                "v": "cross-origin-resource-policy"
+              }
+            ]
+          ],
+          "kind": "fields"
+        },
+        "title": "Cross-origin isolation"
       },
       {
         "id": "http.server",

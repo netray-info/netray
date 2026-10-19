@@ -10,7 +10,7 @@ use netray_common::enrichment::EnrichmentClient;
 use netray_common::rate_limit::{KeyedLimiter, check_keyed_cost};
 use netray_engine::{BoxFuture, EvidencePath, Facts, Module, RunContext, SectionOutcome};
 use netray_model::evidence::{
-    Block, BlockId, Fields, Register, Row, Shape, ShapeKind, Value as EvValue, ValueType,
+    Block, BlockId, Fields, Node, Register, Row, Shape, ShapeKind, Value as EvValue, ValueType,
 };
 use netray_model::{CheckId, CheckResult, Protocol, Status};
 use url::Url;
@@ -48,8 +48,8 @@ pub(crate) fn http_checks() -> &'static [CheckId] {
 }
 
 /// The HTTP register: the HTTPS and port-80 redirect chains, the port-80 probe, the HTTPS
-/// response headers, the server that answered (or the error kind of the probe), the CORS probe
-/// and the cookies.
+/// response headers, the server that answered (or the error kind of the probe), the CORS probe,
+/// the cookies and the parsed header blocks (CSP, HSTS, caching, CDN, cross-origin isolation).
 pub const REGISTER: Register = Register {
     blocks: &[
         ("http.redirects", ShapeKind::Chain),
@@ -59,6 +59,11 @@ pub const REGISTER: Register = Register {
         ("http.server", ShapeKind::Fields),
         ("http.cors", ShapeKind::Fields),
         ("http.cookies", ShapeKind::Table),
+        ("http.csp", ShapeKind::Tree),
+        ("http.hsts", ShapeKind::Fields),
+        ("http.caching", ShapeKind::Fields),
+        ("http.cdn", ShapeKind::Fields),
+        ("http.isolation", ShapeKind::Fields),
     ],
     keys: &[
         ("http.redirects", "url", ValueType::Text),
@@ -94,6 +99,28 @@ pub const REGISTER: Register = Register {
         ("http.cookies", "secure", ValueType::Bool),
         ("http.cookies", "http_only", ValueType::Bool),
         ("http.cookies", "same_site", ValueType::Text),
+        ("http.csp", "report_only", ValueType::Bool),
+        ("http.csp", "issue_count", ValueType::Int),
+        ("http.csp", "issue", ValueType::Text),
+        ("http.csp", "directive", ValueType::Text),
+        ("http.csp", "source", ValueType::Text),
+        ("http.hsts", "max_age", ValueType::Int),
+        ("http.hsts", "include_subdomains", ValueType::Bool),
+        ("http.hsts", "preload", ValueType::Bool),
+        ("http.caching", "directive", ValueType::Text),
+        ("http.caching", "max_age", ValueType::Int),
+        ("http.caching", "etag", ValueType::Text),
+        ("http.caching", "etag_weak", ValueType::Bool),
+        ("http.caching", "last_modified", ValueType::Time),
+        ("http.caching", "vary", ValueType::Text),
+        ("http.caching", "age", ValueType::Int),
+        ("http.cdn", "provider", ValueType::Text),
+        ("http.cdn", "cache_status", ValueType::Text),
+        ("http.cdn", "indicator", ValueType::Text),
+        ("http.isolation", "coop", ValueType::Text),
+        ("http.isolation", "coep", ValueType::Text),
+        ("http.isolation", "corp", ValueType::Text),
+        ("http.isolation", "missing", ValueType::Text),
     ],
 };
 
@@ -128,6 +155,12 @@ const VOLATILE: &[EvidencePath] = &[
     EvidencePath("http.server/address"),
     EvidencePath("http.server/org"),
     EvidencePath("http.server/network_type"),
+    EvidencePath("http.caching/etag"),
+    EvidencePath("http.caching/etag_weak"),
+    EvidencePath("http.caching/last_modified"),
+    EvidencePath("http.caching/age"),
+    EvidencePath("http.cdn/cache_status"),
+    EvidencePath("http.csp/source"),
 ];
 
 /// The HTTP inspection as an engine module. The target address comes from `Facts` (`a`, then
@@ -352,6 +385,27 @@ fn check_result(
             evidence: vec![],
         };
     }
+    let csp = &resp.security.csp;
+    if name == "csp"
+        && (csp.enforced || csp.report_only)
+        && let Some(c) = find_check(quality, name)
+    {
+        let mut findings = Vec::new();
+        if csp.report_only {
+            findings.push(CSP_REPORT_ONLY.to_string());
+        }
+        findings.extend(
+            crate::inspect::csp::issues(&csp.directives)
+                .into_iter()
+                .map(|i| i.message),
+        );
+        return CheckResult {
+            id: id.clone(),
+            status: c.status.clone().into(),
+            findings,
+            evidence: vec![],
+        };
+    }
     let (status, findings) = match find_check(quality, name) {
         None => (CheckStatus::Skip, vec![NOT_REPORTED.to_string()]),
         Some(c) => match c.status {
@@ -397,6 +451,19 @@ fn references(name: &str, resp: &InspectResponse) -> Vec<BlockId> {
         "cors" => "http.cors",
         _ if resp.error.is_some() => "http.server",
         "cookie_secure" => "http.cookies",
+        "hsts" => {
+            return vec![
+                static_block_id("http.headers"),
+                static_block_id("http.hsts"),
+            ];
+        }
+        "csp" => return vec![static_block_id("http.headers"), static_block_id("http.csp")],
+        "caching" => {
+            return vec![
+                static_block_id("http.headers"),
+                static_block_id("http.caching"),
+            ];
+        }
         _ => "http.headers",
     };
     vec![static_block_id(block)]
@@ -436,6 +503,11 @@ fn blocks(resp: &InspectResponse) -> Vec<Block> {
     }
     if answered {
         blocks.push(headers_block(resp));
+        blocks.extend(csp_block(resp));
+        blocks.extend(hsts_block(resp));
+        blocks.push(caching_block(resp));
+        blocks.extend(cdn_block(resp));
+        blocks.push(isolation_block(resp));
     }
     blocks.push(server_block(resp));
     if resp.cors.error.is_none() {
@@ -475,6 +547,181 @@ fn blocks(resp: &InspectResponse) -> Vec<Block> {
         blocks.push(cookies_block(resp));
     }
     blocks
+}
+
+/// The CSP as a tree: the root holds the report-only marker, the issue count and the issues of
+/// a directive the policy lacks; one child per directive in policy order. Only with a policy.
+fn csp_block(resp: &InspectResponse) -> Option<Block> {
+    let csp = &resp.security.csp;
+    if !(csp.enforced || csp.report_only) {
+        return None;
+    }
+    let issues = crate::inspect::csp::issues(&csp.directives);
+    let mut fields: Fields = vec![
+        ("report_only".into(), EvValue::Bool(csp.report_only)),
+        ("issue_count".into(), EvValue::Int(issues.len() as i64)),
+    ];
+    fields.extend(
+        issues
+            .iter()
+            .filter(|i| !csp.directives.contains_key(&i.directive))
+            .map(|i| ("issue".into(), EvValue::Text(i.message.clone()))),
+    );
+    let children = csp
+        .directives
+        .iter()
+        .map(|(name, sources)| {
+            let mut fields: Fields = vec![("directive".into(), EvValue::Text(name.clone()))];
+            fields.extend(
+                sources
+                    .iter()
+                    .map(|s| ("source".into(), EvValue::Text(s.clone()))),
+            );
+            fields.extend(
+                issues
+                    .iter()
+                    .filter(|i| i.directive == *name)
+                    .map(|i| ("issue".into(), EvValue::Text(i.message.clone()))),
+            );
+            Node {
+                fields,
+                children: vec![],
+            }
+        })
+        .collect();
+    Some(Block {
+        id: static_block_id("http.csp"),
+        title: "Content Security Policy".into(),
+        shape: Shape::Tree(Node { fields, children }),
+    })
+}
+
+/// HSTS as parsed, only when the header was received.
+fn hsts_block(resp: &InspectResponse) -> Option<Block> {
+    if !resp.headers.contains_key("strict-transport-security") {
+        return None;
+    }
+    let hsts = &resp.security.hsts;
+    let mut fields: Fields = Vec::new();
+    if let Some(max_age) = hsts.max_age.and_then(|v| i64::try_from(v).ok()) {
+        fields.push(("max_age".into(), EvValue::Int(max_age)));
+    }
+    fields.push((
+        "include_subdomains".into(),
+        EvValue::Bool(hsts.include_sub_domains),
+    ));
+    fields.push(("preload".into(), EvValue::Bool(hsts.preload)));
+    Some(Block {
+        id: static_block_id("http.hsts"),
+        title: "HSTS".into(),
+        shape: Shape::Fields(fields),
+    })
+}
+
+/// The cache headers the response carried, each only when known. The block stands whenever the
+/// HTTPS probe answered, so its presence never turns on a volatile key alone.
+fn caching_block(resp: &InspectResponse) -> Block {
+    let c = &resp.caching;
+    let mut fields: Fields = Vec::new();
+    if c.cache_control.is_some() {
+        let d = &c.directives;
+        for (name, set) in [
+            ("public", d.public),
+            ("private", d.private),
+            ("no-store", d.no_store),
+            ("no-cache", d.no_cache),
+            ("must-revalidate", d.must_revalidate),
+            ("immutable", d.immutable),
+        ] {
+            if set {
+                fields.push(("directive".into(), EvValue::Text(name.into())));
+            }
+        }
+    }
+    if let Some(max_age) = c.directives.max_age.and_then(|v| i64::try_from(v).ok()) {
+        fields.push(("max_age".into(), EvValue::Int(max_age)));
+    }
+    if let Some(etag) = &c.etag {
+        fields.push(("etag".into(), EvValue::Text(etag.clone())));
+        fields.push(("etag_weak".into(), EvValue::Bool(etag.starts_with("W/"))));
+    }
+    if let Some(last_modified) = c.last_modified.as_deref().and_then(http_date) {
+        fields.push(("last_modified".into(), EvValue::Time(last_modified)));
+    }
+    fields.extend(
+        c.vary
+            .iter()
+            .filter(|v| !v.is_empty())
+            .map(|v| ("vary".into(), EvValue::Text(v.clone()))),
+    );
+    if let Some(age) = c.age.and_then(|v| i64::try_from(v).ok()) {
+        fields.push(("age".into(), EvValue::Int(age)));
+    }
+    Block {
+        id: static_block_id("http.caching"),
+        title: "Caching".into(),
+        shape: Shape::Fields(fields),
+    }
+}
+
+/// An HTTP date (RFC 9110 §5.6.7: IMF-fixdate and the obsolete RFC 850 and asctime forms) as an
+/// RFC 3339 UTC time; `None` when it is none of them.
+fn http_date(v: &str) -> Option<String> {
+    use chrono::{NaiveDateTime, SecondsFormat, TimeZone, Utc};
+    let v = v.trim();
+    let utc = chrono::DateTime::parse_from_rfc2822(v)
+        .map(|d| d.with_timezone(&Utc))
+        .ok()
+        .or_else(|| {
+            NaiveDateTime::parse_from_str(v, "%A, %d-%b-%y %H:%M:%S GMT")
+                .or_else(|_| NaiveDateTime::parse_from_str(v, "%a %b %e %H:%M:%S %Y"))
+                .ok()
+                .map(|n| Utc.from_utc_datetime(&n))
+        })?;
+    Some(utc.to_rfc3339_opts(SecondsFormat::Secs, true))
+}
+
+/// The detected CDN; no block without one.
+fn cdn_block(resp: &InspectResponse) -> Option<Block> {
+    let cdn = &resp.cdn;
+    let provider = cdn.detected.as_ref()?;
+    let mut fields: Fields = vec![("provider".into(), EvValue::Text(provider.clone()))];
+    if let Some(status) = &cdn.cache_status {
+        fields.push(("cache_status".into(), EvValue::Text(status.clone())));
+    }
+    fields.extend(
+        cdn.indicators
+            .iter()
+            .map(|i| ("indicator".into(), EvValue::Text(i.clone()))),
+    );
+    Some(Block {
+        id: static_block_id("http.cdn"),
+        title: "CDN".into(),
+        shape: Shape::Fields(fields),
+    })
+}
+
+/// COOP, COEP and CORP: the value when readable, the header name under `missing` otherwise.
+fn isolation_block(resp: &InspectResponse) -> Block {
+    let s = &resp.security;
+    let mut fields: Fields = Vec::new();
+    let mut missing: Fields = Vec::new();
+    for (key, header, check) in [
+        ("coop", "cross-origin-opener-policy", &s.coop),
+        ("coep", "cross-origin-embedder-policy", &s.coep),
+        ("corp", "cross-origin-resource-policy", &s.corp),
+    ] {
+        match &check.value {
+            Some(v) => fields.push((key.into(), EvValue::Text(v.clone()))),
+            None => missing.push(("missing".into(), EvValue::Text(header.into()))),
+        }
+    }
+    fields.extend(missing);
+    Block {
+        id: static_block_id("http.isolation"),
+        title: "Cross-origin isolation".into(),
+        shape: Shape::Fields(fields),
+    }
 }
 
 /// The port-80 probe: the URL it requested; the status and `Location` of the response that
@@ -666,6 +913,8 @@ fn cookies_block(resp: &InspectResponse) -> Block {
     }
 }
 
+const CSP_REPORT_ONLY: &str =
+    "Content-Security-Policy is report-only: browsers report violations but enforce nothing";
 const NOT_REPORTED: &str = "not reported";
 /// Finding of a check spectra measured as not applicable without giving a reason.
 const NOT_APPLICABLE: &str = "not applicable";
@@ -756,6 +1005,18 @@ mod tests {
         assert_eq!(row("set-cookie#2"), Some(EvValue::Text("x".into())));
         assert_eq!(row("set-cookie"), Some(EvValue::Text("a=1".into())));
         assert_eq!(row("set-cookie#3"), Some(EvValue::Text("b=2".into())));
+    }
+
+    #[test]
+    fn http_date_reads_the_three_forms() {
+        for v in [
+            "Sun, 06 Nov 1994 08:49:37 GMT",
+            "Sunday, 06-Nov-94 08:49:37 GMT",
+            "Sun Nov  6 08:49:37 1994",
+        ] {
+            assert_eq!(http_date(v).as_deref(), Some("1994-11-06T08:49:37Z"), "{v}");
+        }
+        assert_eq!(http_date("yesterday"), None);
     }
 
     #[test]

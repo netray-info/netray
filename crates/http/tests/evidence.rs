@@ -76,7 +76,7 @@ fn fixture_blocks_fit_the_register_and_checks_reference_them() {
     validate("http", &REGISTER, &blocks).expect("blocks fit the register");
     check_evidence_rule(&checks, &blocks).expect("evidence rule holds");
 
-    assert_eq!(refs(&checks, "hsts"), vec!["http.headers"]);
+    assert_eq!(refs(&checks, "hsts"), vec!["http.headers", "http.hsts"]);
     assert_eq!(
         refs(&checks, "https_redirect"),
         vec!["http.port80", "http.port80_probe"]
@@ -149,6 +149,12 @@ fn volatile_paths_name_registered_keys() {
         "http.server/address",
         "http.server/org",
         "http.server/network_type",
+        "http.caching/etag",
+        "http.caching/etag_weak",
+        "http.caching/last_modified",
+        "http.caching/age",
+        "http.cdn/cache_status",
+        "http.csp/source",
     ]
     .into_iter()
     .map(String::from)

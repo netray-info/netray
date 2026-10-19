@@ -118,13 +118,18 @@ fn caching_block_holds_the_known_cache_headers() {
 }
 
 #[test]
-fn unparsable_last_modified_is_omitted_and_no_headers_means_no_block() {
+fn unparsable_last_modified_is_omitted_and_no_headers_means_an_empty_block() {
     let (_, blocks) = run(&[("etag", "\"abc\""), ("last-modified", "yesterday")]);
     let f = caching(&blocks).unwrap_or_else(|| panic!("no http.caching block: {blocks:?}"));
     assert!(all(f, "last_modified").is_empty(), "{f:?}");
     assert_eq!(all(f, "etag_weak"), vec![&Ev::Bool(false)]);
 
+    // The block stands whenever the probe answered, empty without cache headers.
     let (checks, blocks) = run(&[]);
-    assert!(caching(&blocks).is_none(), "{blocks:?}");
-    assert_eq!(check_evidence(&checks), vec!["http.headers"]);
+    let f = caching(&blocks).unwrap_or_else(|| panic!("no http.caching block: {blocks:?}"));
+    assert!(f.is_empty(), "{f:?}");
+    assert_eq!(
+        check_evidence(&checks),
+        vec!["http.headers", "http.caching"]
+    );
 }
