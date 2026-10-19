@@ -14,7 +14,9 @@
           "longitude",
           "isp",
           "location",
-          "network"
+          "network",
+          "host",
+          "cidr"
         ],
         "type": "string"
       },
@@ -432,7 +434,9 @@
           "tcp",
           "user_agent",
           "host",
-          "headers"
+          "headers",
+          "cidr",
+          "all"
         ],
         "type": "string"
       },
@@ -3266,6 +3270,17 @@
         ],
         "type": "string"
       },
+      "Format": {
+        "description": "The forms of `?format=`.",
+        "enum": [
+          "json",
+          "yaml",
+          "toml",
+          "csv",
+          "plain"
+        ],
+        "type": "string"
+      },
       "Grade": {
         "description": "The overall grade of a scan.",
         "enum": [
@@ -4202,6 +4217,10 @@
           "api": {
             "type": "string"
           },
+          "attribution": {
+            "description": "The MaxMind GeoLite2 attribution text the IP data requires next to its use.",
+            "type": "string"
+          },
           "current_profile": {
             "format": "int32",
             "minimum": 0,
@@ -4233,6 +4252,7 @@
           "current_profile",
           "profiles",
           "evidence_schema_version",
+          "attribution",
           "limits"
         ],
         "type": "object"
@@ -8379,6 +8399,51 @@
             "schema": {
               "$ref": "#/components/schemas/CallerField"
             }
+          },
+          {
+            "description": "Answer for this address instead of the caller's",
+            "in": "query",
+            "name": "ip",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Reverse DNS: `true` or `1` (default) looks it up, anything else leaves the hostname null",
+            "in": "query",
+            "name": "dns",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Language tag of the localized location names: up to 16 ASCII letters, digits and `-`",
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Comma-separated top-level keys to keep in a structured answer",
+            "in": "query",
+            "name": "fields",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Render the answer in this form; without it, an `Accept` of yaml, toml or csv decides",
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Format"
+            }
           }
         ],
         "responses": {
@@ -8389,13 +8454,28 @@
                   "$ref": "#/components/schemas/Ifconfig"
                 }
               },
+              "application/toml": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "application/yaml": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              },
               "text/plain": {
                 "schema": {
                   "type": "string"
                 }
               }
             },
-            "description": "The caller's lookup; with `?field`, that one value as text/plain"
+            "description": "The lookup; with `?field`, that one value as text/plain"
           },
           "400": {
             "content": {
@@ -8405,7 +8485,7 @@
                 }
               }
             },
-            "description": "Unknown field"
+            "description": "Unknown field or format, malformed `lang`, or an `ip` that is malformed or non-global"
           },
           "413": {
             "content": {
@@ -8438,7 +8518,7 @@
             "description": "The IP module is off"
           }
         },
-        "summary": "The caller's address, or one field of it.",
+        "summary": "The caller's address, or one field of it; with `?ip=`, that address instead.",
         "tags": [
           "ip"
         ]
@@ -8447,6 +8527,17 @@
     "/api/v1/ip/batch": {
       "post": {
         "operationId": "batch",
+        "parameters": [
+          {
+            "description": "Reverse DNS per address: `true` or `1` looks it up; without it the hostname is null",
+            "in": "query",
+            "name": "dns",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -8679,6 +8770,42 @@
             "schema": {
               "$ref": "#/components/schemas/AddressField"
             }
+          },
+          {
+            "description": "Reverse DNS: `true` or `1` (default) looks it up, anything else leaves the hostname null",
+            "in": "query",
+            "name": "dns",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Language tag of the localized location names: up to 16 ASCII letters, digits and `-`",
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Comma-separated top-level keys to keep in a structured answer",
+            "in": "query",
+            "name": "fields",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Render the answer in this form; without it, an `Accept` of yaml, toml or csv decides",
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Format"
+            }
           }
         ],
         "responses": {
@@ -8687,6 +8814,21 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Ifconfig"
+                }
+              },
+              "application/toml": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "application/yaml": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
                 }
               },
               "text/plain": {
@@ -8705,7 +8847,7 @@
                 }
               }
             },
-            "description": "Malformed or non-global address, caller-only or unknown field"
+            "description": "Malformed or non-global address, caller-only or unknown field, unknown format or malformed `lang`"
           },
           "413": {
             "content": {

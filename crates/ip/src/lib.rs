@@ -42,9 +42,13 @@ use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 
 pub use config::{Config, ModuleConfig};
-pub use lookup::{IpLookup, IpRefusal};
+pub use lookup::{IpLookup, IpRefusal, LookupOptions};
 pub use module::{IpModule, translate};
 pub use state::ProjectInfo;
+
+/// The attribution MaxMind's GeoLite2 licence requires next to data derived from the databases.
+pub const GEOIP_ATTRIBUTION: &str =
+    "This product includes GeoLite2 data created by MaxMind, available from https://www.maxmind.com.";
 
 /// Middleware that requires a valid `Authorization: Bearer <token>` header.
 /// Used to protect the admin port when `server.admin_token` is configured.

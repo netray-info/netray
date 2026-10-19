@@ -10,7 +10,9 @@ use netray_model::{CheckId, CheckResult, Protocol, Status};
 use crate::backend::{DnsCache, Ifconfig, UserAgent, new_dns_cache};
 use crate::config::{Config, ModuleConfig};
 use crate::enrichment::{EnrichmentContext, LoadError};
-use crate::lookup::{AsnLookupResponse, IpLookup, IpRefusal, RangeResponse, asn_lookup, enrich, range_lookup};
+use crate::lookup::{
+    AsnLookupResponse, IpLookup, IpRefusal, LookupOptions, RangeResponse, asn_lookup, enrich, range_lookup,
+};
 
 // ---------------------------------------------------------------------------
 // Module
@@ -92,10 +94,7 @@ impl IpModule {
 
 impl IpLookup for IpModule {
     fn lookup(&self, ip: IpAddr) -> BoxFuture<'_, Result<Ifconfig, IpRefusal>> {
-        Box::pin(async move {
-            let ctx = self.enrichment.load_full();
-            Ok(enrich(&ctx, &self.dns_cache, SocketAddr::new(ip, 0), None, true, None).await)
-        })
+        self.lookup_with(ip, LookupOptions::default())
     }
 
     fn lookup_caller<'a>(
@@ -103,14 +102,51 @@ impl IpLookup for IpModule {
         remote: SocketAddr,
         user_agent: Option<&'a str>,
     ) -> BoxFuture<'a, Result<Ifconfig, IpRefusal>> {
+        self.lookup_caller_with(
+            remote,
+            user_agent,
+            LookupOptions {
+                reverse_dns: true,
+                lang: None,
+            },
+        )
+    }
+
+    fn lookup_with(&self, ip: IpAddr, options: LookupOptions) -> BoxFuture<'_, Result<Ifconfig, IpRefusal>> {
         Box::pin(async move {
             let ctx = self.enrichment.load_full();
-            let mut ifconfig = enrich(&ctx, &self.dns_cache, remote, user_agent, false, None).await;
+            let skip_dns = !options.reverse_dns;
+            Ok(enrich(
+                &ctx,
+                &self.dns_cache,
+                SocketAddr::new(ip, 0),
+                None,
+                skip_dns,
+                options.lang,
+            )
+            .await)
+        })
+    }
+
+    fn lookup_caller_with<'a>(
+        &'a self,
+        remote: SocketAddr,
+        user_agent: Option<&'a str>,
+        options: LookupOptions,
+    ) -> BoxFuture<'a, Result<Ifconfig, IpRefusal>> {
+        Box::pin(async move {
+            let ctx = self.enrichment.load_full();
+            let skip_dns = !options.reverse_dns;
+            let mut ifconfig = enrich(&ctx, &self.dns_cache, remote, user_agent, skip_dns, options.lang).await;
             if ifconfig.user_agent.is_none() {
                 ifconfig.user_agent = user_agent.map(UserAgent::unparsed);
             }
             Ok(ifconfig)
         })
+    }
+
+    fn geoip_build_epoch(&self) -> Option<u64> {
+        self.enrichment.load().geoip_city_build_epoch
     }
 
     fn range<'a>(&'a self, cidr: &'a str) -> BoxFuture<'a, Result<RangeResponse, IpRefusal>> {

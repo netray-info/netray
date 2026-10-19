@@ -9,8 +9,8 @@ use axum::extract::ConnectInfo;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use netray_common::ip_extract::IpExtractor;
-use netray_ip::IpLookup;
 use netray_ip::testing::StubIpLookup;
+use netray_ip::{IpLookup, LookupOptions};
 use netray_web::api::{
     ApiConfig, ApiIpConfig, ApiParts, ApiState, DomainRefusal, DomainRuns, RunStart, RunTrigger,
     openapi, router,
@@ -76,9 +76,18 @@ async fn get(app: Router, uri: &str) -> (StatusCode, Value) {
     (status, body)
 }
 
+/// The routes look up reverse DNS by default (spec v2-ip-cli, requirement 2).
+fn dns_on() -> LookupOptions {
+    LookupOptions {
+        reverse_dns: true,
+        lang: None,
+    }
+}
+
 fn stub_json(ip: &str) -> Value {
     let stub = StubIpLookup::new();
-    let ifconfig = futures::executor::block_on(stub.lookup(ip.parse().unwrap())).unwrap();
+    let ifconfig =
+        futures::executor::block_on(stub.lookup_with(ip.parse().unwrap(), dns_on())).unwrap();
     serde_json::to_value(ifconfig).unwrap()
 }
 
@@ -136,7 +145,7 @@ async fn no_ip_lookup_answers_unavailable() {
 async fn stub_lookup_equals_the_route_body() {
     let lookup: Arc<dyn IpLookup> = Arc::new(StubIpLookup::new());
     let direct = lookup
-        .lookup("198.51.100.1".parse().unwrap())
+        .lookup_with("198.51.100.1".parse().unwrap(), dns_on())
         .await
         .unwrap();
     let (status, body) = get(app(false, stub_parts()), "/ip/198.51.100.1").await;

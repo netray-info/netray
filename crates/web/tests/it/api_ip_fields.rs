@@ -9,10 +9,10 @@ use axum::extract::ConnectInfo;
 use axum::http::{Request, StatusCode, header};
 use futures::future::BoxFuture;
 use http_body_util::BodyExt;
-use netray_ip::IpLookup;
 use netray_ip::backend::Ifconfig;
 use netray_ip::handlers;
 use netray_ip::testing::StubIpLookup;
+use netray_ip::{IpLookup, LookupOptions};
 use netray_web::api::{
     ApiConfig, ApiParts, ApiState, DomainRefusal, DomainRuns, RunStart, RunTrigger,
 };
@@ -110,7 +110,10 @@ const ADDRESS_FIELDS: [&str; 11] = [
     "location",
     "network",
 ];
-const CALLER_ONLY: [&str; 4] = ["tcp", "user_agent", "host", "headers"];
+const CALLER_ONLY: [&str; 3] = ["tcp", "user_agent", "headers"];
+/// Fields spec v2-ip-cli adds: `host` and `cidr` on both paths, `all` on the caller.
+const ADDRESS_ADDED: [&str; 2] = ["host", "cidr"];
+const CALLER_ADDED: [&str; 1] = ["all"];
 
 fn assert_plain(r: &Reply, expected: &str, label: &str) {
     assert_eq!(r.status, StatusCode::OK, "{label}: {}", r.body);
@@ -161,7 +164,14 @@ async fn the_eleven_address_fields_equal_to_plain_over_the_stub() {
 async fn caller_fields_on_ip_are_rendered_from_the_request() {
     let stub = StubIpLookup::new();
     let caller = stub
-        .lookup_caller(CALLER.parse().unwrap(), Some(UA))
+        .lookup_caller_with(
+            CALLER.parse().unwrap(),
+            Some(UA),
+            LookupOptions {
+                reverse_dns: true,
+                lang: None,
+            },
+        )
         .await
         .unwrap();
     for name in ["user_agent", "tcp", "host"] {
@@ -233,10 +243,23 @@ fn enum_values(doc: &Value, schema: &Value, out: &mut Vec<String>) {
 fn the_document_lists_the_field_names_as_an_enum_per_path() {
     let doc = serde_json::to_value(netray_web::api::openapi()).unwrap();
     for (path, expected) in [
-        ("/api/v1/ip/{address}", ADDRESS_FIELDS.to_vec()),
+        (
+            "/api/v1/ip/{address}",
+            ADDRESS_FIELDS
+                .iter()
+                .chain(&ADDRESS_ADDED)
+                .copied()
+                .collect(),
+        ),
         (
             "/api/v1/ip",
-            ADDRESS_FIELDS.iter().chain(&CALLER_ONLY).copied().collect(),
+            ADDRESS_FIELDS
+                .iter()
+                .chain(&CALLER_ONLY)
+                .chain(&ADDRESS_ADDED)
+                .chain(&CALLER_ADDED)
+                .copied()
+                .collect::<Vec<_>>(),
         ),
     ] {
         let params = doc["paths"][path]["get"]["parameters"]
