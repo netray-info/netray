@@ -2927,6 +2927,7 @@ dependencies = [
  "netray-web",
  "percent-encoding",
  "serde",
+ "serde_json",
  "tempfile",
  "tokio",
  "toml",
@@ -3062,6 +3063,7 @@ dependencies = [
  "sha2 0.10.9",
  "tokio",
  "toml",
+ "tracing",
  "utoipa",
 ]
 
@@ -3157,12 +3159,15 @@ dependencies = [
 name = "netray-store"
 version = "0.26.0"
 dependencies = [
+ "metrics",
+ "metrics-util",
  "nanoid",
  "netray-model",
  "serde_json",
  "sqlx",
  "tempfile",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

@@ -1,7 +1,10 @@
 //! The V2 history (`history.db`, SDD §4): entries per domain, identical-run detection, the stored
 //! diff and the retention sweep.
 
+pub mod record;
 pub mod seed;
+
+pub use record::{now_unix, record, run_sweep_loop, set_gauges};
 
 use std::fmt;
 use std::path::Path;

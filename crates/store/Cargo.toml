@@ -10,9 +10,12 @@ netray-model = { workspace = true }
 sqlx = { workspace = true, features = ["runtime-tokio", "sqlite", "migrate"] }
 nanoid = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["sync", "time"] }
+metrics = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
 tempfile = "3"
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+metrics-util = { version = "0.20", default-features = false, features = ["debugging"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }
