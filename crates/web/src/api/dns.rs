@@ -546,7 +546,9 @@ fn module_of(state: &ApiState) -> Result<&Arc<dyn Module>, V1Error> {
 /// The name a check runs on: one domain, as lens validates it, with no address (a trailing dot
 /// included), no whitespace and nothing but letters, digits, `-`, `_` and `.`.
 fn check_domain(raw: &str) -> Result<String, V1Error> {
-    let name = raw.trim();
+    // Untrimmed: surrounding whitespace is refused like any other, so the name checked and the
+    // `query` stored are the same string.
+    let name = raw;
     if name.trim_end_matches('.').parse::<IpAddr>().is_ok() {
         return Err(V1Error::InvalidInput(format!(
             "`{name}` is an IP address: the check takes a domain"
