@@ -53,3 +53,46 @@ async fn request_dkim_selectors_reach_the_dkim_evidence_block() {
         "no custom1# row in {keys:?}"
     );
 }
+
+/// A selector given twice, or in another case, is one DNS name: probed once, one row
+/// (v2-dkim-legacy-urls review finding on Phase 2).
+#[tokio::test]
+async fn a_repeated_selector_is_probed_once() {
+    let record = format!("v=DKIM1; k=rsa; p={RSA_2048_P}");
+    let dns = example_dns().with_txt("custom1._domainkey.example.com", vec![record.as_str()]);
+    let inspector = stub_inspector(dns);
+    let limits = RateLimitState::new(&serde_json::from_str::<RateLimitConfig>("{}").unwrap())
+        .expect("default rate limit");
+    let slots = InspectSlots::new(4);
+
+    let job = inspector
+        .inspect(
+            &EmailInspectRequest {
+                domain: "example.com".into(),
+                dkim_selectors: vec!["custom1".into(), "custom1".into(), "CUSTOM1".into()],
+            },
+            "198.51.100.1".parse().unwrap(),
+            &limits,
+            &slots,
+        )
+        .expect("inspection starts");
+    let result = job.collect().await.expect("a summary");
+    let block = result
+        .evidence
+        .iter()
+        .find(|b| b.id.to_string() == "email.dkim")
+        .expect("an email.dkim block");
+    let Shape::Table { rows, .. } = &block.shape else {
+        panic!("email.dkim is not a table: {block:?}");
+    };
+    let custom: Vec<String> = rows
+        .iter()
+        .filter_map(|r| match r.first() {
+            Some(Value::Text(t)) if t.to_ascii_lowercase().starts_with("custom1#") => {
+                Some(t.clone())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(custom, vec!["custom1#1".to_string()], "rows: {custom:?}");
+}
