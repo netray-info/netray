@@ -10,7 +10,9 @@ default: adlc-verify
 adlc-verify: test-repo check-frontend-dist fmt-check clippy test-rust-offline test-frontend validate-site check-sitemap
 
 # Everything the gate runs, plus the full Rust suite (ifconfig-rs integration tests need `just ifconfig-data`).
-check: adlc-verify deny test-rust
+# test-rust stands in for test-rust-offline: one feature set, so the workspace tests compile once
+# (tests/repo/lib/verbs.sh holds it to a superset).
+check: test-repo check-frontend-dist fmt-check clippy test-frontend validate-site check-sitemap deny test-rust
 
 # Deterministic supply-chain checks; advisories run on a schedule elsewhere (workflow-rules R-J6).
 deny:
@@ -61,8 +63,7 @@ test-rust:
         cargo test --workspace
     else
         echo "notice: no GeoIP data; ifconfig-rs integration tests skipped (just ifconfig-data, then just test-ifconfig-data)" >&2
-        cargo test --workspace --exclude netray-ip
-        cargo test -p netray-ip --lib
+        just test-rust-offline
     fi
 
 # ifconfig-rs including the tests that need GeoIP data.
