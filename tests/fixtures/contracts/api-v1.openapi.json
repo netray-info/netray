@@ -6162,6 +6162,81 @@
       }
     },
     "/api/v1/dns/authcompare": {
+      "get": {
+        "operationId": "dns_authcompare_get",
+        "parameters": [
+          {
+            "description": "The query: a domain, then record types, `@server` names or addresses and `+flags`",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsAuthCompareResult"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsAuthCompareEvent"
+                }
+              }
+            },
+            "description": "The recursive and the authoritative lookups of the domain"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or unparsable q, invalid domain, record type or server, or a query the DNS policy refuses"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A server address in a blocked range"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited, or too many DNS jobs of this caller at once"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The DNS module is off, or no resolver could be built"
+          }
+        },
+        "summary": "`POST /dns/authcompare` over the query language in `q`.",
+        "tags": [
+          "dns"
+        ]
+      },
       "post": {
         "operationId": "dns_authcompare",
         "requestBody": {
@@ -6248,6 +6323,81 @@
       }
     },
     "/api/v1/dns/compare": {
+      "get": {
+        "operationId": "dns_compare_get",
+        "parameters": [
+          {
+            "description": "The query: a domain, then record types, `@server` names or addresses and `+flags`",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsCompareResult"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsCompareEvent"
+                }
+              }
+            },
+            "description": "The lookups of the domain per transport"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or unparsable q, invalid domain, record type or server, or a query the DNS policy refuses"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A server address in a blocked range"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited, or too many DNS jobs of this caller at once"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The DNS module is off, or no resolver could be built"
+          }
+        },
+        "summary": "`POST /dns/compare` over the query language in `q`.",
+        "tags": [
+          "dns"
+        ]
+      },
       "post": {
         "operationId": "dns_compare",
         "requestBody": {
@@ -6334,6 +6484,71 @@
       }
     },
     "/api/v1/dns/dnssec": {
+      "get": {
+        "operationId": "dns_dnssec_get",
+        "parameters": [
+          {
+            "description": "The query: a domain",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsDnssecResult"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsDnssecEvent"
+                }
+              }
+            },
+            "description": "The levels of the chain of trust"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or unparsable q, or invalid domain"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited, or too many DNS jobs of this caller at once"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The DNS module is off, or no resolver could be built"
+          }
+        },
+        "summary": "`POST /dns/dnssec` over the query language in `q`: the domain.",
+        "tags": [
+          "dns"
+        ]
+      },
       "post": {
         "operationId": "dns_dnssec",
         "requestBody": {
@@ -6410,6 +6625,84 @@
       }
     },
     "/api/v1/dns/query": {
+      "get": {
+        "operationId": "dns_query_get",
+        "parameters": [
+          {
+            "description": "The query: a domain, then record types, `@server` names or addresses and `+flags`",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsQueryResult"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsQueryEvent"
+                }
+              }
+            },
+            "description": "The lookups of the domain"
+          },
+          "307": {
+            "description": "A routing flag (+trace, +compare, +auth, +check): the same q on that job's path"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or unparsable q, invalid domain, record type or server, or a query the DNS policy refuses"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A server address in a blocked range"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited, or too many DNS jobs of this caller at once"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The DNS module is off, or no resolver could be built"
+          }
+        },
+        "summary": "`POST /dns/query` over the dig-like query language in `q`. A routing flag (`+trace`,\n`+compare`, `+auth`, `+check`) redirects to that job's path with the same `q`.",
+        "tags": [
+          "dns"
+        ]
+      },
       "post": {
         "operationId": "dns_query",
         "requestBody": {
@@ -6496,6 +6789,71 @@
       }
     },
     "/api/v1/dns/trace": {
+      "get": {
+        "operationId": "dns_trace_get",
+        "parameters": [
+          {
+            "description": "The query: a domain, then a record type (A when none)",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsTraceResult"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsTraceEvent"
+                }
+              }
+            },
+            "description": "The hops of the delegation"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or unparsable q, invalid domain or record type"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited, or too many DNS jobs of this caller at once"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The DNS module is off, or no resolver could be built"
+          }
+        },
+        "summary": "`POST /dns/trace` over the query language in `q`: the domain and its first record type.",
+        "tags": [
+          "dns"
+        ]
+      },
       "post": {
         "operationId": "dns_trace",
         "requestBody": {

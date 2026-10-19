@@ -62,3 +62,69 @@ The coder stopped red on `openapi_responses`, whose list of allowed DNS SSE even
 
 skipped: the binary's outbound DNS is blocked locally (Little Snitch); the v1 routes are driven
 end to end over the router and the offline stub in `api_dns_summary.rs`. The live probe is Phase 6's.
+
+## Phase 2 — Query language on GET
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R7: GET /dns/query?q= parses q with the query language and runs the query job as the POST route answers, JSON or SSE, charging [api.dns]; +dnssec adds DNSKEY and DS; warnings in done.warnings; missing or empty q, a parse error 400 INVALID_INPUT; policy refusals as POST | green | crates/web/tests/api_dns_get.rs |
+| C2 | R8: GET /dns/compare, authcompare, trace, dnssec with q run that job; trace over the first type, A when none | green | crates/web/tests/api_dns_get.rs |
+| C3 | R9: in GET /dns/query, +trace, +compare, +auth or +check answers 307 to /api/v1/dns/trace, compare, authcompare or check with the same q, nothing charged | green | crates/web/tests/api_dns_get.rs |
+| C4 | GIVEN q=example.com MX @google THEN 200, batches MX only, every lookup a Google server, valid DnsQueryResult | green | crates/web/tests/api_dns_get.rs |
+| C5 | GIVEN q=example.com THEN batches A, AAAA, CNAME, MX | green | crates/web/tests/api_dns_get.rs |
+| C6 | GIVEN q=example.com A +dnssec THEN batches A, DNSKEY, DS and done.dnssec true | green | crates/web/tests/api_dns_get.rs |
+| C7 | GIVEN q=example.com A bogus THEN 200 and done.warnings names the unrecognized token | green | crates/web/tests/api_dns_get.rs |
+| C8 | GIVEN no q or q empty THEN 400 INVALID_INPUT | green | crates/web/tests/api_dns_get.rs |
+| C9 | GIVEN q=example.com ANY THEN 400 INVALID_INPUT naming the blocked type | green | crates/web/tests/api_dns_get.rs |
+| C10 | GIVEN q=example.com A @192.168.1.1 THEN the POST route's refusal for that server | green | crates/web/tests/api_dns_get.rs |
+| C11 | GIVEN Accept text/event-stream on GET /dns/query THEN events batch, summary, done | green | crates/web/tests/api_dns_get.rs |
+| C12 | GIVEN GET /dns/compare?q=example.com A THEN DnsCompareResult with four transports; /dns/authcompare THEN DnsAuthCompareResult | green | crates/web/tests/api_dns_get.rs |
+| C13 | GIVEN GET /dns/trace?q=example.com MX THEN DnsTraceResult; /dns/dnssec?q=example.com THEN DnsDnssecResult | green | crates/web/tests/api_dns_get.rs |
+| C14 | GIVEN GET /dns/query?q=example.com +trace THEN 307 to /api/v1/dns/trace?q=example.com%20%2Btrace; +compare, +auth, +check to compare, authcompare, check | green | crates/web/tests/api_dns_get.rs |
+| C15 | GIVEN a caller over the [api.dns] budget WHEN GET /dns/query?q=example.com THEN 429 with Retry-After | green | crates/web/tests/api_dns_get.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 3 | sonnet (+2 test fixes by the implementer) | 65470 | 156 |
+
+The coder ended red on two test-side gaps, fixed under `ADLC-Test-Change`: the five-job table of
+`api_dns_get.rs` spent more than the default `[api.dns]` burst from one caller (the table now runs
+with raised bursts), and `openapi_responses.rs` had no cases for the new documented GET operations.
+The coder also refuses a first token starting with `@` or `+` (the parser takes it as a domain).
+
+### Review
+
+- DEFERRED: `+check` redirects to `/dns/check`, which Phase 5 adds.
+- DEFERRED (pre-existing, also POST and V1): `+dnssec` adds DNSKEY and DS after the cost and the
+  `max_record_types` check, so a compare is charged for fewer lookups than it runs and 10 types
+  plus `+dnssec` run 12.
+- NIT: the trace's "A when none" fallback is unreachable (the parser fills default types); an
+  address `q` traces PTR.
+
+### Behavioural verification
+
+skipped: outbound DNS blocked locally; the GET forms are driven over the router and the offline
+stub. Live probe in Phase 6.
+
+## Phase 3 — Parse, servers and record types
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R10: POST /dns/parse {input, cursor_pos} answers tokens, completions, query, error without running anything; @system only when allowed; behind [api]; malformed body 400 | open | |
+| C2 | R11: GET /dns/servers answers providers with configs and the group aliases public and all, behind [api] | open | |
+| C3 | R12: GET /dns/record-types answers every type except ANY, AXFR, IXFR, OPT, ZERO, NULL, behind [api] | open | |
+| C4 | GIVEN input example.com MX @cl THEN tokens domain, record_type, server_partial with byte ranges, completions include @cloudflare, query.servers empty with a warning naming @cl | open | |
+| C5 | GIVEN input example.com A @google +tcp THEN query domain example.com, types A, servers google, transport tcp, error null | open | |
+| C6 | GIVEN input example.com ANY THEN query null and error names the blocked type | open | |
+| C7 | GIVEN empty input and cursor 0 THEN tokens empty and error the empty-query message | open | |
+| C8 | GIVEN a body that is not JSON THEN 400 | open | |
+| C9 | GIVEN the default DNS config and input example.com @ THEN completions do not offer @system | open | |
+| C10 | GIVEN GET /dns/servers THEN providers include cloudflare, google, quad9, mullvad with udp, tcp, tls, https configs, groups public and all list their providers | open | |
+| C11 | GIVEN GET /dns/record-types THEN A, MX, DNSKEY, TLSA, SVCB present, none of ANY, AXFR, IXFR, OPT, ZERO, NULL | open | |
+| C12 | GIVEN each of the three routes THEN the body validates against its documented schema | open | |
