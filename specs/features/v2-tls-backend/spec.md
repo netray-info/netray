@@ -1,6 +1,6 @@
 # Spec: v2-tls-backend
 
-Status: Draft
+Status: Ready for Implementation
 Created: 2026-10-19
 
 ## Goal
