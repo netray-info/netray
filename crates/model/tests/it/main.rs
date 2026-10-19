@@ -12,3 +12,4 @@ mod model;
 mod run;
 mod run_check_fields;
 mod volatile_block;
+mod volatile_row_repeats;
