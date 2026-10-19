@@ -267,3 +267,35 @@ async fn reference_bodies_validate_against_documented_schemas() {
         &get("/dns/record-types").await,
     );
 }
+
+// C9 (Phase 3 review amendment): with `allow_system_resolvers = true` the v1 route offers `@system`.
+#[tokio::test]
+async fn parse_offers_system_when_the_config_allows_it() {
+    let config: netray_dns::config::ModuleConfig =
+        serde_json::from_str(r#"{"dns": {"allow_system_resolvers": true}}"#).unwrap();
+    let jobs = netray_dns::testing::stub_jobs_with(config.into_config().unwrap());
+    let parts = ApiParts {
+        dns: Some(jobs),
+        ..Default::default()
+    };
+    let app = router(ApiState::new(ApiConfig::default(), Arc::new(NoRuns)).with_parts(parts));
+    let body = json!({"input": "example.com @", "cursor_pos": 13}).to_string();
+    let mut req = Request::builder()
+        .method("POST")
+        .uri("/dns/parse")
+        .header("content-type", "application/json")
+        .body(Body::from(body))
+        .unwrap();
+    let peer: SocketAddr = "198.51.100.1:0".parse().unwrap();
+    req.extensions_mut().insert(ConnectInfo(peer));
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+    let v: Value = serde_json::from_slice(&bytes).unwrap();
+    let offered = v["completions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|c| c["label"] == "@system");
+    assert!(offered, "{v}");
+}
