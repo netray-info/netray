@@ -1,7 +1,8 @@
 # Spec: v2-result-page
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-17
+Finished: 2026-10-19
 
 ## Goal
 
@@ -797,6 +798,7 @@ GIVEN the stack seeded on any day WHEN `/shop.example.com` and `/stale.example.c
 - The `spectrum` island moves `aria-current` to the run on display (hovered, pinned or stepped), over leaving it on run 0: the trace marker (R43) follows the shown run, and a pinned row carries only the marker, no further emphasis (frontend-rules §4) (implementer under the operator's autonomy mandate, 2026-10-19; Phase 5 review).
 - On the end page of a run that was not stored, the line sentences include that run as the newest point (dated now), over the stored history alone: the sentence must not contradict the line shown; live figures during a stream keep the stored history's sentences, which the end fragments replace (implementer under the operator's autonomy mandate, 2026-10-19; Phase 5 review).
 - The run stepper renders only when the trace holds two or more runs, over two inert buttons on a page without history (implementer under the operator's autonomy mandate, 2026-10-19; Phase 5 review).
+- `finish`'s distillation was confirmed by the implementer, not the operator: the operator dropped the halt before `finish` and reviews the work live afterwards, so the candidates were written as drafted (implementer under the operator's autonomy mandate, 2026-10-19).
 
 ## Open decisions
 

@@ -331,3 +331,8 @@ Run 1 failed to start lens: lens reads every `LENS_*` variable as a key, so the 
 ```
 
 Screenshots (`target/screenshots/v2-result-page/`, copied to `/private/tmp/claude-501/-Users-lukas-Documents-src-netray/5622365d-7bd6-4968-a408-05fa2d6691a9/scratchpad/screenshots/v2-result-page/`): idle-recent, shop-fresh, shop-pinned (1440) / shop-stepped (390), issues-severity, new-first, stale-refused, stale-nojs, history, each at 390 and 1440 px, and og-shop.png; dark-scheme variants (`*-dark.png`) of idle-recent, shop-fresh, new-first, stale-refused and history at both widths, taken outside the spec with `colorScheme: 'dark'`.
+
+### Checks to build
+
+- An islands test that touches `localStorage` without installing a stub (`useStorage`) fails a lint over `crates/web/islands/test/*.test.ts` (Node 26 shadows happy-dom's storage).
+- An end fragment set of the run route never contains an element that holds `data-island="stream"` (a test over every `Parts::fragments()` variant in `crates/web/tests/`), so the stream form is never detached.
