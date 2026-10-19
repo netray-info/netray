@@ -67,7 +67,7 @@ fn the_sdd_names_the_new_dns_endpoints() {
     let text = sdd();
     let api = section(&text, "### 7.1 Apex API v1");
     for needle in [
-        "GET /dns/query?q=",
+        "`GET /dns/query`",
         "`summary`",
         "/dns/check",
         "/dns/parse",
