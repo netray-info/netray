@@ -44,6 +44,10 @@ pub enum ApiError {
     #[error("too many servers: {requested} exceeds limit of {max}")]
     TooManyServers { requested: usize, max: usize },
 
+    /// A cost above a limiter's burst: no wait admits it (v2-input-edges).
+    #[error("request cost {cost} exceeds the limit of {limit} per request")]
+    CostExceedsLimit { cost: u32, limit: u32 },
+
     #[error("rate limited ({scope})")]
     RateLimited {
         retry_after_secs: u64,
@@ -67,7 +71,8 @@ impl netray_common::error::ApiError for ApiError {
             | Self::SystemResolversDisabled
             | Self::ArbitraryServersDisabled
             | Self::TooManyRecordTypes { .. }
-            | Self::TooManyServers { .. } => StatusCode::UNPROCESSABLE_ENTITY,
+            | Self::TooManyServers { .. }
+            | Self::CostExceedsLimit { .. } => StatusCode::UNPROCESSABLE_ENTITY,
 
             Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
 
@@ -87,6 +92,7 @@ impl netray_common::error::ApiError for ApiError {
             Self::ArbitraryServersDisabled => "ARBITRARY_SERVERS_DISABLED",
             Self::TooManyRecordTypes { .. } => "TOO_MANY_RECORD_TYPES",
             Self::TooManyServers { .. } => "TOO_MANY_SERVERS",
+            Self::CostExceedsLimit { .. } => "COST_EXCEEDS_LIMIT",
             Self::RateLimited { .. } => "RATE_LIMITED",
             Self::ResolverError(_) => "RESOLVER_ERROR",
         }

@@ -89,8 +89,9 @@ retry can pass; `429` stays for requests that pass after waiting.
    `400 DOMAIN_INVALID` and records no run; `GET /ＥＸＡＭＰＬＥ.com` answers a 301 to `/example.com`;
    the evidence page `/１.１.１.１/dns` answers 404.
 6. **DNS cost beyond a burst.** `check_query_cost` compares, before the stream check and before any
-   limiter is charged, the total cost with the per-IP and global bursts and the per-target cost with
-   the per-target burst, in that order. The first one exceeded refuses the request with a new
+   limiter is charged, the total cost with the per-IP and global bursts and the per-target cost,
+   times the number of times a target is listed, with the per-target burst, in that order; a
+   request that charges no target (trace, dnssec, check) is not held to the per-target burst. The first one exceeded refuses the request with a new
    `ApiError::CostExceedsLimit { cost, limit }` whose message names both numbers
    (`request cost <cost> exceeds the limit of <limit> per request`) and charges no limiter.
 7. **DNS answers.** prism's V1 routes answer `CostExceedsLimit` with `422` and code
@@ -185,6 +186,11 @@ GIVEN the inspect page with `[api.tls] per_ip_burst = 2` WHEN the TLS job runs `
   ASCII label starting with a digit or `_` is refused (`_dmarc.xn--4dbrk0ce.co.il`). The URL
   Standard refuses the same hosts; lens takes registrable domains, not `_`-prefixed names, so the
   case is left (implementer under the operator's autonomy mandate, 2026-10-19).
+
+- Phase 2 amendment after the reader: the per-target comparison applies only to targets the
+  request charges, once per listing (a POST body may repeat a server), so trace, dnssec and check
+  keep passing a per-target burst below 16, and a repeated server is caught up front (implementer
+  under the operator's autonomy mandate, 2026-10-20).
 
 ## Open decisions
 
