@@ -126,3 +126,28 @@
   height: var(--spectrum-plate-height);
   transform: translateX(-50%);
 }
+.spectrum-gutter {
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  gap: 2px;
+  margin-block-start: 56px;
+  padding-inline-start: var(--space-2);
+  border-inline-start: var(--line-marker) solid transparent;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+.spectrum-gutter[data-replaying] {
+  border-inline-start-color: var(--color-ink);
+}
+.spectrum-gutter__date {
+  color: var(--color-ink);
+  font-weight: var(--font-weight-bold);
+}
+.spectrum-gutter__grade strong {
+  color: var(--color-ink);
+}
+.spectrum__region-grades {
+  display: none;
+}

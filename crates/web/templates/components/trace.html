@@ -1,11 +1,15 @@
 {% macro trace(view) %}
 <ol class="trace">
   {% for row in view.rows %}
-  <li class="trace__row marker" data-run="{{ loop.index0 }}"{% if row.current %} aria-current="true"{% endif %}>
-    <span class="trace__date">{{ row.date }}</span>
-    <span class="trace__grade">{{ row.grade }}</span>
-    <span class="trace__cells">{% for cell in row.cells %}<span class="trace__cell" data-tone="{{ cell.as_str() }}"></span>{% endfor %}</span>
+  <li class="trace__row" data-run="{{ loop.index0 }}"{% if let Some(no) = row.no %} data-run-no="{{ no }}"{% endif %} data-date="{{ row.date }}" data-grade="{{ row.grade }}"{% if row.current %} aria-current="true"{% endif %}>
+    {% for cell in row.cells %}<span class="trace__cell" data-tone="{{ cell.as_str() }}"></span>{% endfor %}
   </li>
   {% endfor %}
 </ol>
+<div class="trace__edges"><span class="trace__edge" data-edge="newest">{{ view.newest }}</span>{% if view.rows.len() > 1 %}<span class="trace__edge" data-edge="oldest">{{ view.oldest }}</span>{% endif %}</div>
+<div class="trace__foot">
+  <p class="trace__caption" data-rest="{{ view.caption }}">{{ view.caption }}</p>
+  <p class="trace__hint" data-rest="{{ view.hint }}">{{ view.hint }}</p>
+</div>
+{% if let Some(href) = view.table_href %}<a class="trace__table-link" href="{{ href }}">Show history as a table</a>{% endif %}
 {% endmacro %}

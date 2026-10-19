@@ -176,6 +176,8 @@ fn spectrum_renders_plate_lines_and_regions() {
             width: 25.0,
             grade: None,
         }],
+        gutter: None,
+        run_grades: vec![],
     })
     .unwrap();
     assert_root(&html, "spectrum");
@@ -200,18 +202,25 @@ fn trace_renders_rows_cells_and_single_current_marker() {
     let html = trace(&TraceView {
         rows: vec![
             TraceRow {
+                no: Some(2),
                 date: "2026-10-15".into(),
                 grade: "A-".into(),
                 cells: vec![Tone::Pass, Tone::Warn, Tone::Fail],
                 current: true,
             },
             TraceRow {
+                no: Some(1),
                 date: "2026-09-01".into(),
                 grade: "C+".into(),
                 cells: vec![Tone::Fix, Tone::Untested],
                 current: false,
             },
         ],
+        newest: "10-15".into(),
+        oldest: "09-01".into(),
+        caption: "Each line carries its trace: 2 runs, newest on top.".into(),
+        hint: "hover a run to replay the spectrum".into(),
+        table_href: None,
     })
     .unwrap();
     assert_root(&html, "trace");
@@ -222,10 +231,6 @@ fn trace_renders_rows_cells_and_single_current_marker() {
         "in: {html}"
     );
     assert_eq!(html.matches("aria-current").count(), 1, "in: {html}");
-    assert!(
-        class_tokens(&html).iter().any(|t| t == "marker"),
-        "no marker in: {html}"
-    );
     for tone in ["pass", "warn", "fail", "fix", "untested"] {
         assert_eq!(
             html.matches(&format!("data-tone=\"{tone}\"")).count(),

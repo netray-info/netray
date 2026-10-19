@@ -48,9 +48,15 @@
       <span class="spectrum__tick"{% if tick.major %} data-major{% endif %}{% if tick.last %} data-last{% endif %} style="left: {{ tick.x_pct() }}%"></span>
       {% endfor %}
       {% for region in view.regions %}
-      <span class="spectrum__region-label" style="left: {{ region.x_pct() }}%; width: {{ region.width_pct() }}%">{{ region.label }}{% if let Some(grade) = region.grade %} <span class="spectrum__region-grade">{{ grade }}</span>{% endif %}</span>
+      <span class="spectrum__region-label" data-protocol="{{ region.label }}" style="left: {{ region.x_pct() }}%; width: {{ region.width_pct() }}%">{{ region.label }}{% if let Some(grade) = region.grade %} <span class="spectrum__region-grade">{{ grade }}</span>{% endif %}</span>
       {% endfor %}
     </div>
+    {% for set in view.run_grades %}
+    <span class="spectrum__region-grades" data-run="{{ set.run }}" hidden>{% for (protocol, letter) in set.grades %}<span data-protocol="{{ protocol }}">{{ letter }}</span>{% endfor %}</span>
+    {% endfor %}
   </div>
 </div>
+{% if let Some(g) = view.gutter %}
+<div id="spectrum-gutter" class="spectrum-gutter"><span class="spectrum-gutter__run">{% if let Some(run) = g.run %}Run {{ run }}{% endif %}</span><span class="spectrum-gutter__date">{{ g.date }}</span><span class="spectrum-gutter__grade">grade <strong>{{ g.grade }}</strong></span></div>
+{% endif %}
 {% endmacro %}

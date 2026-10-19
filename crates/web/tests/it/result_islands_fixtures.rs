@@ -201,10 +201,15 @@ async fn normalise(store: &HistoryStore, text: String) -> String {
     for (n, (_, id)) in ids.iter().enumerate() {
         out = out.replace(id.as_str(), &format!("ENTRY{n}"));
     }
-    // The live run's trace row carries the wall clock; every fixed fixture time lies in 2025.
-    regex::Regex::new(r"20(2[6-9]|[3-9][0-9])-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}")
+    // The live run's trace row, gutter and newest edge carry the wall clock; every fixed fixture
+    // time lies in 2025.
+    let out = regex::Regex::new(r"20(2[6-9]|[3-9][0-9])-[0-9]{2}-[0-9]{2}( [0-9]{2}:[0-9]{2})?")
         .unwrap()
         .replace_all(&out, "NOW")
+        .into_owned();
+    regex::Regex::new(r#"(data-edge=\\*"newest\\*">)[0-9]{2}-[0-9]{2}"#)
+        .unwrap()
+        .replace_all(&out, "${1}NOW")
         .into_owned()
 }
 

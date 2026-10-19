@@ -29,3 +29,17 @@ G1: C1–C13 (one group: every criterion touches the spectrum layout, its compon
 G1 — `crates/web/src/spectrum.rs` `run_heights`: height = 0.35 + 0.65 × w / w_max over measured lines (w the effective weight it computes today), muted lines unchanged; the view (`SpectrumView` in `crates/web/src/components.rs`) gains the tick list (N + 1, major at the ends and region bounds) and per-region left/width percentages and an optional section grade; `figure_parts` in `crates/web/src/pages/result/mod.rs` passes section grades from `score_run`'s section percentages through the profile thresholds (expose a lookup in `netray_engine::scoring`). `templates/components/spectrum.html`: ticks in `.spectrum__axis`, region label spans with `left`/`width`, `<span class="spectrum__region-grade">`, label band 56 px for up to three rows, leaders 8/22/36 px by label index. `static/spectrum.css`: plate radius, axis 32 px, ticks 4/10 px, region labels caption mono uppercase .14em centred, line labels caption mono 600 transparent. `partials/result_spectrum.html`: the legend with `.legend__mark` entries (pass, warn, fail, "fixed since run k−1" when a predecessor exists) and `.legend__note`; legend rules in `pages.css`. Catalogue short of `tls.expiry_window` "Expiry". SDD §5.4 amended (height rule). OG plate goldens regenerated if the heights move them.
 
 G2 — `just design-check` with the phase 2 manifest elements; rows into report.md.
+
+## Phase 3 — History trace, diff and first visit
+
+### Groups
+
+G1: C1, C5, C6, C7, C8, C9, C11, C15, C16, C17, C18 and the server half of C2, C3, C12, C13 (`fidelity_replay_markup.rs`) · G2: C2, C3, C4, C12, C13, C14 (spectrum island) · G3: C19 (design-check)
+
+### Plan
+
+G1 — `templates/components/trace.html` + `static/trace.css`: rows `li.trace__row[data-run]` with `data-run-no`, `data-date`, `data-grade`, no date/grade text; one cell per line with a centred 5 px mark (pass 1 px hair, warn/fail 3 px, untested muted); row height `--spectrum-trace-row`; edge dates `.trace__edge[data-edge]`. `views::trace_view` supplies run numbers, dates and grades. `partials/result_spectrum.html`: the figure as a grid with the gutter column (`#spectrum-gutter.spectrum-gutter` with run, date, grade spans), the caption and hint with `data-rest`, the table link `.trace__table-link` to `/<domain>/history`, region grades and the legend's fixed entry per run inside `[data-run]` wrappers. `views::line_code(&CheckId)` (tag and 1-based spectrum position); `diff_block` component: marker, kind (70 px), text, code; no in-box title or summary for a stored entry; `.since-meta` after the since h2 (predecessor date, grades). First entry: `<section id="diff" class="first-run">` with title, text and ghost (one row of cells, two dashed rows). Island fixtures regenerated.
+
+G2 — `islands/src/spectrum.ts`: hover/pin set `data-hovered`/`data-dimmed`/`data-pinned` on rows, fill the gutter from the row's data attributes and set `data-replaying`, swap caption/hint/run-title text from `data-rest`, restore on leave; no style writes; bundle under the cap.
+
+G3 — `just design-check` with the phase 3 manifest elements (FTrace trace, caption, gutter; F since and diff; FFirst first-run box; F/FDark "history rows" accepted).

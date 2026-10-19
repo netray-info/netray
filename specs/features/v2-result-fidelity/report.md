@@ -123,3 +123,63 @@ The desktop boards report no row (C14); the two phone rows belong to Phase 6. Th
 | AMENDMENT | leader stagger by index (board) versus by row (S20) | decision logged; requirement 17 reworded |
 | AMENDMENT | first-visit legend without a fixed entry | as board FFirst; logged |
 | DEFERRED | design fixtures' evidence blocks contradict their statuses | Phase 5 (evidence tabs) |
+
+## Phase 3 — History trace, diff and first visit
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R20 Trace form: under the spectrum each line carries its trace, one row per stored entry newest on top, up to 24, 5 px per row (6 px phone); pass a 1 px hairline, warn and fail a 3 px block in their colour, not tested and not applicable muted; edge dates newest and oldest right of the trace at its top and bottom; no horizontal waterfall rows | green | crates/web/tests/it/fidelity_trace.rs |
+| C2 | R21 Caption and hint under the trace: "Each line carries its trace: n runs, newest on top." and "hover a run to replay the spectrum · tap to pin"; while hovered or pinned the caption names the line and its history sentence and the hint reads "replaying run k · move away to return" or "pinned · tap again to release" | green | crates/web/islands/test/spectrum-replay.test.ts, crates/web/tests/it/fidelity_replay_markup.rs |
+| C3 | R22 Replay gutter right of the plate: "Run k", the date in bold, "grade X", a 3 px marker beside the replayed trace row; the run title reads "Run k · date · replaying history"; region grades and the legend's fixed entry follow the replayed run | green | crates/web/islands/test/spectrum-replay.test.ts, crates/web/tests/it/fidelity_replay_markup.rs |
+| C4 | R23 Hover dimming: while a run is hovered every other trace row is at 30 % opacity and the hovered row enlarged; the island switches data attributes only | green | crates/web/islands/test/spectrum-replay.test.ts, crates/web/tests/it/fidelity_replay_markup.rs |
+| C5 | R24 History link "Show history as a table" to /domain/history under the trace | green | crates/web/tests/it/fidelity_trace.rs |
+| C6 | R25 Since heading: h2 "Since run k−1" 20 px weight 650 outside the box, mono meta "predecessor date · grade from → to" | green | crates/web/tests/it/fidelity_diff.rs |
+| C7 | R26 Diff rows in a bordered box: padding 10 px 16 px, rules between rows, a 3 × 16 px tone marker, a 70 px kind column, the sentence, right-aligned the line code or the protocol for an evidence change; phone: sentence first, "kind · code" meta under it | green | crates/web/tests/it/fidelity_diff.rs |
+| C8 | R27 First-run box on a domain's first entry: bordered surface box, "First run recorded." 17 px weight 650, the explanation sentence of board FFirst, a ghost trace of one row and two dashed rows | green | crates/web/tests/it/fidelity_first_run.rs |
+| C9 | GIVEN 12 stored entries WHEN the trace renders THEN each line has 12 rows newest first and the edge dates are the newest and oldest entry's month and day | green | crates/web/tests/it/fidelity_trace.rs |
+| C10 | GIVEN 30 stored entries WHEN the trace renders THEN each line has 24 rows | already_implemented | crates/web/tests/it/fidelity_trace.rs |
+| C11 | GIVEN a pass row and a warn row WHEN rendered THEN the pass row is a 1 px hairline and the warn row a 3 px block in the warn colour | green | crates/web/tests/it/fidelity_trace.rs |
+| C12 | GIVEN the trace at rest WHEN rendered THEN the caption reads "Each line carries its trace: 12 runs, newest on top." and the hint "hover a run to replay the spectrum · tap to pin" | green | crates/web/islands/test/spectrum-replay.test.ts, crates/web/tests/it/fidelity_replay_markup.rs |
+| C13 | GIVEN the island WHEN run 5 is hovered THEN every other trace row carries the dimmed attribute, the gutter shows "Run 5", its date and grade, and the run title reads "Run 5 · date · replaying history" | green | crates/web/islands/test/spectrum-replay.test.ts, crates/web/tests/it/fidelity_replay_markup.rs |
+| C14 | GIVEN a pinned run WHEN the hint renders THEN it reads "pinned · tap again to release" | green | crates/web/islands/test/spectrum-replay.test.ts, crates/web/tests/it/fidelity_replay_markup.rs |
+| C15 | GIVEN the result page of a domain with history WHEN rendered THEN it links "Show history as a table" to /example.com/history | green | crates/web/tests/it/fidelity_trace.rs |
+| C16 | GIVEN entry 12 with predecessor 11 graded C and itself B WHEN rendered THEN an h2 reads "Since run 11" and its meta "date · grade C → B" | green | crates/web/tests/it/fidelity_diff.rs |
+| C17 | GIVEN a diff with a fixed check at position 31 WHEN rendered THEN its row shows kind "fixed", the sentence and the code "MAIL·31" | green | crates/web/tests/it/fidelity_diff.rs |
+| C18 | GIVEN a domain's first entry WHEN rendered THEN the box reads "First run recorded." with the explanation and a ghost trace of one row and two dashed rows, and no since heading | green | crates/web/tests/it/fidelity_first_run.rs |
+| C19 | GIVEN boards FTrace and FFirst WHEN just design-check runs THEN no row names the trace, caption, gutter, since heading, diff rows or first-run box | green | design-check |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 trace, gutter, diff, since meta, first-run box, line codes | 3 (the orchestrator corrected a stale check id in `fidelity_diff.rs`) | sonnet | 202815 | 639 |
+| G2 spectrum island | 1 | sonnet | 45959 | 86 |
+| G3 design-check | run by the orchestrator; per-run region grades kept out of view, hidden legend entries, since meta beside its h2, the empty sentence slot removed from the grid | n/a | n/a | n/a |
+| review fixes | 4 | sonnet | 107625 | 279 |
+
+### Behavioural verification
+
+`just design-check` (manifest netray-ops 89f9def: trace row, caption, hint, edge date, gutter on FTrace; since meta, diff box, rows, marker, kind, text, code on F and FTrace; first-run box, title, text, ghost, dashed rows on FFirst; "history rows" on F accepted):
+
+```
+D3 · Mobile result — light (Play: ‹ › and tap lines): 2 deviation(s)
+2 open deviation(s), 0 stale accepted entries
+```
+
+Accepted (operator decision, Decision log): board F light and dark "history rows background-color" (the waterfall's filled cells against the per-line trace). The desktop boards report no open row (C19). Side-by-side of FTrace light: the trace sits under the axis, gutter right of the plate with run, date and grade, caption and hint under the trace, edge dates right of it, the since h2 with its meta and the diff box with marker, kind, sentence and line code.
+
+### Reader
+
+| class | finding | disposition |
+|---|---|---|
+| BLOCKER | the pinned hint never showed with a mouse (hover won) | fixed: pinned hint on the pinned row; island test |
+| BLOCKER | no marker beside the replayed trace row | fixed: 3 px ink mark at the row's start while hovered or pinned; test |
+| AMENDMENT | gutter lost its run slot when the newest row had no number | repaired: slot always rendered |
+| AMENDMENT | the window's oldest row claimed "fixed since" without its predecessor | repaired: empty entry |
+| AMENDMENT | caption kept naming a once-hovered line | repaired: only while replaying; named by short and line code |
+| AMENDMENT | unstored run lost its grade change | repaired: since meta "date · grade B → F" |
+| AMENDMENT | phone half of requirement 26 had no owner | moved to Phase 6 |
+| NIT | empty run number in the hint | fixed: "replaying this run" |
+| NIT | the line-code oracle repeats the implementation's loop | listed |

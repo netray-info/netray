@@ -413,7 +413,7 @@ GIVEN boards F and M WHEN `just design-check` runs THEN no row names the evidenc
 ## Phase 6 — Phone layout
 
 **Depends on:** Phase 3, Phase 4, Phase 5
-**Requirements:** 36, 37, 38, 39, 40
+**Requirements:** 36, 37, 38, 39, 40, and the phone halves of 16 and 26
 
 Phone values under the `layout.phoneMax` query, the menu disclosure, the phone result header, the
 spectrum fit, the stepper bar and hint, tap targets.
@@ -520,6 +520,8 @@ GIVEN the side-by-side images WHEN a reader compares them THEN every finding is 
 - A token `radius.round` (50 %) draws the legend's fix ring, the board's circle (implementer under the operator's autonomy mandate, 2026-10-19).
 
 - Review of Phase 2: region labels centre and overflow symmetrically, the last one end-aligned, so none leaves the plate; region grades follow the score guard; the key note counts the lines drawn; label widths are measured at the drawn 11 px (SDD §5.5). The phone half of requirement 16 (9 px, "MAIL") is built in Phase 6 with requirement 38. Region grades and the legend name the latest run; while replaying, Phase 3's gutter (requirement 22) names the replayed run's grade, and the region grades and the fixed entry follow the shown run (built with Phase 3). The first visit's legend has no fixed entry, as board FFirst. The design fixtures' evidence blocks are made consistent with their statuses in Phase 5 (implementer under the operator's autonomy mandate, 2026-10-19).
+
+- Phase 3: the trace's caption, hint, edge dates and table link live in the trace component and the gutter in the spectrum component (the gate's ownership rule); the first-run box and the since meta are page parts in `pages.css`; tokens `font.size.title` (17 px) and `font.size.text` (14 px) for the first-run box; a fixed line is a pass mark in the trace. Review: the pinned hint wins over hover on the pinned row, the replayed row carries the 3 px marker, the gutter always holds the run slot, the window's oldest row claims no fix, the caption names a line only while a run is replayed and names it by short and code, the unstored run's since meta keeps the grade change; the phone half of requirement 26 moves to Phase 6 (implementer under the operator's autonomy mandate, 2026-10-19).
 
 ### Proposals for the operator
 

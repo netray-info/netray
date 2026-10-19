@@ -68,8 +68,9 @@ describe("spectrum island (requirement 17)", () => {
     const labels = figure().querySelectorAll('.spectrum__labels[data-run="1"] .spectrum__line-label');
     expect(labels.length).toBeGreaterThan(0);
     const gutter = text(document.getElementById("spectrum-gutter"));
-    expect(gutter).toContain("2025-10-10 08:53");
-    expect(gutter).toContain("B");
+    expect(gutter).toContain("Run 2");
+    expect(gutter).toContain("2025-10-10");
+    expect(gutter).toContain("grade B");
     leave(row(1));
     expect(shownRuns()).toEqual(["0"]);
   });
@@ -137,12 +138,12 @@ describe("spectrum island (requirement 17)", () => {
     expect(muts.length).toBeGreaterThan(0);
     const slot = (n: Node): boolean => {
       const el = n instanceof Element ? n : n.parentElement;
-      return !!el?.closest("#spectrum-gutter, #spectrum-sentence");
+      return !!el?.closest("#spectrum-gutter, #spectrum-sentence, .trace__caption, .trace__hint, #run-line");
     };
     for (const m of muts) {
       if (m.type === "attributes") {
         const name = m.attributeName as string;
-        expect(name === "class" || name.startsWith("aria-") || name.startsWith("data-"), name).toBe(true);
+        expect(name === "class" || name === "hidden" || name.startsWith("aria-") || name.startsWith("data-"), name).toBe(true);
       } else {
         expect(slot(m.target), `${m.type} on ${(m.target as Element).nodeName}`).toBe(true);
       }

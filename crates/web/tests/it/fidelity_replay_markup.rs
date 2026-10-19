@@ -18,7 +18,6 @@ use netray_web::api::{DomainRefusal, DomainRuns, RunStart, RunTrigger};
 use netray_web::pages::result::{ResultState, router};
 use tower::ServiceExt;
 
-
 const DOMAIN: &str = "shop.example.com";
 const T: i64 = 1_800_000_000;
 const DAY: i64 = 86_400;

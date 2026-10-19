@@ -381,7 +381,7 @@ async fn a_first_record_missing_from_the_re_read_keeps_the_first_run_wording() {
     assert!(title.contains("Run 1"), "{title}");
     assert!(title.contains("first run"), "{title}");
     let diff = last(&fragments, "diff");
-    assert!(diff.contains("<h2>First run recorded.</h2>"), "{diff}");
+    assert!(diff.contains("First run recorded."), "{diff}");
 }
 
 // Finding 2: a disputed grade is logged whether or not the score is complete

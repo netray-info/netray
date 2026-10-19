@@ -20,7 +20,7 @@ use crate::components::{
 };
 use crate::entries::view::{epoch_days_to_ymd, grade_letter, status_tone};
 use crate::evidence::href;
-use crate::spectrum::{Layout, RunInput, SectionState};
+use crate::spectrum::{Layout, LineTone, RunInput, SectionState};
 
 /// Where an issue's evidence link points.
 pub enum Links<'a> {
@@ -304,6 +304,29 @@ pub fn passed_checks(run: &Run, catalogue: &Catalogue) -> Vec<CheckRowView> {
     rows.into_iter().map(|(_, row)| row).collect()
 }
 
+/// A check's code: its protocol tag and its 1-based position in the spectrum's line order, two
+/// digits ("DNS·04"). `None` for an id the catalogue does not hold.
+pub fn line_code(id: &CheckId) -> Option<String> {
+    let cat = catalogue();
+    let mut position = 0;
+    for protocol in PROTOCOLS {
+        for spec in cat.for_protocol(protocol).entries() {
+            position += 1;
+            if &spec.id == id {
+                let tag = match protocol {
+                    Protocol::Dns => "DNS",
+                    Protocol::Tls => "TLS",
+                    Protocol::Http => "HTTP",
+                    Protocol::Email => "MAIL",
+                    Protocol::Ip => "IP",
+                };
+                return Some(format!("{tag}\u{b7}{position:02}"));
+            }
+        }
+    }
+    None
+}
+
 /// The class label of a change.
 pub fn change_label(class: &ChangeClass) -> &'static str {
     match class {
@@ -378,7 +401,7 @@ pub fn diff_view(diff: Option<&Diff>, catalogue: &Catalogue) -> DiffView {
         text: catalogue
             .get(&c.id)
             .map_or_else(|| c.id.to_string(), |s| s.title.clone()),
-        protocol: c.id.protocol().as_str().to_string(),
+        protocol: line_code(&c.id).unwrap_or_else(|| c.id.protocol().as_str().to_string()),
     });
     let blocks = diff.evidence.iter().map(|b| {
         let (kind, text) = match &b.kind {
@@ -413,14 +436,7 @@ pub fn diff_view(diff: Option<&Diff>, catalogue: &Catalogue) -> DiffView {
         ],
         None => vec![step(diff.grade.from, None), step(diff.grade.to, None)],
     };
-    let summary = grade
-        .iter()
-        .map(|s| match &s.note {
-            Some(note) => format!("{} ({note})", s.grade),
-            None => s.grade.clone(),
-        })
-        .collect::<Vec<_>>()
-        .join(" \u{2192} ");
+    let summary = grade_line(&grade);
     DiffView {
         block: DiffBlockView {
             title: DIFF_TITLE.to_string(),
@@ -432,6 +448,19 @@ pub fn diff_view(diff: Option<&Diff>, catalogue: &Catalogue) -> DiffView {
         },
         grade,
     }
+}
+
+/// The grade steps of a diff as one line: "C → B", with the rescored step "C → D (profile
+/// effect) → B (domain effect)".
+pub fn grade_line(steps: &[GradeStep]) -> String {
+    steps
+        .iter()
+        .map(|s| match &s.note {
+            Some(note) => format!("{} ({note})", s.grade),
+            None => s.grade.clone(),
+        })
+        .collect::<Vec<_>>()
+        .join(" \u{2192} ")
 }
 
 fn date_of(timestamp: i64) -> (u64, u8, u8) {
@@ -690,22 +719,52 @@ pub fn utc_minute(timestamp: i64) -> String {
     )
 }
 
-/// The trace of a layout: one row per run, newest first, `rows` the (created_at, grade) of each
-/// run in the layout's run order.
-pub fn trace_view(layout: &Layout, rows: &[(i64, Grade)]) -> TraceView {
+/// A line's mark in the trace: a fix is a pass there, the trace draws no fix.
+fn trace_tone(tone: LineTone) -> Tone {
+    match tone {
+        LineTone::Fixed => Tone::Pass,
+        tone => line_tone(tone),
+    }
+}
+
+/// One run of the history behind the trace: when it was recorded, its grade and its place in
+/// the stored history when that is known.
+pub struct TraceInput {
+    pub created_at: i64,
+    pub grade: Grade,
+    pub no: Option<usize>,
+}
+
+/// The trace of a layout: one row per run, newest first, `inputs` the history of each run in
+/// the layout's run order; `table_href` the history table's address when the domain has one.
+pub fn trace_view(layout: &Layout, inputs: &[TraceInput], table_href: Option<String>) -> TraceView {
+    let shown: Vec<&TraceInput> = inputs.iter().take(layout.runs.len()).collect();
+    let rows: Vec<TraceRow> = layout
+        .runs
+        .iter()
+        .zip(&shown)
+        .enumerate()
+        .map(|(k, (run, input))| TraceRow {
+            no: input.no,
+            date: run_date(input.created_at),
+            grade: grade_letter(input.grade).to_string(),
+            cells: run.tones.iter().map(|t| trace_tone(*t)).collect(),
+            current: k == 0,
+        })
+        .collect();
+    let edge =
+        |input: Option<&&TraceInput>| input.map_or_else(String::new, |i| month_day(i.created_at));
+    let count = rows.len();
     TraceView {
-        rows: layout
-            .runs
-            .iter()
-            .zip(rows)
-            .enumerate()
-            .map(|(k, (run, (created_at, grade)))| TraceRow {
-                date: utc_minute(*created_at),
-                grade: grade_letter(*grade).to_string(),
-                cells: run.tones.iter().map(|t| line_tone(*t)).collect(),
-                current: k == 0,
-            })
-            .collect(),
+        newest: edge(shown.first()),
+        oldest: edge(shown.last()),
+        caption: format!(
+            "Each line carries its trace: {count} {}, newest on top.",
+            if count == 1 { "run" } else { "runs" }
+        ),
+        hint: "hover a run to replay the spectrum \u{b7} tap to pin".to_string(),
+        table_href,
+        rows,
     }
 }
 

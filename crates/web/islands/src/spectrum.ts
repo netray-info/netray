@@ -9,37 +9,117 @@ export function spectrum(el: HTMLElement): void {
   let hovered: number | null = null;
   let pinned: number | null = null;
   let selected: string | null = null;
+  let sticky = false;
 
   const phone = (): boolean =>
     typeof window.matchMedia === "function" && window.matchMedia(PHONE).matches;
   const runOf = (row: HTMLElement): number => Number.parseInt(row.getAttribute("data-run") ?? "0", 10);
-  const label = (row: HTMLElement | undefined): string =>
-    row
-      ? `${row.querySelector(".trace__date")?.textContent?.trim() ?? ""} · ${
-          row.querySelector(".trace__grade")?.textContent?.trim() ?? ""
-        }`
-      : "";
+  const query = <T extends HTMLElement>(sel: string): T | null => el.ownerDocument.querySelector<T>(sel);
+  const caption = el.querySelector<HTMLElement>(".trace__caption");
+  const hint = el.querySelector<HTMLElement>(".trace__hint");
+  const rest = (e: HTMLElement | null): string => e?.getAttribute("data-rest") ?? "";
+  const setText = (e: Element | null, value: string): void => {
+    if (e && e.textContent !== value) e.textContent = value;
+  };
+  let titleSaved: { el: HTMLElement; nodes: Node[] } | null = null;
+
+  const fillGutter = (row: HTMLElement | undefined): void => {
+    if (!gutter || !row) return;
+    const no = row.getAttribute("data-run-no");
+    setText(gutter.querySelector(".spectrum-gutter__run"), no ? `Run ${no}` : "");
+    setText(gutter.querySelector(".spectrum-gutter__date"), row.getAttribute("data-date") ?? "");
+    const grade = gutter.querySelector(".spectrum-gutter__grade");
+    const letter = row.getAttribute("data-grade") ?? "";
+    if (grade && grade.textContent !== `grade ${letter}`) {
+      const strong = el.ownerDocument.createElement("strong");
+      strong.textContent = letter;
+      grade.replaceChildren("grade ", strong);
+    }
+  };
+
+  const retitle = (row: HTMLElement | undefined, replaying: boolean): void => {
+    const title = query<HTMLElement>("#run-line .run-line--title");
+    if (replaying && title && row?.getAttribute("data-run-no")) {
+      if (titleSaved?.el !== title) titleSaved = { el: title, nodes: [...title.childNodes] };
+      setText(
+        title,
+        `Run ${row.getAttribute("data-run-no")} · ${row.getAttribute("data-date") ?? ""} · replaying history`,
+      );
+    } else if (titleSaved) {
+      if (titleSaved.el.isConnected) titleSaved.el.replaceChildren(...titleSaved.nodes);
+      titleSaved = null;
+    }
+  };
 
   const render = (): void => {
     const shown = hovered ?? pinned ?? 0;
+    const replaying = shown !== 0;
+    const shownRow = rows.find((row) => runOf(row) === shown);
     for (const e of el.querySelectorAll(".spectrum__run[data-run], .spectrum__labels[data-run]")) {
       e.toggleAttribute("data-shown", Number.parseInt(e.getAttribute("data-run") ?? "0", 10) === shown);
+    }
+    for (const e of el.querySelectorAll(".spectrum__region-grades[data-run], .legend__fixed[data-run]")) {
+      const on = Number.parseInt(e.getAttribute("data-run") ?? "0", 10) === shown;
+      e.toggleAttribute("data-shown", on);
+      e.toggleAttribute("hidden", !on);
+    }
+    const grades = el.querySelector(`.spectrum__region-grades[data-run="${shown}"]`);
+    if (grades) {
+      for (const label of el.querySelectorAll<HTMLElement>(".spectrum__region-label[data-protocol]")) {
+        const letter = grades.querySelector(`[data-protocol="${label.getAttribute("data-protocol")}"]`)?.textContent ?? "";
+        let slot = label.querySelector(".spectrum__region-grade");
+        if (!slot && letter) {
+          slot = label.ownerDocument.createElement("span");
+          slot.className = "spectrum__region-grade";
+          label.append(slot);
+        }
+        if (slot) slot.textContent = letter;
+      }
     }
     for (const row of rows) {
       const k = runOf(row);
       row.classList.toggle("trace__row--hover", hovered === k);
       row.classList.toggle("trace__row--pinned", pinned === k);
+      row.toggleAttribute("data-hovered", hovered === k);
+      row.toggleAttribute("data-dimmed", hovered !== null && hovered !== k);
+      row.toggleAttribute("data-pinned", pinned === k);
       row.setAttribute("aria-pressed", String(pinned === k));
       if (k === shown) row.setAttribute("aria-current", "true");
       else row.removeAttribute("aria-current");
     }
-    if (gutter) gutter.textContent = label(rows.find((row) => runOf(row) === shown));
-    if (sentence) {
-      const item = [...el.querySelectorAll<HTMLElement>("#spectrum-sentences li[data-code]")].find(
-        (li) => li.getAttribute("data-code") === selected,
-      );
-      sentence.textContent = item?.getAttribute("data-sentence")?.trim() ?? "";
+    fillGutter(shownRow);
+    gutter?.toggleAttribute("data-replaying", replaying);
+    retitle(shownRow, replaying);
+
+    const item = [...el.querySelectorAll<HTMLElement>("#spectrum-sentences li[data-code]")].find(
+      (li) => li.getAttribute("data-code") === selected,
+    );
+    const sentenceText = item?.getAttribute("data-sentence")?.trim() ?? "";
+    if (sentence) sentence.textContent = sentenceText;
+    if (caption) {
+      const named = item !== undefined && (hovered !== null || pinned !== null);
+      caption.toggleAttribute("data-active", named);
+      const name = item?.getAttribute("data-name") || selected;
+      setText(caption, named ? `${name}${sentenceText ? ` · ${sentenceText}` : ""}` : rest(caption));
     }
+    if (hint) {
+      const run = shownRow?.getAttribute("data-run-no");
+      const replayingText = `replaying ${run ? `run ${run}` : "this run"} · move away to return`;
+      const pinnedShown = pinned !== null && (hovered === null || hovered === pinned);
+      setText(
+        hint,
+        pinnedShown
+          ? "pinned · tap again to release"
+          : hovered !== null && (replaying || pinned !== null)
+            ? replayingText
+            : rest(hint),
+      );
+    }
+  };
+
+  const release = (): void => {
+    selected = null;
+    sticky = false;
   };
 
   for (const row of rows) {
@@ -60,6 +140,7 @@ export function spectrum(el: HTMLElement): void {
     }
     row.addEventListener("click", () => {
       pinned = pinned === k ? null : k;
+      if (pinned === null) release();
       render();
     });
   }
@@ -69,13 +150,22 @@ export function spectrum(el: HTMLElement): void {
       selected = target.getAttribute("data-target");
       render();
     };
+    const unselect = (): void => {
+      if (sticky || selected !== target.getAttribute("data-target")) return;
+      selected = null;
+      render();
+    };
+    for (const type of ["pointerleave", "mouseleave"]) target.addEventListener(type, unselect);
     target.addEventListener("pointerenter", () => {
       if (!phone()) select();
     });
     target.addEventListener("mouseenter", () => {
       if (!phone()) select();
     });
-    target.addEventListener("click", select);
+    target.addEventListener("click", () => {
+      sticky = true;
+      select();
+    });
   }
 
   for (const button of el.querySelectorAll("#spectrum-stepper [data-step]")) {
@@ -83,6 +173,7 @@ export function spectrum(el: HTMLElement): void {
       const step = Number.parseInt(button.getAttribute("data-step") ?? "0", 10);
       const next = Math.max(0, Math.min(oldest, (pinned ?? 0) + step));
       pinned = next > 0 ? next : null;
+      if (pinned === null) release();
       render();
     });
   }

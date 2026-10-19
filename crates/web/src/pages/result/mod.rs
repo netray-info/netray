@@ -34,7 +34,7 @@ use super::{Frame, page, query_redirect, server_error};
 use crate::api::DomainRuns;
 use crate::components::{
     self, CheckRowView, DiffBlockView, GradeView, GroupingOption, GroupingSwitchView,
-    QueryInputView, RunLineView, SpectrumView,
+    QueryInputView, RunLineView, SpectrumGutter, SpectrumRunGrades, SpectrumView, Tone,
 };
 use crate::entries::view::{grade_letter, grade_tone};
 use crate::evidence;
@@ -353,7 +353,9 @@ struct Shown {
     legend: Legend,
     sentences: Vec<(String, String)>,
     refreshing: bool,
+    first_run: Option<FirstRun>,
     diff_heading: Option<String>,
+    diff_meta: Option<String>,
     diff: Option<DiffBlockView>,
     hard_fail: Option<HardFailView>,
     open: usize,
@@ -375,7 +377,9 @@ impl Shown {
             legend: Legend::default(),
             sentences: Vec::new(),
             refreshing: false,
+            first_run: None,
             diff_heading: None,
+            diff_meta: None,
             diff: None,
             hard_fail: None,
             open: 0,
@@ -509,24 +513,113 @@ fn done_banner(done: &Run, shown: Grade) -> Option<HardFailView> {
     views::hard_fail_view(&score_run(done, profile), catalogue(), shown)
 }
 
+/// The first-run box: the explanation sentence and the line tones of the ghost trace.
+struct FirstRun {
+    text: String,
+    cells: Vec<Tone>,
+}
+
+fn first_run(domain: &str, cells: Vec<Tone>) -> FirstRun {
+    FirstRun {
+        text: format!(
+            "This is the first spectrum of {domain}. Re-check after your next change and netray stacks the runs into a history: a line that turns neutral is a fix, a line that lights up is a regression."
+        ),
+        cells,
+    }
+}
+
+/// The diff block of the since section: the heading outside the box carries the title and the
+/// grade line, so the box has none.
+fn boxed(block: DiffBlockView) -> DiffBlockView {
+    DiffBlockView {
+        title: String::new(),
+        summary: String::new(),
+        ..block
+    }
+}
+
+/// The grade line over the diff box, with the date of the run it is measured against in front
+/// when one exists; `None` when the diff carries no grade change.
+fn since_meta(grade: &[views::GradeStep], before: Option<&Entry>) -> Option<String> {
+    if grade.is_empty() {
+        return None;
+    }
+    let grade = views::grade_line(grade);
+    Some(match before {
+        Some(before) => format!(
+            "{} \u{b7} grade {grade}",
+            views::run_date(before.created_at)
+        ),
+        None => format!("grade {grade}"),
+    })
+}
+
 /// The heading over the diff of a run that follows `earlier` stored runs.
 fn since_heading(earlier: usize) -> Option<String> {
     (earlier > 0).then(|| format!("Since run {earlier}"))
 }
 
-fn rows_of(entries: &[Entry]) -> Vec<(i64, Grade)> {
-    entries
-        .iter()
-        .take(SHOWN)
-        .map(|e| (e.created_at, e.grade))
-        .collect()
+/// One run behind the figure: when it was recorded, its grade, its place in the stored history
+/// when known, what the legend's fixed entry names and its section grades.
+pub(crate) struct FigureRow {
+    created_at: i64,
+    grade: Grade,
+    no: Option<usize>,
+    fixed: Option<String>,
+    grades: BTreeMap<String, String>,
 }
 
-/// What the key under the spectrum says: the predecessor a fix is measured against, when there
-/// is one, and the number of lines the spectrum draws, 0 when it draws none.
+/// The figure rows of the stored `entries` (newest first); `numbered` is false when their place
+/// in the history is unknown.
+fn rows_of(entries: &[Entry], numbered: bool) -> Vec<FigureRow> {
+    let total = entries.len();
+    let mut rows: Vec<FigureRow> = entries
+        .iter()
+        .enumerate()
+        .take(SHOWN)
+        .map(|(j, e)| FigureRow {
+            created_at: e.created_at,
+            grade: e.grade,
+            no: numbered.then(|| total - j),
+            fixed: match (j + 1 < total, numbered) {
+                (false, _) => None,
+                (true, true) => fixed_since(total - j - 1),
+                (true, false) => Some("the previous run".to_string()),
+            },
+            grades: section_grades(&e.run, Some(e.grade)),
+        })
+        .collect();
+    unfix_oldest(&mut rows);
+    rows
+}
+
+/// The oldest row of the layout window has no predecessor inside it, so no fixed tones were
+/// computed for it and its legend names none.
+fn unfix_oldest(rows: &mut [FigureRow]) {
+    if let Some(oldest) = rows.last_mut() {
+        oldest.fixed = None;
+    }
+}
+
+/// The figure rows of the run `done` shown as `grade` over the stored `entries` before it.
+pub(crate) fn done_rows(done: &Run, grade: Grade, entries: &[Entry]) -> Vec<FigureRow> {
+    let mut rows = vec![FigureRow {
+        created_at: now(),
+        grade,
+        no: None,
+        fixed: fixed_since(entries.len()),
+        grades: section_grades(done, Some(grade)),
+    }];
+    rows.extend(rows_of(entries, true).into_iter().take(SHOWN - 1));
+    unfix_oldest(&mut rows);
+    rows
+}
+
+/// What the key under the spectrum says: per run the predecessor a fix is measured against,
+/// when there is one, and the number of lines the spectrum draws, 0 when it draws none.
 #[derive(Default)]
 struct Legend {
-    fixed_since: Option<String>,
+    fixed: Vec<Option<String>>,
     checks: usize,
 }
 
@@ -560,17 +653,26 @@ fn section_grades(run: &Run, shown: Option<Grade>) -> BTreeMap<String, String> {
         .collect()
 }
 
-/// The spectrum plate, the trace and the legend of `run`, laid out as `current` over `older`;
-/// `live` names the bands the run on display measured, `fixed` the predecessor the legend names.
-fn figure_parts(
+/// What the figure of a run is made of: the plate, the trace, the legend and the run's line
+/// tones, which the first-run box draws again.
+pub(crate) struct Figure {
+    plate: String,
+    trace: String,
+    legend: Legend,
+    cells: Vec<Tone>,
+}
+
+/// The spectrum plate, the trace and the legend of the run `rows[0]`, laid out as `current`
+/// over `older`; `live` names the bands the run on display measured, `stored` that the domain
+/// has a history table to link.
+pub(crate) fn figure_parts(
     domain: &str,
-    run: &Run,
     current: &RunInput<'static>,
     older: &[RunInput<'static>],
-    rows: &[(i64, Grade)],
+    rows: &[FigureRow],
     live: &str,
-    fixed: Option<String>,
-) -> Option<(String, String, Legend)> {
+    stored: bool,
+) -> Option<Figure> {
     let cat = catalogue();
     let width = (cat.entries().len() as f64 * spectrum::line_pitch_min()) as u32;
     let layout = match spectrum::layout(current, older, cat, width) {
@@ -581,18 +683,63 @@ fn figure_parts(
         }
     };
     let label = format!("Check results of {domain}");
-    let view = SpectrumView::from_layout(&layout, &label, 0)
-        .with_grades(&section_grades(run, rows.first().map(|r| r.1)));
+    let newest = rows.first()?;
+    let mut view = SpectrumView::from_layout(&layout, &label, 0)
+        .with_grades(&newest.grades)
+        .with_gutter(SpectrumGutter {
+            run: newest.no,
+            date: views::run_date(newest.created_at),
+            grade: grade_letter(newest.grade).to_string(),
+        });
+    if rows.len() > 1 {
+        view = view.with_run_grades(
+            rows.iter()
+                .enumerate()
+                .map(|(run, row)| SpectrumRunGrades {
+                    run,
+                    grades: row.grades.clone().into_iter().collect(),
+                })
+                .collect(),
+        );
+    }
     let plate = warn_render("spectrum", components::spectrum_live(&view, live))?;
+    let inputs: Vec<views::TraceInput> = rows
+        .iter()
+        .map(|row| views::TraceInput {
+            created_at: row.created_at,
+            grade: row.grade,
+            no: row.no,
+        })
+        .collect();
+    let table_href = stored.then(|| format!("/{}/history", href_of(domain)));
     let trace = warn_render(
         "trace",
-        components::trace(&views::trace_view(&layout, rows)),
+        components::trace(&views::trace_view(&layout, &inputs, table_href)),
     )?;
     let legend = Legend {
-        fixed_since: fixed,
+        fixed: if rows.len() > 1 {
+            rows.iter().map(|row| row.fixed.clone()).collect()
+        } else {
+            Vec::new()
+        },
         checks: layout.lines.len(),
     };
-    Some((plate, trace, legend))
+    let cells = layout
+        .runs
+        .first()
+        .map(|run| {
+            run.tones
+                .iter()
+                .map(|t| components::line_tone(*t))
+                .collect()
+        })
+        .unwrap_or_default();
+    Some(Figure {
+        plate,
+        trace,
+        legend,
+        cells,
+    })
 }
 
 /// What the latest of `entries` (newest first, not empty) shows.
@@ -610,19 +757,18 @@ fn stored_shown(
         .take(SHOWN)
         .map(|e| views::layout_input_or_current(&e.run))
         .collect();
-    let fixed = match (entries.len() > 1, ordinal_known) {
-        (false, _) => None,
-        (true, true) => fixed_since(entries.len() - 1),
-        (true, false) => Some("the previous run".to_string()),
-    };
-    let (plate, trace, legend) = figure_parts(
+    let Figure {
+        plate,
+        trace,
+        legend,
+        cells,
+    } = figure_parts(
         &entry.domain,
-        &entry.run,
         &inputs[0],
         &inputs[1..],
-        &rows_of(entries),
+        &rows_of(entries, ordinal_known),
         "",
-        fixed,
+        true,
     )?;
     let chosen: Vec<&Entry> = entries.iter().take(SHOWN).collect();
     let mut since: BTreeMap<CheckId, String> = BTreeMap::new();
@@ -640,17 +786,19 @@ fn stored_shown(
         }
     }
     let diff = match recorded {
-        Some(recorded) => views::recorded_diff_view(recorded, Some(entry), cat).block,
-        None => views::diff_view(entry.diff.as_ref(), cat).block,
+        Some(recorded) => views::recorded_diff_view(recorded, Some(entry), cat),
+        None => views::diff_view(entry.diff.as_ref(), cat),
     };
     let ordinal = ordinal_known.then_some(entries.len());
-    let diff_heading = match ordinal {
-        Some(n) => since_heading(n - 1).unwrap_or_else(|| "First run recorded.".to_string()),
-        None if matches!(recorded, Some(Recorded::First { .. })) => {
-            "First run recorded.".to_string()
-        }
-        None => "Since the previous run".to_string(),
+    let first = match ordinal {
+        Some(n) => n == 1,
+        None => matches!(recorded, Some(Recorded::First { .. })),
     };
+    let diff_heading = match ordinal {
+        Some(n) => since_heading(n - 1),
+        None => Some("Since the previous run".to_string()),
+    };
+    let diff_meta = since_meta(&diff.grade, entries.get(1));
     Some(Shown {
         grade: Some(grade_view(
             entry.grade,
@@ -664,8 +812,10 @@ fn stored_shown(
         legend,
         sentences: sentences_of(chosen.iter().rev().copied()),
         refreshing: false,
-        diff_heading: Some(diff_heading),
-        diff: Some(diff),
+        first_run: first.then(|| first_run(&entry.domain, cells)),
+        diff_heading: if first { None } else { diff_heading },
+        diff_meta: if first { None } else { diff_meta },
+        diff: (!first).then(|| boxed(diff.block)),
         hard_fail: score
             .as_ref()
             .and_then(|s| views::hard_fail_view(s, cat, entry.grade)),
@@ -689,30 +839,21 @@ fn stored_shown(
     })
 }
 
-/// The spectrum plate and trace of the finished run `done` over `entries`, its own row graded
-/// `grade`.
-fn done_figure(
-    domain: &str,
-    done: &Run,
-    grade: Grade,
-    entries: &[Entry],
-) -> Option<(String, String, Legend)> {
+/// The figure of the finished run `done` over `entries`, its own row graded `grade`.
+fn done_figure(domain: &str, done: &Run, grade: Grade, entries: &[Entry]) -> Option<Figure> {
     let current = views::layout_input_or_current(done);
     let older: Vec<RunInput<'static>> = entries
         .iter()
         .take(SHOWN - 1)
         .map(|e| views::layout_input_or_current(&e.run))
         .collect();
-    let mut rows = vec![(now(), grade)];
-    rows.extend(rows_of(entries).into_iter().take(SHOWN - 1));
     figure_parts(
         domain,
-        done,
         &current,
         &older,
-        &rows,
+        &done_rows(done, grade, entries),
         "",
-        fixed_since(entries.len()),
+        !entries.is_empty(),
     )
 }
 
@@ -744,8 +885,14 @@ fn not_stored_shown(
     } else {
         Grade::Incomplete
     };
-    let (plate, trace, legend) = done_figure(domain, done, grade, entries)?;
+    let Figure {
+        plate,
+        trace,
+        legend,
+        ..
+    } = done_figure(domain, done, grade, entries)?;
     let evidence = done_evidence(done, evidence::incomplete_run_line)?;
+    let diff = views::recorded_diff_view(recorded, entries.first(), cat);
     Some(Shown {
         grade: Some(grade_view(grade, None)),
         date: Some(views::run_date(now())),
@@ -756,8 +903,10 @@ fn not_stored_shown(
         legend,
         sentences: sentences_through(entries, done),
         refreshing: false,
+        first_run: None,
         diff_heading: Some(since_heading(entries.len()).unwrap_or_else(|| "This run".to_string())),
-        diff: Some(views::recorded_diff_view(recorded, entries.first(), cat).block),
+        diff_meta: since_meta(&diff.grade, entries.first()),
+        diff: Some(boxed(diff.block)),
         hard_fail: done_banner(done, grade),
         open: views::open_count(done),
         groups: views::issues(done, cat, Links::Live, Grouping::Owner, &BTreeMap::new()),
@@ -771,7 +920,12 @@ fn not_stored_shown(
 /// share link.
 fn unrecorded_shown(domain: &str, done: &Run, entries: &[Entry]) -> Option<Shown> {
     let cat = catalogue();
-    let (plate, trace, legend) = done_figure(domain, done, done.grade, entries)?;
+    let Figure {
+        plate,
+        trace,
+        legend,
+        ..
+    } = done_figure(domain, done, done.grade, entries)?;
     let evidence = done_evidence(done, evidence::live_run_line)?;
     Some(Shown {
         grade: Some(grade_view(done.grade, None)),
@@ -785,8 +939,10 @@ fn unrecorded_shown(domain: &str, done: &Run, entries: &[Entry]) -> Option<Shown
         legend,
         sentences: sentences_through(entries, done),
         refreshing: false,
+        first_run: None,
         diff_heading: Some(since_heading(entries.len()).unwrap_or_else(|| "This run".to_string())),
-        diff: Some(views::not_recorded_view().block),
+        diff_meta: None,
+        diff: Some(boxed(views::not_recorded_view().block)),
         hard_fail: done_banner(done, done.grade),
         open: views::open_count(done),
         groups: views::issues(done, cat, Links::Live, Grouping::Owner, &BTreeMap::new()),
@@ -907,7 +1063,7 @@ struct SpectrumPart<'a> {
     plate: &'a str,
     trace: &'a str,
     legend: &'a Legend,
-    sentences: &'a [(String, String)],
+    sentences: &'a [(String, String, String)],
     refreshing: bool,
     stepper: bool,
 }
@@ -921,7 +1077,9 @@ struct HardFailPart<'a> {
 #[derive(Template)]
 #[template(path = "partials/result_diff.html")]
 struct DiffPart<'a> {
+    first: &'a Option<FirstRun>,
     heading: &'a Option<String>,
+    meta: &'a Option<String>,
     diff: &'a Option<DiffBlockView>,
 }
 
@@ -960,6 +1118,21 @@ fn progress_part(ray: &str) -> Option<String> {
     warn_render("progress", trimmed(&ProgressPart { ray }))
 }
 
+/// What a line is called in the caption: its short label and its line code, "HSTS HTTP\u{b7}21";
+/// empty when the catalogue does not know the check.
+fn line_name(code: &str) -> String {
+    let Ok(id) = CheckId::parse(code) else {
+        return String::new();
+    };
+    let Some(spec) = catalogue().get(&id) else {
+        return String::new();
+    };
+    match views::line_code(&id) {
+        Some(line) => format!("{} {line}", spec.short),
+        None => spec.short.clone(),
+    }
+}
+
 fn spectrum_part(
     plate: &str,
     trace: &str,
@@ -967,13 +1140,17 @@ fn spectrum_part(
     sentences: &[(String, String)],
     refreshing: bool,
 ) -> Option<String> {
+    let named: Vec<(String, String, String)> = sentences
+        .iter()
+        .map(|(code, sentence)| (code.clone(), line_name(code), sentence.clone()))
+        .collect();
     warn_render(
         "spectrum",
         trimmed(&SpectrumPart {
             plate,
             trace,
             legend,
-            sentences,
+            sentences: &named,
             refreshing,
             stepper: trace.matches("data-run=").count() >= 2,
         }),
@@ -1053,7 +1230,9 @@ fn assemble(domain: &str, autostart: bool, shown: Shown) -> Option<Parts> {
     let diff = warn_render(
         "diff",
         trimmed(&DiffPart {
+            first: &shown.first_run,
             heading: &shown.diff_heading,
+            meta: &shown.diff_meta,
             diff: &shown.diff,
         }),
     )?;

@@ -284,6 +284,23 @@ impl SpectrumRegion {
     }
 }
 
+/// The replay gutter right of the plate: the run on display. `run` is absent when the run has
+/// no place in the stored history.
+#[derive(Debug, Clone)]
+pub struct SpectrumGutter {
+    pub run: Option<usize>,
+    pub date: String,
+    pub grade: String,
+}
+
+/// One run's region grades as (protocol, letter) pairs, the data the replay copies into the
+/// region labels.
+#[derive(Debug, Clone)]
+pub struct SpectrumRunGrades {
+    pub run: usize,
+    pub grades: Vec<(String, String)>,
+}
+
 /// A tick on the spectrum axis at `x` percent of the plate; major at the ends and region bounds.
 #[derive(Debug, Clone)]
 pub struct SpectrumTick {
@@ -311,6 +328,8 @@ pub struct SpectrumView {
     pub bands: Vec<SpectrumBand>,
     pub label_sets: Vec<SpectrumLabelSet>,
     pub regions: Vec<SpectrumRegion>,
+    pub gutter: Option<SpectrumGutter>,
+    pub run_grades: Vec<SpectrumRunGrades>,
 }
 
 pub(crate) fn line_tone(tone: crate::spectrum::LineTone) -> Tone {
@@ -356,6 +375,18 @@ impl SpectrumView {
         for region in &mut self.regions {
             region.grade = grades.get(&region.label).cloned();
         }
+        self
+    }
+
+    /// The view with the replay gutter naming the run on display.
+    pub fn with_gutter(mut self, gutter: SpectrumGutter) -> Self {
+        self.gutter = Some(gutter);
+        self
+    }
+
+    /// The view with every run's region grades, for the replay.
+    pub fn with_run_grades(mut self, run_grades: Vec<SpectrumRunGrades>) -> Self {
+        self.run_grades = run_grades;
         self
     }
 
@@ -438,23 +469,33 @@ impl SpectrumView {
             bands,
             label_sets,
             regions,
+            gutter: None,
+            run_grades: Vec::new(),
         }
     }
 }
 
-/// One run of the trace; `current` marks the run on display.
+/// One run of the trace; `current` marks the run on display, `no` its place in the stored
+/// history when that is known.
 #[derive(Debug, Clone)]
 pub struct TraceRow {
+    pub no: Option<usize>,
     pub date: String,
     pub grade: String,
     pub cells: Vec<Tone>,
     pub current: bool,
 }
 
-/// The trace waterfall, newest run first.
+/// The per-line trace, newest run first; the edge dates, the caption and the hint come with it,
+/// `table_href` is the history table's address when the domain has one.
 #[derive(Debug, Clone)]
 pub struct TraceView {
     pub rows: Vec<TraceRow>,
+    pub newest: String,
+    pub oldest: String,
+    pub caption: String,
+    pub hint: String,
+    pub table_href: Option<String>,
 }
 
 /// One check result.
@@ -485,10 +526,12 @@ pub struct DiffEntry {
     pub kind: String,
     pub tone: Tone,
     pub text: String,
+    /// The right-hand column: a check's line code, the protocol of an evidence change.
     pub protocol: String,
 }
 
-/// The diff against the previous run; `note` explains an empty diff.
+/// The diff against the previous run; `note` explains an empty diff. An empty `title` or
+/// `summary` is not rendered.
 #[derive(Debug, Clone)]
 pub struct DiffBlockView {
     pub title: String,

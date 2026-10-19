@@ -24,7 +24,7 @@ use serde::Deserialize;
 use super::views::{self, Grouping, Links};
 use super::{
     EvidenceInner, PROTOCOLS, Parts, ResultState, RunLineBody, SHOWN, Shown, assemble,
-    domain_segment, evidence_part, figure_parts, fixed_since, full_page, href_of, is_fresh,
+    domain_segment, done_rows, evidence_part, figure_parts, full_page, href_of, is_fresh,
     issues_part, not_stored_shown, progress_part, recorded_entry, resolve, run_line_part,
     sentences_of, spectrum_part, stored_parts, unrecorded_shown,
 };
@@ -266,13 +266,7 @@ impl Live {
             .take(SHOWN - 1)
             .map(|e| views::layout_input_or_current(&e.run))
             .collect();
-        let mut rows = vec![(super::now(), netray_model::Grade::Incomplete)];
-        rows.extend(
-            self.entries
-                .iter()
-                .take(SHOWN - 1)
-                .map(|e| (e.created_at, e.grade)),
-        );
+        let rows = done_rows(run, netray_model::Grade::Incomplete, &self.entries);
         let live = run
             .sections
             .iter()
@@ -280,10 +274,17 @@ impl Live {
             .collect::<Vec<_>>()
             .join(" ");
         let sentences = sentences_of(self.entries.iter().take(SHOWN - 1).rev());
-        let fixed = fixed_since(self.entries.len());
-        let html = figure_parts(&self.domain, run, &current, &older, &rows, &live, fixed).and_then(
-            |(plate, trace, legend)| spectrum_part(&plate, &trace, &legend, &sentences, true),
-        );
+        let stored = !self.entries.is_empty();
+        let html =
+            figure_parts(&self.domain, &current, &older, &rows, &live, stored).and_then(|figure| {
+                spectrum_part(
+                    &figure.plate,
+                    &figure.trace,
+                    &figure.legend,
+                    &sentences,
+                    true,
+                )
+            });
         self.push("spectrum", html);
     }
 

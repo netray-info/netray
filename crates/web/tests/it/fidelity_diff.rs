@@ -67,7 +67,7 @@ fn run(i: usize) -> Run {
                 reason: None,
             },
         ],
-        checks: [("dns.dnssec_valid", Status::Pass), ("email.dkim", dkim)]
+        checks: [("dns.dnssec", Status::Pass), ("email.dkim", dkim)]
             .iter()
             .map(|(id, status)| RunCheck {
                 id: CheckId::parse(id).unwrap(),
@@ -141,7 +141,7 @@ fn expected_code(id: &str) -> String {
 
 #[test]
 fn c17_line_code_is_protocol_tag_and_two_digit_line_position() {
-    for id in ["dns.dnssec_valid", "tls.chain_trusted", "email.dkim"] {
+    for id in ["dns.dnssec", "tls.chain_trusted", "email.dkim"] {
         assert_eq!(
             line_code(&CheckId::parse(id).unwrap()),
             Some(expected_code(id)),

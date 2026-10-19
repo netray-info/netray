@@ -1,47 +1,81 @@
 .trace {
-  display: grid;
-  gap: var(--space-1);
+  grid-column: 1;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .trace__row {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding-inline-start: var(--space-2);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-small);
-}
-.trace__date { color: var(--color-muted); }
-.trace__grade {
-  min-width: var(--space-6);
-  color: var(--color-ink);
-  font-weight: var(--font-weight-strong);
-}
-.trace__cells {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: var(--space-1);
-  min-height: var(--spectrum-trace-row);
-}
-.trace__cell {
-  flex: 1;
+  align-items: stretch;
+  position: relative;
   height: var(--spectrum-trace-row);
-  background: var(--status-untested-mark);
+  cursor: pointer;
 }
-.trace__cell[data-tone="pass"] {
+.trace__row[data-dimmed] { opacity: .3; }
+.trace__cell {
+  position: relative;
+  flex: 1;
+}
+.trace__cell::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--spectrum-trace-row);
+  height: var(--line-warn);
+  background: var(--status-untested-mark);
+  transform: translate(-50%, -50%);
+}
+.trace__cell[data-tone="pass"]::before {
   height: var(--line-hair);
   background: var(--status-pass-hair);
 }
-.trace__cell[data-tone="warn"] { background: var(--status-warn-mark); }
-.trace__cell[data-tone="fail"] { background: var(--status-fail-mark); }
-.trace__cell[data-tone="fix"] { background: var(--status-fix-mark); }
-.trace__row[data-run] { cursor: pointer; }
-.trace__row--hover {
-  font-weight: var(--font-weight-strong);
+.trace__cell[data-tone="warn"]::before { background: var(--status-warn-mark); }
+.trace__cell[data-tone="fail"]::before { background: var(--status-fail-mark); }
+.trace__row:is([data-hovered], [data-pinned]) .trace__cell::before {
+  transform: translate(-50%, -50%) scaleY(2.4);
 }
-.trace__row--hover .trace__cell:not([data-tone="pass"]) {
-  height: calc(var(--spectrum-trace-row) * 2);
+.trace__row:is([data-hovered], [data-pinned]) .trace__cell[data-tone="pass"]::before {
+  transform: translate(-50%, -50%) scaleY(3);
+}
+.trace__edges {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  line-height: 1;
+}
+.trace__foot {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-block-start: var(--space-2);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+.trace__caption,
+.trace__hint { margin: 0; }
+.trace__table-link {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin-block-start: var(--space-2);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+.trace__caption[data-active] { color: var(--color-ink); }
+.trace__row:is([data-hovered], [data-pinned])::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: -12px;
+  top: 50%;
+  width: 3px;
+  height: 9px;
+  background: var(--color-ink);
+  transform: translateY(-50%);
 }
