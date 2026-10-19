@@ -96,3 +96,59 @@ Test fixes after RED: the `api_runs_selectors.rs` stub answered an empty stream 
 ### Behavioural verification
 
 skipped here: lens's live run path needs outbound DNS, blocked locally (Little Snitch); the selector path is covered offline by `admission_selectors.rs` through the real `LensRuns` and admission, and the endpoint end to end is verified in Phase 3 together with the page.
+
+## Phase 3 — Selectors on the result page
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R5: `POST /<domain>/run` takes `dkim_selectors`; valid list starts a selector run for both triggers, invalid 400, SSE streams, without SSE the finished page 200 no-store | green | crates/web/tests/it/result_selectors.rs |
+| C2 | R6: `GET /<domain>?dkim_selectors=` valid: no-store, autostart, hidden field with the normalised list; invalid 400; absent unchanged | green | crates/web/tests/it/result_selectors.rs |
+| C3 | R7: `/?d=<domain>&dkim_selectors=<value>` 301 keeps the parameter | green | crates/web/tests/it/result_selectors.rs |
+| C4 | R8: `/guide/scoring` says 1-5, reads `.run.checks[]`, describes selector runs | green | crates/web/tests/it/guide_scoring_selectors.rs |
+| C5 | fresh head, visit with `dkim_selectors=s1` over SSE: selector start got s1, stream ends | green | crates/web/tests/it/result_selectors.rs |
+| C6 | recheck with `dkim_selectors=bad.sel`: 400, no start | green | crates/web/tests/it/result_selectors.rs |
+| C7 | visit with empty `dkim_selectors=`: plain path | already_implemented | crates/web/tests/it/result_selectors.rs |
+| C8 | recheck with `s1` without SSE, complete unrecorded run: 200, no-store, grade and "not recorded" | green | crates/web/tests/it/result_selectors.rs |
+| C9 | fresh head, `GET /example.com?dkim_selectors=s1,%20s2`: 200, no-store, autostart visit, hidden input value s1,s2 | green | crates/web/tests/it/result_selectors.rs |
+| C10 | `GET /example.com?dkim_selectors=bad.sel`: 400 | green | crates/web/tests/it/result_selectors.rs |
+| C11 | `GET /example.com`: no dkim_selectors input | already_implemented | crates/web/tests/it/result_selectors.rs |
+| C12 | `/?d=example.com&dkim_selectors=google,s1` 301 to `/example.com?dkim_selectors=google%2Cs1` or with a comma; without, to `/example.com` | green | crates/web/tests/it/result_selectors.rs |
+| C13 | guide says 1-5, `.run.checks[]`, no "cached per domain for 5 minutes" | green | crates/web/tests/it/guide_scoring_selectors.rs |
+
+C7 and C11 passed before the change (the empty field and a plain page already took the plain path); the `/?d=` case without selectors (part of C12) too. The tests stay to protect them.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 result page: form field, page query, finished page, hidden field | 2 | implementer (no coder spawned; a whitespace fix in the header template for the markup goldens) | 0 | 0 |
+| G2 idle redirect and guide text | 1 | implementer | 0 | 0 |
+| G3 review fix: canonical redirect keeps the query | 1 | implementer | 0 | 0 |
+
+### Review
+
+- AMENDMENT (repaired in phase): `GET /Example.com?dkim_selectors=s1` redirected to `/example.com` without the query; test `the_canonical_redirect_keeps_the_selector_parameter`.
+- DEFERRED, fixed anyway: `finished_page` answered 500 on a failed history read after the run was admitted; it now reads an empty history, as the stream does.
+- NIT: a bad selector list shows the domain refusal page titled "Not a domain name" (copy, lane A).
+- NIT: C7 also accepts a `start_with` call with an empty list, so it cannot tell the fresh-history answer from a plain run.
+
+### Behavioural verification
+
+`netray lens lens.dev.toml` on 127.0.0.1:18791 (outbound DNS blocked locally, so live sections are unmeasured):
+
+```
+GET /?d=example.com&dkim_selectors=google,s1      -> 301 /example.com?dkim_selectors=google,s1
+GET /example.com?dkim_selectors=s1,%20s2          -> 200, cache-control: no-store,
+    <form id="recheck" ... data-stream-autostart="visit">
+    <input type="hidden" name="dkim_selectors" value="s1,s2">
+GET /example.com?dkim_selectors=bad.sel           -> 400
+POST /api/v1/domains/example.com/runs?dkim_selectors=bad.sel -> 400 INVALID_INPUT "dkim_selectors: invalid DKIM selector: selector must not contain dots"
+POST ...?dkim_selectors=a,b,c,d,e,f               -> 400 INVALID_INPUT "at most 5 selectors allowed, got 6"
+POST ...?dkim_selectors=s1                        -> 200, recorded not_stored, entry_id null, run.complete false (DNS blocked), email.dkim present
+POST ...?dkim_selectors=s1 again                  -> 429 (throttle minute)
+POST /api/v1/email/inspect {"domain":"example.com","dkim_selectors":["s1"]} -> 200
+POST /api/v1/email/inspect {...,"dkim_selectors":["bad.sel"]} -> 400 INVALID_INPUT
+GET /example.com/history                          -> 404 (the selector run stored nothing)
+```
