@@ -322,16 +322,50 @@ C4–C13 are inventory items and deferred halves of Phases 1–5 folded into thi
 
 | id | criterion | status | test file |
 |---|---|---|---|
-| C1 | R5: what `serve` still calls in `crates/lens` moves to the crate §3.1 names, behaviour unchanged: orchestration to netray-engine, recording to netray-store, routes, badge, OG, admission, the `DomainRuns` implementation, the card renderers, `validate_domain`, `client_ip_from` and the middleware stack to netray-web, the module registry and the real `InspectorJobs` to `crates/netray`; tests move with their code; one `/privacy` route | open | |
-| C2 | GIVEN the moved code WHEN `just adlc-verify` runs THEN it passes, and the agreement test of Phase 5 is unchanged | open | |
-| C3 | GIVEN `crates/netray/Cargo.toml` and `crates/web/Cargo.toml` WHEN read THEN neither depends on `lens` (read until Phase 7 as: web does not, and in `crates/netray` only `src/v1.rs`, the kept `netray lens`, names lens; Decision log 2026-10-19) | open | tests/repo/test_no_lens_dependency.sh |
-| C4 | Phase 1 C15 and C18's second half: `[api]`, `[api.<inspector>]` and `[inspect.<tool>]` in `netray.toml`; `[api.ip] batch_max_size = 50` and `[inspect.tls] deadline_ms = 15000` check exit 0; `batch_max_size = 101` at `serve` exits 1 naming the key; `[inspect.http] max_concurrent = 4` exits 0 | open | |
+| C1 | R5: what `serve` still calls in `crates/lens` moves to the crate §3.1 names, behaviour unchanged: orchestration to netray-engine, recording to netray-store, routes, badge, OG, admission, the `DomainRuns` implementation, the card renderers, `validate_domain`, `client_ip_from` and the middleware stack to netray-web, the module registry and the real `InspectorJobs` to `crates/netray`; tests move with their code; one `/privacy` route | green | crates/engine/tests/domain_run_*.rs, crates/store/tests/record_metrics.rs, crates/web/tests (copied lens tests), crates/netray/src/v1.rs run_bytes_unchanged |
+| C2 | GIVEN the moved code WHEN `just adlc-verify` runs THEN it passes, and the agreement test of Phase 5 is unchanged | green | adlc verify (455 tests); crates/netray/tests/agreement.rs |
+| C3 | GIVEN `crates/netray/Cargo.toml` and `crates/web/Cargo.toml` WHEN read THEN neither depends on `lens` (read until Phase 7 as: web does not, and in `crates/netray` only `src/v1.rs`, the kept `netray lens`, names lens; Decision log 2026-10-19) | green | tests/repo/test_no_lens_dependency.sh |
+| C4 | Phase 1 C15 and C18's second half: `[api]`, `[api.<inspector>]` and `[inspect.<tool>]` in `netray.toml`; `[api.ip] batch_max_size = 50` and `[inspect.tls] deadline_ms = 15000` check exit 0; `batch_max_size = 101` at `serve` exits 1 naming the key; `[inspect.http] max_concurrent = 4` exits 0 | green | crates/netray/tests/serve_api_inspect_tables.rs; test_check_config.sh |
 | C5 | Phase 4 C8 and C3's halves: `GET /api/v1/domains/example.com` counts `netray_api_requests_total{endpoint="/api/v1/domains/{domain}"}`; after `/api/v1` and an inspector job no label name is forbidden and no label value is the domain, the address or an entry ID | green | crates/netray/tests/serve_api_metrics.rs |
 | C6 | inventory: the ip module parses the user agent from `[modules.ip] user_agent_regexes`; `?field=user_agent` answers the parsed family, as V1 did; top-level `user_agent_regexes` names `[modules.ip].user_agent_regexes` | green | crates/ip/tests/module_ua.rs, crates/netray/tests/serve_ua_key.rs |
-| C7 | inventory (Phase 2 review): a wiring test shows the composition root's registry hands the in-process enrichment client to the dns, tls, http and email modules when the ip module is registered, and none without | open | |
-| C8 | Phase 2 C4, C8 and C13's halves: `dns.`, `tls.`, `http.` and `ip.` serve their inspector at `/`; `Host: dns.netray.info` `GET /?q=example.com` gives the markup of apex `GET /inspect/dns?q=example.com`; with apex `localhost`, `dns.localhost` serves the DNS inspector | open | |
-| C9 | Phase 3 C11 and C17: `dns./?q=…`, `tls./?h=…`, `http./?url=…`, `ip./?ip=…` answer 200 with the inspector, `dns./?r=` is ignored; `ip./` with a curl user agent answers 200 `text/plain` with the caller's address, a browser the inspector | open | |
-| C10 | Phase 5 C1, C2, C4–C6's halves: the agreement test reads the result page, the open issues, every evidence view and `/api/v1/domains/{domain}` (and `/diff` for the fixed state) and finds the same grade and statuses; the incomplete state's stream and API run answer say `incomplete` | open | |
+| C7 | inventory (Phase 2 review): a wiring test shows the composition root's registry hands the in-process enrichment client to the dns, tls, http and email modules when the ip module is registered, and none without | green | crates/netray/src/registry.rs (registry_wiring) |
+| C8 | Phase 2 C4, C8 and C13's halves: `dns.`, `tls.`, `http.` and `ip.` serve their inspector at `/`; `Host: dns.netray.info` `GET /?q=example.com` gives the markup of apex `GET /inspect/dns?q=example.com`; with apex `localhost`, `dns.localhost` serves the DNS inspector | green | crates/netray/tests/serve_inspector_hosts.rs, crates/web/tests/inspect_hosts.rs |
+| C9 | Phase 3 C11 and C17: `dns./?q=…`, `tls./?h=…`, `http./?url=…`, `ip./?ip=…` answer 200 with the inspector, `dns./?r=` is ignored; `ip./` with a curl user agent answers 200 `text/plain` with the caller's address, a browser the inspector | green | crates/netray/tests/serve_inspector_hosts.rs, crates/web/tests/inspect_hosts.rs |
+| C10 | Phase 5 C1, C2, C4–C6's halves: the agreement test reads the result page, the open issues, every evidence view and `/api/v1/domains/{domain}` (and `/diff` for the fixed state) and finds the same grade and statuses; the incomplete state's stream and API run answer say `incomplete` | green | crates/netray/tests/agreement.rs |
 | C11 | inventory: CI's check job, which ran 25m51s of its 30-minute timeout cold, gets headroom before tests are added (`specs/rules/workflow-rules.md`) | green | tests/repo/test_workflows.sh |
 | C12 | inventory (v2-inspectors review): a refused inspector job (busy, 429, bad input) leaves no back-link to the earlier target, while the refusal stays one fragment (v2-inspectors requirement 10) | green | crates/web/islands/test/stream-reset.test.ts, crates/web/tests/inspect_backlink_reset.rs |
-| C13 | inventory (v2-inspectors review): `inspect_no_store.rs`'s store half runs against the real `InspectorJobs`, and the inspector routes get the trusted-proxy extractor | open | |
+| C13 | inventory (v2-inspectors review): `inspect_no_store.rs`'s store half runs against the real `InspectorJobs`, and the inspector routes get the trusted-proxy extractor | green | crates/web/tests/inspect_hosts.rs, crates/web/tests/inspect_apex_shared_limits.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G0 C5 (api counter) | 1 | sonnet | 34690 | 56 |
+| G0 C6 (UA parser) | 1 | sonnet | 48940 | 80 |
+| G0 C11, C12 (orchestrator, direct) | 1 | orchestrator | | |
+| G1 engine and store copies | 1 | opus | 189821 | 611 |
+| G2 netray-web survivors, inspector hosts | 1 | opus | 326181 | 2686 |
+| G3 composition root off lens | 1 | opus | 268542 | 1555 |
+| review fix B1, B2 | 1 | opus | 104122 | 676 |
+
+### Behavioural verification
+
+```
+$ netray serve --check-config n.toml      # [api.ip] batch_max_size = 50, [inspect.tls] deadline_ms = 15000
+config ok: n.toml
+$ netray serve n.toml &
+$ curl -H 'Host: dns.netray.info' :18431/                  -> 200 dns-root
+$ curl -A curl/8.0 -H 'Host: ip.netray.info' :18431/       -> 127.0.0.1
+$ curl -H 'Host: netray.info' :18431/api/v1/domains/example.com -> 404
+$ curl :18432/metrics | grep netray_api_requests_total{
+netray_api_requests_total{endpoint="/api/v1/domains/{domain}/runs"} 0
+netray_api_requests_total{endpoint="/api/v1/domains/{domain}"} 1
+$ curl -H 'Host: lens.netray.info' :18431/x                -> 301
+```
+
+### Review
+
+Pass 1: BLOCKER the apex built two `ApiState`s, so `/api/v1/<tool>` and the inspector pages and hosts kept separate limiters (lens shared one; v2-inspectors requirement 14), fixed: one state, clones share the limiters (`inspect_apex_shared_limits.rs`); BLOCKER an inspector host's page links host-relative apex paths (back-link, navigation, no-JS form action) that answered 404 there, fixed: GET/HEAD on any inspector-host path but `/` and `/static/*` answers 301 to the apex (decision logged; `inspect_hosts.rs`, `serve_hosts.rs` and `serve_inspector_links.rs`); NIT the copied profile error named `[scoring] profile_path`, fixed to `[engine] profile_path`. The reader found the copies equal to lens line by line (orchestration, recording, admission, badge, OG, metrics, layers, config defaults).
+Pass 2: the fixes hold, no row of requirements 13–14 is shadowed, no open redirect. AMENDMENT (repaired in phase): the page CSP's `form-action` did not admit the bare apex, so a no-JS form redirected from an inspector host to the apex was blocked; `form-action` now names `https://netray.info` too (`pages_csp.rs`). DEFERRED: the header logo links `/`, which on an inspector host is that host's inspector, not the apex home (Decision log). NIT: the shared-limiter test drives `apex::app` (`routes()`), not `host::build`, which `serve` uses; both build one state today.
+DEFERRED from the copies: badges and OG cards keep the default label `lens` for byte-identical output; the result page's evidence part was seen listing tls, http and ip as measured for a run of only dns and email (G3's page dump, not asserted; v2-result-page's code); lens's `NotTested` → `Skip` mapping (Phase 4's DEFERRED) is copied unchanged, as the stored bytes require.
+
