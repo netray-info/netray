@@ -1,7 +1,8 @@
 # Spec: v2-http-checks
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-19
+Finished: 2026-10-19
 
 ## Goal
 
@@ -212,6 +213,9 @@ GIVEN the catalogue and the profile WHEN read THEN the HTTP check IDs are the sa
   header line (RFC 9110 §5.3), which also feeds V1's caching verdict the whole list; HTTP dates are
   read in all three RFC 9110 forms; integers above i64 are omitted, never wrapped (implementer
   under the operator's autonomy mandate, 2026-10-19).
+- Finish: three CLAUDE.md bullets (volatile keys and presence, row repeats, checks outside the verdict) and one
+  check to build (list-valued headers read with `get`); no solutions note (implementer under the
+  operator's autonomy mandate, 2026-10-19).
 
 ## Open decisions
 

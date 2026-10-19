@@ -98,3 +98,7 @@ reads the same function it checks; the C16 test checks membership, not order.
 
 skipped: the HTTP inspector resolves its target through public DNS, blocked locally (Little Snitch); `translate` over
 assembled responses runs offline in the tests above.
+
+### Checks to build
+
+- A list-valued response header (`referrer-policy`, `cache-control`, `vary`) read with `HeaderMap::get` drops its later lines; a `tests/repo` check (`sg` over `crates/http/src/inspect/`) would refuse `.get("<list header>")` and require `get_all`.
