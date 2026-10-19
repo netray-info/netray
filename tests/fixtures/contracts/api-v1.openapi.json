@@ -5234,16 +5234,26 @@
       },
       "TlsInspectRequest": {
         "additionalProperties": false,
-        "description": "One host and port to inspect.",
+        "description": "One host and its port or ports to inspect.",
         "properties": {
           "host": {
             "type": "string"
           },
           "port": {
             "default": 443,
+            "description": "The port; 443 by default.",
             "format": "int32",
             "minimum": 0,
             "type": "integer"
+          },
+          "ports": {
+            "description": "Several ports instead of `port`, at most `limits.max_ports`, each inspected once.",
+            "items": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
           }
         },
         "required": [

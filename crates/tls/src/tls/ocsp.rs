@@ -31,6 +31,10 @@ pub struct OcspRevocationResult {
     pub revoked_at: Option<String>,
     /// ISO 8601 timestamp when this check was performed
     pub checked_at: String,
+    /// True only when the responder returned a successful response carrying a cert status.
+    #[serde(skip)]
+    #[schema(ignore)]
+    pub answered: bool,
 }
 
 /// Perform a live OCSP check for the leaf cert using the AIA OCSP URL.
@@ -66,6 +70,7 @@ pub async fn check_live_ocsp_with(
         reason: None,
         revoked_at: None,
         checked_at: checked_at.clone(),
+        answered: false,
     };
 
     let req_bytes = match build_ocsp_request(leaf_der, issuer_der) {
@@ -153,6 +158,7 @@ fn parse_live_ocsp_response(
         reason: None,
         revoked_at: None,
         checked_at: checked_at.clone(),
+        answered: false,
     };
 
     if resp.response_status != x509_ocsp::OcspResponseStatus::Successful {
@@ -178,6 +184,7 @@ fn parse_live_ocsp_response(
             reason: None,
             revoked_at: None,
             checked_at,
+            answered: true,
         },
         x509_ocsp::CertStatus::Revoked(info) => {
             let reason = info.revocation_reason.map(|r| format!("{:?}", r));
@@ -187,9 +194,13 @@ fn parse_live_ocsp_response(
                 reason,
                 revoked_at,
                 checked_at,
+                answered: true,
             }
         }
-        x509_ocsp::CertStatus::Unknown(_) => unknown(),
+        x509_ocsp::CertStatus::Unknown(_) => OcspRevocationResult {
+            answered: true,
+            ..unknown()
+        },
     }
 }
 

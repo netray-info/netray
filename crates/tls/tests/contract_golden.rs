@@ -196,6 +196,7 @@ fn response() -> InspectResponse {
                 issuer_allowed: None,
                 issuewild_present: false,
                 answered: None,
+                lookup: None,
             }),
             resolved_ips: vec!["192.0.2.10".to_string()],
             lookup_errors: vec![],
