@@ -31,10 +31,7 @@ const DEPRECATED_HEADERS: &[&str] = &[
 ];
 
 pub fn analyze_caching(headers: &HeaderMap) -> CachingReport {
-    let cache_control = headers
-        .get("cache-control")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+    let cache_control = list_header(headers, "cache-control");
 
     let directives = parse_cache_control(cache_control.as_deref().unwrap_or(""));
 
@@ -47,9 +44,7 @@ pub fn analyze_caching(headers: &HeaderMap) -> CachingReport {
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string());
 
-    let vary = headers
-        .get("vary")
-        .and_then(|v| v.to_str().ok())
+    let vary = list_header(headers, "vary")
         .map(|v| v.split(',').map(|s| s.trim().to_string()).collect())
         .unwrap_or_default();
 
@@ -66,6 +61,17 @@ pub fn analyze_caching(headers: &HeaderMap) -> CachingReport {
         vary,
         age,
     }
+}
+
+/// Every readable line of a list-valued header joined with `, `, as RFC 9110 §5.3 combines them;
+/// `None` when no line is readable.
+fn list_header(headers: &HeaderMap, name: &str) -> Option<String> {
+    let lines: Vec<&str> = headers
+        .get_all(name)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .collect();
+    (!lines.is_empty()).then(|| lines.join(", "))
 }
 
 fn parse_cache_control(value: &str) -> CacheControlDirectives {
@@ -171,6 +177,19 @@ mod tests {
             report.last_modified.as_deref(),
             Some("Mon, 01 Jan 2024 00:00:00 GMT")
         );
+    }
+
+    #[test]
+    fn list_headers_combine_their_lines() {
+        let mut h = HeaderMap::new();
+        h.append("cache-control", "max-age=0".parse().unwrap());
+        h.append("cache-control", "must-revalidate".parse().unwrap());
+        h.append("vary", "Accept-Encoding".parse().unwrap());
+        h.append("vary", "Origin".parse().unwrap());
+        let report = analyze_caching(&h);
+        assert_eq!(report.directives.max_age, Some(0));
+        assert!(report.directives.must_revalidate);
+        assert_eq!(report.vary, vec!["Accept-Encoding", "Origin"]);
     }
 
     #[test]

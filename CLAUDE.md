@@ -85,6 +85,9 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Carry new internal data on V1 response structs as `#[serde(skip)]` fields** so the V1 wire and its goldens stay byte-identical; test struct literals then need the field.
 - **Module crates' `required-features = ["testing"]` tests need `--features testing`**: `cargo test -p netray-email --features testing --test evidence`; without it they are skipped or refused.
 - **A new volatile path changes every stored fingerprint**: the next run of each domain stores an entry with an empty diff (`crates/store/src/lib.rs` compares the stored fingerprint).
+- **A volatile key never decides presence.** A block or sibling key that exists only beside a volatile key flaps the fingerprint: make the block unconditional or the sibling volatile (`http.caching`).
+- **A volatile row path also covers `<key>#<n>` repeats** (`canonical.rs` `row_covers`): key repeated table rows `#<n>`, never join them into one cell.
+- **A check outside the verdict is evidence, not a catalogue ID.** The profile refuses weight 0 and every ID needs a weight (SDD §3.8); COOP/COEP/CORP live in `http.isolation`.
 - **beacon goldens are literal scenarios**: a new one must carry every sub-check the checks emit for its records (FCrDNS one per IP, `single_mx`, `no_ipv6`, DMARC `no_ruf`).
 - **A new check id needs its texts in the catalogue**: `crates/engine/catalogue/checks.toml` (lens reads titles, fix hints, owners and guide links from it) and `CHECK_LABELS`/`CHECK_DESCRIPTIONS` in the frontend `checkMeta.ts`, which `tests/repo/test_checkmeta_catalogue.sh` holds to the catalogue's names and titles. A catalogue text (`finding`, `fix_hint`, `fix_owner`) describes every warn and fail branch of the check's code: read the check before writing it.
 - **tlsight's `summary` judges OCSP, CAA and DANE from the first handshake over all ports**: a per-port verdict reads the port's own data (`module::port_wide`).

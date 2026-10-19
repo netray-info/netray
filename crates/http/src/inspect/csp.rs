@@ -5,6 +5,29 @@ use crate::quality::types::CheckStatus;
 
 use super::assembler::CspReport;
 
+/// How much a CSP finding weighs: `Fail` fails an enforced policy, `Warn` only warns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CspSeverity {
+    Fail,
+    Warn,
+}
+
+/// One finding about a CSP: the directive it concerns, its severity and the V1 message text.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CspIssue {
+    pub directive: String,
+    pub severity: CspSeverity,
+    pub message: String,
+}
+
+fn issue(directive: &str, severity: CspSeverity, message: impl Into<String>) -> CspIssue {
+    CspIssue {
+        directive: directive.to_string(),
+        severity,
+        message: message.into(),
+    }
+}
+
 /// Analyze CSP headers per SDD §10.
 pub fn analyze_csp(headers: &HeaderMap) -> CspReport {
     let enforced_header = headers
@@ -29,35 +52,24 @@ pub fn analyze_csp(headers: &HeaderMap) -> CspReport {
     };
 
     let directives = parse_directives(csp_value);
-    let issues = score_directives(&directives);
+    let found = issues(&directives);
 
     let status = if report_only {
         CheckStatus::Warn
-    } else if issues.iter().any(|i| i.starts_with("[fail]")) {
+    } else if found.iter().any(|i| i.severity == CspSeverity::Fail) {
         CheckStatus::Fail
-    } else if issues.is_empty() {
+    } else if found.is_empty() {
         CheckStatus::Pass
     } else {
         CheckStatus::Warn
     };
-
-    // Strip level prefixes from issues for the response
-    let clean_issues: Vec<String> = issues
-        .into_iter()
-        .map(|i| {
-            i.strip_prefix("[fail] ")
-                .or_else(|| i.strip_prefix("[warn] "))
-                .unwrap_or(&i)
-                .to_string()
-        })
-        .collect();
 
     CspReport {
         status,
         enforced,
         report_only,
         directives,
-        issues: clean_issues,
+        issues: found.into_iter().map(|i| i.message).collect(),
     }
 }
 
@@ -77,32 +89,44 @@ fn parse_directives(csp: &str) -> IndexMap<String, Vec<String>> {
     map
 }
 
-fn score_directives(directives: &IndexMap<String, Vec<String>>) -> Vec<String> {
+/// Score parsed CSP directives into structured issues, in check order.
+pub fn issues(directives: &IndexMap<String, Vec<String>>) -> Vec<CspIssue> {
+    use CspSeverity::{Fail, Warn};
     let mut issues = Vec::new();
 
     // No default-src
     if !directives.contains_key("default-src") {
-        issues.push("[fail] Missing default-src directive".to_string());
+        issues.push(issue("default-src", Fail, "Missing default-src directive"));
     }
 
     // script-src checks
     if let Some(values) = directives.get("script-src") {
         if values.iter().any(|v| v == "'unsafe-inline'") {
-            issues.push("[warn] script-src contains 'unsafe-inline'".to_string());
+            issues.push(issue(
+                "script-src",
+                Warn,
+                "script-src contains 'unsafe-inline'",
+            ));
         }
         if values.iter().any(|v| v == "'unsafe-eval'") {
-            issues.push("[warn] script-src contains 'unsafe-eval'".to_string());
+            issues.push(issue(
+                "script-src",
+                Warn,
+                "script-src contains 'unsafe-eval'",
+            ));
         }
         if values.iter().any(|v| v == "data:") {
-            issues.push("[warn] script-src contains data: URI".to_string());
+            issues.push(issue("script-src", Warn, "script-src contains data: URI"));
         }
         // Wildcard with single-label TLD
         for v in values {
             if let Some(rest) = v.strip_prefix("*.")
                 && !rest.contains('.')
             {
-                issues.push(format!(
-                    "[warn] script-src wildcard {v} is overly broad (single-label TLD)"
+                issues.push(issue(
+                    "script-src",
+                    Warn,
+                    format!("script-src wildcard {v} is overly broad (single-label TLD)"),
                 ));
             }
         }
@@ -112,7 +136,11 @@ fn score_directives(directives: &IndexMap<String, Vec<String>>) -> Vec<String> {
     if let Some(values) = directives.get("style-src")
         && values.iter().any(|v| v == "'unsafe-inline'")
     {
-        issues.push("[warn] style-src contains 'unsafe-inline'".to_string());
+        issues.push(issue(
+            "style-src",
+            Warn,
+            "style-src contains 'unsafe-inline'",
+        ));
     }
 
     // object-src checks
@@ -123,15 +151,16 @@ fn score_directives(directives: &IndexMap<String, Vec<String>>) -> Vec<String> {
     match directives.get("object-src") {
         None => {
             if !default_restricts_plugins {
-                issues.push(
-                    "[warn] Missing object-src and default-src does not restrict plugins"
-                        .to_string(),
-                );
+                issues.push(issue(
+                    "object-src",
+                    Warn,
+                    "Missing object-src and default-src does not restrict plugins",
+                ));
             }
         }
         Some(values) => {
             if !values.iter().any(|v| v == "'none'") {
-                issues.push("[warn] object-src is not set to 'none'".to_string());
+                issues.push(issue("object-src", Warn, "object-src is not set to 'none'"));
             }
         }
     }
@@ -139,12 +168,12 @@ fn score_directives(directives: &IndexMap<String, Vec<String>>) -> Vec<String> {
     // base-uri checks
     match directives.get("base-uri") {
         None => {
-            issues.push("[warn] Missing base-uri directive".to_string());
+            issues.push(issue("base-uri", Warn, "Missing base-uri directive"));
         }
         Some(values) => {
             let is_restrictive = values.iter().any(|v| v == "'self'" || v == "'none'");
             if !is_restrictive {
-                issues.push("[warn] base-uri is permissive".to_string());
+                issues.push(issue("base-uri", Warn, "base-uri is permissive"));
             }
         }
     }
