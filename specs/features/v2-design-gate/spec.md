@@ -31,7 +31,7 @@ a board. This feature adds that step; features 1–7 of the V2 gap closure use i
   separate boards) and a manifest live in the private netray-ops checkout under
   `specs/netray/design/canvas/`. This repository cites it as "(private)" and reads its location
   from `NETRAY_DESIGN_DIR` (default `../netray-ops/specs/netray/design/canvas` relative to the
-  repository root).
+  main checkout, the parent of git's common directory, so a feature worktree finds it too).
 - Rendering the export needs a page viewport taller than the tallest board (3200 px), or boards
   render cut off (seen 2026-10-19).
 - The result page `GET /<domain>` starts a live run when the newest stored entry is older than
@@ -48,12 +48,14 @@ a board. This feature adds that step; features 1–7 of the V2 gap closure use i
 
 1. **Manifest.** `just design-check` reads a JSON manifest (`$NETRAY_DESIGN_DIR/manifest.json`,
    overridable by the recipe's first argument). Per board it names: the board's title in the export,
-   the V2 host and path, viewport width, theme (`light` or `dark`), an optional live target, and a
+   the V2 host and path, viewport width, theme (`light` or `dark`), an optional live target (placed
+   into the path at `{target}`; a target and the placeholder come together or not at all), and a
    list of named elements, each with a board selector, a page selector, a class (`spacing`,
    `typography`, `colour`) and the CSS properties to compare. The manifest also holds an `accepted`
    list (board, element, property, reason) for operator-decided "deliberately different" rows. The
-   loader refuses an unknown key, a missing board title, a duplicate element name within a board and
-   a class outside the three, each with a message naming the entry.
+   loader refuses an unknown key, a missing board title, a duplicate element name within a board,
+   a class outside the three, two board titles that name the same output files, and a target without
+   its placeholder (or the reverse), each with a message naming the entry.
 2. **States.** The recipe seeds a fresh history store from a fixture directory the manifest names
    (default `tests/acceptance/fixtures/history/`), starts lens (and the inspector services the
    manifest's boards use) on free ports with `[cache] ttl_seconds` large enough that no seeded
@@ -164,6 +166,11 @@ GIVEN CLAUDE.md WHEN read THEN its rules table names `specs/rules/design-rules.m
   2026-10-19).
 - Classes, tolerances and dispositions as agreed with the operator on 2026-10-19 (thinking-mode
   session; operator decision).
+- Phase 1 review amendments: the design directory's default resolves beside the main checkout,
+  not the worktree; a board's live target enters its path at `{target}`; board titles whose file
+  slugs collide are refused; a page answering HTTP 400 or above is a `no state` row, as is a result
+  page whose stored state is not fresh (implementer under the operator's autonomy mandate,
+  2026-10-19).
 - Spec drafted and approved by the implementer under the operator's mandate for features 0–7
   (operator, 2026-10-19).
 

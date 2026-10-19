@@ -21,10 +21,10 @@ cat >"$tmp/base.json" <<'JSON'
     {
       "title": "Result page, light",
       "host": "lens",
-      "path": "/shop.example.com",
+      "path": "/{target}",
       "width": 1280,
       "theme": "light",
-      "target": "example.com",
+      "target": "shop.example.com",
       "elements": [
         {"name": "h1 domain", "board": "h1", "page": "main h1", "class": "typography", "properties": ["font-size", "font-weight"]},
         {"name": "card gap", "board": ".card", "page": ".card", "class": "spacing", "properties": ["padding-top"]}
@@ -50,13 +50,16 @@ mutate() {
 # name | mutation | expected exit | stderr substrings (separated by ;;)
 table=(
     "C1 valid manifest|;|0|"
-    "C1 valid without optional keys|delete m.export; delete m.fixtures; delete m.accepted; delete m.boards[0].target|0|"
+    "C1 valid without optional keys|delete m.export; delete m.fixtures; delete m.accepted; delete m.boards[0].target; m.boards[0].path = \"/shop.example.com\"|0|"
     "C1 missing board title|delete m.boards[0].title|2|boards[0]"
     "C4 unknown top-level key|m.colour_scheme = 1|2|colour_scheme"
     "C4 unknown board key|m.boards[0].viewport = 1|2|viewport"
     "C4 unknown element key|m.boards[0].elements[0].weight = 1|2|weight"
     "C4 unknown accepted key|m.accepted[0].severity = 1|2|severity"
     "C5 duplicate element name|m.boards[0].elements[1].name = \"h1 domain\"|2|Result page, light;;h1 domain"
+    "C1 target without placeholder|m.boards[0].path = \"/shop.example.com\"|2|boards[0];;{target}"
+    "C1 placeholder without target|delete m.boards[0].target|2|boards[0];;{target}"
+    "C1 two boards on one file slug|m.boards.push(JSON.parse(JSON.stringify(m.boards[0]))); m.boards[1].title = \"Result page light\"|2|boards[1];;result-page-light"
     "C6 class motion|m.boards[0].elements[1].class = \"motion\"|2|card gap;;spacing;;typography;;colour"
 )
 
