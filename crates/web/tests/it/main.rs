@@ -75,6 +75,7 @@ mod fidelity_legend;
 mod fidelity_regions;
 mod fidelity_result_header;
 mod fidelity_review_p1;
+mod fidelity_review_p2;
 mod fidelity_run_title;
 mod fidelity_score;
 mod gate;
