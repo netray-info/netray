@@ -33,7 +33,7 @@ protected tests. `GEOIP_ATTRIBUTION` lands in `lib.rs` with G1 so the groups nev
    OpenAPI params, a `Format` schema and media types. With `?ip=`, `headers` (the request's) and
    `all` (X's lookup plus the headers) are accepted; `/ip/{address}?field=headers` stays refused.
 3. `crates/web/src/api/mod.rs`: `Format` in `ApiDoc` components; `Meta.attribution`.
-4. `crates/web/tests/api_ip_lookup.rs`, `crates/web/tests/api_ip_fields.rs` (protected,
+4. `crates/web/tests/it/api_ip_lookup.rs`, `crates/web/tests/it/api_ip_fields.rs` (protected,
    `ADLC-Test-Change`): route bodies compared against the reverse-DNS lookups; `host` leaves
    `CALLER_ONLY`; enum expectations grow by `host`, `cidr`, `all`.
 5. `specs/sdd/v2.md`: S40 row; §7.1 ip, batch and meta cells; §7.2 paragraph (first cells unchanged).
