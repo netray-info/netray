@@ -5,6 +5,7 @@
 use std::cell::Cell;
 use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
+use std::future::Future;
 use std::hash::{Hash, Hasher};
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU32;
@@ -245,12 +246,12 @@ fn field_of<T: for<'de> Deserialize<'de>>(name: &str) -> Option<T> {
 
 #[derive(Deserialize)]
 pub(super) struct IpQuery {
-    field: Option<String>,
+    pub(super) field: Option<String>,
     ip: Option<String>,
     dns: Option<String>,
     lang: Option<String>,
     fields: Option<String>,
-    format: Option<String>,
+    pub(super) format: Option<String>,
 }
 
 type QueryResult = Result<Query<IpQuery>, QueryRejection>;
@@ -272,12 +273,12 @@ fn valid_lang(lang: &str) -> bool {
 }
 
 /// The form an answer is rendered in when it is not the default.
-enum Form {
+pub(super) enum Form {
     Plain,
     Structured(OutputFormat, String),
 }
 
-fn form_of(name: &str) -> Result<Form, V1Error> {
+pub(super) fn form_of(name: &str) -> Result<Form, V1Error> {
     if name == "plain" {
         return Ok(Form::Plain);
     }
@@ -313,7 +314,8 @@ struct Params {
 }
 
 impl Params {
-    fn new(query: &IpQuery, headers: &HeaderMap) -> Result<Self, V1Error> {
+    /// `preset` is a form the route already decided; without it `?format=` and `Accept` decide.
+    fn new(query: &IpQuery, headers: &HeaderMap, preset: Option<Form>) -> Result<Self, V1Error> {
         if let Some(lang) = query.lang.as_deref().filter(|lang| !valid_lang(lang)) {
             return Err(V1Error::InvalidInput(format!(
                 "invalid lang `{lang}`: at most {LANG_MAX_LEN} ASCII letters, digits and `-`"
@@ -331,7 +333,10 @@ impl Params {
                     .filter(|name| !name.is_empty())
                     .collect()
             }),
-            form: choose_form(query.format.as_deref(), headers)?,
+            form: match preset {
+                Some(form) => Some(form),
+                None => choose_form(query.format.as_deref(), headers)?,
+            },
             label: query.field.clone().unwrap_or_else(|| "document".into()),
         })
     }
@@ -453,9 +458,19 @@ pub(super) async fn metadata(
 ) -> Response {
     let is_get = request.method() == Method::GET;
     let if_none_match = request.headers().get(header::IF_NONE_MATCH).cloned();
+    with_metadata(&state, is_get, if_none_match, next.run(request)).await
+}
+
+/// `answer` with the metadata headers of an ip route; `is_get` allows the ETag and the 304.
+pub(super) async fn with_metadata(
+    state: &ApiState,
+    is_get: bool,
+    if_none_match: Option<HeaderValue>,
+    answer: impl Future<Output = Response>,
+) -> Response {
     let (mut response, remaining) = REMAINING
         .scope(Cell::new(None), async {
-            let response = next.run(request).await;
+            let response = answer.await;
             let remaining = REMAINING.with(Cell::get);
             (response, remaining)
         })
@@ -467,6 +482,13 @@ pub(super) async fn metadata(
         remaining
     };
     let headers = response.headers_mut();
+    // The answer depends on the caller, its agent and its Accept: no shared cache, and every
+    // reuse revalidates against the ETag (V1 sent `Vary: Accept, User-Agent` too).
+    headers.insert(header::VARY, HeaderValue::from_static("Accept, User-Agent"));
+    headers.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("private, no-cache"),
+    );
     headers.insert(
         "x-ratelimit-limit",
         HeaderValue::from(state.config().ip.per_ip_per_minute),
@@ -566,13 +588,14 @@ fn shown_headers(state: &ApiState, headers: &HeaderMap) -> Shown {
 
 /// One global address, as `/ip/{address}` and `/ip?ip=` answer it. `address_path` is the former:
 /// its fields are the address fields only.
-async fn answer_address(
+pub(super) async fn answer_address(
     state: &ApiState,
     peer: Option<SocketAddr>,
     headers: &HeaderMap,
     address: &str,
     query: &IpQuery,
     address_path: bool,
+    preset: Option<Form>,
 ) -> Result<Response, V1Error> {
     let name = query.field.as_deref();
     let field = if address_path {
@@ -580,7 +603,7 @@ async fn answer_address(
     } else {
         queried_field(name)?
     };
-    let params = Params::new(query, headers)?;
+    let params = Params::new(query, headers, preset)?;
     let target = parse_address(address, state.config().ip.internal_mode)?;
     let shown = shown_headers(state, headers);
     if let Some(answer) = offline_answer(field, target, &shown, false) {
@@ -637,20 +660,31 @@ pub(super) async fn caller(
     query: QueryResult,
 ) -> Result<Response, V1Error> {
     let query = ip_query(query)?;
-    let peer = peer_of(peer);
+    answer_caller(&state, peer_of(peer), &headers, &query, None).await
+}
+
+/// The caller's answer, or with `?ip=` that address's: the field is `query.field`, the form `preset`
+/// or else what `?format=` and `Accept` pick.
+pub(super) async fn answer_caller(
+    state: &ApiState,
+    peer: Option<SocketAddr>,
+    headers: &HeaderMap,
+    query: &IpQuery,
+    preset: Option<Form>,
+) -> Result<Response, V1Error> {
     if let Some(address) = &query.ip {
-        return answer_address(&state, peer, &headers, address, &query, false).await;
+        return answer_address(state, peer, headers, address, query, false, preset).await;
     }
     let field = caller_field(query.field.as_deref())?;
-    let params = Params::new(&query, &headers)?;
-    let shown = shown_headers(&state, &headers);
-    let client = limit::client(&state, &headers, peer);
+    let params = Params::new(query, headers, preset)?;
+    let shown = shown_headers(state, headers);
+    let client = limit::client(state, headers, peer);
     if let Some(answer) = offline_answer(field, client, &shown, params.plain_form()) {
-        charge_caller(&state, &headers, peer, 1)?;
+        charge_caller(state, headers, peer, 1)?;
         return respond(answer, &params);
     }
-    let ip = seam(&state)?;
-    charge_caller(&state, &headers, peer, 1)?;
+    let ip = seam(state)?;
+    charge_caller(state, headers, peer, 1)?;
     charge(
         &state.ip_limiters().per_target,
         client,
@@ -707,7 +741,16 @@ pub(super) async fn address(
 ) -> Result<Response, V1Error> {
     let query = ip_query(query)?;
     let Path(address) = address.map_err(|e| V1Error::InvalidInput(e.body_text()))?;
-    answer_address(&state, peer_of(peer), &headers, &address, &query, true).await
+    answer_address(
+        &state,
+        peer_of(peer),
+        &headers,
+        &address,
+        &query,
+        true,
+        None,
+    )
+    .await
 }
 
 /// The query of a batch lookup.

@@ -48,14 +48,16 @@ half of 6.5 and 6.51.
 
 ### How the cutover mounts `ip_host`
 
-In `host/mod.rs`, the `Some("ip")` arm calls `netray_web::api::ip_host(&api_state, req).await` first.
-`Ok(response)` is the answer. `Err(req)` hands the request back unchanged and the arm continues as
-today: `ip_successor`, `subdomain_common`, `to_apex`, the inspector. With `ip_host` first, these
-rows of `ip_successor` become unreachable and are removed in the cutover: `json`/`yaml`/`toml`/`csv`,
-`all`, `ip` (any second segment), `asn` without a number, and the `IP_FIELDS` row. The rows that
-stay correct are `/asn/<n>`, `/range`, `/batch`, `/diff`, `/ipv4`, `/ipv6`, `/meta`, `/api/meta` and
-`/api-docs/openapi.json`. `pages::inspect::ip_root`'s text branch also becomes unreachable, because
-`ip_host` answers every `/` a CLI agent sends. The root then needs only `render(Tool::Ip, uri)`.
+In `host/mod.rs`, the `Some("ip")` arm calls `netray_web::api::ip_host(&api_state, req).await` first,
+with the same `ApiState` clone `/api/v1` is built over (a fresh state would bring fresh limiters).
+`Ok(response)` is the answer. `Err(req)` hands the request back unchanged; the arm rebuilds its
+`Legacy` view from it and continues as today: `ip_successor`, `subdomain_common`, `to_apex`, the
+inspector. `ip_successor` stays as it is: `ip_host` answers GET and HEAD on its paths before the
+table, and the table still answers what comes back (other methods, `/ip/<other>`, `/<field>/`,
+`/asn/<n>`, `/range`, `/batch`, `/diff`, `/ipv4`, `/ipv6`, `/meta`). Its wrong successors for
+`/asn` and `/ip/cidr` remain only for methods other than GET and HEAD. `pages::inspect::ip_root`'s
+text branch becomes unreachable, because `ip_host` answers every GET or HEAD on `/` a CLI agent
+sends; the root then needs only `render(Tool::Ip, uri)`.
 
 ## Requirements
 
@@ -275,6 +277,18 @@ GIVEN the stub WHEN `ip_host` answers `/country` THEN it carries `X-RateLimit-Li
   it charges, and a request refused before the charge (validation, module off) costs nothing since
   Phase 1's review, so it carries the limit alone (implementer under the operator's autonomy
   mandate, 2026-10-19).
+
+- Phase 3 review: every ip answer (API and `ip_host`) carries `Vary: Accept, User-Agent` and
+  `Cache-Control: private, no-cache`. The answer depends on the caller, and `Last-Modified` alone
+  would make it heuristically fresh in a cache. V1 sent the same `Vary` with
+  `private, max-age=60`; `no-cache` keeps the ETag useful without serving another network's
+  address (implementer under the operator's autonomy mandate, 2026-10-19).
+- Phase 3 review: `ip_host`'s HEAD carries GET's `Content-Length`; `/<field>/` (empty suffix) is
+  handed back; its own refusals (unknown suffix or format, malformed query) pass the metadata step
+  (implementer under the operator's autonomy mandate, 2026-10-19).
+- `ip_host` carries `#[allow(clippy::result_large_err)]`: the spec's `Err(Request)` hands the
+  request back by value and cannot be boxed without changing the mount (implementer under the
+  operator's autonomy mandate, 2026-10-19).
 
 ## Open decisions
 

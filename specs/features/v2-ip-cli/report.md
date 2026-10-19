@@ -143,3 +143,62 @@ x-ratelimit-remaining: 7
 HTTP/1.1 503 Service Unavailable
 x-ratelimit-limit: 60
 ```
+
+## Phase 3 — The ip. host entry point
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R13: ip_host serves GET and HEAD on the V1 paths; every other path, method and /asn/digits come back as Err(req) unchanged | green | crates/web/tests/ip_host_paths.rs |
+| C2 | R14: root negotiation in V1 order, HTML or nothing gives Err; other paths suffix first, HTML or nothing falls to plain; unknown suffix 404 naming the formats | green | crates/web/tests/ip_host_root.rs |
+| C3 | R15: every ip_host path answers for ?ip=X; headers shows the request; tcp and user_agent with ?ip= 400; fields lang dns format act; limiters refusals and headers shared; plain root ip cidr headers answer with the module off | green | crates/web/tests/ip_host_misc.rs |
+| C4 | S: curl with Accept */* on / gives text/plain caller address and newline | green | crates/web/tests/ip_host_root.rs |
+| C5 | S: curl on /?ip=198.51.100.1 gives 198.51.100.1 and newline | green | crates/web/tests/ip_host_root.rs |
+| C6 | S: curl with Accept application/json on / gives the JSON document | green | crates/web/tests/ip_host_root.rs |
+| C7 | S: browser Accept text/html on / gives Err(req) unchanged | green | crates/web/tests/ip_host_root.rs |
+| C8 | S: any agent on /?format=yaml gives YAML | green | crates/web/tests/ip_host_root.rs |
+| C9 | S: curl on /country gives the stub country and newline | green | crates/web/tests/ip_host_paths.rs |
+| C10 | S: browser on /country gives plain text, not Err | green | crates/web/tests/ip_host_paths.rs |
+| C11 | S: /country?ip=198.51.100.1&lang=de gives the plain answer for 198.51.100.1 | green | crates/web/tests/ip_host_paths.rs |
+| C12 | S: /location/json gives location to_json of the caller lookup | green | crates/web/tests/ip_host_paths.rs |
+| C13 | S: /json?fields=ip gives a JSON object with only ip | green | crates/web/tests/ip_host_paths.rs |
+| C14 | S: /yaml /toml /csv give the document in that form | green | crates/web/tests/ip_host_paths.rs |
+| C15 | S: curl on /asn gives AS64496 and newline | green | crates/web/tests/ip_host_paths.rs |
+| C16 | S: /asn/15169 gives Err(req) | green | crates/web/tests/ip_host_paths.rs |
+| C17 | S: /ip/cidr gives 192.0.2.10/32; with ?ip=198.51.100.1 gives 198.51.100.1/32 | green | crates/web/tests/ip_host_paths.rs |
+| C18 | S: /all with X-Test one gives all to_plain followed by x-test: one | green | crates/web/tests/ip_host_paths.rs |
+| C19 | S: /headers/json gives the filtered request headers as a JSON object | green | crates/web/tests/ip_host_paths.rs |
+| C20 | S: /country/xml gives 404 naming the formats | green | crates/web/tests/ip_host_paths.rs |
+| C21 | S: /range /batch /meta /nope give Err(req) | green | crates/web/tests/ip_host_paths.rs |
+| C22 | S: POST / gives Err(req) | green | crates/web/tests/ip_host_paths.rs |
+| C23 | S: module off, curl /, /ip/cidr, /headers give 200 plain; /country 503 | green | crates/web/tests/ip_host_misc.rs |
+| C24 | S: /tcp?ip=198.51.100.1 gives 400 naming tcp | green | crates/web/tests/ip_host_misc.rs |
+| C25 | S: /country carries X-RateLimit-Limit, the GeoIP headers and an ETag | green | crates/web/tests/ip_host_misc.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 1 | sonnet | 93203 | 292 |
+
+### Review
+
+Reader over the phase diff: 0 BLOCKER, 5 AMENDMENT, 1 NIT. All five amendments repaired in this
+phase by the orchestrator, with `crates/web/tests/ip_host_review.rs`:
+
+- HEAD on `ip_host` lost GET's `Content-Length` once mounted under a router; it now carries it.
+- No `Cache-Control`/`Vary` on caller-dependent answers that carry `Last-Modified` (also on
+  `/api/v1/ip*` since Phase 2); every ip answer is now `private, no-cache` with
+  `Vary: Accept, User-Agent`.
+- The spec's mount section told the cutover to remove `ip_successor` rows that `ip_host` hands
+  back (`/ip/<other>`, other methods); the section now keeps the table unchanged.
+- `/<field>/` answered 404 instead of coming back; it now comes back.
+- `ip_host`'s own refusals skipped the metadata step; they pass it now.
+- NIT (not acted on): the shared-limiter test spends its budget through `ip_host` only.
+
+### Behavioural verification
+
+skipped: `ip_host` has no route on main; the `ip.` host dispatch exists only on
+`feature/v2-cutover`, which mounts it as the spec's "How the cutover mounts `ip_host`" says. The
+entry point is exercised end to end by direct calls in `crates/web/tests/ip_host_*.rs`.

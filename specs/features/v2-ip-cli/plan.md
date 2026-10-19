@@ -64,3 +64,25 @@ G1: C1–C10 (one response step; every criterion hangs on it).
 4. `crates/web/src/api/jobs.rs`: the inspector's per-IP admission charges through
    `charge_per_ip`.
 5. `crates/web/src/api/mod.rs`: the ip routes get `route_layer(from_fn_with_state(state, ip::metadata))`.
+
+## Phase 3 — The ip. host entry point
+
+### Groups
+
+G1: C1–C25 (one entry point over the Phase 1 renderers and the Phase 2 response step).
+
+### Plan
+
+#### G1
+1. `crates/web/src/api/ip.rs`: the Phase 2 middleware body becomes a reusable step
+   (`with_metadata(state, method, if_none_match, future)`), used by `metadata` and by `ip_host`;
+   the query parsing, `answer_address`, the caller answer and `respond` become `pub(super)` (or
+   gain a shared core) so `ip_host` calls them with a field, a format suffix and the query.
+2. `crates/web/src/api/ip_host.rs` (new): `pub async fn ip_host(&ApiState, Request<Body>) ->
+   Result<Response, Request<Body>>`: GET/HEAD only; path match (`/`, `/json|yaml|toml|csv`,
+   `/<field>`, `/<field>/<fmt>`, `/ip/cidr`, `/asn` without digits); V1 negotiation
+   (`netray_ip::negotiate`): root HTML or nothing hands the request back, other paths fall to
+   plain; unknown suffix 404 naming the formats; `?ip=` and the other parameters as `/api/v1/ip`.
+3. `crates/web/src/api/mod.rs`: `mod ip_host; pub use ip_host::ip_host;`.
+4. `specs/sdd/v2.md`: S40 and §7.2 name `netray_web::api::ip_host` serving the V1 path family
+   ahead of the cutover's `410` table.

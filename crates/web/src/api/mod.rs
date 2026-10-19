@@ -10,6 +10,7 @@ mod email;
 mod error;
 mod inspectors;
 mod ip;
+mod ip_host;
 mod jobs;
 mod limit;
 mod reads;
@@ -36,6 +37,7 @@ pub use config::{
 };
 pub use error::V1Error;
 use ip::{AddressField, CallerField, Format};
+pub use ip_host::ip_host;
 pub use jobs::InspectJobs;
 pub(crate) use runs::wants_event_stream;
 pub use runs::{
