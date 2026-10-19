@@ -363,3 +363,19 @@ async fn c21_trace_and_dnssec_fields() {
         }
     }
 }
+
+/// Review fix (R1): an authoritative REFUSED is unmeasured and carries the rcode mnemonic, as the
+/// recursive answers do.
+#[tokio::test]
+async fn authoritative_refusal_carries_the_mnemonic() {
+    let v = json_job("/dns/authcompare", q("lame.example.com", &["A"])).await;
+    let auth: Vec<&Value> = answers(&v, 0)
+        .iter()
+        .filter(|a| a["source"] == "authoritative")
+        .collect();
+    assert!(!auth.is_empty(), "{v}");
+    for a in auth {
+        assert_eq!(a["outcome"], "unmeasured", "{a}");
+        assert_eq!(a["response_code"], "REFUSED", "{a}");
+    }
+}

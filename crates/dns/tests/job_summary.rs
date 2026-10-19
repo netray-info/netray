@@ -257,3 +257,45 @@ fn a_job_summary_counts_types_and_lookups() {
         (1, 0, 1, 1)
     );
 }
+
+fn answer(
+    source: &str,
+    record_type: &str,
+    data: &str,
+) -> netray_dns::jobs::summary::DnsServerAnswer {
+    netray_dns::jobs::summary::DnsServerAnswer {
+        server: format!("udp:192.0.2.1:53 {source}"),
+        address: "192.0.2.1:53".into(),
+        name: None,
+        transport: "udp".into(),
+        source: Some(source.into()),
+        outcome: AnswerOutcome::Answered,
+        response_code: None,
+        error: None,
+        response_time_ms: Some(1.0),
+        records: vec![DnsRecordDetail {
+            name: "example.com".into(),
+            record_type: record_type.into(),
+            ttl: 300,
+            data: data.into(),
+            soa_serial_age_days: None,
+        }],
+    }
+}
+
+// Review fix (R3): recursive and authoritative records come from two printers that differ on
+// DNSSEC types; across sources such a type compares by record count, not text.
+#[test]
+fn cross_source_dnssec_types_compare_by_count() {
+    let recursive = answer("recursive", "RRSIG", "A 13 2 300 ...");
+    let authoritative = answer("authoritative", "RRSIG", "A ECDSAP256SHA256 2 300 ...");
+    assert_eq!(
+        agreement(&[recursive.clone(), authoritative]),
+        Agreement::Agree
+    );
+    let other = answer("recursive", "RRSIG", "A 8 2 300 ...");
+    assert_eq!(agreement(&[recursive, other]), Agreement::Diverge);
+    let a1 = answer("recursive", "A", "192.0.2.10");
+    let a2 = answer("authoritative", "A", "192.0.2.20");
+    assert_eq!(agreement(&[a1, a2]), Agreement::Diverge);
+}

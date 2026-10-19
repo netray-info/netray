@@ -226,10 +226,16 @@ fn dns(job: &'static str, status: u16, accept: Option<&'static str>, body: &'sta
 /// The SSE event names a DNS path may emit and the component of its `done` event.
 fn dns_events(doc_path: &str) -> (&'static [&'static str], &'static str) {
     match doc_path {
-        "/api/v1/dns/query" => (&["batch", "error", "enrichment", "done"], "DnsQueryDone"),
-        "/api/v1/dns/compare" => (&["batch", "error", "enrichment", "done"], "DnsCompareDone"),
+        "/api/v1/dns/query" => (
+            &["batch", "error", "enrichment", "summary", "done"],
+            "DnsQueryDone",
+        ),
+        "/api/v1/dns/compare" => (
+            &["batch", "error", "enrichment", "summary", "done"],
+            "DnsCompareDone",
+        ),
         "/api/v1/dns/authcompare" => (
-            &["batch", "error", "enrichment", "done"],
+            &["batch", "error", "enrichment", "summary", "done"],
             "DnsAuthCompareDone",
         ),
         "/api/v1/dns/trace" => (&["hop", "error", "enrichment", "done"], "DnsTraceDone"),
@@ -650,6 +656,7 @@ async fn responses_match_the_committed_document() {
                         "enrichment" => "DnsEnrichmentEvent",
                         "hop" => "DnsHopEvent",
                         "chain" => "DnsChainEvent",
+                        "summary" => "DnsJobSummary",
                         _ => done,
                     };
                     validate_component(&doc, component, &body, &format!("{label} {event}"));
