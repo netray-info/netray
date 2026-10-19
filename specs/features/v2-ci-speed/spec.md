@@ -17,7 +17,8 @@ before and after.
 - No test is dropped, skipped or weakened; moved tests keep their assertions byte for byte.
 - `adlc-verify` (the contract) keeps its recipe line and body; only `check` changes.
 - No change to `release.yml` or the Dockerfile's build.
-- No change to which crates' unit tests run or to feature selection of any test.
+- No change to which crates' unit tests run. With GeoIP data, `check` runs them under the unified
+  workspace features only; the gate's narrower feature sets stay in `adlc-verify` (decision log).
 
 ## Context and constraints
 
@@ -181,6 +182,10 @@ GIVEN a CI run without the disk workarounds WHEN it completes THEN `df` after `j
 - lens's `admission_config.rs` and `history_config.rs` stay their own binaries: they set `LENS_*` variables that lens's loader reads as keys, which would leak into concurrent tests in one process (implementer under the operator's autonomy mandate, 2026-10-19).
 
 - ok_handlers' `filtered_headers_excluded_from_response` keeps its own `build_app`: it sets `filtered_headers` on its config, which the shared app must not carry; the repo check admits a call preceded by a config assignment (implementer under the operator's autonomy mandate, 2026-10-19).
+
+- `check` with data drops the gate's `--exclude netray-ip` / `-p netray-ip` feature sets (review, DEFERRED): accepted, because `adlc verify` runs them and every push needs its receipt; CI checks the unified set the binary ships with (implementer under the operator's autonomy mandate, 2026-10-19).
+- netray-ip's build script watches HEAD, `logs/HEAD` and the branch's loose ref, not all of `refs/heads` or `packed-refs` (review AMENDMENT): a commit in another worktree rebuilt netray-ip and could turn `test_build_fresh.sh` red mid-run (implementer under the operator's autonomy mandate, 2026-10-19).
+- ok_handlers' shared app runs with the `?ip=` cache off (review BLOCKER): with one app per test it never hit; shared, one test's PTR answer reached `ip_param_dns_false_skips_dns`. The production path serving a cached hostname for `dns=false` (`crates/ip/src/routes.rs`) is left for its own fix (implementer under the operator's autonomy mandate, 2026-10-19).
 
 ## Open decisions
 

@@ -14,8 +14,15 @@ recipe_deps() {
 _test_rust_is_superset() {
     local body
     body=$(just --justfile "$1" --show test-rust 2>/dev/null) || return 1
-    grep -Eq '^\s*just( [^ ]+)* test-rust-offline\s*$' <<<"$body" || { echo "test-rust's no-data branch does not run 'just test-rust-offline'"; return 1; }
-    grep -Eq '^\s*cargo test --workspace\s*$' <<<"$body" || { echo "test-rust does not run 'cargo test --workspace' without further arguments"; return 1; }
+    # The shape: `if [ -f <...>.mmdb ]; then` / cargo test --workspace / `else` / just test-rust-offline.
+    # Read as consecutive non-comment lines, so swapped branches or a dead `if false` do not pass.
+    local shape
+    shape=$(grep -vE '^[[:space:]]*(#|echo )' <<<"$body" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
+        | grep -A3 -E '^if \[ -f [^]]*\.mmdb \]; then$' | head -4 | tr '\n' '|')
+    case "$shape" in
+        if*'; then|cargo test --workspace|else|just '*'test-rust-offline|') ;;
+        *) echo "test-rust is not: if [ -f <data>.mmdb ]; then cargo test --workspace; else just test-rust-offline (got: $shape)"; return 1 ;;
+    esac
     if grep -E 'cargo test' <<<"$body" | grep -q -- '--exclude'; then
         echo "test-rust excludes a crate: $(grep -E 'cargo test' <<<"$body" | grep -- '--exclude' | head -1 | sed 's/^ *//')"
         return 1

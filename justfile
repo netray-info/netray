@@ -9,9 +9,11 @@ default: adlc-verify
 # The ADLC gate: offline, no browser. Needs `just adlc-setup` once (frontend/dist is embedded by the crates).
 adlc-verify: test-repo check-frontend-dist fmt-check clippy test-rust-offline test-frontend validate-site check-sitemap
 
-# Everything the gate runs, plus the full Rust suite (ifconfig-rs integration tests need `just ifconfig-data`).
+# Every test the gate runs, plus the full Rust suite (ifconfig-rs integration tests need `just ifconfig-data`).
 # test-rust stands in for test-rust-offline: one feature set, so the workspace tests compile once
-# (tests/repo/lib/verbs.sh holds it to a superset).
+# (tests/repo/lib/verbs.sh holds it to a superset). With GeoIP data the tests run under the unified
+# workspace features only; the gate's own feature sets (--exclude netray-ip, -p netray-ip) run in
+# `adlc verify`, whose receipt every push needs.
 check: test-repo check-frontend-dist fmt-check clippy test-frontend validate-site check-sitemap deny test-rust
 
 # Deterministic supply-chain checks; advisories run on a schedule elsewhere (workflow-rules R-J6).

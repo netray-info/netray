@@ -13,7 +13,8 @@ fn test_config() -> Config {
 /// The dev-config app, built once per test binary: each build loads the GeoLite2 databases, which
 /// cost about a second per test. Every test still serves it on its own listener. All tests connect
 /// from loopback, so the shared limiters get quotas no test run reaches; no test here asserts on
-/// rate limiting (that lives in rate_limit.rs).
+/// rate limiting (that lives in rate_limit.rs). The `?ip=` result cache is off: with one app per
+/// test it never hit, and shared it would serve one test's PTR answer to another's `dns=false`.
 async fn shared_app() -> axum::Router {
     static APP: tokio::sync::OnceCell<axum::Router> = tokio::sync::OnceCell::const_new();
     APP.get_or_init(|| async {
@@ -22,6 +23,7 @@ async fn shared_app() -> axum::Router {
         config.rate_limit.per_ip_burst = 1_000_000;
         config.rate_limit.per_target_per_minute = 1_000_000;
         config.rate_limit.per_target_burst = 1_000_000;
+        config.cache.enabled = false;
         netray_ip::build_app(&config).await.app
     })
     .await
