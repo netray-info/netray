@@ -7,7 +7,8 @@ use netray_http::module::{REGISTER, translate};
 use netray_http::{HttpModule, ModuleConfig};
 use netray_model::evidence::{Shape, Value, validate};
 
-const SPECTRA_JSON: &str = include_str!("../../../tests/fixtures/contracts/spectra-inspect.json");
+const SPECTRA_JSON: &str =
+    include_str!("../../../../tests/fixtures/contracts/spectra-inspect.json");
 
 #[test]
 fn server_block_holds_inspection_ms_equal_to_duration_ms() {

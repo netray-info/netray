@@ -15,7 +15,8 @@ use netray_model::Protocol;
 use netray_model::evidence::{ShapeKind, ValueType as T, check_evidence_rule, validate};
 use serde_json::json;
 
-const SPECTRA_JSON: &str = include_str!("../../../tests/fixtures/contracts/spectra-inspect.json");
+const SPECTRA_JSON: &str =
+    include_str!("../../../../tests/fixtures/contracts/spectra-inspect.json");
 
 const PARSED: [&str; 5] = [
     "http.csp",

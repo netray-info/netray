@@ -11,7 +11,8 @@ use netray_http::quality::types::CheckStatus;
 use netray_model::Status;
 use reqwest::header::{HeaderMap, HeaderValue};
 
-const SPECTRA_JSON: &str = include_str!("../../../tests/fixtures/contracts/spectra-inspect.json");
+const SPECTRA_JSON: &str =
+    include_str!("../../../../tests/fixtures/contracts/spectra-inspect.json");
 
 fn v2_status(value: &'static str) -> Status {
     let mut headers = HeaderMap::new();

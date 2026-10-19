@@ -8,7 +8,8 @@ use netray_http::module::{REGISTER, translate};
 use netray_model::evidence::{Shape, Value as Ev, validate};
 use serde_json::{Value, json};
 
-const SPECTRA_JSON: &str = include_str!("../../../tests/fixtures/contracts/spectra-inspect.json");
+const SPECTRA_JSON: &str =
+    include_str!("../../../../tests/fixtures/contracts/spectra-inspect.json");
 
 fn fixture(mutate: impl FnOnce(&mut Value)) -> InspectResponse {
     let mut v: Value = serde_json::from_str(SPECTRA_JSON).unwrap();
