@@ -54,7 +54,8 @@ function pxWithin(b, p, tol) {
       if (bs[i] !== ps[i]) return false;
       continue;
     }
-    if (Math.abs(parseFloat(bm[1]) - parseFloat(pm[1])) > tol) return false;
+    // "At most" the tolerance: the epsilon absorbs float error (17.6 - 13.6 = 4.000000000000002).
+    if (Math.abs(parseFloat(bm[1]) - parseFloat(pm[1])) > tol + 1e-6) return false;
   }
   return true;
 }

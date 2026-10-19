@@ -181,3 +181,7 @@ rows; a board without a state still gets its board image and side-by-side; `chec
 `check.mjs` end to end against a fixture export and page server (exit 0 within tolerance, 1 with
 a row outside it, 1 with a `no state` row for HTTP 404 plus both images); `test_design_states.sh`
 removes its temporary directory. Re-run against main's pages: unchanged, 58 open deviations, exit 1.
+
+The second review pass found fractional px values exactly at the tolerance (13.6px against
+17.6px) reported as deviations by float error; the comparison now allows the tolerance plus an
+epsilon of 1e-6 px, with test rows at both boundaries.
