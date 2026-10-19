@@ -2,8 +2,20 @@ use std::path::Path;
 
 fn main() {
     println!("cargo::rerun-if-changed=frontend/dist");
-    println!("cargo::rerun-if-changed=.git/HEAD");
-    println!("cargo::rerun-if-changed=.git/refs/heads");
+    // Rerun when the commit changes. Ask git where its files are (a worktree splits HEAD from the
+    // refs) and name only paths that exist: a missing path makes cargo rerun the script on every
+    // call. Without a git checkout (Docker build) nothing is named.
+    for name in ["HEAD", "refs/heads", "packed-refs"] {
+        let path = std::process::Command::new("git")
+            .args(["rev-parse", "--path-format=absolute", "--git-path", name])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+        if let Some(path) = path.filter(|p| Path::new(p).exists()) {
+            println!("cargo::rerun-if-changed={path}");
+        }
+    }
 
     let git_sha = std::process::Command::new("git")
         .args(["rev-parse", "--short", "HEAD"])

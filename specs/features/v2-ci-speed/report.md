@@ -28,3 +28,25 @@ is a dry-run property of the justfile.
 
 `just -n check | grep -E 'cargo test|just '` → `cargo test --workspace` and, in the no-data branch,
 `just test-rust-offline`; no `--exclude` line. The CI run of the PR measures the effect (Phase 6).
+
+## Phase 2 — netray-ip build script reruns only on git changes
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R4: a second cargo build -p netray with no change reports netray-ip fresh; only existing git paths named; without git none and both variables unknown | green | tests/repo/test_build_fresh.sh |
+| C2 | GIVEN a built tree WHEN cargo build -p netray --message-format=json runs again THEN the netray-ip artifact is fresh | green | tests/repo/test_build_fresh.sh (3) |
+| C3 | GIVEN the build script outside any git checkout WHEN it runs THEN no git rerun path and both variables unknown | green | tests/repo/test_build_fresh.sh (2, standalone rustc build of the script in a temp dir) |
+| C4 | GIVEN the build script WHEN read THEN no relative .git rerun path | green | tests/repo/test_build_fresh.sh (1) |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 crates/ip/build.rs (made directly) | 0 | n/a | 0 | 0 |
+
+### Behavioural verification
+
+`cargo build -q -p netray --bin netray && cargo build -p netray --bin netray` → the second call
+prints only `Finished`, no `Compiling netray-ip` (output below the phase commit's run).
