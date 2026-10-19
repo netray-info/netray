@@ -1,7 +1,8 @@
 # Spec: v2-input-limits
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-19
+Finished: 2026-10-19
 
 ## Goal
 
@@ -17,8 +18,8 @@ and were found during v2-dns-api.
 - The TLS and HTTP inspectors' own target parsing: they take addresses on purpose.
 - A character-set rule for domain names (the shared rule checks no characters today; the DNS check
   route adds its own). Only the address forms change.
-- The ip inspector's cached hostname for a `dns=false` request (`crates/ip/src/routes.rs`): PR #37
-  (v2-ip-cli) is open and owns it.
+- The ip inspector's cached hostname for a `dns=false` request (`crates/ip/src/routes.rs`): it
+  lives only in the V1 `netray ip` service, which cutover Phase 7 deletes.
 - Any file under `crates/web/templates`, `crates/web/static` or `crates/web/islands`.
 
 ## Context and constraints
@@ -116,12 +117,17 @@ GIVEN ten types including DNSKEY and DS and `dnssec: true` WHEN `DnsJobs::query`
   only the dotted forms: `1.2.3` and `3221225985` reach the same address through every URL parser and
   `inet_aton`, and no public TLD is numeric (implementer under the operator's autonomy mandate,
   2026-10-19).
-- The ip cache-key bug is not fixed here: PR #37 (v2-ip-cli) is open and its agent owns it
-  (implementer under the operator's autonomy mandate, 2026-10-19).
+- The ip cache-key bug is not fixed here: PR #37 merged without fixing it, and the coordinator
+  scoped it out, since only the V1 `netray ip` service has it and cutover Phase 7 deletes that
+  service, undeployed until then (coordinator, 2026-10-19).
 
 - Phase 2 amendment: prism's V1 route answers the record-type limit with `422`, not `400` as the
   first scenario said; the scenario follows the existing refusal, as R4 asks (implementer under the
   operator's autonomy mandate, 2026-10-19).
+
+- Finish: one CLAUDE.md bullet (augment a request before its limit and cost checks); no check to
+  build, no solutions note; review's minor (C7's store read cannot fail alone) left, the status
+  assertion carries the criterion (implementer under the operator's autonomy mandate, 2026-10-19).
 
 ## Open decisions
 
@@ -129,5 +135,5 @@ None.
 
 ## Out of scope
 
-A character-set rule for domain names, IDNA handling (lens's rule leaves it out), and the ip
-inspector's cache (PR #37).
+A character-set rule for domain names, IDNA handling (lens's rule leaves it out), and the V1 ip
+inspector's cache.
