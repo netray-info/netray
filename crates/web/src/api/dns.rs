@@ -4,6 +4,9 @@
 //! reaches `done` stores its collected result under the `done`'s `cache_key`, which
 //! `GET /dns/results/{key}` replays.
 use std::convert::Infallible;
+use std::net::IpAddr;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use axum::Json;
 use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
@@ -14,12 +17,13 @@ use futures::{Stream, StreamExt};
 use netray_common::error::ErrorResponse;
 use netray_dns::parser::ParsedQuery;
 use netray_dns::{
-    DnsAuthCompareEvent, DnsAuthCompareResult, DnsCachedResult, DnsCompareEvent, DnsCompareResult,
-    DnsDnssecEvent, DnsDnssecResult, DnsJob, DnsJobEvent, DnsJobs, DnsQueryEvent, DnsQueryResult,
-    DnsRefusal, DnsResultCache, DnsTraceEvent, DnsTraceResult, DnssecRequest, PostQueryRequest,
-    TraceRequest,
+    DnsAuthCompareEvent, DnsAuthCompareResult, DnsCachedJob, DnsCachedResult, DnsCheckResult,
+    DnsCompareEvent, DnsCompareResult, DnsDnssecEvent, DnsDnssecResult, DnsJob, DnsJobEvent,
+    DnsJobs, DnsQueryEvent, DnsQueryResult, DnsRefusal, DnsResultCache, DnsTraceEvent,
+    DnsTraceResult, DnssecRequest, PostQueryRequest, TraceRequest,
 };
 use netray_dns::{DnsParseAnswer, DnsParseRequest, DnsRecordTypes, DnsServerCatalogue};
+use netray_engine::{Domain, Facts, Module, RunContext};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 use serde::Deserialize;
 use utoipa_axum::router::OpenApiRouter;
@@ -523,6 +527,129 @@ pub(super) async fn dns_dnssec_get(
     Ok(respond(job, &headers, &state, q).await)
 }
 
+/// The flat cost of one health check against the `[api.dns]` budget.
+const CHECK_COST: u32 = 16;
+const CHECK_DEADLINE: Duration = Duration::from_secs(30);
+
+#[derive(Deserialize, utoipa::ToSchema)]
+pub(super) struct DnsCheckRequest {
+    /// The domain to check
+    domain: String,
+}
+
+fn module_of(state: &ApiState) -> Result<&Arc<dyn Module>, V1Error> {
+    state
+        .dns_module()
+        .ok_or_else(|| V1Error::Unavailable(DNS_OFF.into()))
+}
+
+/// The name a check runs on: one domain, as lens validates it, with no address (a trailing dot
+/// included), no whitespace and nothing but letters, digits, `-`, `_` and `.`.
+fn check_domain(raw: &str) -> Result<String, V1Error> {
+    let name = raw.trim();
+    if name.trim_end_matches('.').parse::<IpAddr>().is_ok() {
+        return Err(V1Error::InvalidInput(format!(
+            "`{name}` is an IP address: the check takes a domain"
+        )));
+    }
+    if let Some(c) = name
+        .chars()
+        .find(|c| !(c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')))
+    {
+        return Err(V1Error::InvalidInput(format!(
+            "`{name}` is not a domain: it holds {c:?}"
+        )));
+    }
+    netray_common::domain::validate(name).map_err(V1Error::InvalidInput)
+}
+
+async fn run_check(
+    state: &ApiState,
+    module: &Arc<dyn Module>,
+    headers: &HeaderMap,
+    peer: Peer,
+    raw: &str,
+    query: String,
+) -> Result<Response, V1Error> {
+    let domain = check_domain(raw)?;
+    let client = limit::client(state, headers, peer_of(peer));
+    state.dns_limiter().prune_if_due();
+    let _guard = state
+        .dns_limiter()
+        .check_query_cost(client, &[], CHECK_COST, CHECK_COST)
+        .map_err(refused)?;
+    let ctx = RunContext {
+        deadline: Instant::now() + CHECK_DEADLINE,
+        domain: Domain::new(domain),
+        options: Default::default(),
+    };
+    let mut result = netray_dns::check_result(module.run(&ctx, &Facts::default()).await);
+    let key = DnsResultCache::fresh_key();
+    result.cache_key = Some(key.clone());
+    state
+        .dns_results()
+        .insert(DnsCachedResult {
+            key,
+            mode: "check".to_owned(),
+            query,
+            result: DnsCachedJob::Check(result.clone()),
+        })
+        .await;
+    Ok(Json(result).into_response())
+}
+
+/// Runs the DNS module's ten health checks on a domain and answers them as one JSON object,
+/// whatever the `Accept` header.
+#[utoipa::path(
+    post,
+    path = "/dns/check",
+    tag = "dns",
+    request_body = DnsCheckRequest,
+    responses(
+        (status = 200, description = "The DNS section of a run: its checks, evidence blocks and the key it replays under", body = DnsCheckResult),
+        (status = 400, description = "Malformed body, or a blank domain or an IP address", body = ErrorResponse),
+        (status = 413, description = "Request body over the 8 KiB limit", body = ErrorResponse),
+        (status = 429, description = "Rate limited, or too many DNS jobs of this caller at once", body = ErrorResponse),
+        (status = 503, description = "The DNS module is off", body = ErrorResponse),
+    )
+)]
+pub(super) async fn dns_check(
+    State(state): State<ApiState>,
+    peer: Peer,
+    headers: HeaderMap,
+    body: Result<Json<DnsCheckRequest>, JsonRejection>,
+) -> Result<Response, V1Error> {
+    let module = module_of(&state)?;
+    let request = json_body(body)?;
+    let query = request.domain.clone();
+    run_check(&state, module, &headers, peer, &request.domain, query).await
+}
+
+/// The check of `POST /dns/check` over the query language in `q`: the domain is its first token.
+#[utoipa::path(
+    get,
+    path = "/dns/check",
+    tag = "dns",
+    params(("q" = String, Query, description = "The query: a domain")),
+    responses(
+        (status = 200, description = "The DNS section of a run: its checks, evidence blocks and the key it replays under", body = DnsCheckResult),
+        (status = 400, description = "Missing or unparsable q, or a blank domain or an IP address", body = ErrorResponse),
+        (status = 429, description = "Rate limited, or too many DNS jobs of this caller at once", body = ErrorResponse),
+        (status = 503, description = "The DNS module is off", body = ErrorResponse),
+    )
+)]
+pub(super) async fn dns_check_get(
+    State(state): State<ApiState>,
+    peer: Peer,
+    headers: HeaderMap,
+    params: Result<Query<QParams>, QueryRejection>,
+) -> Result<Response, V1Error> {
+    let module = module_of(&state)?;
+    let q = q_of(params)?;
+    let first = q.split_whitespace().next().unwrap_or_default().to_owned();
+    run_check(&state, module, &headers, peer, &first, q).await
+}
+
 pub(super) fn dns_doc_routes() -> OpenApiRouter<ApiState> {
     OpenApiRouter::new()
         .routes(routes!(dns_query, dns_query_get))
@@ -530,6 +657,7 @@ pub(super) fn dns_doc_routes() -> OpenApiRouter<ApiState> {
         .routes(routes!(dns_authcompare, dns_authcompare_get))
         .routes(routes!(dns_trace, dns_trace_get))
         .routes(routes!(dns_dnssec, dns_dnssec_get))
+        .routes(routes!(dns_check, dns_check_get))
 }
 
 /// Parses a query string: its tokens with byte ranges, the completions at the cursor, and the

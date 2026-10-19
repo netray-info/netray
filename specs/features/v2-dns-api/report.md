@@ -202,10 +202,37 @@ skipped: covered over the router; live probe in Phase 6.
 
 | id | criterion | status | test file |
 |---|---|---|---|
-| C1 | R15: POST /dns/check {domain} and GET /dns/check?q= run the DNS module alone, live, not stored, answering protocol, outcome, reason, checks, blocks, cache_key as JSON whatever the Accept; IP, empty or invalid name 400; flat 16 on [api.dns]; 30 s deadline; no module 503 | open | |
-| C2 | GIVEN the golden DNS module and POST /dns/check example.com THEN 200, protocol dns, outcome measured, the ten dns checks with status and findings, the evidence blocks, a cache_key replaying with mode check | open | |
-| C3 | GIVEN GET /dns/check?q=example.com THEN the same shape | open | |
-| C4 | GIVEN domain 192.0.2.1 or an empty domain THEN 400 INVALID_INPUT | open | |
-| C5 | GIVEN no DNS module THEN 503 UNAVAILABLE | open | |
-| C6 | GIVEN a caller over the [api.dns] budget THEN 429 | open | |
-| C7 | GIVEN Accept text/event-stream THEN the answer is still JSON | open | |
+| C1 | R15: POST /dns/check {domain} and GET /dns/check?q= run the DNS module alone, live, not stored, answering protocol, outcome, reason, checks, blocks, cache_key as JSON whatever the Accept; IP, empty or invalid name 400; flat 16 on [api.dns]; 30 s deadline; no module 503 | green | crates/web/tests/api_dns_check.rs |
+| C2 | GIVEN the golden DNS module and POST /dns/check example.com THEN 200, protocol dns, outcome measured, the ten dns checks with status and findings, the evidence blocks, a cache_key replaying with mode check | green | crates/web/tests/api_dns_check.rs |
+| C3 | GIVEN GET /dns/check?q=example.com THEN the same shape | green | crates/web/tests/api_dns_check.rs |
+| C4 | GIVEN domain 192.0.2.1 or an empty domain THEN 400 INVALID_INPUT | green | crates/web/tests/api_dns_check.rs |
+| C5 | GIVEN no DNS module THEN 503 UNAVAILABLE | green | crates/web/tests/api_dns_check.rs |
+| C6 | GIVEN a caller over the [api.dns] budget THEN 429 | green | crates/web/tests/api_dns_check.rs |
+| C7 | GIVEN Accept text/event-stream THEN the answer is still JSON | green | crates/web/tests/api_dns_check.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 2 | sonnet (+1 test fix and the review fixes by the implementer) | 62319 | 207 |
+
+`openapi_responses.rs` gained check cases (its app now carries the golden DNS module) under
+`ADLC-Test-Change`. `checks[]` entries always carry `findings` and `evidence` arrays (the run
+stream's `RunCheck` omits empty ones); the values are the same.
+
+### Review
+
+- BLOCKER (fixed): the check took its name from the query parser, which validates nothing, and
+  a POST body's first token only: an over-long name ran and answered 200 `incomplete`, and
+  `example.com other` checked `example.com`. The name is now the whole body domain (or `q`'s first
+  token), refused unless it passes lens's domain rule and holds only letters, digits, `-`, `_`, `.`.
+- BLOCKER (fixed): `192.0.2.1.` slipped past the address guard; the guard strips the dot first.
+  Test: `names_the_check_cannot_run_on_are_400`.
+- DEFERRED (outside this diff): `netray_common::domain::validate("192.0.2.1.")` accepts the
+  address, so `POST /domains/192.0.2.1./runs` starts a lens run on an IP.
+- NIT: the golden module ignores the run context, so no test sees the name the module receives.
+
+### Behavioural verification
+
+skipped: covered over the router with the golden module; live probe in Phase 6.
+

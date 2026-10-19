@@ -3,6 +3,10 @@
 
 use std::time::Duration;
 
+use netray_engine::SectionOutcome;
+use netray_model::evidence::{Block, BlockId};
+use netray_model::run::SectionKind;
+use netray_model::{CheckId, Protocol, Status};
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -23,6 +27,63 @@ pub enum DnsCachedJob {
     AuthCompare(DnsAuthCompareResult),
     Trace(DnsTraceResult),
     Dnssec(DnsDnssecResult),
+    Check(DnsCheckResult),
+}
+
+/// One check of the section; findings and evidence are always present, empty or not.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct DnsCheckEntry {
+    pub id: CheckId,
+    pub status: Status,
+    pub findings: Vec<String>,
+    pub evidence: Vec<BlockId>,
+}
+
+/// The DNS module's section of one run: what `GET /domains/{domain}/runs` streams as `section`,
+/// with the key its result is stored under.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct DnsCheckResult {
+    pub protocol: Protocol,
+    pub outcome: SectionKind,
+    pub reason: Option<String>,
+    pub checks: Vec<DnsCheckEntry>,
+    pub blocks: Vec<Block>,
+    /// The 12-character hex key `GET /dns/results/{key}` replays this result under.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_key: Option<String>,
+}
+
+/// The section a module run ended in, as an answer.
+pub fn check_result(outcome: SectionOutcome) -> DnsCheckResult {
+    let (outcome, reason, checks, blocks) = match outcome {
+        SectionOutcome::Measured { checks, evidence } => {
+            let checks = checks
+                .into_iter()
+                .map(|c| DnsCheckEntry {
+                    id: c.id,
+                    status: c.status,
+                    findings: c.findings,
+                    evidence: c.evidence,
+                })
+                .collect();
+            (SectionKind::Measured, None, checks, evidence)
+        }
+        SectionOutcome::NotApplicable { reason } => {
+            (SectionKind::NotApplicable, Some(reason), vec![], vec![])
+        }
+        SectionOutcome::Incomplete { reason } => {
+            (SectionKind::Incomplete, Some(reason), vec![], vec![])
+        }
+        SectionOutcome::TimedOut => (SectionKind::TimedOut, None, vec![], vec![]),
+    };
+    DnsCheckResult {
+        protocol: Protocol::Dns,
+        outcome,
+        reason,
+        checks,
+        blocks,
+        cache_key: None,
+    }
 }
 
 macro_rules! cached_from {
@@ -48,7 +109,7 @@ cached_from!(
 pub struct DnsCachedResult {
     /// The 12-character hex key from the job's `done`.
     pub key: String,
-    /// The job: `query`, `compare`, `authcompare`, `trace` or `dnssec`.
+    /// The job: `query`, `compare`, `authcompare`, `trace`, `dnssec` or `check`.
     pub mode: String,
     /// The `q` of the GET, or the `domain` of the POST body.
     pub query: String,

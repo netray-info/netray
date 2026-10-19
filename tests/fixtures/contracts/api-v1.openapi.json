@@ -1347,6 +1347,9 @@
           },
           {
             "$ref": "#/components/schemas/DnsDnssecResult"
+          },
+          {
+            "$ref": "#/components/schemas/DnsCheckResult"
           }
         ]
       },
@@ -1358,7 +1361,7 @@
             "type": "string"
           },
           "mode": {
-            "description": "The job: `query`, `compare`, `authcompare`, `trace` or `dnssec`.",
+            "description": "The job: `query`, `compare`, `authcompare`, `trace`, `dnssec` or `check`.",
             "type": "string"
           },
           "query": {
@@ -1391,6 +1394,91 @@
         "required": [
           "request_id",
           "level"
+        ],
+        "type": "object"
+      },
+      "DnsCheckEntry": {
+        "description": "One check of the section; findings and evidence are always present, empty or not.",
+        "properties": {
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/BlockId"
+            },
+            "type": "array"
+          },
+          "findings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "$ref": "#/components/schemas/CheckId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/Status"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "findings",
+          "evidence"
+        ],
+        "type": "object"
+      },
+      "DnsCheckRequest": {
+        "properties": {
+          "domain": {
+            "description": "The domain to check",
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain"
+        ],
+        "type": "object"
+      },
+      "DnsCheckResult": {
+        "description": "The DNS module's section of one run: what `GET /domains/{domain}/runs` streams as `section`,\nwith the key its result is stored under.",
+        "properties": {
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/Block"
+            },
+            "type": "array"
+          },
+          "cache_key": {
+            "description": "The 12-character hex key `GET /dns/results/{key}` replays this result under.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/DnsCheckEntry"
+            },
+            "type": "array"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/SectionKind"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/Protocol"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "protocol",
+          "outcome",
+          "checks",
+          "blocks"
         ],
         "type": "object"
       },
@@ -6627,6 +6715,137 @@
           }
         },
         "summary": "The recursive answer against the authoritative one, queried from the domain's name servers.",
+        "tags": [
+          "dns"
+        ]
+      }
+    },
+    "/api/v1/dns/check": {
+      "get": {
+        "operationId": "dns_check_get",
+        "parameters": [
+          {
+            "description": "The query: a domain",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsCheckResult"
+                }
+              }
+            },
+            "description": "The DNS section of a run: its checks, evidence blocks and the key it replays under"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or unparsable q, or a blank domain or an IP address"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited, or too many DNS jobs of this caller at once"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The DNS module is off"
+          }
+        },
+        "summary": "The check of `POST /dns/check` over the query language in `q`: the domain is its first token.",
+        "tags": [
+          "dns"
+        ]
+      },
+      "post": {
+        "operationId": "dns_check",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DnsCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsCheckResult"
+                }
+              }
+            },
+            "description": "The DNS section of a run: its checks, evidence blocks and the key it replays under"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed body, or a blank domain or an IP address"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited, or too many DNS jobs of this caller at once"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The DNS module is off"
+          }
+        },
+        "summary": "Runs the DNS module's ten health checks on a domain and answers them as one JSON object,\nwhatever the `Accept` header.",
         "tags": [
           "dns"
         ]

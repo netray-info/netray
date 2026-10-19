@@ -55,7 +55,9 @@ pub use reference::{
     DnsParseAnswer, DnsParseRequest, DnsParsedQuery, DnsRecordTypes, DnsServerCatalogue,
     DnsServerGroup, parse_answer, record_types, server_catalogue,
 };
-pub use results::{DnsCachedJob, DnsCachedResult, DnsResultCache, is_key};
+pub use results::{
+    DnsCachedJob, DnsCachedResult, DnsCheckResult, DnsResultCache, check_result, is_key,
+};
 pub use summary::{
     Agreement, AnswerOutcome, DnsJobSummary, DnsRecordDetail, DnsServerAnswer, DnsServerSummary,
     DnsTypeComparison,

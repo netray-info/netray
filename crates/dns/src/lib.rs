@@ -35,7 +35,9 @@ pub use jobs::{
     DnsJobEvent, DnsJobs, DnsQueryDone, DnsQueryEvent, DnsQueryResult, DnsRefusal, DnsTraceDone,
     DnsTraceEvent, DnsTraceResult,
 };
-pub use jobs::{DnsCachedJob, DnsCachedResult, DnsResultCache, is_key};
+pub use jobs::{
+    DnsCachedJob, DnsCachedResult, DnsCheckResult, DnsResultCache, check_result, is_key,
+};
 pub use jobs::{
     DnsParseAnswer, DnsParseRequest, DnsParsedQuery, DnsRecordTypes, DnsServerCatalogue,
     DnsServerGroup, parse_answer, record_types, server_catalogue,
