@@ -89,6 +89,19 @@ impl Legacy<'_> {
         self.moved(target)
     }
 
+    /// The inspector hosts' pages are the apex's, links included: a GET or HEAD on any path but
+    /// `/` and `/static/*` moves to the same path and query on the apex. Other methods pass.
+    pub fn to_apex(&self) -> Option<Response> {
+        let path = self.path();
+        if !matches!(*self.method, Method::GET | Method::HEAD)
+            || path == "/"
+            || path.starts_with("/static/")
+        {
+            return None;
+        }
+        Some(self.lens_host())
+    }
+
     /// 13f and 13h on `dns.`, `tls.`, `http.`, `email.` and `ip.`.
     pub fn subdomain_common(&self) -> Option<Response> {
         let path = self.path();

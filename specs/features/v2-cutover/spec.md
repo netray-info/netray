@@ -560,6 +560,7 @@ GIVEN `architecture-rules.md` WHEN read THEN the env prefix rule names `NETRAY_`
 - CI's check job gets `timeout-minutes: 60`, over splitting the job: one line, no change to what runs; verified by the branch's first CI run (implementer under the operator's autonomy mandate, 2026-10-19).
 - Under `serve` the apex answers unmatched paths with netray-web's 404 page and `/robots.txt` with `pages::robots` (with the `Sitemap:` line), over lens's SPA fallback and its bare robots file: `v2-pages` exported both for this feature's apex router, and the SPA is V1 (implementer under the operator's autonomy mandate, 2026-10-19).
 - The ip host's curl root answers the caller's socket address as text without `[modules.ip]`, over requiring the module: the address needs no GeoIP data, as V1's root did (implementer under the operator's autonomy mandate, 2026-10-19).
+- A GET or HEAD on an inspector host (`dns.`, `tls.`, `http.`, `ip.`) for any path other than `/` and `/static/*`, after rows 13f, 13h and 14, answers 301 to the same path and query on the apex, over 404 or absolute links in the page: requirement 2 keeps the host's page byte-equal to the apex's `/inspect/<tool>`, so its back-link, navigation and no-JS form action are host-relative and resolve only on the apex (Phase 6 review BLOCKER; implementer under the operator's autonomy mandate, 2026-10-19).
 
 ## Open decisions
 

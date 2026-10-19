@@ -141,7 +141,7 @@ pub fn load_scoring_profile(path: Option<&str>) -> Result<Profile, Box<dyn std::
                 .find(|id| catalogue.get(id).is_none())
             {
                 return Err(format!(
-                    "[scoring] profile_path {p}: check {unknown} is not a catalogue ID"
+                    "[engine] profile_path {p}: check {unknown} is not a catalogue ID"
                 )
                 .into());
             }
@@ -205,7 +205,7 @@ A = 90
         let err = load_scoring_profile(Some(&file.path().to_string_lossy()))
             .expect_err("unknown ID must be refused");
         let msg = err.to_string();
-        assert!(msg.contains("[scoring] profile_path"), "{msg}");
+        assert!(msg.contains("[engine] profile_path"), "{msg}");
         assert!(msg.contains("dns.no_such_check"), "{msg}");
     }
 }

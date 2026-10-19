@@ -51,9 +51,10 @@ pub fn build(
     let mut state = ApexState::new(config, registry, plan, resolve_budget, profile);
     state.history_store = store;
     state.api_parts = parts;
-    let inspect = inspect_deps(&state);
+    let api = api_state(&state);
+    let inspect = inspect_deps(&state, api.clone());
     Apex {
-        apex_router: routes_with(state.clone(), inspect.clone()),
+        apex_router: routes_with(state.clone(), inspect.clone(), api),
         dns: crate::pages::inspect_host_router(Tool::Dns, inspect.clone()),
         tls: crate::pages::inspect_host_router(Tool::Tls, inspect.clone()),
         http: crate::pages::inspect_host_router(Tool::Http, inspect.clone()),
@@ -77,11 +78,12 @@ pub fn api_state(state: &ApexState) -> ApiState {
     .with_profile(state.scoring_profile.clone())
 }
 
-/// The inspector pages' dependencies over `state`, with the trusted-proxy extractor; the apex
-/// and the inspector hosts share them, slots included.
-pub fn inspect_deps(state: &ApexState) -> InspectDeps {
+/// The inspector pages' dependencies over `state` and `api`, with the trusted-proxy extractor;
+/// the apex and the inspector hosts share them, slots included. Pass the `ApiState` `/api/v1`
+/// is built over: its clones share the per-tool limiters (v2-inspectors requirement 14).
+pub fn inspect_deps(state: &ApexState, api: ApiState) -> InspectDeps {
     InspectDeps::new(
-        Arc::new(InspectJobs::new(api_state(state))),
+        Arc::new(InspectJobs::new(api)),
         state.config.inspect.clone(),
     )
     .with_ip_extractor(state.ip_extractor.clone())
@@ -90,8 +92,9 @@ pub fn inspect_deps(state: &ApexState) -> InspectDeps {
 /// The apex's routes over `state` with the `http_metrics` layer, which needs the `MatchedPath`
 /// only these routes set, and without the outer layer stack ([`super::layers::layers`]).
 pub fn routes(state: ApexState) -> Router {
-    let inspect = inspect_deps(&state);
-    routes_with(state, inspect)
+    let api = api_state(&state);
+    let inspect = inspect_deps(&state, api.clone());
+    routes_with(state, inspect, api)
 }
 
 /// [`routes`] inside the outer layer stack: the whole apex as one service.
@@ -100,7 +103,7 @@ pub fn app(state: ApexState) -> Router {
     super::layers::layers(routes(state), api_enabled)
 }
 
-fn routes_with(state: ApexState, inspect: InspectDeps) -> Router {
+fn routes_with(state: ApexState, inspect: InspectDeps, api: ApiState) -> Router {
     let config = state.config.clone();
 
     let (entry_routes, result_routes) = match &state.history_store {
@@ -137,7 +140,7 @@ fn routes_with(state: ApexState, inspect: InspectDeps) -> Router {
 
     let api_routes = if config.api.enabled {
         Router::new()
-            .nest("/api/v1", crate::api::router(api_state(&state)))
+            .nest("/api/v1", crate::api::router(api))
             .route("/api/v1/", any(api_v1_not_found))
     } else {
         Router::new()

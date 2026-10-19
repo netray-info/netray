@@ -1,6 +1,7 @@
 //! Host routing (spec v2-cutover, requirement 2; SDD §5.1 and §7.3): one router that picks what
 //! answers by the request's Host. The probes answer first on any Host or none; the apex serves
-//! the pages, `mta-sts.<apex>` only the policy, the inspector hosts their own routers, and every
+//! the pages, `mta-sts.<apex>` only the policy, the inspector hosts their own routers (a GET or
+//! HEAD beyond `/` and `/static/*` moves to the apex, where the pages' links point), and every
 //! other name a 404.
 
 pub mod apex;
@@ -171,19 +172,23 @@ async fn dispatch(State(hosts): State<Arc<Hosts>>, req: Request) -> Response {
     match label {
         Some("lens") => legacy.lens_host(),
         Some("email") => legacy.email_host(),
-        Some("dns") => match legacy.subdomain_common() {
+        Some("dns") => match legacy.subdomain_common().or_else(|| legacy.to_apex()) {
             Some(response) => response,
             None => inspector(&hosts.dns, req).await,
         },
-        Some("tls") => match legacy.subdomain_common() {
+        Some("tls") => match legacy.subdomain_common().or_else(|| legacy.to_apex()) {
             Some(response) => response,
             None => inspector(&hosts.tls, req).await,
         },
-        Some("http") => match legacy.subdomain_common() {
+        Some("http") => match legacy.subdomain_common().or_else(|| legacy.to_apex()) {
             Some(response) => response,
             None => inspector(&hosts.http, req).await,
         },
-        Some("ip") => match legacy.ip_successor().or_else(|| legacy.subdomain_common()) {
+        Some("ip") => match legacy
+            .ip_successor()
+            .or_else(|| legacy.subdomain_common())
+            .or_else(|| legacy.to_apex())
+        {
             Some(response) => response,
             None => inspector(&hosts.ip, req).await,
         },
