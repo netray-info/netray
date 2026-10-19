@@ -114,7 +114,11 @@ fn run_line_parts(html: &str) -> Vec<String> {
 async fn get(app: &Router) -> String {
     let resp = app
         .clone()
-        .oneshot(Request::get(format!("/{DOMAIN}")).body(Body::empty()).unwrap())
+        .oneshot(
+            Request::get(format!("/{DOMAIN}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     let bytes = resp.into_body().collect().await.unwrap().to_bytes();
@@ -163,7 +167,11 @@ async fn cached_is_a_run_title_part_only_inside_the_cache_window() {
         let body = get(&app).await;
         assert!(body.contains(&format!(r#"data-state="{state}""#)), "{body}");
         let parts = run_line_parts(&body);
-        assert_eq!(parts.iter().any(|p| p == "cached"), cached, "{ages:?}: {parts:?}");
+        assert_eq!(
+            parts.iter().any(|p| p == "cached"),
+            cached,
+            "{ages:?}: {parts:?}"
+        );
         if cached && ages.len() > 1 {
             assert_eq!(parts.last().unwrap(), "cached", "{parts:?}");
         }

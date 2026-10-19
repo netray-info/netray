@@ -12,10 +12,6 @@
 <meta property="og:url" content="/r/{{ view.id }}">
 {% endblock %}
 
-{% block styles %}<style>{{ styles|safe }}</style>{% endblock %}
-
-{% block header %}{% endblock %}
-
 {% block main %}
 <h1>{{ view.domain }}</h1>
 {% call grade::grade(view.grade) %}{% endcall %}
@@ -24,5 +20,3 @@
 {% for row in view.issues %}{% call check_row::check_row(row) %}{% endcall %}{% endfor %}
 <p>{{ view.counts.pass }} pass · {{ view.counts.warn }} warn · {{ view.counts.fail }} fail · {{ view.counts.not_applicable }} not applicable · {{ view.counts.not_tested }} not tested · {{ view.counts.unmeasured }} not measured</p>
 {% endblock %}
-
-{% block scripts %}{% endblock %}

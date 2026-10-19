@@ -258,6 +258,7 @@ fn entry_with(diff: Option<Diff>, predecessor_id: Option<String>) -> Entry {
         grade: r.grade,
         fingerprint: "fp".into(),
         engine_version: r.engine_version.clone(),
+        duration_ms: None,
         run: r,
         diff,
     }

@@ -125,7 +125,7 @@ fn stored_answer(domain: &str, entries: &[Entry], sse: bool) -> Response {
     if !sse {
         return see_other(domain);
     }
-    match stored_parts(domain, entries, false, None, None) {
+    match stored_parts(domain, entries, false, None, true, None, true) {
         Some(parts) => {
             let mut events: Vec<Event> = parts
                 .fragments()
@@ -309,7 +309,7 @@ impl Live {
             Grouping::Owner,
             &BTreeMap::new(),
         );
-        self.push("issues", issues_part(&groups));
+        self.push("issues", issues_part(&groups, views::open_count(&run)));
         let inner = evidence::render_section(&evidence::section(
             &run,
             protocol,
@@ -341,10 +341,20 @@ impl Live {
             .inspect_err(|e| tracing::warn!(domain = %domain, error = %e, "history lookup failed"))
             .unwrap_or_default();
         let entry = recorded_entry(domain, done, recorded)?;
-        if entries.first().map(|e| &e.id) != Some(&entry.id) {
+        let stand_in = entries.first().map(|e| &e.id) != Some(&entry.id);
+        if stand_in {
             entries.insert(0, entry);
         }
-        stored_parts(domain, &entries, false, Some(recorded), None)
+        let ordinal_known = !stand_in || matches!(recorded, Recorded::First { .. });
+        stored_parts(
+            domain,
+            &entries,
+            false,
+            Some(recorded),
+            false,
+            None,
+            ordinal_known,
+        )
     }
 
     async fn finish(&mut self, recorded: Option<Recorded>) {

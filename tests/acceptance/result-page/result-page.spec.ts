@@ -29,9 +29,9 @@ async function visit(page: Page, domain: string): Promise<void> {
 }
 
 async function entryId(page: Page): Promise<string> {
-  const text = await page.locator('#run-line').innerText();
-  const m = /entry ([A-Za-z0-9_-]+)/.exec(text);
-  expect(m, `run line "${text}" names an entry`).not.toBeNull();
+  const href = (await page.locator('#share').getAttribute('href')) ?? '';
+  const m = /^\/r\/([A-Za-z0-9_-]+)$/.exec(href);
+  expect(m, `share link "${href}" names an entry`).not.toBeNull();
   return m![1];
 }
 

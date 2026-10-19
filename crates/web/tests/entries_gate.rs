@@ -7,8 +7,9 @@ use netray_web::gate::check;
 
 const OWNERSHIP_RULE: u8 = 2;
 const PAGES: [&str; 3] = ["entry", "gone", "privacy"];
-const SHEETS: [&str; 11] = [
+const SHEETS: [&str; 12] = [
     "base",
+    "button",
     "grade",
     "run_line",
     "progress_ray",

@@ -22,8 +22,7 @@ use serde_json::Value;
 use tower::ServiceExt;
 
 const DOMAIN: &str = "shop.example.com";
-const BUTTON_VISIT: &str =
-    r#"<button id="recheck-button" type="submit" name="trigger" value="visit""#;
+const BUTTON_VISIT: &str = r#"<button id="recheck-button" class="button button--primary" type="submit" name="trigger" value="visit""#;
 
 fn run(status: Status) -> Run {
     Run {

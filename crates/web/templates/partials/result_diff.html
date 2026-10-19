@@ -1,4 +1,5 @@
 {% import "components/diff_block.html" as diff_block %}
 <section id="diff">
-{% if let Some(d) = diff %}{% call diff_block::diff_block(d) %}{% endcall %}{% endif %}
+{% if let Some(h) = heading %}<h2>{{ h }}</h2>
+{% endif %}{% if let Some(d) = diff %}{% call diff_block::diff_block(d) %}{% endcall %}{% endif %}
 </section>

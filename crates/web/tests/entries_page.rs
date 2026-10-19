@@ -129,7 +129,10 @@ fn domain_and_check_title_are_escaped() {
         None,
     ))
     .expect("render");
-    assert!(!html.contains("<script"), "page holds a script element");
+    assert!(
+        !html.contains("<script>alert"),
+        "page holds an injected script element"
+    );
     assert!(
         html.contains("&lt;script&gt;alert(1)") || html.contains("&#60;script&#62;alert(1)"),
         "domain not escaped"
@@ -162,6 +165,7 @@ fn entry(grade: Grade) -> Entry {
         },
         diff: None::<Diff>,
         engine_version: "0.26.0".into(),
+        duration_ms: None,
     }
 }
 

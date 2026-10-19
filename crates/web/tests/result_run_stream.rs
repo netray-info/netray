@@ -283,6 +283,7 @@ fn expected_ids(order: &[usize]) -> Vec<String> {
         "run-line",
         "progress",
         "result-share",
+        "hard-fail-slot",
         "spectrum",
         "diff",
         "issues",
@@ -407,6 +408,7 @@ async fn c14_a_fresh_head_answers_from_the_store_on_visit_and_runs_on_recheck() 
             "run-line",
             "progress",
             "result-share",
+            "hard-fail-slot",
             "spectrum",
             "diff",
             "issues",
@@ -420,7 +422,8 @@ async fn c14_a_fresh_head_answers_from_the_store_on_visit_and_runs_on_recheck() 
         ]
     );
     let run_line = &frags.iter().find(|(i, _)| i == "run-line").unwrap().1;
-    assert!(run_line.contains(&format!("entry {id}")), "{run_line}");
+    assert!(!run_line.contains(&id), "{run_line}");
+    assert!(run_line.contains("cached"), "{run_line}");
     assert_eq!(f.store.entries(DOMAIN).await.unwrap().len(), 1);
 
     let recheck = post(&f.app, "recheck", &[]).await;

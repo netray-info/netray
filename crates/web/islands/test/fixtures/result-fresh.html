@@ -1,24 +1,29 @@
 
 <div id="result" class="result" data-state="fresh" data-domain="shop.example.com" data-island="recent">
-<header id="result-header">
+<header id="result-header" class="result-hero">
 <div id="result-grade" data-grade="A" data-date="2025-10-09">
 <div class="grade" data-tone="pass">
   <span class="grade__letter">A</span>
   
 </div>
 </div>
-<h1>shop.example.com</h1>
+<div class="result-hero__title">
 <div id="run-line">
-<p class="run-line">
-  <span class="run-line__part">run of 2025-10-09 08:53 UTC</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">entry ENTRY0</span>
+<p class="run-line run-line--title">
+  <span class="run-line__part">Run 1</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">2025-10-09 08:53 UTC</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">5 checks</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">profile 3</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">cached</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">first run</span>
 </p>
 </div>
+<h1>shop.example.com</h1>
 <div id="progress"></div>
+</div>
+<div class="result-hero__actions">
 <form id="recheck" class="recheck" method="post" action="/shop.example.com/run" data-island="stream" data-stream-url="/shop.example.com/run">
-<button id="recheck-button" type="submit" name="trigger" value="recheck">re-check now</button>
+<button id="recheck-button" class="button button--primary" type="submit" name="trigger" value="recheck">Re-check now</button>
 </form>
-<p id="result-share"><a id="share" href="/r/ENTRY0">share</a></p>
+<p id="result-share"><a id="share" class="button button--secondary" href="/r/ENTRY0">Share</a></p>
+</div>
 </header>
+<div id="hard-fail-slot"></div>
 <figure id="spectrum" data-island="spectrum">
 
 <div class="spectrum">
@@ -576,6 +581,7 @@
 </ul>
 </figure>
 <section id="diff">
+<h2>First run recorded.</h2>
 
 <section class="diff-block">
   <h3 class="diff-block__title">Changes since the previous entry</h3>
@@ -602,6 +608,7 @@
 
 </section>
 <section id="evidence">
+<h2>Evidence</h2>
 <div id="evidence-dns">
 <a href="/r/ENTRY0/dns">dns</a> <span>measured</span>
 </div>

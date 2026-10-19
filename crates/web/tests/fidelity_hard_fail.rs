@@ -103,7 +103,11 @@ async fn render(run: &Run) -> String {
     });
     let app: Router = router(ResultState::new(store, runs, TTL));
     let resp = app
-        .oneshot(Request::get(format!("/{DOMAIN}")).body(Body::empty()).unwrap())
+        .oneshot(
+            Request::get(format!("/{DOMAIN}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);

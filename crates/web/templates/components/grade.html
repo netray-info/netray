@@ -1,6 +1,6 @@
 {% macro grade(view) %}
 <div class="grade" data-tone="{{ view.tone.as_str() }}">
   <span class="grade__letter">{{ view.letter }}</span>
-  {% if let Some(score) = view.score %}<span class="grade__score">{{ score }} / 100</span>{% endif %}
+  {% if let Some(score) = view.score %}<span class="grade__score">score <strong>{{ score }}</strong> / 100</span><span class="grade__descriptor">{{ view.descriptor() }}</span>{% endif %}
 </div>
 {% endmacro %}

@@ -143,7 +143,11 @@ async fn store_with(
 async fn page(store: Arc<HistoryStore>) -> (StatusCode, String) {
     let app: Router = router(ResultState::new(store, Arc::new(NoRuns), 300));
     let resp = app
-        .oneshot(Request::get(format!("/{DOMAIN}")).body(Body::empty()).unwrap())
+        .oneshot(
+            Request::get(format!("/{DOMAIN}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     let status = resp.status();
@@ -235,7 +239,10 @@ async fn c15_an_incomplete_live_run_shows_no_score() {
     let dir = tempfile::tempdir().unwrap();
     let (store, _) = store_with(&dir, Some(&run(grade, true))).await;
     let (_, stored_page) = page(store).await;
-    assert!(stored_page.contains(r#"class="grade__score""#), "{stored_page}");
+    assert!(
+        stored_page.contains(r#"class="grade__score""#),
+        "{stored_page}"
+    );
 
     let dir = tempfile::tempdir().unwrap();
     let (store, _) = store_with(&dir, None).await;
@@ -262,7 +269,11 @@ async fn c15_an_incomplete_live_run_shows_no_score() {
 async fn c16_a_grade_the_engine_disputes_hides_the_score_and_warns_with_the_entry_id() {
     let profile = Profiles::get(3).unwrap();
     let computed = score_run(&run(Grade::A, true), profile).grade;
-    let stored = if computed == Grade::F { Grade::A } else { Grade::F };
+    let stored = if computed == Grade::F {
+        Grade::A
+    } else {
+        Grade::F
+    };
     let dir = tempfile::tempdir().unwrap();
     let (store, id) = store_with(&dir, Some(&run(stored, true))).await;
     let id = id.unwrap();

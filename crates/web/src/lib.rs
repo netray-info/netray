@@ -13,6 +13,7 @@ pub mod entries;
 pub mod evidence;
 pub mod explore;
 pub mod gate;
+pub mod grade_legend;
 pub mod pages;
 pub mod plate;
 pub mod spectrum;

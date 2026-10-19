@@ -76,7 +76,11 @@ async fn page() -> String {
         .unwrap();
     let app = router(ResultState::new(store, Arc::new(StubRuns), 300));
     let resp = app
-        .oneshot(Request::get(format!("/{DOMAIN}")).body(Body::empty()).unwrap())
+        .oneshot(
+            Request::get(format!("/{DOMAIN}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
@@ -126,7 +130,9 @@ fn decl(decls: &str, prop: &str) -> String {
         let def = format!("{name}:");
         let tokens = netray_web::tokens::CSS;
         let at = pos(tokens, &def) + def.len();
-        return tokens[at..tokens[at..].find(';').unwrap() + at].trim().to_string();
+        return tokens[at..tokens[at..].find(';').unwrap() + at]
+            .trim()
+            .to_string();
     }
     start
 }
@@ -151,8 +157,17 @@ async fn r3_header_is_grade_then_title_column_then_actions() {
     let actions_box = &head[actions..];
     let form = pos(actions_box, r#"<form id="recheck""#);
     assert!(form < pos(actions_box, r#"id="recheck-button""#));
-    assert!(actions_box.contains(r#"id="result-share""#), "{actions_box}");
-    for id in ["result-grade", "run-line", "progress", "result-share", "recheck-button"] {
+    assert!(
+        actions_box.contains(r#"id="result-share""#),
+        "{actions_box}"
+    );
+    for id in [
+        "result-grade",
+        "run-line",
+        "progress",
+        "result-share",
+        "recheck-button",
+    ] {
         assert!(head.contains(&format!(r#"id="{id}""#)), "{id} missing");
     }
 }

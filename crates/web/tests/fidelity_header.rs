@@ -25,8 +25,13 @@ async fn page(uri: &str) -> String {
 }
 
 fn between<'a>(html: &'a str, open: &str, close: &str) -> &'a str {
-    let start = html.find(open).unwrap_or_else(|| panic!("missing `{open}`"));
-    let end = start + html[start..].find(close).unwrap_or_else(|| panic!("missing `{close}`"));
+    let start = html
+        .find(open)
+        .unwrap_or_else(|| panic!("missing `{open}`"));
+    let end = start
+        + html[start..]
+            .find(close)
+            .unwrap_or_else(|| panic!("missing `{close}`"));
     &html[start..end + close.len()]
 }
 
@@ -63,24 +68,34 @@ async fn header_holds_wordmark_tagline_and_nav_ending_in_theme_button() {
     assert!(!header.contains("/compare"), "Compare is not in the header");
 
     let footer = between(&html, "<footer", "</footer>");
-    assert!(footer.contains(r#"href="/compare""#), "footer nav holds Compare");
+    assert!(
+        footer.contains(r#"href="/compare""#),
+        "footer nav holds Compare"
+    );
 
     // C27: no absolute URL anywhere in the header.
     for bad in [r#"href="http"#, r#"href="//"#] {
-        assert!(!header.contains(bad), "absolute URL `{bad}` in header: {header}");
+        assert!(
+            !header.contains(bad),
+            "absolute URL `{bad}` in header: {header}"
+        );
     }
 }
 
 #[test]
 fn theme_toggle_is_unboxed_in_pages_css() {
-    let css = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/static/pages.css")).unwrap();
+    let css =
+        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/static/pages.css")).unwrap();
     let rule = between(&css, ".theme-toggle {", "}");
     let has = |p: &str| rule.lines().any(|l| l.trim().starts_with(p));
     assert!(
         rule.contains("border: 0") || rule.contains("border: none"),
         "no border: {rule}"
     );
-    assert!(has("background: transparent"), "transparent background: {rule}");
+    assert!(
+        has("background: transparent"),
+        "transparent background: {rule}"
+    );
     assert!(has("padding: 0;"), "padding 0: {rule}");
     assert!(has("font: inherit"), "font inherit: {rule}");
 }

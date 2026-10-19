@@ -131,6 +131,22 @@ pub struct GradeView {
     pub tone: Tone,
 }
 
+impl GradeView {
+    /// The grade legend's "descriptor, meaning" of the letter.
+    pub fn descriptor(&self) -> &'static str {
+        use netray_model::Grade;
+        crate::grade_legend::descriptor(match self.letter.as_str() {
+            "A+" => Grade::APlus,
+            "A" => Grade::A,
+            "B" => Grade::B,
+            "C" => Grade::C,
+            "D" => Grade::D,
+            "F" => Grade::F,
+            _ => Grade::Incomplete,
+        })
+    }
+}
+
 /// The run line: parts joined by a separator.
 #[derive(Debug, Clone)]
 pub struct RunLineView {

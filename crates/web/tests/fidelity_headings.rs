@@ -141,9 +141,17 @@ async fn c12_c25_result_page_outline_has_one_h1_an_h2_per_section_and_skips_no_l
 
     assert_eq!(status, StatusCode::OK, "{body}");
     let hs = headings(&body);
-    let h1: Vec<&str> = hs.iter().filter(|h| h.0 == 1).map(|h| h.1.as_str()).collect();
+    let h1: Vec<&str> = hs
+        .iter()
+        .filter(|h| h.0 == 1)
+        .map(|h| h.1.as_str())
+        .collect();
     assert_eq!(h1, vec!["shop.example.com"], "{hs:?}");
-    let h2: Vec<&str> = hs.iter().filter(|h| h.0 == 2).map(|h| h.1.as_str()).collect();
+    let h2: Vec<&str> = hs
+        .iter()
+        .filter(|h| h.0 == 2)
+        .map(|h| h.1.as_str())
+        .collect();
     assert!(h2.contains(&"Since run 1"), "{h2:?} in {hs:?}");
     assert!(h2.contains(&"2 lines need attention"), "{h2:?} in {hs:?}");
     assert!(h2.contains(&"Evidence"), "{h2:?} in {hs:?}");
@@ -158,7 +166,11 @@ async fn c12_c25_first_entry_outline_has_the_domain_h1_and_skips_no_level() {
 
     assert_eq!(status, StatusCode::OK, "{body}");
     let hs = headings(&body);
-    let h1: Vec<&str> = hs.iter().filter(|h| h.0 == 1).map(|h| h.1.as_str()).collect();
+    let h1: Vec<&str> = hs
+        .iter()
+        .filter(|h| h.0 == 1)
+        .map(|h| h.1.as_str())
+        .collect();
     assert_eq!(h1, vec!["shop.example.com"], "{hs:?}");
     assert_no_skip(&hs);
 }

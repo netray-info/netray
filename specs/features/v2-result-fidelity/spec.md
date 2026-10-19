@@ -93,7 +93,8 @@ value" means the value the gate measures on the named boards; the inventory row 
    1120 px including 32 px side padding), for header, main and footer alike. (9.2; boards 13–16,
    25/26)
 2. **Header.** The header holds, in one row, the wordmark, the tagline "your domain, in full
-   spectrum" (13 px, muted, from the one tagline partial) beside it, and right-aligned the nav
+   spectrum" (13 px, muted, from its own partial; the footer keeps the site tagline of
+   `partials/tagline.html`) beside it, and right-aligned the nav
    Inspectors, Guides, API, Status (13 px, muted) followed by the unboxed text button "Theme". The
    Inspectors link goes to `/inspect/dns`, API to `/api/v1/docs`. Compare leaves the header and is
    linked from the footer beside Privacy and Status until the site-navigation feature redoes the
@@ -107,7 +108,7 @@ value" means the value the gate measures on the named boards; the inventory row 
    boards 13–16)
 5. **Score line.** Under the letter, mono 13 px: "score <n> / 100", `<n>` the run's overall
    percentage from `score_run` under the entry's profile version, rounded half up, with `<n>` in
-   ink at weight 600. Under it, mono 11 px muted, the grade's descriptor and meaning as V1's grade
+   ink at weight 700 (the board's `<strong>`). Under it, mono 11 px muted, the grade's descriptor and meaning as V1's grade
    legend words them (`crates/lens/frontend/src/lib/gradeLegend.ts`: A+ "excellent, ahead of most
    domains" through F "critical, fix today"), held once in `netray-web` so the grade legend of the
    site-navigation feature reads the same texts. The line
@@ -115,8 +116,8 @@ value" means the value the gate measures on the named boards; the inventory row 
    page never shows a number that contradicts the letter; such a mismatch logs a warning naming the
    entry). (9.6, 1.4; boards 13–16, 27/28)
 6. **Run title.** Above the h1, mono 11 px uppercase with letter-spacing .12em: "RUN <k> ·
-   <YYYY-MM-DD HH:MM> UTC · <c> CHECKS · PROFILE <v>", where `<k>` is the entry's ordinal in the
-   domain's history (first entry 1), `<c>` the run's check count and `<v>` its profile version;
+   <YYYY-MM-DD HH:MM> UTC · <c> CHECKS · PROFILE <v>", where `<k>` is the entry's ordinal among the
+   domain's stored entries (oldest stored entry 1; the retention sweep renumbers), `<c>` the run's check count and `<v>` its profile version;
    then "· <s> S" with the creating run's duration in seconds to one decimal when it is known
    (requirement 9), then "· CACHED" when requirement 10 holds, then "· FIRST RUN" on a domain's
    first entry. The entry id stays reachable through Share (requirement 33), not in the title. A
@@ -125,8 +126,9 @@ value" means the value the gate measures on the named boards; the inventory row 
 7. **h1.** The domain is 40 px, weight 650. (9.10; boards 13–16, 27/28)
 8. **Buttons.** "Re-check now" is the primary button: 44 px tall, padding 0 18 px, ink background,
    `bg` text, 14 px weight 600, radius 2 px, in both themes. "Share" is the secondary button beside
-   it: 44 px tall, 1 px `line` border, radius 2 px, transparent background, ink text. Both are
-   `<button>` elements styled by one component stylesheet; no user-agent button style remains.
+   it: 44 px tall, 1 px `line` border, radius 2 px, transparent background, ink text. Re-check is a
+   `<button>`; Share is the link to `/r/<id>` that requirement 41 upgrades to the dialog trigger;
+   both are styled by one stylesheet and no user-agent button style remains.
    (9.11, 9.12, 9.13; boards 13–16)
 9. **Run duration.** The history store records each new entry's run duration in milliseconds (the
    engine run from start to grade) in a new nullable column; an `Identical` run leaves it unchanged;
@@ -502,6 +504,14 @@ GIVEN the side-by-side images WHEN a reader compares them THEN every finding is 
   agent, 2026-10-19).
 - The menu and the clean bar are built on `<details>`, so the phone nav and the passed list work
   without JavaScript, as S7 asks of server-rendered pages (drafting agent, 2026-10-19).
+
+- Header tagline from its own partial: the boards draw two different lines (header "your domain, in full spectrum", footer "Every check of a domain, in one spectrum."), so the single-tagline partial keeps the footer line and the header gets its own (implementer under the operator's autonomy mandate, 2026-10-19).
+- The score number is weight 700, the board's `<strong>`, not the drafted 600: the board wins (implementer under the operator's autonomy mandate, 2026-10-19).
+- Share stays a link styled as a button: requirement 41 needs the no-JavaScript link, and the island upgrades it (implementer under the operator's autonomy mandate, 2026-10-19).
+- The hard-fail banner sits in a stream-replaced wrapper `#hard-fail-slot`, so a streamed re-check updates it (implementer under the operator's autonomy mandate, 2026-10-19).
+- `/r/<id>` loads the frame's scripts, so the header's Theme button works there (implementer under the operator's autonomy mandate, 2026-10-19).
+
+- Review of Phase 1: the run number counts stored entries, so the retention sweep renumbers them; the history migration is forward-only (SDD §4.1); the hard-fail sentence follows the score's guard (hidden when `score_run`'s grade differs from the shown grade) and is built for unstored and unrecorded runs too; a history re-read failure after a record drops the run number and the first-run marker instead of claiming run 1 (implementer under the operator's autonomy mandate, 2026-10-19).
 
 ### Proposals for the operator
 

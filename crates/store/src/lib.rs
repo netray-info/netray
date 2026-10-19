@@ -26,7 +26,7 @@ const ID_ALPHABET: &[char] = &[
 ];
 
 const ENTRY_COLUMNS: &str = "e.id, e.domain, e.created_at, e.last_seen_at, e.predecessor_id, \
-     e.profile_version, e.grade, e.fingerprint, e.run, e.diff, e.engine_version";
+     e.profile_version, e.grade, e.fingerprint, e.run, e.diff, e.engine_version, e.duration_ms";
 
 /// The chain head first (the entry no other entry names as its predecessor), then by
 /// `created_at`, newest first, then by insertion order, newest first. `created_at` never decreases
@@ -116,6 +116,8 @@ pub struct Entry {
     pub run: Run,
     pub diff: Option<Diff>,
     pub engine_version: String,
+    /// How long the run took, in milliseconds; `None` for entries recorded without a measurement.
+    pub duration_ms: Option<u64>,
 }
 
 /// The head of a domain's chain, without its payload columns.
@@ -173,6 +175,24 @@ impl HistoryStore {
     where
         F: FnOnce(&Run, &Run) -> Diff,
     {
+        self.record_timed(domain, run, volatile, now, None, diff)
+            .await
+    }
+
+    /// As `record`, storing the run's measured `duration_ms` on a new entry; an identical run
+    /// leaves the existing entry's duration as it is.
+    pub async fn record_timed<F>(
+        &self,
+        domain: &str,
+        run: &Run,
+        volatile: &[&str],
+        now: i64,
+        duration_ms: Option<u64>,
+        diff: F,
+    ) -> Result<Recorded, StoreError>
+    where
+        F: FnOnce(&Run, &Run) -> Diff,
+    {
         let _guard = self.write.lock().await;
         let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
         let latest = latest_in(&mut tx, domain).await?;
@@ -201,14 +221,29 @@ impl HistoryStore {
                     run,
                     &print,
                     now.max(latest.created_at),
-                    Some(&latest.id),
-                    Some(&diff_json),
+                    Placement {
+                        predecessor_id: Some(&latest.id),
+                        diff_json: Some(&diff_json),
+                        duration_ms,
+                    },
                 )
                 .await?;
                 Recorded::Changed { id, diff }
             }
             None => {
-                let id = insert(&mut tx, domain, run, &print, now, None, None).await?;
+                let id = insert(
+                    &mut tx,
+                    domain,
+                    run,
+                    &print,
+                    now,
+                    Placement {
+                        predecessor_id: None,
+                        diff_json: None,
+                        duration_ms,
+                    },
+                )
+                .await?;
                 Recorded::First { id }
             }
         };
@@ -327,16 +362,31 @@ async fn head_in(
     .transpose()
 }
 
+/// Where a new entry sits in its chain and what was measured with it.
+struct Placement<'a> {
+    predecessor_id: Option<&'a str>,
+    diff_json: Option<&'a str>,
+    duration_ms: Option<u64>,
+}
+
 async fn insert(
     conn: &mut SqliteConnection,
     domain: &str,
     run: &Run,
     print: &str,
     now: i64,
-    predecessor_id: Option<&str>,
-    diff_json: Option<&str>,
+    placement: Placement<'_>,
 ) -> Result<String, StoreError> {
+    let Placement {
+        predecessor_id,
+        diff_json,
+        duration_ms,
+    } = placement;
     let run_json = serde_json::to_string(run)?;
+    let duration = duration_ms
+        .map(i64::try_from)
+        .transpose()
+        .map_err(|_| StoreError(Kind::Corrupt("duration_ms out of range".into())))?;
     let grade = serde_json::to_value(run.grade)?
         .as_str()
         .map(str::to_owned)
@@ -346,8 +396,8 @@ async fn insert(
         let id = nanoid::nanoid!(ID_LEN, ID_ALPHABET);
         let result = sqlx::query(
             "INSERT INTO entries (id, domain, created_at, last_seen_at, predecessor_id, \
-             profile_version, grade, fingerprint, run, diff, engine_version) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             profile_version, grade, fingerprint, run, diff, engine_version, duration_ms) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&id)
         .bind(domain)
@@ -360,6 +410,7 @@ async fn insert(
         .bind(&run_json)
         .bind(diff_json)
         .bind(&run.engine_version)
+        .bind(duration)
         .execute(&mut *conn)
         .await;
         match result {
@@ -377,6 +428,7 @@ fn entry_from_row(row: &SqliteRow) -> Result<Entry, StoreError> {
     let run: String = row.try_get("run")?;
     let diff: Option<String> = row.try_get("diff")?;
     let profile_version: i64 = row.try_get("profile_version")?;
+    let duration_ms: Option<i64> = row.try_get("duration_ms")?;
     Ok(Entry {
         id: row.try_get("id")?,
         domain: row.try_get("domain")?,
@@ -390,5 +442,9 @@ fn entry_from_row(row: &SqliteRow) -> Result<Entry, StoreError> {
         run: serde_json::from_str(&run)?,
         diff: diff.as_deref().map(serde_json::from_str).transpose()?,
         engine_version: row.try_get("engine_version")?,
+        duration_ms: duration_ms
+            .map(u64::try_from)
+            .transpose()
+            .map_err(|_| StoreError(Kind::Corrupt("duration_ms out of range".into())))?,
     })
 }

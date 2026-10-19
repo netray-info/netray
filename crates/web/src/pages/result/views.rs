@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use netray_engine::catalogue::{Catalogue, CheckSpec, catalogue};
 use netray_engine::profile::{Profile, Profiles};
+use netray_engine::scoring::Score;
 use netray_engine::{SectionEvent, SectionOutcome};
 use netray_model::diff::{BlockChangeKind, ChangeClass, Diff};
 use netray_model::evidence::{BlockId, EVIDENCE_SCHEMA_VERSION};
@@ -14,7 +15,8 @@ use netray_store::{Entry, Recorded};
 
 use crate::api::{RefusalReason, RunRefusal};
 use crate::components::{
-    CheckRowView, DiffBlockView, DiffEntry, SegmentState, Tone, TraceRow, TraceView, line_tone,
+    CheckRowView, DiffBlockView, DiffEntry, RunLineView, SegmentState, Tone, TraceRow, TraceView,
+    line_tone,
 };
 use crate::entries::view::{epoch_days_to_ymd, grade_letter, status_tone};
 use crate::evidence::href;
@@ -151,6 +153,11 @@ pub fn evidence_href(check: &RunCheck, links: &Links<'_>) -> String {
 
 fn is_open(status: Status) -> bool {
     matches!(status, Status::Warn | Status::Fail)
+}
+
+/// The number of warn and fail checks of `run`.
+pub fn open_count(run: &Run) -> usize {
+    run.checks.iter().filter(|c| is_open(c.status)).count()
 }
 
 fn index_of(catalogue: &Catalogue, id: &CheckId) -> Option<usize> {
@@ -429,6 +436,78 @@ pub fn diff_view(diff: Option<&Diff>, catalogue: &Catalogue) -> DiffView {
 
 fn date_of(timestamp: i64) -> (u64, u8, u8) {
     epoch_days_to_ymd(timestamp.div_euclid(86_400).max(0) as u64)
+}
+
+/// A protocol's name in a sentence of the page.
+pub fn section_name(protocol: Protocol) -> &'static str {
+    match protocol {
+        Protocol::Dns => "DNS",
+        Protocol::Tls => "TLS",
+        Protocol::Http => "HTTP",
+        Protocol::Email => "Email",
+        Protocol::Ip => "IP",
+    }
+}
+
+/// The run title of `entry`, the `ordinal`-th of its domain (the first is 1) when that is
+/// known: ordinal, time, check count, profile, the duration when known, "cached" and "first run".
+pub fn run_title(entry: &Entry, ordinal: Option<usize>, cached: bool) -> RunLineView {
+    let checks = entry.run.checks.len();
+    let mut parts: Vec<String> = ordinal.map(|n| format!("Run {n}")).into_iter().collect();
+    parts.extend([
+        format!("{} UTC", utc_minute(entry.created_at)),
+        format!("{checks} check{}", if checks == 1 { "" } else { "s" }),
+        format!("profile {}", entry.profile_version),
+    ]);
+    if let Some(ms) = entry.duration_ms {
+        parts.push(format!("{:.1} s", ms as f64 / 1000.0));
+    }
+    if cached {
+        parts.push("cached".to_string());
+    }
+    if ordinal == Some(1) {
+        parts.push("first run".to_string());
+    }
+    RunLineView { parts }
+}
+
+/// The hard-fail banner: the failed hard-fail checks and the sections left out of the score.
+#[derive(Debug, Clone)]
+pub struct HardFailView {
+    pub hard_fail: Option<String>,
+    pub without: Option<String>,
+}
+
+/// The banner of `score` under the letter `shown`, `None` when nothing is left to say. The
+/// hard-fail sentence names the letter F, so it stays out when the score's grade is not `shown`.
+pub fn hard_fail_view(score: &Score, catalogue: &Catalogue, shown: Grade) -> Option<HardFailView> {
+    let hard_fail = (!score.hard_fail_checks.is_empty() && score.grade == shown).then(|| {
+        let titles: Vec<String> = score
+            .hard_fail_checks
+            .iter()
+            .map(|id| {
+                catalogue
+                    .get(id)
+                    .map_or_else(|| id.to_string(), |spec| spec.title.clone())
+            })
+            .collect();
+        format!(
+            "Hard fail: {}. A failed hard-fail check sets the grade to F whatever the score.",
+            titles.join(", ")
+        )
+    });
+    let without = (!score.not_applicable.is_empty()).then(|| {
+        let sections: Vec<String> = score
+            .not_applicable
+            .iter()
+            .map(|(protocol, reason)| match reason.as_str() {
+                "" => section_name(*protocol).to_string(),
+                reason => format!("{} ({reason})", section_name(*protocol)),
+            })
+            .collect();
+        format!("Score computed without: {}", sections.join(", "))
+    });
+    (hard_fail.is_some() || without.is_some()).then_some(HardFailView { hard_fail, without })
 }
 
 /// The UTC date of `timestamp`, `YYYY-MM-DD`.

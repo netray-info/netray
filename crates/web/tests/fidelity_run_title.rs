@@ -119,7 +119,11 @@ async fn render(entries: &[Spec]) -> (String, String) {
     let id = store.latest(DOMAIN).await.unwrap().unwrap().id;
     let app: Router = router(ResultState::new(Arc::new(store), Arc::new(StubRuns), TTL));
     let resp = app
-        .oneshot(Request::get(format!("/{DOMAIN}")).body(Body::empty()).unwrap())
+        .oneshot(
+            Request::get(format!("/{DOMAIN}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
@@ -151,7 +155,10 @@ async fn c6_run_title_parts_in_order_without_the_entry_id() {
         parts[1].len() == "2020-09-13 12:26 UTC".len() && parts[1].ends_with(" UTC"),
         "{parts:?}"
     );
-    assert_eq!(parts[2..], ["2 checks", "profile 3", "2.0 s", "cached", "first run"]);
+    assert_eq!(
+        parts[2..],
+        ["2 checks", "profile 3", "2.0 s", "cached", "first run"]
+    );
     let title = body
         .split("<p class=\"run-line run-line--title\">")
         .nth(1)
@@ -161,11 +168,8 @@ async fn c6_run_title_parts_in_order_without_the_entry_id() {
         .unwrap();
     assert!(!title.contains(&id), "entry id in the title: {title}");
 
-    let css = std::fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/static/run_line.css"
-    ))
-    .unwrap();
+    let css = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/static/run_line.css"))
+        .unwrap();
     let rule = css
         .split(".run-line--title")
         .nth(1)
@@ -175,7 +179,8 @@ async fn c6_run_title_parts_in_order_without_the_entry_id() {
         .unwrap();
     assert!(rule.contains("text-transform: uppercase"), "{rule}");
     assert!(
-        rule.contains("letter-spacing: .12em") || rule.contains("letter-spacing: 0.12em")
+        rule.contains("letter-spacing: .12em")
+            || rule.contains("letter-spacing: 0.12em")
             || rule.contains("letter-spacing: var(--font-tracking-caps)"),
         "{rule}"
     );

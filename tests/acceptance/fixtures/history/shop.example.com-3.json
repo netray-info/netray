@@ -164,7 +164,7 @@
       },
       {
         "id": "email.mta_sts",
-        "status": "pass",
+        "status": "warn",
         "evidence": [
           "email.mta_sts",
           "email.mta_sts_policy"

@@ -19,12 +19,15 @@ use axum::routing::{get, post};
 use futures::future::BoxFuture;
 use netray_common::ip_extract::IpExtractor;
 use netray_engine::catalogue::catalogue;
+use netray_engine::history::score_run;
+use netray_engine::profile::Profiles;
+use netray_engine::scoring::Score;
 use netray_model::run::Run;
 use netray_model::{CheckId, Grade, Protocol, Status};
 use netray_store::{Entry, HistoryStore, Recorded};
 use percent_encoding::utf8_percent_encode;
 
-use self::views::{Grouping, IssueGroup, Links};
+use self::views::{Grouping, HardFailView, IssueGroup, Links};
 use super::errors::{LOCATION_SET, query_view, refused_page};
 use super::headers::secure;
 use super::{Frame, page, query_redirect, server_error};
@@ -34,7 +37,7 @@ use crate::components::{
     QueryInputView, RunLineView, SpectrumView,
 };
 use crate::entries::view::{grade_letter, grade_tone};
-use crate::evidence::{self, entry_run_line};
+use crate::evidence;
 use crate::spectrum::{self, RunInput};
 
 /// The handler a request for a segment that is not a domain goes to.
@@ -285,7 +288,8 @@ fn full_page(
 ) -> Response {
     let state_word = state_word(entries, state.ttl_seconds);
     let autostart = refusal.is_none() && state_word != "fresh";
-    let Some(parts) = stored_parts(domain, entries, autostart, None, refusal) else {
+    let cached = refusal.is_none() && state_word == "fresh";
+    let Some(parts) = stored_parts(domain, entries, autostart, None, cached, refusal, true) else {
         return server_error();
     };
     page(
@@ -321,6 +325,8 @@ fn state_word(entries: &[Entry], ttl_seconds: u64) -> &'static str {
 /// What the run line says.
 enum RunLineBody {
     Line(RunLineView),
+    /// The title of a stored run.
+    Title(RunLineView),
     Text(String),
     /// The lead text of a refusal and the seconds its countdown starts at.
     Refusal {
@@ -346,7 +352,10 @@ struct Shown {
     trace: String,
     sentences: Vec<(String, String)>,
     refreshing: bool,
+    diff_heading: Option<String>,
     diff: Option<DiffBlockView>,
+    hard_fail: Option<HardFailView>,
+    open: usize,
     groups: Vec<IssueGroup>,
     passed: Vec<CheckRowView>,
     evidence: Vec<EvidenceInner>,
@@ -364,7 +373,10 @@ impl Shown {
             trace: String::new(),
             sentences: Vec::new(),
             refreshing: false,
+            diff_heading: None,
             diff: None,
+            hard_fail: None,
+            open: 0,
             groups: Vec::new(),
             passed: Vec::new(),
             evidence: PROTOCOLS.iter().map(|_| EvidenceInner::Empty).collect(),
@@ -376,6 +388,7 @@ impl Shown {
 /// The rendered page parts, one per fragment id; the evidence elements run dns to ip.
 struct Parts {
     header: String,
+    hard_fail: String,
     grade: String,
     run_line: String,
     progress: String,
@@ -398,6 +411,7 @@ impl Parts {
             ("run-line".to_string(), self.run_line.as_str()),
             ("progress".to_string(), self.progress.as_str()),
             ("result-share".to_string(), self.share.as_str()),
+            ("hard-fail-slot".to_string(), self.hard_fail.as_str()),
             ("spectrum".to_string(), self.spectrum.as_str()),
             ("diff".to_string(), self.diff.as_str()),
             ("issues".to_string(), self.issues.as_str()),
@@ -420,18 +434,23 @@ fn warn_render<T>(what: &str, result: Result<T, askama::Error>) -> Option<T> {
 }
 
 /// The parts of the history `entries` (newest first) of `domain`; `recorded` is the store's
-/// answer to a run that just finished, `run_line` replaces the run line.
+/// answer to a run that just finished, `cached` marks the title as answered from a stored
+/// entry, `run_line` replaces the run line.
+/// `ordinal_known` is false when the head of `entries` stands in for a record the history read
+/// did not return: its place in the history is then unknown.
 fn stored_parts(
     domain: &str,
     entries: &[Entry],
     autostart: bool,
     recorded: Option<&Recorded>,
+    cached: bool,
     run_line: Option<RunLineBody>,
+    ordinal_known: bool,
 ) -> Option<Parts> {
     let mut shown = if entries.is_empty() {
         Shown::none()
     } else {
-        stored_shown(entries, recorded)?
+        stored_shown(entries, recorded, cached, ordinal_known)?
     };
     if let Some(run_line) = run_line {
         shown.run_line = run_line;
@@ -439,12 +458,58 @@ fn stored_parts(
     assemble(domain, autostart, shown)
 }
 
-fn grade_view(grade: Grade) -> GradeView {
+fn grade_view(grade: Grade, score: Option<u8>) -> GradeView {
     GradeView {
         letter: grade_letter(grade).to_string(),
-        score: None,
+        score,
         tone: grade_tone(grade),
     }
+}
+
+/// `entry`'s score under its own profile version, `None` when the profile is unknown.
+fn entry_score(entry: &Entry) -> Option<Score> {
+    let Some(profile) = Profiles::get(entry.profile_version) else {
+        tracing::warn!(entry = %entry.id, profile = entry.profile_version, "unknown profile version, no score");
+        return None;
+    };
+    Some(score_run(&entry.run, profile))
+}
+
+/// The score shown under `entry`'s letter: the integer percentage, only when the run and its
+/// score are complete and the engine's grade is the stored one. A differing grade is logged
+/// whether or not the score is complete.
+fn shown_score(entry: &Entry, score: &Score) -> Option<u8> {
+    if score.grade != entry.grade {
+        tracing::warn!(
+            entry = %entry.id,
+            stored = grade_letter(entry.grade),
+            computed = grade_letter(score.grade),
+            "stored grade differs from the engine's grade, no score"
+        );
+        return None;
+    }
+    if !entry.run.complete || !score.complete {
+        return None;
+    }
+    Some(score.overall_percentage.round().clamp(0.0, 100.0) as u8)
+}
+
+/// The banner of the finished run `done` shown under the letter `shown`, scored under its own
+/// profile version.
+fn done_banner(done: &Run, shown: Grade) -> Option<HardFailView> {
+    let Some(profile) = Profiles::get(done.profile_version) else {
+        tracing::warn!(
+            profile = done.profile_version,
+            "unknown profile version, no banner"
+        );
+        return None;
+    };
+    views::hard_fail_view(&score_run(done, profile), catalogue(), shown)
+}
+
+/// The heading over the diff of a run that follows `earlier` stored runs.
+fn since_heading(earlier: usize) -> Option<String> {
+    (earlier > 0).then(|| format!("Since run {earlier}"))
 }
 
 fn rows_of(entries: &[Entry]) -> Vec<(i64, Grade)> {
@@ -486,9 +551,15 @@ fn figure_parts(
 }
 
 /// What the latest of `entries` (newest first, not empty) shows.
-fn stored_shown(entries: &[Entry], recorded: Option<&Recorded>) -> Option<Shown> {
+fn stored_shown(
+    entries: &[Entry],
+    recorded: Option<&Recorded>,
+    cached: bool,
+    ordinal_known: bool,
+) -> Option<Shown> {
     let entry = entries.first()?;
     let cat = catalogue();
+    let score = entry_score(entry);
     let inputs: Vec<RunInput<'static>> = entries
         .iter()
         .take(SHOWN)
@@ -520,16 +591,32 @@ fn stored_shown(entries: &[Entry], recorded: Option<&Recorded>) -> Option<Shown>
         Some(recorded) => views::recorded_diff_view(recorded, Some(entry), cat).block,
         None => views::diff_view(entry.diff.as_ref(), cat).block,
     };
+    let ordinal = ordinal_known.then_some(entries.len());
+    let diff_heading = match ordinal {
+        Some(n) => since_heading(n - 1).unwrap_or_else(|| "First run recorded.".to_string()),
+        None if matches!(recorded, Some(Recorded::First { .. })) => {
+            "First run recorded.".to_string()
+        }
+        None => "Since the previous run".to_string(),
+    };
     Some(Shown {
-        grade: Some(grade_view(entry.grade)),
+        grade: Some(grade_view(
+            entry.grade,
+            score.as_ref().and_then(|s| shown_score(entry, s)),
+        )),
         date: Some(views::run_date(entry.created_at)),
-        run_line: RunLineBody::Line(entry_run_line(entry.created_at, &entry.id)),
+        run_line: RunLineBody::Title(views::run_title(entry, ordinal, cached)),
         share: entry.run.complete.then(|| entry.id.clone()),
         plate,
         trace,
         sentences: sentences_of(chosen.iter().rev().copied()),
         refreshing: false,
+        diff_heading: Some(diff_heading),
         diff: Some(diff),
+        hard_fail: score
+            .as_ref()
+            .and_then(|s| views::hard_fail_view(s, cat, entry.grade)),
+        open: views::open_count(&entry.run),
         groups: views::issues(
             &entry.run,
             cat,
@@ -599,7 +686,7 @@ fn not_stored_shown(
     let (plate, trace) = done_figure(domain, done, grade, entries)?;
     let evidence = done_evidence(done, evidence::incomplete_run_line)?;
     Some(Shown {
-        grade: Some(grade_view(grade)),
+        grade: Some(grade_view(grade, None)),
         date: Some(views::run_date(now())),
         run_line: RunLineBody::Line(evidence::incomplete_run_line()),
         share: None,
@@ -607,7 +694,10 @@ fn not_stored_shown(
         trace,
         sentences: sentences_through(entries, done),
         refreshing: false,
+        diff_heading: Some(since_heading(entries.len()).unwrap_or_else(|| "This run".to_string())),
         diff: Some(views::recorded_diff_view(recorded, entries.first(), cat).block),
+        hard_fail: done_banner(done, grade),
+        open: views::open_count(done),
         groups: views::issues(done, cat, Links::Live, Grouping::Owner, &BTreeMap::new()),
         passed: views::passed_checks(done, cat),
         evidence,
@@ -622,7 +712,7 @@ fn unrecorded_shown(domain: &str, done: &Run, entries: &[Entry]) -> Option<Shown
     let (plate, trace) = done_figure(domain, done, done.grade, entries)?;
     let evidence = done_evidence(done, evidence::live_run_line)?;
     Some(Shown {
-        grade: Some(grade_view(done.grade)),
+        grade: Some(grade_view(done.grade, None)),
         date: Some(views::run_date(now())),
         run_line: RunLineBody::Line(RunLineView {
             parts: vec![views::NOT_RECORDED.to_string()],
@@ -632,7 +722,10 @@ fn unrecorded_shown(domain: &str, done: &Run, entries: &[Entry]) -> Option<Shown
         trace,
         sentences: sentences_through(entries, done),
         refreshing: false,
+        diff_heading: Some(since_heading(entries.len()).unwrap_or_else(|| "This run".to_string())),
         diff: Some(views::not_recorded_view().block),
+        hard_fail: done_banner(done, done.grade),
+        open: views::open_count(done),
         groups: views::issues(done, cat, Links::Live, Grouping::Owner, &BTreeMap::new()),
         passed: views::passed_checks(done, cat),
         evidence,
@@ -680,6 +773,7 @@ fn recorded_entry(domain: &str, done: &Run, recorded: &Recorded) -> Option<Entry
         run: done.clone(),
         diff,
         engine_version: done.engine_version.clone(),
+        duration_ms: None,
     })
 }
 
@@ -755,8 +849,15 @@ struct SpectrumPart<'a> {
 }
 
 #[derive(Template)]
+#[template(path = "partials/result_hard_fail.html")]
+struct HardFailPart<'a> {
+    banner: &'a Option<HardFailView>,
+}
+
+#[derive(Template)]
 #[template(path = "partials/result_diff.html")]
 struct DiffPart<'a> {
+    heading: &'a Option<String>,
     diff: &'a Option<DiffBlockView>,
 }
 
@@ -765,6 +866,8 @@ struct DiffPart<'a> {
 struct IssuesPart<'a> {
     switch: &'a GroupingSwitchView,
     groups: &'a [IssueGroup],
+    count: usize,
+    heading: String,
 }
 
 #[derive(Template)]
@@ -811,13 +914,20 @@ fn spectrum_part(
     )
 }
 
-fn issues_part(groups: &[IssueGroup]) -> Option<String> {
+fn issues_part(groups: &[IssueGroup], count: usize) -> Option<String> {
     let switch = grouping_switch();
+    let heading = if count == 1 {
+        "1 line needs attention".to_string()
+    } else {
+        format!("{count} lines need attention")
+    };
     warn_render(
         "issues",
         trimmed(&IssuesPart {
             switch: &switch,
             groups,
+            count,
+            heading,
         }),
     )
 }
@@ -835,9 +945,9 @@ fn evidence_part(protocol: Protocol, inner: &EvidenceInner) -> Option<String> {
 fn assemble(domain: &str, autostart: bool, shown: Shown) -> Option<Parts> {
     let href = href_of(domain);
     let (trigger, trigger_label) = if shown.recheck {
-        ("recheck", "re-check now")
+        ("recheck", "Re-check now")
     } else {
-        ("visit", "check now")
+        ("visit", "Check now")
     };
     let button = warn_render(
         "recheck-button",
@@ -874,7 +984,19 @@ fn assemble(domain: &str, autostart: bool, shown: Shown) -> Option<Parts> {
             share: &share,
         }),
     )?;
-    let diff = warn_render("diff", trimmed(&DiffPart { diff: &shown.diff }))?;
+    let diff = warn_render(
+        "diff",
+        trimmed(&DiffPart {
+            heading: &shown.diff_heading,
+            diff: &shown.diff,
+        }),
+    )?;
+    let hard_fail = warn_render(
+        "hard-fail",
+        trimmed(&HardFailPart {
+            banner: &shown.hard_fail,
+        }),
+    )?;
     let passed = warn_render(
         "passed",
         trimmed(&PassedPart {
@@ -888,6 +1010,7 @@ fn assemble(domain: &str, autostart: bool, shown: Shown) -> Option<Parts> {
         .collect::<Option<Vec<_>>>()?;
     Some(Parts {
         header,
+        hard_fail,
         grade,
         run_line,
         progress,
@@ -901,7 +1024,7 @@ fn assemble(domain: &str, autostart: bool, shown: Shown) -> Option<Parts> {
             shown.refreshing,
         )?,
         diff,
-        issues: issues_part(&shown.groups)?,
+        issues: issues_part(&shown.groups, shown.open)?,
         evidence,
         passed,
     })

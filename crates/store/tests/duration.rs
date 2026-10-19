@@ -125,10 +125,17 @@ async fn entries_recorded_before_the_migration_read_back_none() {
 
     let pool = SqlitePoolOptions::new()
         .max_connections(1)
-        .connect_with(SqliteConnectOptions::new().filename(&path).create_if_missing(true))
+        .connect_with(
+            SqliteConnectOptions::new()
+                .filename(&path)
+                .create_if_missing(true),
+        )
         .await
         .unwrap();
-    sqlx::raw_sql(&first_migration).execute(&pool).await.unwrap();
+    sqlx::raw_sql(&first_migration)
+        .execute(&pool)
+        .await
+        .unwrap();
     sqlx::query(
         "INSERT INTO entries (id, domain, created_at, last_seen_at, predecessor_id, \
          profile_version, grade, fingerprint, run, diff, engine_version) \

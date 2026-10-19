@@ -16,16 +16,14 @@
 <body>
 {% block header %}<header class="page-header">
 <a href="/"><img src="/static/logo.svg" alt="netray"></a>
+<span class="page-tagline">{% include "partials/header_tagline.html" %}</span>
 <nav class="page-nav">
+<a href="/inspect/dns">Inspectors</a>
 <a href="/guide/">Guides</a>
-<a href="/compare">Compare</a>
+<a href="/api/v1/docs">API</a>
 <a href="/status">Status</a>
-<a href="https://ip.netray.info">IP</a>
-<a href="https://dns.netray.info">DNS</a>
-<a href="https://tls.netray.info">TLS</a>
-<a href="https://http.netray.info">HTTP</a>
-</nav>
 <button type="button" class="theme-toggle" data-island="theme" aria-label="Switch theme">Theme</button>
+</nav>
 </header>{% endblock %}
 <main>{% block main %}{% endblock %}</main>
 <footer class="page-footer">
@@ -33,6 +31,7 @@
 <nav>
 <a href="/privacy">Privacy</a>
 <a href="/status">Status</a>
+<a href="/compare">Compare</a>
 </nav>
 </footer>
 {% block scripts %}<script type="module" src="/static/islands.js"></script>

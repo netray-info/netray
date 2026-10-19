@@ -21,6 +21,7 @@ const APP_CSS: &str = concat!(
     include_str!("../../static/diff_block.css"),
     include_str!("../../static/grouping_switch.css"),
     include_str!("../../static/query_input.css"),
+    include_str!("../../static/button.css"),
     include_str!("../../static/pages.css"),
 );
 

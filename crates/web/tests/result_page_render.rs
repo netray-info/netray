@@ -187,7 +187,7 @@ async fn c3_c11_get_renders_the_latest_entry_without_a_run_or_a_write() {
     let passed = &body[pos(&body, r#"<details id="passed""#)..];
     let tag = &passed[..passed.find('>').unwrap()];
     assert!(!tag.contains("open"), "{tag}");
-    assert!(body.contains(&format!("entry {id}")), "{body}");
+    assert!(body.contains(&format!(r#"href="/r/{id}""#)), "{body}");
     assert_eq!(f.runs.starts.load(Ordering::SeqCst), 0);
     let after = f.store.latest(DOMAIN).await.unwrap().unwrap();
     assert_eq!(after.last_seen_at, before.last_seen_at);
@@ -214,9 +214,9 @@ async fn c4_run_line_names_the_entry_time_and_id() {
 
     let (_, body) = get(&f.app, &format!("/{DOMAIN}")).await;
 
-    let want = format!("run of {} UTC", utc_minute(created));
+    let want = format!("{} UTC", utc_minute(created));
     assert!(body.contains(&want), "{want} missing in {body}");
-    assert!(body.contains(&format!("entry {id}")), "{body}");
+    assert!(body.contains(&format!(r#"href="/r/{id}""#)), "{body}");
 }
 
 #[tokio::test]

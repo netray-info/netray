@@ -1,7 +1,8 @@
 {% import "components/grouping_switch.html" as grouping_switch %}
 {% import "components/check_row.html" as check_row %}
 <section id="issues" data-island="issues">
-<div hidden>{% call grouping_switch::grouping_switch(switch) %}{% endcall %}</div>
+{% if count > 0 %}<h2>{{ heading }}</h2>
+{% endif %}<div hidden>{% call grouping_switch::grouping_switch(switch) %}{% endcall %}</div>
 {% for group in groups %}
 <section class="issue-group" data-group="{{ group.key }}">
 <h3>{{ group.label }}</h3>

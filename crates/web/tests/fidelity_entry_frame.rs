@@ -37,6 +37,7 @@ fn entry() -> Entry {
         },
         diff: None,
         engine_version: "0.30.0".into(),
+        duration_ms: None,
     }
 }
 
@@ -60,5 +61,8 @@ fn entry_page_renders_inside_the_site_frame() {
     }
     let main = html.find("<main").unwrap();
     let footer = html.find("<footer class=\"page-footer\"").unwrap();
-    assert!(header_start < main && main < footer, "frame order header, main, footer");
+    assert!(
+        header_start < main && main < footer,
+        "frame order header, main, footer"
+    );
 }

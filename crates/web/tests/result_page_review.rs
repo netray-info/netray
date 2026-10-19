@@ -120,7 +120,7 @@ async fn an_entry_scored_with_an_unknown_profile_still_renders_as_the_latest() {
     let (status, body) = get(&app, "/shop.example.com").await;
     assert_eq!(status, StatusCode::OK);
     assert!(body.contains(r#"data-state="fresh""#), "{body}");
-    assert!(body.contains(&format!("entry {}", ids[0])), "{body}");
+    assert!(body.contains(&format!(r#"href="/r/{}""#, ids[0])), "{body}");
     assert!(!body.contains("not checked yet"), "{body}");
     assert!(body.contains(r#"id="band-tls""#), "{body}");
     assert!(body.contains("tls.chain_trusted"), "{body}");
