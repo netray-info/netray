@@ -9,8 +9,12 @@ f=crates/ip/tests/ok_handlers.rs
 [ -n "$f" ] && [ -f "$f" ] || { echo "FAIL: ok_handlers.rs not found"; exit 1; }
 
 fail=0
+# One call builds the shared dev-config app; a test that needs its own config (it assigns a config
+# field in the lines before) may build its own. Any other call rebuilds what the shared app holds.
 n=$(grep -c 'build_app(' "$f")
-[ "$n" -eq 1 ] || { echo "FAIL: $f calls build_app $n times, want 1 (inside a OnceCell initialiser)"; fail=1; }
+[ "$n" -ge 1 ] || { echo "FAIL: $f never calls build_app"; fail=1; }
+stray=$(awk '/build_app\(/{ if (prev !~ /config\.[a-z_.]+ = / && !in_cell) print FILENAME":"NR": "$0 } /OnceCell/{in_cell=1} /^}/{in_cell=0} {prev2=prev; prev=$0}' "$f")
+[ -z "$stray" ] || { echo "FAIL: build_app called with the unchanged dev config outside the shared OnceCell:"; echo "$stray"; fail=1; }
 grep -q 'OnceCell' "$f" || { echo "FAIL: $f holds no OnceCell for the shared app"; fail=1; }
 awk '/OnceCell/{s=1} s&&/build_app\(/{found=1} END{exit !found}' "$f" || { echo "FAIL: build_app is not called after the OnceCell"; fail=1; }
 

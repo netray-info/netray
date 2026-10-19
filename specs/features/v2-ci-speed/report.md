@@ -50,3 +50,29 @@ is a dry-run property of the justfile.
 
 `cargo build -q -p netray --bin netray && cargo build -p netray --bin netray` → the second call
 prints only `Finished`, no `Compiling netray-ip` (output below the phase commit's run).
+
+## Phase 3 — ok_handlers builds its app once
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R5: ok_handlers builds the dev-config app once per binary, fresh listener per test; filtered_headers keeps its own build; no assertion changes | green | tests/repo/test_ip_app_once.sh; crates/ip/tests/ok_handlers.rs |
+| C2 | GIVEN ok_handlers.rs WHEN read THEN every build_app call with the unchanged dev config sits inside the OnceCell initialiser | green | tests/repo/test_ip_app_once.sh |
+| C3 | GIVEN the GeoIP data WHEN cargo test -p netray-ip --test ok_handlers runs THEN all its tests pass as before | green | crates/ip/tests/ok_handlers.rs (113 passed, 2 ignored, as before) |
+
+The spec's first scenario said "exactly once"; `filtered_headers_excluded_from_response` builds
+with its own config, so requirement 5 and the scenario were amended (decision log).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 crates/ip/tests/ok_handlers.rs (made directly) | 0 | n/a | 0 | 0 |
+
+### Behavioural verification
+
+With the `ifconfig-rs-data` image's files in `crates/ip/data/` (local, gitignored):
+`cargo test -p netray-ip --test ok_handlers` → before `113 passed; 0 failed; 2 ignored ... finished in 20.24s`,
+after `113 passed; 0 failed; 2 ignored ... finished in 11.44s` (macOS, while another cargo build ran;
+CI's baseline was 127.54 s).

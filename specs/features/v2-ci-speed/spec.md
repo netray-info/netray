@@ -65,8 +65,9 @@ before and after.
    script names only paths that exist (the real git dir's `HEAD`, `refs/heads` and, when present,
    `packed-refs`), and without a git checkout it names none of them and still sets
    `GIT_SHORT_SHA` and `BUILD_DATE` to `unknown`.
-5. `crates/ip/tests/ok_handlers.rs` builds the app once per test binary and serves it on a fresh
-   listener per test; no assertion changes.
+5. `crates/ip/tests/ok_handlers.rs` builds the dev-config app once per test binary and serves it
+   on a fresh listener per test; a test that needs its own config (`filtered_headers`) keeps its own
+   build; no assertion changes.
 6. The `check` job installs mold through `rui314/setup-mold` pinned by SHA with an explicit
    `mold-version`, before `just adlc-setup`; `tests/repo/test_workflows.sh` requires it.
 7. The integration tests of `netray-web` and `lens` each build as one test target `it`
@@ -124,7 +125,7 @@ limiter's own tests live in `rate_limit.rs`). A repo check holds the single `bui
 
 ### Test Scenarios
 
-GIVEN ok_handlers.rs WHEN read THEN it calls `build_app` exactly once, inside a `OnceCell` initialiser.
+GIVEN ok_handlers.rs WHEN read THEN every `build_app` call with the unchanged dev config sits inside the `OnceCell` initialiser.
 GIVEN the GeoIP data WHEN `cargo test -p netray-ip --test ok_handlers` runs THEN all its tests pass as before.
 
 ## Phase 4 — mold links in CI
@@ -178,6 +179,8 @@ GIVEN a CI run without the disk workarounds WHEN it completes THEN `df` after `j
 - mold through `rui314/setup-mold` over an apt package or RUSTFLAGS: the action replaces the system `ld`, so the rust-cache key (hashing `CARGO*`/`RUST*` env) is untouched; mold 2.42.1 over 3.0.0, which is only 14 days old (implementer under the operator's autonomy mandate, 2026-10-19).
 - ok_handlers raises the shared app's per-IP quota over one app per test: the file asserts no rate-limit behaviour, and a shared limiter keyed on 127.0.0.1 would refuse after ten requests (implementer under the operator's autonomy mandate, 2026-10-19).
 - lens's `admission_config.rs` and `history_config.rs` stay their own binaries: they set `LENS_*` variables that lens's loader reads as keys, which would leak into concurrent tests in one process (implementer under the operator's autonomy mandate, 2026-10-19).
+
+- ok_handlers' `filtered_headers_excluded_from_response` keeps its own `build_app`: it sets `filtered_headers` on its config, which the shared app must not carry; the repo check admits a call preceded by a config assignment (implementer under the operator's autonomy mandate, 2026-10-19).
 
 ## Open decisions
 

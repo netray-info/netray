@@ -10,9 +10,26 @@ fn test_config() -> Config {
     Config::load(Some("ifconfig.dev.toml")).expect("test config")
 }
 
+/// The dev-config app, built once per test binary: each build loads the GeoLite2 databases, which
+/// cost about a second per test. Every test still serves it on its own listener. All tests connect
+/// from loopback, so the shared limiters get quotas no test run reaches; no test here asserts on
+/// rate limiting (that lives in rate_limit.rs).
+async fn shared_app() -> axum::Router {
+    static APP: tokio::sync::OnceCell<axum::Router> = tokio::sync::OnceCell::const_new();
+    APP.get_or_init(|| async {
+        let mut config = test_config();
+        config.rate_limit.per_ip_per_minute = 1_000_000;
+        config.rate_limit.per_ip_burst = 1_000_000;
+        config.rate_limit.per_target_per_minute = 1_000_000;
+        config.rate_limit.per_target_burst = 1_000_000;
+        netray_ip::build_app(&config).await.app
+    })
+    .await
+    .clone()
+}
+
 async fn send_request(req: Request<Body>, _remote: SocketAddr) -> (StatusCode, axum::http::HeaderMap, String) {
-    let config = test_config();
-    let app = netray_ip::build_app(&config).await.app;
+    let app = shared_app().await;
 
     // Bind a real listener so ConnectInfo works
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -1414,8 +1431,7 @@ async fn ipv6_with_ipv4_ip_param_returns_404() {
 // These tests bind the server to [::1] so the connecting client is seen as an IPv6 client.
 
 async fn send_request_v6(path: &str, req_headers: &[(&str, &str)]) -> (StatusCode, axum::http::HeaderMap, String) {
-    let config = test_config();
-    let app = netray_ip::build_app(&config).await.app;
+    let app = shared_app().await;
 
     let listener = TcpListener::bind("[::1]:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -1477,8 +1493,7 @@ async fn ipv6_client_ipv4_endpoint_returns_404() {
 
 #[tokio::test]
 async fn cors_preflight_returns_correct_headers() {
-    let config = test_config();
-    let app = netray_ip::build_app(&config).await.app;
+    let app = shared_app().await;
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
