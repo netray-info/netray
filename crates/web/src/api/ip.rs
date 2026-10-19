@@ -339,9 +339,15 @@ impl Params {
             },
             label: query.field.clone().unwrap_or_else(|| "document".into()),
         };
-        // A scalar field has no TOML form; refused here, before any charge or lookup.
+        // A scalar field has no TOML form, nor has `user_agent` without a usable User-Agent (its
+        // value is then null); refused here, before any charge or lookup.
+        let no_agent = headers
+            .get(header::USER_AGENT)
+            .and_then(|v| v.to_str().ok())
+            .is_none();
         if let Some(Form::Structured(OutputFormat::Toml, name)) = &params.form
-            && TOML_LESS_FIELDS.contains(&params.label.as_str())
+            && (TOML_LESS_FIELDS.contains(&params.label.as_str())
+                || (no_agent && params.label == "user_agent"))
         {
             return Err(V1Error::InvalidInput(format!(
                 "{} has no {name} form",
