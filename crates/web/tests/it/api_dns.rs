@@ -213,6 +213,7 @@ async fn query_event_stream_names_components_and_equals_prism() {
             "error" => "DnsErrorEvent",
             "enrichment" => "DnsEnrichmentEvent",
             "done" => "DnsQueryDone",
+            "summary" => "DnsJobSummary",
             other => panic!("unexpected event {other}"),
         };
         validate_component(component, data);
@@ -233,8 +234,14 @@ async fn query_event_stream_names_components_and_equals_prism() {
     assert_eq!(resp.status(), StatusCode::OK);
     let bytes = resp.into_body().collect().await.unwrap().to_bytes();
     let prism_frames = frames(std::str::from_utf8(&bytes).unwrap());
+    // C20 (v2-dns-api): prism emits no `summary`; v1's frames without it equal prism's.
+    assert!(
+        prism_frames.iter().all(|f| f.0 != "summary"),
+        "prism emitted a summary event"
+    );
+    let v1: Vec<_> = v1.into_iter().filter(|f| f.0 != "summary").collect();
     assert_eq!(
-        normalised(v1, false),
+        normalised(v1, true),
         normalised(prism_frames, true),
         "v1 frames differ from prism's"
     );
@@ -253,13 +260,13 @@ async fn other_jobs_answer_in_both_forms() {
         (
             "/dns/compare",
             json!({"domain": "example.com", "record_types": ["A"]}),
-            &["batch", "error", "enrichment", "done"],
+            &["batch", "error", "enrichment", "summary", "done"],
             "DnsCompareDone",
         ),
         (
             "/dns/authcompare",
             json!({"domain": "example.com", "record_types": ["A"]}),
-            &["batch", "error", "enrichment", "done"],
+            &["batch", "error", "enrichment", "summary", "done"],
             "DnsAuthCompareDone",
         ),
         (
@@ -297,6 +304,7 @@ async fn other_jobs_answer_in_both_forms() {
                 "chain" => "DnsChainEvent",
                 "error" => "DnsErrorEvent",
                 "enrichment" => "DnsEnrichmentEvent",
+                "summary" => "DnsJobSummary",
                 _ => done,
             };
             validate_component(component, data);
