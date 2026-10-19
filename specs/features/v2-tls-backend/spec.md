@@ -83,16 +83,16 @@ inventory rows 3.3, 3.9, 3.16, 3.19 (data), 3.23, 3.25 and 3.44, and the data ha
    `tls.handshake/ocsp_live_revoked_at` and `tls.handshake/ocsp_live_reason` are volatile.
 6. `netray_tls::module::translate_ports(resp)` returns one outcome per inspected port, in port
    order, each the full set of 21 `tls.*` checks judged on that port alone with that port's
-   blocks. With one port its outcome equals `translate(resp)`. With more than one port the
+   blocks. With one port its outcome equals `translate(resp)` apart from `tls.notices` (requirement 7). With more than one port the
    port-wide blocks are qualified by the port (`tls.addresses@<port>`, `tls.ct@<port>`), and the
-   host-wide `tls.caa` block appears once, in the first port's outcome.
+   host-wide `tls.caa` block appears once, in the band port's outcome (443, else the lowest port). OCSP stapling, CAA and DANE are judged on the port itself, not from the response's summary, and a TLSA lookup error leaves a port whose TLSA records answered measured.
 7. `translate_ports` adds a `tls.notices` fields block (`warning` text, repeated;
-   `skipped_address` addr, repeated) to the first port's outcome when the response carries
+   `skipped_address` addr, repeated) to the band port's outcome when the response carries
    warnings or skipped addresses, and no such block otherwise. `translate` and the domain run never
    emit it.
 8. The TLS inspector job streams one part per inspected port. With one port the part keeps its
    label `handshake`; with more it is labelled `port <n>`. Each part holds that port's blocks; the
-   band shows the checks of port 443, else the first port, as today.
+   band shows the checks of port 443, else the lowest port, as today.
 9. The TLS inspector's entry points deduplicate the parsed ports, keeping first occurrence order,
    before charging and inspecting, so every limiter charge counts only the ports inspected.
 10. An explore link derived from a port-qualified `tls.addresses@<port>` block names that port
@@ -142,9 +142,9 @@ per port), `crates/web/src/explore.rs` (port from the qualifier), the OpenAPI go
 
 GIVEN a response with ports 443 and 465 WHEN `translate_ports` runs THEN it returns two outcomes, for 443 then 465, each with 21 checks and blocks `tls.addresses@443` and `tls.addresses@465` respectively, and each validates with the evidence rule holding.
 GIVEN port 465 failing its handshake while 443 passes WHEN `translate_ports` runs THEN 465's `tls.tls_reachable` is fail and 443's is pass.
-GIVEN a response with one port WHEN `translate_ports` runs THEN it returns one outcome equal to `translate`, with the unqualified `tls.addresses`.
-GIVEN a two-port response with CAA records WHEN `translate_ports` runs THEN `tls.caa` is in the first outcome only.
-GIVEN a response with a warning and two skipped addresses WHEN `translate_ports` runs THEN the first outcome holds `tls.notices` with the warning and both addresses; GIVEN neither THEN no outcome holds `tls.notices`; GIVEN the same response WHEN `translate` runs THEN no `tls.notices`.
+GIVEN a response with one port and no warnings WHEN `translate_ports` runs THEN it returns one outcome equal to `translate`, with the unqualified `tls.addresses`.
+GIVEN a two-port response with CAA records WHEN `translate_ports` runs THEN `tls.caa` is in the band port's outcome only.
+GIVEN a response with a warning and two skipped addresses WHEN `translate_ports` runs THEN the band port's outcome holds `tls.notices` with the warning and both addresses; GIVEN neither THEN no outcome holds `tls.notices`; GIVEN the same response WHEN `translate` runs THEN no `tls.notices`.
 GIVEN the inspector job for `example.com:443,465` WHEN started THEN it has two parts labelled `port 443` and `port 465`; GIVEN `example.com` THEN one part labelled `handshake`.
 GIVEN `example.com:443,443,465` WHEN the inspector parses it THEN the ports are 443 then 465, and the stub backend records handshakes on two ports per address.
 GIVEN a block `tls.addresses@465` WHEN explore links are derived THEN each links `<address>:465`; GIVEN `tls.addresses` THEN `:443`.
@@ -162,7 +162,7 @@ GIVEN the OpenAPI document WHEN generated THEN `TlsInspectRequest` lists `ports`
 - Per-port outcomes as one `SectionOutcome` per port over a combined section: the 21 check ids are
   unique per outcome, and the UI half renders one band per port from them (implementer under the
   operator's autonomy mandate, 2026-10-19).
-- The inspector page keeps one band (443, else first port) and gets one part per port; per-port
+- The inspector page keeps one band (443, else the lowest port) and gets one part per port; per-port
   bands need template changes and belong to lane A (implementer under the operator's autonomy
   mandate, 2026-10-19).
 - Port-qualified `tls.addresses@<port>` and `tls.ct@<port>` only with more than one port: single
@@ -185,6 +185,9 @@ GIVEN the OpenAPI document WHEN generated THEN `TlsInspectRequest` lists `ports`
   its value (implementer under the operator's autonomy mandate, 2026-10-19).
 - crt.sh needs no new field: V1 builds the link from `fingerprint_sha256`, already in `tls.chain`
   (implementer under the operator's autonomy mandate, 2026-10-19).
+
+- Amendment in Phase 2: requirement 6's one-port equality excludes `tls.notices`, which requirement 7 adds to the band port's outcome also with one port (an IP target always carries the no-SNI warning) (implementer under the operator's autonomy mandate, 2026-10-19).
+- Review of Phase 2: requirement 6 per port means OCSP, CAA and DANE come from the port itself (the summary judges the first handshake over all ports), a host-wide TLSA error spares a port whose records answered, and the host-wide blocks sit in the band port's outcome so the band keeps referencing `tls.caa` (implementer under the operator's autonomy mandate, 2026-10-19).
 
 ## Open decisions
 

@@ -76,7 +76,10 @@ fn notices(outcome: &SectionOutcome) -> Option<&Block> {
 
 #[test]
 fn two_ports_give_two_qualified_outcomes() {
-    let outcomes = translate_ports(&response(two_ports()));
+    // CT checked, so each port carries its SCT table (a skipped CT check has none).
+    let mut doc = two_ports();
+    doc["summary"]["checks"]["ct_logged"] = serde_json::json!("pass");
+    let outcomes = translate_ports(&response(doc));
     assert_eq!(
         outcomes.iter().map(|(p, _)| *p).collect::<Vec<_>>(),
         vec![443, 465]
@@ -174,4 +177,50 @@ fn no_notices_block_without_warnings_or_skipped_addresses() {
     for (_, outcome) in translate_ports(&response(two_ports())) {
         assert!(notices(&outcome).is_none());
     }
+}
+
+// Review of Phase 2: OCSP, DANE and the TLSA lookup error are judged per port, not from the
+// summary of the first handshake; the host-wide blocks sit in the band port's outcome.
+
+#[test]
+fn ocsp_stapled_is_judged_on_each_port() {
+    let mut doc = two_ports();
+    doc["summary"]["checks"]["ocsp_stapled"] = json!("pass");
+    doc["ports"][0]["ips"][0]["tls"]["ocsp"] = json!({"stapled": true, "status": "good"});
+    doc["ports"][1]["ips"][0]["tls"]["ocsp"] = json!({"stapled": false});
+    let outcomes = translate_ports(&response(doc));
+    assert_eq!(status(&outcomes[0].1, "ocsp_stapled"), Status::Pass);
+    assert_eq!(status(&outcomes[1].1, "ocsp_stapled"), Status::Warn);
+}
+
+#[test]
+fn dane_and_a_tlsa_error_are_judged_on_each_port() {
+    let mut doc = two_ports();
+    doc["summary"]["checks"]["dane_valid"] = json!("pass");
+    doc["ports"][0]["tlsa"] = json!({
+        "records": ["3 1 1 aabb"],
+        "dnssec_signed": false,
+        "dane_valid": true
+    });
+    doc["dns"] = json!({"resolved_ips": ["192.0.2.10"], "lookup_errors": ["tlsa"]});
+    let outcomes = translate_ports(&response(doc));
+    assert_eq!(status(&outcomes[0].1, "dane_valid"), Status::Pass);
+    assert_eq!(status(&outcomes[1].1, "dane_valid"), Status::Unmeasured);
+}
+
+#[test]
+fn notices_sit_in_the_band_port_without_443() {
+    let mut doc = two_ports();
+    doc["ports"][0]["port"] = json!(8443);
+    doc["ports"].as_array_mut().unwrap().reverse();
+    doc["warnings"] = json!(["192.0.2.99: blocked (documentation range)"]);
+    let outcomes = translate_ports(&response(doc));
+    assert_eq!(
+        outcomes.iter().map(|(p, _)| *p).collect::<Vec<_>>(),
+        vec![465, 8443]
+    );
+    assert!(notices(&outcomes[0].1).is_some());
+    assert!(notices(&outcomes[1].1).is_none());
+    assert_eq!(netray_tls::module::band_port([8443, 465]), 465);
+    assert_eq!(netray_tls::module::band_port([8443, 443]), 443);
 }

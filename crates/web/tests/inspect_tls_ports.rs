@@ -73,22 +73,36 @@ async fn c13_one_part_per_port_labelled_by_port() {
 
     assert!(stream.contains("port 443"), "{stream}");
     assert!(stream.contains("port 465"), "{stream}");
-    assert!(!stream.contains("handshake"), "{stream}");
+    // The start fragment names each part by its label; the `handshake` label is gone.
+    assert!(!stream.contains("handshake pending"), "{stream}");
     assert_eq!(count(&stream, "inspect-part-2"), 0, "{stream}");
     assert!(stream.contains("inspect-band"), "{stream}");
 
-    // The streamed part is the last mention of its id; its blocks follow it, before the next part.
-    let p0 = stream.rfind("inspect-part-0").expect(&stream);
-    let p1 = stream.rfind("inspect-part-1").expect(&stream);
-    let b443 = stream
-        .find("ev-tls.chain@93.184.215.14:443")
-        .unwrap_or_else(|| panic!("no 443 chain block: {stream}"));
-    let b465 = stream
-        .find("ev-tls.chain@93.184.215.14:465")
-        .unwrap_or_else(|| panic!("no 465 chain block: {stream}"));
-    assert!(p0 < p1, "parts out of order: {stream}");
-    assert!(p0 < b443 && b443 < p1, "443 block outside part 0: {stream}");
-    assert!(b465 > p1, "465 block outside part 1: {stream}");
+    // Each part's own fragment event holds that port's chain block and not the other's.
+    let part = |n: usize| -> &str {
+        let id = format!("\"id\":\"inspect-part-{n}\",\"html\"");
+        stream
+            .split("\n\n")
+            .filter(|event| event.contains(&id))
+            .last()
+            .unwrap_or_else(|| panic!("no fragment for part {n}: {stream}"))
+    };
+    assert!(
+        part(0).contains("ev-tls.chain@93.184.215.14:443"),
+        "{stream}"
+    );
+    assert!(
+        !part(0).contains("ev-tls.chain@93.184.215.14:465"),
+        "{stream}"
+    );
+    assert!(
+        part(1).contains("ev-tls.chain@93.184.215.14:465"),
+        "{stream}"
+    );
+    assert!(
+        !part(1).contains("ev-tls.chain@93.184.215.14:443"),
+        "{stream}"
+    );
 }
 
 #[tokio::test]
