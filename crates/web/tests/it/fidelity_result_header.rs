@@ -174,7 +174,7 @@ async fn r3_header_is_grade_then_title_column_then_actions() {
 
 #[test]
 fn r3_hero_styles_are_a_wrapping_flex_row_with_a_column_title() {
-    let css = include_str!("../static/pages.css");
+    let css = include_str!("../../static/pages.css");
     let hero = rule(css, ".result-hero");
     assert_eq!(decl(&hero, "display"), "flex");
     assert_eq!(decl(&hero, "align-items"), "center");

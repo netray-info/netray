@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mount } from "../src/main";
 
-// stream.sse is written by the Rust encoder (crates/web/tests/stream_wire.rs).
+// stream.sse is written by the Rust encoder (crates/web/tests/it/stream_wire.rs).
 const fixture = readFileSync(resolve(process.cwd(), "test/fixtures/stream.sse"));
 
 afterEach(() => {

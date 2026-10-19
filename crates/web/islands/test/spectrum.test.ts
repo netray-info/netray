@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { spectrum } from "../src/spectrum";
 
-// Markup is written by the Rust renderer (crates/web/tests/result_islands_trace_fixture.rs).
+// Markup is written by the Rust renderer (crates/web/tests/it/result_islands_trace_fixture.rs).
 const trace = readFileSync(resolve(process.cwd(), "test/fixtures/result-trace.html"), "utf8");
 
 function stubMatchMedia(phone: boolean): void {

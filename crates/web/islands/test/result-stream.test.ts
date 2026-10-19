@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount, register } from "../src/main";
 
-// Markup and stream are written by the Rust renderer (crates/web/tests/result_islands_fixtures.rs).
+// Markup and stream are written by the Rust renderer (crates/web/tests/it/result_islands_fixtures.rs).
 const read = (name: string): Buffer => readFileSync(resolve(process.cwd(), "test/fixtures", name));
 const stale = read("result-stale.html").toString("utf8");
 const fresh = read("result-fresh.html").toString("utf8");

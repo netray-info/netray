@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mount } from "../src/main";
 
-// Both fixtures are written by the Rust renderer (crates/web/tests/result_islands_fixtures.rs).
+// Both fixtures are written by the Rust renderer (crates/web/tests/it/result_islands_fixtures.rs).
 const fixture = (name: string) => readFileSync(resolve(process.cwd(), "test/fixtures", name));
 const stale = fixture("result-stale.html").toString("utf8");
 const refused = fixture("result-refused.sse");
