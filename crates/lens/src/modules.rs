@@ -189,7 +189,7 @@ pub(crate) fn ip_addresses(evidence: &[Block]) -> Vec<IpInfo> {
 pub(crate) struct HttpServer {
     pub status_code: Option<u16>,
     pub http_version: Option<String>,
-    pub response_ms: Option<u64>,
+    pub inspection_ms: Option<u64>,
     pub address: Option<String>,
     pub org: Option<String>,
     pub network_type: Option<String>,
@@ -206,7 +206,7 @@ impl HttpServer {
                 _ => None,
             },
             http_version: text(f, "http_version"),
-            response_ms: match field(f, "response_ms") {
+            inspection_ms: match field(f, "inspection_ms") {
                 Some(Value::Duration(ms)) => Some(*ms),
                 _ => None,
             },
@@ -479,7 +479,7 @@ impl ModuleSection {
                             ),
                             status_code: server.status_code,
                             http_version: server.http_version,
-                            response_duration_ms: server.response_ms,
+                            response_duration_ms: server.inspection_ms,
                             server_ip: server.address,
                             server_org: server.org,
                             server_network_type: server.network_type,
@@ -587,5 +587,47 @@ mod tests {
             matches!(result, Err(SectionError::NoDnsResults)),
             "expected NoDnsResults, got: {result:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn http_section_reads_response_duration_from_inspection_ms() {
+        let server = Block {
+            id: BlockId::parse("http.server").unwrap(),
+            title: "Server".into(),
+            shape: Shape::Fields(vec![
+                ("status_code".into(), Value::Int(200)),
+                ("inspection_ms".into(), Value::Duration(77)),
+            ]),
+        };
+        let section = ModuleSection {
+            registry: Arc::new(Registry::new()),
+            protocol: Protocol::Http,
+            timeout: Duration::from_secs(5),
+            public_url: "https://http.example.com".to_string(),
+        };
+        let (tx, _rx) = mpsc::channel(1);
+        let base = RunContext {
+            deadline: Instant::now() + Duration::from_secs(5),
+            domain: Domain::new("example.com"),
+            options: RunOptions {
+                dkim_selectors: None,
+            },
+        };
+        let report =
+            netray_engine::run(&section.registry, base, &[], Duration::from_secs(1), tx).await;
+        let outcome = SectionOutcome::Measured {
+            checks: vec![],
+            evidence: vec![server],
+        };
+        let result = section
+            .adapt("example.com", outcome, &report)
+            .expect("measured http section adapts");
+        match result.extra {
+            BackendExtra::Http {
+                response_duration_ms,
+                ..
+            } => assert_eq!(response_duration_ms, Some(77)),
+            _ => panic!("expected BackendExtra::Http"),
+        }
     }
 }

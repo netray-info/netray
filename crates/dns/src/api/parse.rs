@@ -128,22 +128,36 @@ pub async fn parse_handler(
     State(state): State<AppState>,
     Json(body): Json<ParseRequest>,
 ) -> Json<ParseResponse> {
-    let input = &body.input;
-    let mut cursor_pos = body.cursor_pos.unwrap_or(input.len()).min(input.len());
+    let (tokens, completions) = parse_input(
+        &body.input,
+        body.cursor_pos,
+        state.config.dns.allow_system_resolvers,
+    );
+
+    Json(ParseResponse {
+        tokens,
+        completions,
+    })
+}
+
+/// Tokenises `input` and completes at `cursor_pos` (default: the end). `@system` is offered only
+/// when `allow_system` is set.
+pub fn parse_input(
+    input: &str,
+    cursor_pos: Option<usize>,
+    allow_system: bool,
+) -> (Vec<TokenInfo>, Vec<Completion>) {
+    let mut cursor_pos = cursor_pos.unwrap_or(input.len()).min(input.len());
     while !input.is_char_boundary(cursor_pos) {
         cursor_pos -= 1;
     }
 
     let tokens = tokenize(input);
     let mut completions = completions_at(input, cursor_pos, &tokens);
-    if !state.config.dns.allow_system_resolvers {
+    if !allow_system {
         completions.retain(|c| c.label != "@system");
     }
-
-    Json(ParseResponse {
-        tokens,
-        completions,
-    })
+    (tokens, completions)
 }
 
 // ---------------------------------------------------------------------------

@@ -223,13 +223,29 @@ fn dns(job: &'static str, status: u16, accept: Option<&'static str>, body: &'sta
     }
 }
 
+/// A DNS job case on the GET form: `q` in the query language, percent-encoded.
+fn dns_get(job: &'static str, status: u16, accept: Option<&'static str>, q: &str) -> Case {
+    let doc_path: &'static str = format!("/api/v1/dns/{job}").leak();
+    let uri: &'static str = format!("/dns/{job}?q={q}").leak();
+    Case {
+        accept,
+        ..ip(doc_path, "get", uri, status, None)
+    }
+}
+
 /// The SSE event names a DNS path may emit and the component of its `done` event.
 fn dns_events(doc_path: &str) -> (&'static [&'static str], &'static str) {
     match doc_path {
-        "/api/v1/dns/query" => (&["batch", "error", "enrichment", "done"], "DnsQueryDone"),
-        "/api/v1/dns/compare" => (&["batch", "error", "enrichment", "done"], "DnsCompareDone"),
+        "/api/v1/dns/query" => (
+            &["batch", "error", "enrichment", "summary", "done"],
+            "DnsQueryDone",
+        ),
+        "/api/v1/dns/compare" => (
+            &["batch", "error", "enrichment", "summary", "done"],
+            "DnsCompareDone",
+        ),
         "/api/v1/dns/authcompare" => (
-            &["batch", "error", "enrichment", "done"],
+            &["batch", "error", "enrichment", "summary", "done"],
             "DnsAuthCompareDone",
         ),
         "/api/v1/dns/trace" => (&["hop", "error", "enrichment", "done"], "DnsTraceDone"),
@@ -246,6 +262,78 @@ fn cases() -> Vec<Case> {
     let mut v = vec![
         case("/api/v1/catalogue", "get", "/catalogue", 200, 0),
         case("/api/v1/catalogue", "get", "/catalogue", 429, 1),
+        case("/api/v1/dns/servers", "get", "/dns/servers", 200, 0),
+        case("/api/v1/dns/servers", "get", "/dns/servers", 429, 1),
+        ip(
+            "/api/v1/dns/check",
+            "post",
+            "/dns/check",
+            200,
+            Some(r#"{"domain":"example.com"}"#),
+        ),
+        ip(
+            "/api/v1/dns/check",
+            "post",
+            "/dns/check",
+            400,
+            Some(r#"{"domain":"192.0.2.1"}"#),
+        ),
+        ip(
+            "/api/v1/dns/check",
+            "get",
+            "/dns/check?q=example.com",
+            200,
+            None,
+        ),
+        ip(
+            "/api/v1/dns/check",
+            "get",
+            "/dns/check?q=192.0.2.1",
+            400,
+            None,
+        ),
+        case(
+            "/api/v1/dns/results/{key}",
+            "get",
+            "/dns/results/{dnskey}",
+            200,
+            0,
+        ),
+        case(
+            "/api/v1/dns/results/{key}",
+            "get",
+            "/dns/results/XYZ",
+            400,
+            0,
+        ),
+        case(
+            "/api/v1/dns/record-types",
+            "get",
+            "/dns/record-types",
+            200,
+            0,
+        ),
+        case(
+            "/api/v1/dns/record-types",
+            "get",
+            "/dns/record-types",
+            429,
+            1,
+        ),
+        ip(
+            "/api/v1/dns/parse",
+            "post",
+            "/dns/parse",
+            200,
+            Some(r#"{"input":"example.com MX @cl"}"#),
+        ),
+        ip(
+            "/api/v1/dns/parse",
+            "post",
+            "/dns/parse",
+            400,
+            Some("not json"),
+        ),
         case("/api/v1/profiles/{n}", "get", "/profiles/3", 200, 0),
         case("/api/v1/profiles/{n}", "get", "/profiles/99", 404, 0),
         case("/api/v1/profiles/{n}", "get", "/profiles/x", 400, 0),
@@ -376,6 +464,11 @@ fn cases() -> Vec<Case> {
     v.push(dns("dnssec", 200, None, DNS_OK));
     v.push(dns("dnssec", 200, Some("text/event-stream"), DNS_OK));
     v.push(dns("dnssec", 400, None, DNSSEC_BAD));
+    for job in ["query", "compare", "authcompare", "trace", "dnssec"] {
+        v.push(dns_get(job, 200, None, "example.com"));
+        v.push(dns_get(job, 200, Some("text/event-stream"), "example.com"));
+        v.push(dns_get(job, 400, None, "example.com%20ANY"));
+    }
     v
 }
 
@@ -465,7 +558,13 @@ fn app(store: Option<Arc<HistoryStore>>, ip_off: bool) -> axum::Router {
             netray_email::testing::example_dns(),
         ))),
         dns: Some(netray_dns::testing::stub_jobs()),
-        dns_module: None,
+        dns_module: Some(Arc::from(netray_dns::testing::golden_module(
+            &std::fs::read_to_string(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../tests/fixtures/contracts/prism.sse"
+            ))
+            .expect("the prism check golden"),
+        ))),
     };
     let config = ApiConfig {
         per_ip_burst: 1,
@@ -554,6 +653,20 @@ async fn responses_match_the_committed_document() {
                 (app(Some(store), false), Some(dir))
             }
         };
+        if uri.contains("{dnskey}") {
+            let job = app
+                .clone()
+                .oneshot(request_accepting("post", "/dns/query", None, Some(DNS_OK)))
+                .await
+                .unwrap();
+            let bytes = job.into_body().collect().await.unwrap().to_bytes();
+            let body: Value = serde_json::from_slice(&bytes).unwrap();
+            let key = body["done"]["cache_key"]
+                .as_str()
+                .expect("a cache key")
+                .to_string();
+            uri = uri.replace("{dnskey}", &key);
+        }
         for _ in 0..c.warmup {
             app.clone().oneshot(request(c.method, &uri)).await.unwrap();
         }
@@ -650,6 +763,7 @@ async fn responses_match_the_committed_document() {
                         "enrichment" => "DnsEnrichmentEvent",
                         "hop" => "DnsHopEvent",
                         "chain" => "DnsChainEvent",
+                        "summary" => "DnsJobSummary",
                         _ => done,
                     };
                     validate_component(&doc, component, &body, &format!("{label} {event}"));

@@ -15,7 +15,9 @@ use crate::dns_dnssec::ChainLevel;
 use crate::dns_trace::TraceHop;
 use crate::record_format;
 
+use super::results::DnsCachedJob;
 use super::schema::DnsLookups;
+use super::summary::{DnsJobSummary, summarise};
 
 /// A non-fatal error of a job, e.g. one resolver failing.
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -115,6 +117,8 @@ pub struct DnsDnssecDone {
     pub request_id: String,
     pub duration_ms: u64,
     pub levels: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_key: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -157,6 +161,9 @@ pub enum AuthResult {
         /// the V1 wire.
         #[serde(skip)]
         failure: Option<String>,
+        /// The response code mnemonic of a failed answer (`REFUSED`); not on the V1 wire.
+        #[serde(skip)]
+        failure_code: Option<String>,
     },
     NxDomain {
         response_time: WireDuration,
@@ -245,9 +252,12 @@ impl Serialize for DnsBatch {
 // ---------------------------------------------------------------------------
 
 /// An event of a DNS job.
-pub trait DnsJobEvent: Serialize + Send + 'static {
+pub trait DnsJobEvent: Serialize + Clone + Send + 'static {
     /// What the job's events collect into.
-    type Collected: Serialize + Default + Send;
+    type Collected: Serialize + Clone + Default + Send + Into<DnsCachedJob>;
+
+    /// The job's name in the result cache and on its route.
+    const MODE: &'static str;
 
     /// The SSE event name prism emits.
     fn name(&self) -> &'static str;
@@ -261,6 +271,11 @@ pub trait DnsJobEvent: Serialize + Send + 'static {
     fn cache_value(&self) -> serde_json::Value;
 
     fn collect_into(self, into: &mut Self::Collected);
+
+    /// The `summary` event that precedes `done`, when the job has one.
+    fn summary_event(_collected: &Self::Collected) -> Option<Self> {
+        None
+    }
 
     /// prism's SSE frame.
     fn sse_event(&self) -> Event {
@@ -277,7 +292,7 @@ fn value<T: Serialize>(payload: &T) -> serde_json::Value {
 }
 
 macro_rules! batch_job {
-    ($(#[$meta:meta])* $event:ident, $result:ident, $done:ident) => {
+    ($(#[$meta:meta])* $event:ident, $result:ident, $done:ident, $mode:literal) => {
         $(#[$meta])*
         #[derive(Debug, Clone, Serialize, ToSchema)]
         #[serde(untagged)]
@@ -285,6 +300,8 @@ macro_rules! batch_job {
             Batch(DnsBatch),
             Error(DnsErrorEvent),
             Enrichment(DnsEnrichmentEvent),
+            /// The job's summary, emitted by API v1 before `done`; the job never sends it.
+            Summary(DnsJobSummary),
             Done($done),
         }
 
@@ -298,6 +315,9 @@ macro_rules! batch_job {
             /// `null` when the stream ended before the job finished.
             #[schema(required = true)]
             pub done: Option<$done>,
+            /// `null` until the job is done.
+            #[schema(required = true)]
+            pub summary: Option<DnsJobSummary>,
         }
 
         impl From<DnsErrorEvent> for $event {
@@ -308,12 +328,14 @@ macro_rules! batch_job {
 
         impl DnsJobEvent for $event {
             type Collected = $result;
+            const MODE: &'static str = $mode;
 
             fn name(&self) -> &'static str {
                 match self {
                     Self::Batch(_) => "batch",
                     Self::Error(_) => "error",
                     Self::Enrichment(_) => "enrichment",
+                    Self::Summary(_) => "summary",
                     Self::Done(_) => "done",
                 }
             }
@@ -333,6 +355,7 @@ macro_rules! batch_job {
                     Self::Batch(b) => b.cache_value(),
                     Self::Error(e) => value(e),
                     Self::Enrichment(e) => value(e),
+                    Self::Summary(s) => value(s),
                     Self::Done(d) => value(d),
                 }
             }
@@ -342,8 +365,20 @@ macro_rules! batch_job {
                     Self::Batch(b) => into.batches.push(b),
                     Self::Error(e) => into.errors.push(e),
                     Self::Enrichment(e) => into.enrichment = Some(e),
-                    Self::Done(d) => into.done = Some(d),
+                    Self::Summary(s) => into.summary = Some(s),
+                    Self::Done(d) => {
+                        into.done = Some(d);
+                        // A `summary` event already collected (the v1 stream's) wins: one summary
+                        // per job, the one that was stored and sent.
+                        if into.summary.is_none() {
+                            into.summary = Some(summarise(&into.batches));
+                        }
+                    }
                 }
+            }
+
+            fn summary_event(collected: &$result) -> Option<Self> {
+                collected.summary.clone().map(Self::Summary)
             }
         }
     };
@@ -353,19 +388,22 @@ batch_job!(
     /// An event of a query job.
     DnsQueryEvent,
     DnsQueryResult,
-    DnsQueryDone
+    DnsQueryDone,
+    "query"
 );
 batch_job!(
     /// An event of a compare job.
     DnsCompareEvent,
     DnsCompareResult,
-    DnsCompareDone
+    DnsCompareDone,
+    "compare"
 );
 batch_job!(
     /// An event of an authcompare job.
     DnsAuthCompareEvent,
     DnsAuthCompareResult,
-    DnsAuthCompareDone
+    DnsAuthCompareDone,
+    "authcompare"
 );
 
 /// An event of a trace job.
@@ -398,6 +436,7 @@ impl From<DnsErrorEvent> for DnsTraceEvent {
 
 impl DnsJobEvent for DnsTraceEvent {
     type Collected = DnsTraceResult;
+    const MODE: &'static str = "trace";
 
     fn name(&self) -> &'static str {
         match self {
@@ -464,6 +503,7 @@ impl From<DnsErrorEvent> for DnsDnssecEvent {
 
 impl DnsJobEvent for DnsDnssecEvent {
     type Collected = DnsDnssecResult;
+    const MODE: &'static str = "dnssec";
 
     fn name(&self) -> &'static str {
         match self {
@@ -477,7 +517,11 @@ impl DnsJobEvent for DnsDnssecEvent {
         matches!(self, Self::Done(_))
     }
 
-    fn set_cache_key(&mut self, _key: String) {}
+    fn set_cache_key(&mut self, key: String) {
+        if let Self::Done(d) = self {
+            d.cache_key = Some(key);
+        }
+    }
 
     fn cache_value(&self) -> serde_json::Value {
         match self {

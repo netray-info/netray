@@ -91,7 +91,7 @@ fn task(final_url: &str, status: u16, headers: HeaderMap) -> TaskResult {
 }
 
 #[test]
-fn repeated_set_cookie_joins_into_one_row() {
+fn repeated_set_cookie_keeps_one_row_per_value() {
     let mut resp = fixture(|_| {});
     resp.raw_headers = vec![
         ("set-cookie".into(), "a=1; Secure".into()),
@@ -100,15 +100,16 @@ fn repeated_set_cookie_joins_into_one_row() {
     ];
     let (_, blocks) = run(&resp);
     let headers = rows(&blocks, "http.headers");
-    let set_cookie: Vec<_> = headers
+    let first = headers
         .iter()
-        .filter(|r| cell(r, "name") == text("set-cookie"))
-        .collect();
-    assert_eq!(set_cookie.len(), 1, "{headers:?}");
-    assert_eq!(
-        cell(set_cookie[0], "value"),
-        text("a=1; Secure\nb=2; Secure")
-    );
+        .find(|r| cell(r, "name") == text("set-cookie"))
+        .unwrap_or_else(|| panic!("{headers:?}"));
+    let second = headers
+        .iter()
+        .find(|r| cell(r, "name") == text("set-cookie#2"))
+        .unwrap_or_else(|| panic!("{headers:?}"));
+    assert_eq!(cell(first, "value"), text("a=1; Secure"));
+    assert_eq!(cell(second, "value"), text("b=2; Secure"));
 }
 
 #[test]
