@@ -10,7 +10,6 @@ pub enum OutputFormat {
 }
 
 impl OutputFormat {
-    #[cfg(test)]
     pub fn from_name(s: &str) -> Option<Self> {
         match s {
             "json" => Some(OutputFormat::Json),

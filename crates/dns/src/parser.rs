@@ -31,6 +31,14 @@ const SERVER_GROUP_ALIASES: &[(&str, &[PredefinedProvider])] = &[
     ),
 ];
 
+/// The group aliases with the provider names each expands to.
+pub fn server_groups() -> Vec<(&'static str, Vec<String>)> {
+    SERVER_GROUP_ALIASES
+        .iter()
+        .map(|&(alias, providers)| (alias, providers.iter().map(|p| p.to_string()).collect()))
+        .collect()
+}
+
 /// Maximum number of record types allowed in a single query (SDD section 8).
 /// Must equal `config::HARD_CAP_RECORD_TYPES` — enforced by a const assertion in config.rs.
 pub(crate) const MAX_RECORD_TYPES: usize = 10;

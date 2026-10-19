@@ -2975,6 +2975,7 @@ version = "0.26.0"
 dependencies = [
  "arc-swap",
  "axum",
+ "chrono",
  "config",
  "futures",
  "governor",
@@ -3214,7 +3215,9 @@ dependencies = [
  "futures",
  "governor",
  "http-body-util",
+ "httpdate",
  "jsonschema",
+ "metrics",
  "netray-common",
  "netray-dns",
  "netray-email",

@@ -31,6 +31,8 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - `just adlc-verify` does not type-check the frontends; run `npx tsc --noEmit` in a frontend you changed.
 - Shared frontend types are generated (`npm run build:types -w @netray-info/common-frontend`, run by `just adlc-setup`); a fresh checkout needs it before `tsc`.
 - `just adlc-verify` is the gate: offline, no browser. `just check` adds the full Rust suite.
+- Read `adlc verify`'s `verified:` or `refuted:` line; piped into `tail`, the exit status is `tail`'s, and a refuted gate looks green.
+- `openapi_responses` needs a 2xx and a non-2xx case per documented operation: a new v1 route adds both; a 2xx needing state runs its producer first (`{dnskey}`).
 - `just build`, `just image`, `just acceptance` (network + browser), `just release X.Y.Z` (never pushes).
 - The published image never contains data files (GeoLite2 licence); `netray ip` gets `/netray/data` from the deployment's mount.
 - `just check` runs `cargo deny check bans licenses sources`; `just adlc-setup` installs cargo-deny when it is missing.
@@ -38,6 +40,7 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - Data: `just ifconfig-data` / `just test-ifconfig-data` (GeoIP), `just tlsight-data` (CAA table, committed).
 - **Integration tests go into `crates/<c>/tests/it/`** as a module with a `mod` line in `tests/it/main.rs`: each merged crate links one test binary `it` (web, lens, engine, model, store, dns, tls, email, http, common). A file stays its own target only with `required-features`, `harness = false`, or a reason in `tests/repo/test_test_binaries.sh` (lens's `LENS_*`-setting `admission_config`, `history_config`). Run one with `cargo test -p <crate> --test it <module>`; shared helpers live in `tests/it/<name>/mod.rs`, used as `use crate::<name>;`.
 - Run tests that depend on feature unification with `--workspace`; `cargo test -p <crate>` resolves features for that crate alone and passes where the binary is wrong.
+- Write no file into the worktree while `adlc verify` runs: its `cargo fmt --check` reads untracked files too and refutes the receipt.
 - `tests/repo/*` read `git ls-files`: stage new and deleted files before running them.
 - `just design-check` needs the private canvas: its export serves boards as sandboxed blob: iframes; reach them with Playwright's `contentFrame()`, never `iframe.contentDocument`.
 - A Playwright test serving fixtures from its own process spawns children with async `spawn`: `spawnSync` blocks the event loop and the fixture server never answers.
@@ -76,11 +79,16 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **beacon orders verdicts** Skip < Info < Pass < Warn < Fail; a category with only Info sub-checks is not applicable to lens, except `email.mx` (pass, Info as findings) and `email.dnsbl` (pass when one zone answered). A category carrying the `unmeasured` sub-check is `unmeasured`.
 - **A failed lookup is never an answer** (Rule M, `specs/features/v2-unmeasured/spec.md`): SERVFAIL, REFUSED, timeout or a policy-refused redirect is `unmeasured`; only NXDOMAIN/NODATA or a wrong answer from the target is a measured fail.
 - **An address lookup has two halves.** Keep the answered half and report the failed one (`AddressLookup { ips, error }`); never fail the whole lookup on one family.
+- **`netray_dns::parser::parse` is no domain validation**: it lowercases the first token and checks no syntax; validate names with `netray_common::domain::validate`.
+- **An unguessable key comes from `Uuid::new_v4()`**: a v7's last 48 bits hold 16 counter bits shared by every key of one millisecond.
 - **Never derive a verdict from a finding's detail text.** Carry it in a structured marker (e.g. SPF `spf_incomplete` with `ipv4`/`ipv6`/`both`/`any`).
 - **An evidence block holds the fact that decided its check.** Omit unknowns; never publish a placeholder (`0`, `""`, a guessed TTL). `check_evidence_rule` and each module's `validate` test enforce it.
 - **Carry new internal data on V1 response structs as `#[serde(skip)]` fields** so the V1 wire and its goldens stay byte-identical; test struct literals then need the field.
 - **Module crates' `required-features = ["testing"]` tests need `--features testing`**: `cargo test -p netray-email --features testing --test evidence`; without it they are skipped or refused.
 - **A new volatile path changes every stored fingerprint**: the next run of each domain stores an entry with an empty diff (`crates/store/src/lib.rs` compares the stored fingerprint).
+- **A volatile key never decides presence.** A block or sibling key that exists only beside a volatile key flaps the fingerprint: make the block unconditional or the sibling volatile (`http.caching`).
+- **A volatile row path also covers `<key>#<n>` repeats** (`canonical.rs` `row_covers`): key repeated table rows `#<n>`, never join them into one cell.
+- **A check outside the verdict is evidence, not a catalogue ID.** The profile refuses weight 0 and every ID needs a weight (SDD §3.8); COOP/COEP/CORP live in `http.isolation`.
 - **beacon goldens are literal scenarios**: a new one must carry every sub-check the checks emit for its records (FCrDNS one per IP, `single_mx`, `no_ipv6`, DMARC `no_ruf`).
 - **A new check id needs its texts in the catalogue**: `crates/engine/catalogue/checks.toml` (lens reads titles, fix hints, owners and guide links from it) and `CHECK_LABELS`/`CHECK_DESCRIPTIONS` in the frontend `checkMeta.ts`, which `tests/repo/test_checkmeta_catalogue.sh` holds to the catalogue's names and titles. A catalogue text (`finding`, `fix_hint`, `fix_owner`) describes every warn and fail branch of the check's code: read the check before writing it.
 - **tlsight's `summary` judges OCSP, CAA and DANE from the first handshake over all ports**: a per-port verdict reads the port's own data (`module::port_wide`).
@@ -101,6 +109,8 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Shared dependencies** go in `[workspace.dependencies]` once two crates use them.
 - **Every production `impl DomainRuns` overrides `start_with`**: the default drops DKIM selectors (`tests/repo/test_domain_runs_selectors.sh`).
 - **An inspector under `/api/v1` runs on its module's `[modules.<x>]` state**; `[api.<x>]` holds only per-client limits (email adds its slots). Never build a second inspector state.
+- **An ip answer validates, then checks the seam, then charges**: a 400 or 503 costs no limiter; charge the per-IP limiter only through `charge_caller` (it feeds `X-RateLimit-Remaining` via a task-local).
+- **`netray_web::api::ip_host` serves `ip.`'s V1 paths** (`/country`, `/json`, `/ip/cidr` ...) and hands every other request back; the cutover mounts it before `ip_successor`.
 - **Compose each new inspector onto the finished v1 document** (`api/compose.rs`, one step per part): composing it with the earlier parts renames a committed component and fails `openapi_contract`.
 - **A golden over prism's routes zeroes `latency_ms` and sorts hash-map-ordered lists** (authcompare's servers); capture it twice before committing.
 - **Outbound fetches of user- or domain-controlled URLs** go only through `netray_common::fetch`; never build a `reqwest::Client` for them. Checking and pinning live in its DNS resolver; reqwest keeps redirect handling.

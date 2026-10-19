@@ -30,7 +30,9 @@ pub fn analyze_security_headers(headers: &HeaderMap) -> SecurityReport {
                 )
             }
         }),
-        referrer_policy: analyze_header_presence(headers, "referrer-policy", |v| {
+        referrer_policy: analyze_list_header(headers, "referrer-policy", |v| {
+            // W3C Referrer Policy, "parse a referrer policy from a Referrer-Policy header":
+            // the last recognised token of the comma-separated list is the effective policy.
             let pass_values = [
                 "no-referrer",
                 "no-referrer-when-downgrade",
@@ -39,12 +41,18 @@ pub fn analyze_security_headers(headers: &HeaderMap) -> SecurityReport {
                 "same-origin",
             ];
             let warn_values = ["origin", "origin-when-cross-origin", "unsafe-url"];
-            if pass_values.iter().any(|s| v.eq_ignore_ascii_case(s)) {
-                (CheckStatus::Pass, None)
-            } else if warn_values.iter().any(|s| v.eq_ignore_ascii_case(s)) {
-                (CheckStatus::Warn, Some(format!("Permissive policy: {v}")))
-            } else {
-                (CheckStatus::Warn, Some(format!("Unrecognized value: {v}")))
+            let effective = v.split(',').map(str::trim).rfind(|t| {
+                pass_values
+                    .iter()
+                    .chain(warn_values.iter())
+                    .any(|s| t.eq_ignore_ascii_case(s))
+            });
+            match effective {
+                Some(t) if pass_values.iter().any(|s| t.eq_ignore_ascii_case(s)) => {
+                    (CheckStatus::Pass, None)
+                }
+                Some(t) => (CheckStatus::Warn, Some(format!("Permissive policy: {t}"))),
+                None => (CheckStatus::Warn, Some(format!("Unrecognized value: {v}"))),
             }
         }),
         coop: analyze_header_presence(headers, "cross-origin-opener-policy", |_| {
@@ -109,6 +117,36 @@ fn analyze_hsts(headers: &HeaderMap) -> HstsCheck {
         max_age,
         include_sub_domains,
         preload,
+    }
+}
+
+/// As [`analyze_header_presence`], over every line of a list-valued header joined with `, `, as
+/// RFC 9110 §5.3 combines them.
+fn analyze_list_header(
+    headers: &HeaderMap,
+    name: &str,
+    scorer: impl FnOnce(&str) -> (CheckStatus, Option<String>),
+) -> HeaderCheck {
+    let values = headers.get_all(name);
+    if values.iter().next().is_none() {
+        return analyze_header_presence(headers, name, scorer);
+    }
+    let lines: Option<Vec<&str>> = values.iter().map(|v| v.to_str().ok()).collect();
+    match lines {
+        Some(lines) => {
+            let val = lines.join(", ");
+            let (status, message) = scorer(&val);
+            HeaderCheck {
+                status,
+                value: Some(val),
+                message,
+            }
+        }
+        None => HeaderCheck {
+            status: CheckStatus::Warn,
+            value: None,
+            message: Some("Header value contains non-ASCII".into()),
+        },
     }
 }
 
@@ -242,6 +280,23 @@ mod tests {
                 "expected Warn for '{value}'"
             );
         }
+    }
+
+    #[test]
+    fn referrer_policy_lines_are_one_list() {
+        let mut h = HeaderMap::new();
+        h.append("referrer-policy", "no-referrer".parse().unwrap());
+        h.append("referrer-policy", "unsafe-url".parse().unwrap());
+        let report = analyze_security_headers(&h);
+        assert_eq!(report.referrer_policy.status, CheckStatus::Warn);
+        assert_eq!(
+            report.referrer_policy.message.as_deref(),
+            Some("Permissive policy: unsafe-url")
+        );
+        assert_eq!(
+            report.referrer_policy.value.as_deref(),
+            Some("no-referrer, unsafe-url")
+        );
     }
 
     #[test]

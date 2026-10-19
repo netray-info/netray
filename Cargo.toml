@@ -25,6 +25,7 @@ tower = "0.5"
 tower-http = "0.6"
 governor = "0.10"
 http-body-util = "0.1"
+httpdate = "1"
 
 # HTTP client
 reqwest = { version = "0.13", default-features = false }

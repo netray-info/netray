@@ -3,7 +3,10 @@
 
 pub mod blocks;
 pub mod events;
+pub mod reference;
+pub mod results;
 pub mod schema;
+pub mod summary;
 
 use std::collections::BTreeMap;
 use std::net::IpAddr;
@@ -47,6 +50,17 @@ pub use events::{
     DnsCompareDone, DnsCompareEvent, DnsCompareResult, DnsDnssecDone, DnsDnssecEvent,
     DnsDnssecResult, DnsEnrichmentEvent, DnsErrorEvent, DnsHopEvent, DnsJobEvent, DnsQueryDone,
     DnsQueryEvent, DnsQueryResult, DnsTraceDone, DnsTraceEvent, DnsTraceResult,
+};
+pub use reference::{
+    DnsParseAnswer, DnsParseRequest, DnsParsedQuery, DnsRecordTypes, DnsServerCatalogue,
+    DnsServerGroup, parse_answer, record_types, server_catalogue,
+};
+pub use results::{
+    DnsCachedJob, DnsCachedResult, DnsCheckResult, DnsResultCache, check_result, is_key,
+};
+pub use summary::{
+    Agreement, AnswerOutcome, DnsJobSummary, DnsRecordDetail, DnsServerAnswer, DnsServerSummary,
+    DnsTypeComparison,
 };
 
 // Cost charged against the per-IP and global limiters per trace or dnssec job: trace queries
@@ -262,6 +276,24 @@ async fn enrichment_event(
     })
 }
 
+/// The mnemonic of a response code (`SERVFAIL`, `REFUSED`), as mhost prints the recursive ones.
+fn rcode_mnemonic(rcode: hickory_proto::op::ResponseCode) -> String {
+    match u16::from(rcode) {
+        0 => "NOERROR".to_owned(),
+        1 => "FORMERR".to_owned(),
+        2 => "SERVFAIL".to_owned(),
+        3 => "NXDOMAIN".to_owned(),
+        4 => "NOTIMP".to_owned(),
+        5 => "REFUSED".to_owned(),
+        6 => "YXDOMAIN".to_owned(),
+        7 => "YXRRSET".to_owned(),
+        8 => "NXRRSET".to_owned(),
+        9 => "NOTAUTH".to_owned(),
+        10 => "NOTZONE".to_owned(),
+        n => format!("RCODE{n}"),
+    }
+}
+
 fn transport_label(t: Transport) -> &'static str {
     match t {
         Transport::Udp => "udp",
@@ -295,6 +327,11 @@ impl DnsJobs {
             backend,
             prism_metrics: false,
         }
+    }
+
+    /// Whether `@system` resolvers are allowed by the configuration.
+    pub fn allows_system_resolvers(&self) -> bool {
+        self.config.dns.allow_system_resolvers
     }
 
     /// Emit prism's `prism_*` metrics from the jobs.
@@ -1151,10 +1188,25 @@ impl DnsJobs {
                                                 AuthResult::NxDomain { response_time }
                                             } else {
                                                 let rcode = raw_resp.response_code();
+                                                let answered =
+                                                    rcode == hickory_proto::op::ResponseCode::NoError;
+                                                // A referral (NOERROR, no answer, not
+                                                // authoritative, NS in authority) is no answer
+                                                // (Rule M).
+                                                let referral = answered
+                                                    && raw_resp.answers().is_empty()
+                                                    && !raw_resp.is_authoritative()
+                                                    && !raw_resp.referral_ns_names().is_empty();
                                                 AuthResult::Response {
-                                                    failure: (rcode
-                                                        != hickory_proto::op::ResponseCode::NoError)
-                                                        .then(|| rcode.to_string()),
+                                                    failure: if !answered {
+                                                        Some(rcode.to_string())
+                                                    } else if referral {
+                                                        Some("referral, no answer".to_owned())
+                                                    } else {
+                                                        None
+                                                    },
+                                                    failure_code: (!answered)
+                                                        .then(|| rcode_mnemonic(rcode)),
                                                     records: records
                                                         .into_iter()
                                                         .map(|(r, presentation)| AuthRecord {
@@ -1496,6 +1548,7 @@ impl DnsJobs {
                 request_id: rid,
                 duration_ms: elapsed.as_millis() as u64,
                 levels: level_count,
+                cache_key: None,
             };
             let _ = tx.send(DnsDnssecEvent::Done(done)).await;
 
