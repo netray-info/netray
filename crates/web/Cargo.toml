@@ -6,7 +6,7 @@ license = "MIT"
 description = "Templates, components and design tokens for the netray.info V2 suite"
 
 [dependencies]
-netray-common = { workspace = true, features = ["schema"] }
+netray-common = { workspace = true, features = ["schema", "middleware", "cors", "server", "prometheus"] }
 netray-model = { workspace = true }
 netray-engine = { workspace = true }
 netray-store = { workspace = true }
@@ -35,6 +35,12 @@ regex = { workspace = true }
 psl = { workspace = true }
 url = { workspace = true }
 tokio = { workspace = true, features = ["sync", "time", "rt"] }
+tower-http = { workspace = true, features = ["cors", "compression-gzip", "set-header", "trace", "limit"] }
+thiserror = { workspace = true }
+# OG cards: SVG to PNG rasterization and deterministic ETag hashing
+resvg = { version = "0.48", default-features = false, features = ["text"] }
+fontdb = "0.24"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
 [build-dependencies]
 serde_json = { workspace = true }
@@ -45,7 +51,9 @@ tempfile = "3"
 http-body-util = { workspace = true }
 sqlx = { workspace = true, features = ["runtime-tokio", "sqlite"] }
 tracing-subscriber = "0.3"
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
+metrics-util = { version = "0.20", default-features = false, features = ["debugging"] }
 toml = { workspace = true }
 futures = { workspace = true }
 jsonschema = { version = "0.30", default-features = false }

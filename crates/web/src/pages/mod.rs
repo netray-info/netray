@@ -2,6 +2,7 @@
 //! `router()` holds only what is common; a service adds its own `/`, `/robots.txt` and fallback.
 
 mod assets;
+pub mod badge;
 pub mod compare;
 mod errors;
 mod evidence;
@@ -9,6 +10,7 @@ pub mod guides;
 mod headers;
 mod inspect;
 mod jsonld;
+pub mod og;
 pub mod result;
 mod status;
 
@@ -24,7 +26,7 @@ pub use errors::{not_found, query_redirect, query_redirect_absolute, server_erro
 pub use evidence::{EvidenceDeps, evidence_router};
 pub use inspect::{
     InspectConfig, InspectDeps, InspectLimits, InspectorJobs, Job, JobPart, JobRequest, Refusal,
-    Tool, inspect_router, registrable_domain,
+    Tool, inspect_host_router, inspect_router, registrable_domain,
 };
 
 /// The speculation rules every page embeds; the CSP allows exactly their hash.

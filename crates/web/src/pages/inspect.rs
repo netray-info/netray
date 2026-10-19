@@ -13,7 +13,7 @@ use axum::Router;
 use axum::extract::connect_info::ConnectInfo;
 use axum::extract::rejection::PathRejection;
 use axum::extract::{Form, FromRequest, Path, Query, Request, State};
-use axum::http::header::{CACHE_CONTROL, RETRY_AFTER};
+use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE, RETRY_AFTER};
 use axum::http::{StatusCode, Uri};
 use axum::response::sse::Event;
 use axum::response::{IntoResponse, Response, Sse};
@@ -357,10 +357,83 @@ pub fn inspect_router(deps: InspectDeps) -> Router {
         ))
 }
 
+/// The inspector of `tool` as its own host serves it (`dns.`, `tls.`, `http.`, `ip.`; spec
+/// v2-cutover requirement 2): `GET /` renders the form through the handler of
+/// `/inspect/{tool}`, so a V1 query string (`?q=`, `?h=`, `?url=`, `?ip=`) prefills it and any
+/// other parameter is ignored; `POST /inspect/{tool}/run` streams the job; `/static/*` serves the
+/// assets the page loads. Every other path is the 404 page. On `ip.`, a command-line client
+/// asking for `/` gets the caller's address as text.
+pub fn inspect_host_router(tool: Tool, deps: InspectDeps) -> Router {
+    let root = match tool {
+        Tool::Ip => get(ip_root),
+        _ => get(move |uri: Uri| render(tool, uri)),
+    };
+    Router::new()
+        .route("/", root)
+        .route(
+            "/inspect/{tool}/run",
+            post(
+                move |state: State<InspectDeps>,
+                      name: Result<Path<String>, PathRejection>,
+                      req: Request| async move {
+                    match &name {
+                        Ok(Path(n)) if Tool::parse(n) == Some(tool) => run(state, name, req).await,
+                        _ => not_found().await,
+                    }
+                },
+            ),
+        )
+        .route("/static/{*path}", get(super::assets::serve))
+        .fallback(not_found)
+        .with_state(deps)
+        .layer(axum::middleware::map_response(
+            |response: Response| async move { secure(response) },
+        ))
+}
+
+/// User agents of command-line clients, as V1's `ip.` detected them.
+const CLI_AGENTS: [&str; 6] = [
+    "curl",
+    "HTTPie",
+    "HTTP Library",
+    "Wget",
+    "python-httpx",
+    "python-requests",
+];
+
+/// `GET /` on `ip.`: the caller's address as `text/plain` for a command-line client that accepts
+/// anything (no `Accept`, or `*/*`), the IP inspector otherwise.
+async fn ip_root(State(deps): State<InspectDeps>, req: Request) -> Response {
+    let headers = req.headers();
+    let header = |name| headers.get(name).and_then(|v| v.to_str().ok());
+    let cli = header("user-agent").is_some_and(|ua| CLI_AGENTS.iter().any(|a| ua.contains(a)))
+        && header("accept").is_none_or(|accept| accept.trim() == "*/*");
+    if !cli {
+        return render(Tool::Ip, req.uri().clone()).await;
+    }
+    let peer = req
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|c| c.0);
+    let client = client_ip(&deps.extractor, headers, peer);
+    (
+        [
+            (CONTENT_TYPE, "text/plain; charset=utf-8"),
+            (CACHE_CONTROL, "no-store"),
+        ],
+        format!("{client}\n"),
+    )
+        .into_response()
+}
+
 async fn show(tool: Result<Path<String>, PathRejection>, uri: Uri) -> Response {
     let Some(tool) = tool.ok().and_then(|Path(name)| Tool::parse(&name)) else {
         return not_found().await;
     };
+    render(tool, uri).await
+}
+
+async fn render(tool: Tool, uri: Uri) -> Response {
     let prefill = Query::<HashMap<String, String>>::try_from_uri(&uri)
         .ok()
         .and_then(|Query(mut q)| q.remove(tool.field()))

@@ -3,7 +3,14 @@
 //! the pages, `mta-sts.<apex>` only the policy, the inspector hosts their own routers, and every
 //! other name a 404.
 
+pub mod apex;
+pub mod layers;
 mod legacy;
+mod probes;
+
+pub use apex::{Apex, build};
+pub use layers::layers;
+pub use probes::probes;
 
 use std::convert::Infallible;
 use std::sync::Arc;
