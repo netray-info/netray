@@ -284,3 +284,50 @@ The swept-predecessor test first swept nothing (`HistoryStore::sweep` keeps the 
 ### Behavioural verification
 
 skipped: the cards are PNG routes; `og_plate` and `og_plate_history` drive `/r/<id>/og.png` and `/og/<domain>.png` through lens's app and compare the bytes, and Phase 8 saves `og-shop.png` from the seeded stack.
+
+## Phase 8 — Behavioural verification and screenshots
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R26: at 390 px no sideways document scroll; header, diff and issues scrollWidth not above clientWidth; every link and button in them and in the stepper at least 44 x 44; only the spectrum plate scrolls; axis group names do not overlap | green | tests/acceptance/result-page/result-page.spec.ts |
+| C2 | R27: acceptance-local seeds lens's history with the one seed; shop (three entries 1209600, 604800, 0 s old with fixed, new and worse changes, warns and fails across owners, findings and evidence), new (0 s) and stale (7200 s) fixtures in the seed contract; LENS_EXTRA appended to lens's environment | green | crates/engine/tests/history_fixtures.rs, tests/repo/test_acceptance_seed.sh, tests/repo/test_acceptance_lens_extra.sh |
+| C3 | R28: a Playwright spec under tests/acceptance/result-page/ at 390 x 844 and 1440 x 900 asserts R26, the JS-off stale page, and writes the screenshots of every listed state plus og-shop.png | green | tests/acceptance/result-page/result-page.spec.ts |
+| C4 | R30: the SDD's Phase 4 table marks V4.5, V4.6 and V4.13 built by v2-result-page and V4.4's OG card use; §5.1 notes the mount on lens until v2-cutover; §5.2 notes trigger=visit and the fresh visit; §4.6 the spectrum card | green | tests/repo/test_result_page_sdd.sh |
+| C5 | GIVEN the seeded stack at 390 px WHEN /shop.example.com loads THEN no sideways scroll, header, diff and issues fit, every target at least 44 x 44, no two axis group names overlap | green | tests/acceptance/result-page/result-page.spec.ts |
+| C6 | GIVEN a JS-off context WHEN /stale.example.com loads THEN the stored grade shows and no POST is sent | green | tests/acceptance/result-page/result-page.spec.ts |
+| C7 | GIVEN a client budget of 0 WHEN /stale.example.com loads with JS THEN the run line shows "too many checks from your address; try again in M s" | green | tests/acceptance/result-page/result-page.spec.ts |
+| C8 | GIVEN desktop WHEN a trace row of shop.example.com is clicked THEN the spectrum shows that run and the row carries the marker | green | tests/acceptance/result-page/result-page.spec.ts |
+| C9 | GIVEN desktop WHEN an issue's evidence link on /shop.example.com is followed THEN v2-inspectors' view of the same entry opens at the referenced block | green | tests/acceptance/result-page/result-page.spec.ts |
+| C10 | GIVEN the spec finished WHEN target/screenshots/v2-result-page/ is listed THEN it holds all eight states at both widths and og-shop.png | green | tests/acceptance/result-page/result-page.spec.ts |
+| C11 | GIVEN a fixture run missing one catalogue ID WHEN the fixture test runs THEN it fails naming the ID | already_implemented | crates/engine/tests/history_fixtures.rs |
+| C12 | GIVEN the stack seeded on any day WHEN /shop.example.com and /stale.example.com load THEN data-state is fresh and stale | green | tests/acceptance/result-page/result-page.spec.ts |
+
+C11 holds by v2-inspectors' `every_history_fixture_run_holds_each_catalogue_id_exactly_once` (`crates/engine/tests/history_fixtures.rs`), which names the missing ID and the file; `crates/store/tests/seed.rs` holds the seed contract.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 justfile, config, SDD; G2 acceptance and 390 px CSS (one coder) | 3 acceptance runs | opus | 127156 | 680 |
+| review fixes | 2 acceptance runs | orchestrator | — | — |
+
+Run 1 failed to start lens: lens reads every `LENS_*` variable as a key, so the recipe unsets `LENS_EXTRA` after the row table. Run 2: `result-page/` matched every spec, because Playwright matches a filter against the absolute path and the worktree path holds `result-page/`; the recipe anchors relative spec paths.
+
+### Review
+
+- BLOCKER (fixed): the `#evidence` flex row let a live evidence section with a long record widen the document to 732–873 px at 390; only the stored link rows are inline now, measured 390/480/1440 with TXT and TLSA rows: no sideways scroll.
+- BLOCKER (fixed): absolute spec paths were prefixed with `$PWD/`; only relative spec paths that are not option values are anchored now.
+- NIT (fixed): `--project result-page` was rewritten; options and their values pass unchanged.
+- NIT (fixed): §5.1 now says the result routes mount only when lens's history store is enabled.
+
+### Behavioural verification
+
+`LENS_EXTRA="LENS_ADMISSION__CLIENT_BUDGET_PER_HOUR=0 LENS_CACHE__TTL_SECONDS=3600" just acceptance-local result-page/`:
+
+```
+21 passed (5.0s)
+```
+
+Screenshots (`target/screenshots/v2-result-page/`, copied to `/private/tmp/claude-501/-Users-lukas-Documents-src-netray/5622365d-7bd6-4968-a408-05fa2d6691a9/scratchpad/screenshots/v2-result-page/`): idle-recent, shop-fresh, shop-pinned (1440) / shop-stepped (390), issues-severity, new-first, stale-refused, stale-nojs, history, each at 390 and 1440 px, and og-shop.png; dark-scheme variants (`*-dark.png`) of idle-recent, shop-fresh, new-first, stale-refused and history at both widths, taken outside the spec with `colorScheme: 'dark'`.

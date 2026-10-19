@@ -21,6 +21,7 @@ export default defineConfig({
     { name: 'static-site', testDir: './static-site', dependencies: ['smoke'] },
     { name: 'api-contract', testDir: './api-contract', dependencies: ['smoke'] },
     { name: 'local', testDir: './v2', grepInvert: process.argv.some((a) => a.includes('@live')) ? undefined : /@live/ },
+    { name: 'result-page', testDir: './result-page' },
     { name: 'services', testDir: './services', dependencies: ['smoke'] },
     { name: 'integration', testDir: './integration', dependencies: ['services'] },
     // Production gets only this subset: the full suite probes unknown paths and crawls the

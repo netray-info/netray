@@ -130,3 +130,16 @@ Decisions (implementer under the operator's autonomy mandate, 2026-10-19):
 - `/og/<domain>.png` after an admitted run answers the plain card (no plate), over that run's plate over the head entry: an admitted run is no entry yet, and when the store records it `Identical` the run-over-head layout drops the fixed lines the head entry shows; requirement 29 draws a plate only for the entry a card shows (revised after the Phase 7 review).
 - The domain card's ETag includes the plate; the entry card's stays `"<id>-<letter>"` (an entry is immutable; a swept predecessor's fixed tones may linger for a client holding the old ETag).
 - The card's fixed line is the page's hollow 5 px outline with its ring, over a solid 2 px stroke; the card carries no axis group names (its 1104 px plate keeps the page's line geometry, §5.4) (Phase 7 review).
+
+## Phase 8 — Behavioural verification and screenshots
+
+### Groups
+
+G1: C2 (LENS_EXTRA), C4 (SDD) · G2: C1, C3, C5–C10, C12 (Playwright run on the seeded stack and the 390 px CSS fixes it needs). C11 holds already (`history_fixtures.rs`).
+
+### Plan
+
+G1: `justfile` `acceptance-local`: the lens row's extra env appends `${LENS_EXTRA:-}`; `tests/acceptance/playwright.config.ts`: project `result-page` (testDir `./result-page`); `specs/sdd/v2.md`: Phase 4 rows V4.5, V4.6, V4.13 "built by `v2-result-page`", §5.1 the result routes mount on lens's router until `v2-cutover`, §5.2 a stale page's visit posts `trigger=visit` and a fresh visit starts nothing.
+G2: `npm ci` in tests/acceptance (no browser install; Chromium revision 1217 is linked locally); run `LENS_EXTRA="LENS_ADMISSION__CLIENT_BUDGET_PER_HOUR=0 LENS_CACHE__TTL_SECONDS=3600" just acceptance-local result-page/`; fix what fails at 390 px in `crates/web/static/pages.css` (and the result partials only where markup must change), including the IP group name spilling past the plate (Decision log, v2-spectrum review); copy the screenshots to the scratchpad.
+
+Decision: the fixtures' grades are set by hand in the fixture files, as v2-inspectors' `example.com.json` is, over scoring them: the seed stores the run as given and no check derives the grade from the statuses (implementer under the operator's autonomy mandate, 2026-10-19).
