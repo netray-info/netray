@@ -58,6 +58,7 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - lens starts one run per domain per 60 s on tokio's clock: a second run of one domain in a test needs `common::pass_throttle()` (current_thread) or another domain.
 - A paused tokio clock times out sqlx pool acquires and auto-advances through deadlines while the runtime idles on the store: never `start_paused` with a `HistoryStore`; `pause()` only after the store work is drained (`result_run_c15`).
 - governor's `check` spends a token whatever follows: take a keyed limiter after every refusal that must cost nothing.
+- A cost above a limiter's burst never passes: refuse it as input (`CostExceedsLimit`, API v1 `INVALID_INPUT`) against the stored bursts before charging, never as `429`.
 - Adding a field to a protected test's struct literal still needs `ADLC-Test-Change`: the gate's tamper check flags any change.
 - lens reads every `LENS_*` variable as a config key, `LENS_EXTRA` included: `acceptance-local` unsets it after building lens's env row.
 - Node 26 defines a global `localStorage` that shadows happy-dom's: an island test installs its own storage, as `islands/test/theme.test.ts`'s `useStorage` does.
@@ -94,6 +95,7 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **tlsight's `summary` judges OCSP, CAA and DANE from the first handshake over all ports**: a per-port verdict reads the port's own data (`module::port_wide`).
 - **`TlsParams.starttls` is a port label, not an upgrade**: only SMTP is upgraded (`tls/connect.rs`); `CertInfo.is_expired` truncates to whole days.
 - **Augment a request before its limit and cost checks**, never after: `+dnssec` once added DNSKEY and DS past `max_record_types`, running 12 types under a limit of 10.
+- **Domain input is the UTS #46 A-label** (`netray_common::domain::validate`): `bücher.de` answers `xn--bcher-kva.de`; a refused-character test needs a URL-forbidden code point (`\`, space, `%`).
 - **Narrowing a check moves its hard fail.** When a check stops failing on a condition, confirm the condition still reaches a hard fail or weight in the profile (`tls.hostname_match` left `chain_trusted`).
 - **Release notes trace to code.** Check each `CHANGELOG.md` claim against the code at the release commit, not against specs or the SDD (changelog-0-25-0: six wrong claims).
 - **report.md criteria statuses** are `green`, `already_implemented` or `test-unwritable`; any other keeps `adlc next` on implement. Drop a criterion whose scenario left the spec.

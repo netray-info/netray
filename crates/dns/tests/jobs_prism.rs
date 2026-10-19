@@ -343,3 +343,31 @@ async fn input_limits_prism_query_ten_types_plus_dnssec_is_too_many_record_types
     let body: Value = serde_json::from_slice(&bytes).expect("JSON error body");
     assert_eq!(body["error"]["code"], "TOO_MANY_RECORD_TYPES", "{body}");
 }
+
+// spec v2-input-edges, Phase 2 (R7): prism's V1 compare refuses a cost above the global burst
+// (5 types with DNSKEY and DS, 3 servers, 4 transports = 60 > 50) with 422 COST_EXCEEDS_LIMIT
+// and no retry-after: waiting never admits it.
+#[tokio::test]
+async fn cost_limit_c7_prism_compare_above_global_burst_is_422_without_retry_after() {
+    let body = json!({
+        "domain": "example.com",
+        "record_types": ["A", "AAAA", "MX"],
+        "dnssec": true,
+        "servers": ["cloudflare", "google", "quad9"],
+    });
+    let resp = router().oneshot(post("/api/compare", &body)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(
+        resp.headers().get("retry-after").is_none(),
+        "no retry-after: {:?}",
+        resp.headers()
+    );
+    let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+    let v: Value = serde_json::from_slice(&bytes).expect("JSON error body");
+    assert_eq!(v["error"]["code"], "COST_EXCEEDS_LIMIT", "{v}");
+    let message = v["error"]["message"].as_str().expect("message");
+    assert!(
+        message.contains("60") && message.contains("50"),
+        "{message}"
+    );
+}

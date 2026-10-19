@@ -50,6 +50,7 @@ mod history_cache_badge_og;
 mod history_findings;
 mod history_record;
 mod http_in_process;
+mod idna_domain_routes;
 mod incomplete_results;
 mod inspect_mount;
 mod ip_enrichment_errors;

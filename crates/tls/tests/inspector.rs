@@ -199,3 +199,85 @@ async fn tlsight_post_refusals_keep_their_codes() {
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert_eq!(body["error"]["code"], "BLOCKED_TARGET");
 }
+
+// ---------------------------------------------------------------------------
+// v2-input-edges Phase 2 (req. 8; C3, C11, C12, C13): a cost above the per-IP burst is an
+// input error, never a rate limit
+// ---------------------------------------------------------------------------
+
+mod cost_limit {
+    use super::*;
+    use axum::response::IntoResponse;
+    use netray_tls::error::AppError;
+    use netray_tls::security::rate_limit::{Quotas, Scopes};
+
+    fn limiter(per_ip_burst: u32, per_target_burst: u32) -> RateLimitState {
+        RateLimitState::scoped(
+            &Quotas {
+                per_ip_per_minute: per_ip_burst,
+                per_ip_burst,
+                per_target_per_minute: 20,
+                per_target_burst,
+            },
+            Scopes {
+                metrics_prefix: "tlsight",
+                per_ip: "per_ip",
+                per_target: "per_target",
+            },
+        )
+    }
+
+    #[test]
+    fn c11_cost_above_the_per_ip_burst_is_refused_and_charges_nothing() {
+        let limits = limiter(2, 20);
+        let err = limits.check_cost(caller(), "example.com", 3).unwrap_err();
+        assert!(
+            matches!(err, AppError::CostExceedsLimit { cost: 3, limit: 2 }),
+            "{err:?}"
+        );
+        assert!(limits.check_cost(caller(), "example.com", 2).is_ok());
+    }
+
+    #[test]
+    fn c12_remaining_budget_is_capped_by_the_per_target_burst() {
+        assert_eq!(limiter(10, 4).remaining_budget(caller()), 4);
+    }
+
+    #[tokio::test]
+    async fn c13_cost_exceeds_limit_answers_422_without_retry_after() {
+        let resp = AppError::CostExceedsLimit { cost: 3, limit: 2 }.into_response();
+        assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(!resp.headers().contains_key("retry-after"));
+        let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+        let body: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["error"]["code"], "COST_EXCEEDS_LIMIT");
+        let message = body["error"]["message"].as_str().unwrap();
+        assert!(message.contains('3') && message.contains('2'), "{message}");
+
+        let refusal = TlsRefusal::from(AppError::CostExceedsLimit { cost: 3, limit: 2 });
+        assert!(
+            matches!(refusal, TlsRefusal::InvalidInput(_)),
+            "{refusal:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn c3_three_ports_over_a_burst_of_two_is_invalid_input_not_rate_limited() {
+        let inspector = stub_state(Arc::new(StubTlsBackend::new())).inspector();
+        let request = TlsInspectRequest {
+            host: "example.com".into(),
+            port: None,
+            ports: Some(vec![443, 8443, 993]),
+        };
+        let err = inspector
+            .inspect(&request, caller(), &limiter(2, 20), "rid".into())
+            .await
+            .unwrap_err();
+        match err {
+            TlsRefusal::InvalidInput(message) => {
+                assert!(message.contains('3') && message.contains('2'), "{message}");
+            }
+            other => panic!("expected InvalidInput, got {other:?}"),
+        }
+    }
+}

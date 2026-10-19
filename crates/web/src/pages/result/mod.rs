@@ -161,7 +161,7 @@ fn resolve(
     }
     Err(Box::new(refused_page(
         segment,
-        "write the domain in lower case without a trailing dot",
+        &format!("write the domain in its normal form: {domain}"),
     )))
 }
 

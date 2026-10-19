@@ -423,3 +423,58 @@ async fn input_limits_dnssec_types_already_requested_are_not_counted_twice() {
         "ten types including DNSKEY and DS start"
     );
 }
+
+// spec v2-input-edges, Phase 2 (R6): a cost above a burst can never be admitted by waiting, so it
+// is refused with `CostExceedsLimit` before any limiter is charged.
+
+#[tokio::test]
+async fn cost_limit_c5_query_above_global_burst_is_refused_and_charges_nothing() {
+    let jobs = arbitrary_jobs();
+    let mut limits = Config::load(None).expect("default config").limits;
+    limits.global_burst = 20;
+    let limiter = RateLimitState::new(&limits);
+    let req = post(json!({
+        "domain": "example.com",
+        "record_types": &TEN_TYPES[..8],
+        "dnssec": true,
+        "servers": ["cloudflare", "google", "quad9"],
+    }));
+    match jobs.query(&req, client(), &limiter, "rid".into()).await {
+        Err(ApiError::CostExceedsLimit { cost, limit }) => assert_eq!((cost, limit), (30, 20)),
+        Err(e) => panic!("expected CostExceedsLimit, got {e:?}"),
+        Ok(_) => panic!("expected CostExceedsLimit, the job started"),
+    }
+    assert!(
+        limiter.check_query_cost(client(), &[], 20, 1).is_ok(),
+        "the refused request charged nothing: a cost of 20 is still admitted"
+    );
+}
+
+#[tokio::test]
+async fn cost_limit_c6_compare_above_per_target_burst_is_refused() {
+    let jobs = testing::stub_jobs();
+    let mut limits = Config::load(None).expect("default config").limits;
+    limits.per_target_burst = 5;
+    let limiter = RateLimitState::new(&limits);
+    let req = post(json!({
+        "domain": "example.com",
+        "record_types": ["A", "AAAA", "MX", "TXT"],
+        "dnssec": true,
+    }));
+    match jobs.compare(&req, client(), &limiter, "rid".into()).await {
+        Err(ApiError::CostExceedsLimit { cost, limit }) => assert_eq!((cost, limit), (6, 5)),
+        Err(e) => panic!("expected CostExceedsLimit, got {e:?}"),
+        Ok(_) => panic!("expected CostExceedsLimit, the job started"),
+    }
+}
+
+#[test]
+fn cost_limit_cost_exceeds_limit_maps_to_invalid_input() {
+    assert!(matches!(
+        DnsRefusal::from(ApiError::CostExceedsLimit {
+            cost: 30,
+            limit: 20
+        }),
+        DnsRefusal::InvalidInput(_)
+    ));
+}

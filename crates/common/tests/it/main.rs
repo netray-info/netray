@@ -4,6 +4,7 @@
 
 mod config_loader;
 mod domain_address_forms;
+mod domain_idna;
 mod ip_extract_no_cf;
 mod prefetch;
 mod target_policy_results_table;

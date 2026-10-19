@@ -55,6 +55,7 @@ pub struct RateLimitState {
     global: RateLimiter<NotKeyed, InMemoryState, governor::clock::DefaultClock>,
     active_streams: Arc<Mutex<HashMap<IpAddr, usize>>>,
     per_ip_max_streams: u32,
+    quotas: Quotas,
     scopes: Scopes,
     last_prune: Mutex<Instant>,
 }
@@ -115,6 +116,7 @@ impl RateLimitState {
             global,
             active_streams: Arc::new(Mutex::new(HashMap::new())),
             per_ip_max_streams: quotas.per_ip_max_streams,
+            quotas: *quotas,
             scopes,
             last_prune: Mutex::new(Instant::now()),
         }
@@ -147,7 +149,8 @@ impl RateLimitState {
     /// `per_target_cost` is `record_types` — the lookups charged to each individual target.
     ///
     /// Returns `Ok(StreamGuard)` if allowed (caller must hold the guard for the stream's
-    /// lifetime), or `Err(ApiError::RateLimited)` if any limiter rejects.
+    /// lifetime), `Err(ApiError::CostExceedsLimit)` if a cost exceeds its burst (nothing is
+    /// charged), or `Err(ApiError::RateLimited)` if any limiter rejects.
     pub fn check_query_cost(
         &self,
         client_ip: IpAddr,
@@ -155,6 +158,27 @@ impl RateLimitState {
         total_cost: u32,
         per_target_cost: u32,
     ) -> Result<StreamGuard, ApiError> {
+        // 0. A cost above a burst never passes, however long the client waits: refuse it as
+        //    input before any limiter is charged (governor spends tokens on every passed check).
+        //    A target is charged once per occurrence in `target_keys` (a POST body may repeat a
+        //    server); a request without targets (trace, dnssec, check) charges none.
+        let per_target_charge = target_keys
+            .iter()
+            .map(|k| target_keys.iter().filter(|o| *o == k).count() as u32)
+            .max()
+            .map(|n| n.saturating_mul(per_target_cost));
+        for (cost, limit) in [
+            (Some(total_cost), self.quotas.per_ip_burst),
+            (Some(total_cost), self.quotas.global_burst),
+            (per_target_charge, self.quotas.per_target_burst),
+        ] {
+            if let Some(cost) = cost
+                && cost > limit
+            {
+                return Err(ApiError::CostExceedsLimit { cost, limit });
+            }
+        }
+
         let total_nz = NonZeroU32::new(total_cost.max(1)).expect("max(1) is non-zero");
         let target_nz = NonZeroU32::new(per_target_cost.max(1)).expect("max(1) is non-zero");
 
@@ -355,5 +379,64 @@ mod tests {
         assert!(state.check_query_cost(ip, &targets, 8, 4).is_ok());
         // Per-target burst is 20; cost 21 exceeds it entirely (InsufficientCapacity) → rejected.
         assert!(state.check_query_cost(ip, &targets, 42, 21).is_err());
+    }
+}
+
+#[cfg(test)]
+mod cost_tests {
+    use super::*;
+
+    fn state(per_target_burst: u32) -> RateLimitState {
+        RateLimitState::scoped(
+            &Quotas {
+                per_ip_per_minute: 64,
+                per_ip_burst: 64,
+                per_target_per_minute: per_target_burst,
+                per_target_burst,
+                global_per_minute: 64,
+                global_burst: 64,
+                per_ip_max_streams: 10,
+            },
+            Scopes {
+                metrics_prefix: "test",
+                per_ip: "per_ip",
+                per_target: "per_target",
+                global: "global",
+                max_streams: "max_streams",
+            },
+        )
+    }
+
+    fn ip() -> IpAddr {
+        "198.51.100.1".parse().unwrap()
+    }
+
+    #[test]
+    fn a_request_without_targets_is_not_held_to_the_per_target_burst() {
+        // trace, dnssec and check: a flat 16 against a per-target burst of 10 charges no target.
+        assert!(state(10).check_query_cost(ip(), &[], 16, 16).is_ok());
+    }
+
+    #[test]
+    fn the_total_cost_is_compared_before_the_per_target_cost() {
+        // spec v2-input-edges R6: per-IP, global, then per-target.
+        let mut quotas = state(5).quotas;
+        quotas.global_burst = 20;
+        quotas.global_per_minute = 20;
+        let state = RateLimitState::scoped(&quotas, state(5).scopes);
+        let keys = vec!["cloudflare".into(), "google".into(), "quad9".into()];
+        match state.check_query_cost(ip(), &keys, 24, 8) {
+            Err(ApiError::CostExceedsLimit { cost, limit }) => assert_eq!((cost, limit), (24, 20)),
+            other => panic!("expected CostExceedsLimit, got {:?}", other.err()),
+        }
+    }
+
+    #[test]
+    fn a_repeated_target_counts_once_per_occurrence() {
+        let keys = vec!["cloudflare".to_string(); 3];
+        match state(20).check_query_cost(ip(), &keys, 21, 7) {
+            Err(ApiError::CostExceedsLimit { cost, limit }) => assert_eq!((cost, limit), (21, 20)),
+            other => panic!("expected CostExceedsLimit, got {:?}", other.err()),
+        }
     }
 }

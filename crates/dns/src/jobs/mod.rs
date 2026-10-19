@@ -142,7 +142,8 @@ impl From<ApiError> for DnsRefusal {
             | ApiError::SystemResolversDisabled
             | ApiError::ArbitraryServersDisabled
             | ApiError::TooManyRecordTypes { .. }
-            | ApiError::TooManyServers { .. } => Self::InvalidInput(e.to_string()),
+            | ApiError::TooManyServers { .. }
+            | ApiError::CostExceedsLimit { .. } => Self::InvalidInput(e.to_string()),
             ApiError::BlockedTargetIp { .. } => Self::Blocked(e.to_string()),
             ApiError::RateLimited {
                 retry_after_secs, ..
