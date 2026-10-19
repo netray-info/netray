@@ -408,7 +408,10 @@ pub fn diff_view(diff: Option<&Diff>, catalogue: &Catalogue) -> DiffView {
     };
     let summary = grade
         .iter()
-        .map(|s| s.grade.as_str())
+        .map(|s| match &s.note {
+            Some(note) => format!("{} ({note})", s.grade),
+            None => s.grade.clone(),
+        })
         .collect::<Vec<_>>()
         .join(" \u{2192} ");
     DiffView {

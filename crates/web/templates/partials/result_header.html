@@ -4,7 +4,7 @@
 {{ run_line|safe }}
 {{ progress|safe }}
 <form id="recheck" class="recheck" method="post" action="/{{ href }}/run" data-island="stream" data-stream-url="/{{ href }}/run"{% if autostart %} data-stream-autostart="visit"{% endif %}>
-<button type="submit" name="trigger" value="{{ trigger }}">{{ trigger_label }}</button>
+{{ button|safe }}
 </form>
 {{ share|safe }}
 </header>

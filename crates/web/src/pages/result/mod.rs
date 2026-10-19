@@ -126,7 +126,7 @@ async fn wrong_method(
     if domain_segment(path).is_none() {
         return (state.fallback)(request).await;
     }
-    StatusCode::METHOD_NOT_ALLOWED.into_response()
+    secure(StatusCode::METHOD_NOT_ALLOWED.into_response())
 }
 
 fn href_of(domain: &str) -> String {
@@ -375,6 +375,8 @@ struct Parts {
     run_line: String,
     progress: String,
     share: String,
+    button: String,
+    recheck: bool,
     spectrum: String,
     diff: String,
     issues: String,
@@ -722,9 +724,15 @@ struct HeaderPart<'a> {
     run_line: &'a str,
     progress: &'a str,
     autostart: bool,
+    button: &'a str,
+    share: &'a str,
+}
+
+#[derive(Template)]
+#[template(path = "partials/result_recheck_button.html")]
+struct RecheckButtonPart {
     trigger: &'static str,
     trigger_label: &'static str,
-    share: &'a str,
 }
 
 #[derive(Template)]
@@ -822,6 +830,13 @@ fn assemble(domain: &str, autostart: bool, shown: Shown) -> Option<Parts> {
     } else {
         ("visit", "check now")
     };
+    let button = warn_render(
+        "recheck-button",
+        trimmed(&RecheckButtonPart {
+            trigger,
+            trigger_label,
+        }),
+    )?;
     let run_line = run_line_part(&shown.run_line)?;
     let progress = progress_part("")?;
     let grade = warn_render(
@@ -846,8 +861,7 @@ fn assemble(domain: &str, autostart: bool, shown: Shown) -> Option<Parts> {
             run_line: &run_line,
             progress: &progress,
             autostart,
-            trigger,
-            trigger_label,
+            button: &button,
             share: &share,
         }),
     )?;
@@ -869,6 +883,8 @@ fn assemble(domain: &str, autostart: bool, shown: Shown) -> Option<Parts> {
         run_line,
         progress,
         share,
+        button,
+        recheck: shown.recheck,
         spectrum: spectrum_part(
             &shown.plate,
             &shown.trace,
