@@ -17,6 +17,15 @@ use crate::enrichment::EnrichmentContext;
 const BATCH_CONCURRENCY: usize = 10;
 const BATCH_LOOKUP_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Per-call options of [`IpLookup::lookup_with`] and [`IpLookup::lookup_caller_with`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LookupOptions {
+    /// Run the PTR lookup for the address.
+    pub reverse_dns: bool,
+    /// Language of the localized location names.
+    pub lang: Option<String>,
+}
+
 /// The IP lookups an embedder can call without the HTTP layer.
 pub trait IpLookup: Send + Sync + 'static {
     /// One address: no reverse DNS, no User-Agent, port 0.
@@ -28,6 +37,28 @@ pub trait IpLookup: Send + Sync + 'static {
         remote: SocketAddr,
         user_agent: Option<&'a str>,
     ) -> BoxFuture<'a, Result<Ifconfig, IpRefusal>>;
+
+    /// One address with `options`; defaults to [`IpLookup::lookup`].
+    fn lookup_with(&self, ip: IpAddr, options: LookupOptions) -> BoxFuture<'_, Result<Ifconfig, IpRefusal>> {
+        let _ = options;
+        self.lookup(ip)
+    }
+
+    /// The caller with `options`; defaults to [`IpLookup::lookup_caller`].
+    fn lookup_caller_with<'a>(
+        &'a self,
+        remote: SocketAddr,
+        user_agent: Option<&'a str>,
+        options: LookupOptions,
+    ) -> BoxFuture<'a, Result<Ifconfig, IpRefusal>> {
+        let _ = options;
+        self.lookup_caller(remote, user_agent)
+    }
+
+    /// Build time of the GeoIP city database in epoch seconds, when one is loaded.
+    fn geoip_build_epoch(&self) -> Option<u64> {
+        None
+    }
 
     /// A CIDR prefix, already percent-decoded; `RangeResponse::cidr` echoes it.
     fn range<'a>(&'a self, cidr: &'a str) -> BoxFuture<'a, Result<RangeResponse, IpRefusal>>;

@@ -5,7 +5,7 @@ use netray_engine::{EvidencePath, Facts, Module, RunContext, SectionOutcome};
 use netray_model::{CheckId, Protocol};
 
 use crate::backend::{Ifconfig, Tcp, UserAgent};
-use crate::lookup::{AsnLookupResponse, IpLookup, IpRefusal, RangeResponse, parse_range};
+use crate::lookup::{AsnLookupResponse, IpLookup, IpRefusal, LookupOptions, RangeResponse, parse_range};
 use crate::module::{ip_checks, sample, translate};
 
 struct GoldenModule(String);
@@ -52,6 +52,9 @@ const IFCONFIG_FIXTURE: &str = include_str!(concat!(
     "/../../tests/fixtures/contracts/ifconfig-json.json"
 ));
 
+/// The GeoIP build epoch [`StubIpLookup`] reports.
+pub const STUB_GEOIP_EPOCH: u64 = 1_700_000_000;
+
 /// An [`IpLookup`] that answers from the committed ifconfig `/json` fixture, with no data files and
 /// no network.
 #[derive(Debug, Default)]
@@ -70,6 +73,26 @@ impl StubIpLookup {
         ifconfig.user_agent = None;
         ifconfig
     }
+
+    fn caller_answer(remote: SocketAddr, user_agent: Option<&str>) -> Ifconfig {
+        let mut ifconfig = Self::answer(remote.ip());
+        if remote.port() != 0 {
+            ifconfig.tcp = Some(Tcp { port: remote.port() });
+        }
+        ifconfig.user_agent = user_agent.map(UserAgent::unparsed);
+        ifconfig
+    }
+
+    fn with_options(mut ifconfig: Ifconfig, options: LookupOptions) -> Ifconfig {
+        if options.reverse_dns {
+            ifconfig.ip.hostname = Some("stub.example.com".to_string());
+        }
+        if options.lang.as_deref() == Some("de") {
+            ifconfig.location.city_localized = Some("Berlin".to_string());
+            ifconfig.location.country_localized = Some("Deutschland".to_string());
+        }
+        ifconfig
+    }
 }
 
 impl IpLookup for StubIpLookup {
@@ -82,14 +105,24 @@ impl IpLookup for StubIpLookup {
         remote: SocketAddr,
         user_agent: Option<&'a str>,
     ) -> BoxFuture<'a, Result<Ifconfig, IpRefusal>> {
-        Box::pin(async move {
-            let mut ifconfig = Self::answer(remote.ip());
-            if remote.port() != 0 {
-                ifconfig.tcp = Some(Tcp { port: remote.port() });
-            }
-            ifconfig.user_agent = user_agent.map(UserAgent::unparsed);
-            Ok(ifconfig)
-        })
+        Box::pin(async move { Ok(Self::caller_answer(remote, user_agent)) })
+    }
+
+    fn lookup_with(&self, ip: IpAddr, options: LookupOptions) -> BoxFuture<'_, Result<Ifconfig, IpRefusal>> {
+        Box::pin(async move { Ok(Self::with_options(Self::answer(ip), options)) })
+    }
+
+    fn lookup_caller_with<'a>(
+        &'a self,
+        remote: SocketAddr,
+        user_agent: Option<&'a str>,
+        options: LookupOptions,
+    ) -> BoxFuture<'a, Result<Ifconfig, IpRefusal>> {
+        Box::pin(async move { Ok(Self::with_options(Self::caller_answer(remote, user_agent), options)) })
+    }
+
+    fn geoip_build_epoch(&self) -> Option<u64> {
+        Some(STUB_GEOIP_EPOCH)
     }
 
     fn range<'a>(&'a self, cidr: &'a str) -> BoxFuture<'a, Result<RangeResponse, IpRefusal>> {

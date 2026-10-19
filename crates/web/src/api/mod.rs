@@ -35,7 +35,7 @@ pub use config::{
     ApiConfig, ApiDnsConfig, ApiEmailConfig, ApiHttpConfig, ApiIpConfig, ApiTlsConfig,
 };
 pub use error::V1Error;
-use ip::{AddressField, CallerField};
+use ip::{AddressField, CallerField, Format};
 pub use jobs::InspectJobs;
 pub(crate) use runs::wants_event_stream;
 pub use runs::{
@@ -52,7 +52,8 @@ const MOUNT: &str = "/api/v1";
     RunAnswer,
     RunSectionEvent,
     AddressField,
-    CallerField
+    CallerField,
+    Format
 )))]
 struct ApiDoc;
 
@@ -188,6 +189,8 @@ struct Meta {
     current_profile: u32,
     profiles: Vec<u32>,
     evidence_schema_version: u32,
+    /// The MaxMind GeoLite2 attribution text the IP data requires next to its use.
+    attribution: String,
     limits: Limits,
 }
 
@@ -280,6 +283,7 @@ async fn meta_handler(State(state): State<ApiState>) -> Json<Meta> {
         current_profile: state.current_profile(),
         profiles: state.profile_versions(),
         evidence_schema_version: EVIDENCE_SCHEMA_VERSION,
+        attribution: netray_ip::GEOIP_ATTRIBUTION.into(),
         limits: Limits {
             api: ApiLimits {
                 per_ip_per_minute: config.per_ip_per_minute,

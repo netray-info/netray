@@ -68,9 +68,12 @@ stay correct are `/asn/<n>`, `/range`, `/batch`, `/diff`, `/ipv4`, `/ipv6`, `/me
 2. `GET /api/v1/ip/{address}` looks up reverse DNS by default. `?dns=` with the value `true` or `1`
    (any case) keeps it on, and any other value turns it off. `host` becomes an address field
    (`?field=host`).
-3. `GET /api/v1/ip?ip=X` answers for X exactly as `GET /api/v1/ip/X` does: same validation, same
-   per-target charge, reverse DNS by default. It never answers the caller when `ip` is given. A
-   caller-only field (`tcp`, `user_agent`) together with `?ip=` answers 400 naming the field.
+3. `GET /api/v1/ip?ip=X` answers for X as `GET /api/v1/ip/X` does: the same address validation,
+   the same per-target charge, reverse DNS by default. It never answers the caller when `ip` is
+   given. A field of the caller's connection (`tcp`, `user_agent`) with `?ip=` answers 400 naming
+   the field. `headers` (the request's) and `all` (X's lookup with the request's headers) are
+   answered, which `/ip/X` refuses as caller fields. `cidr` and `headers` with `?ip=` answer with
+   the IP module off, as requirement 8 has them answer for the caller.
 4. `?lang=<tag>` on `/api/v1/ip` and `/api/v1/ip/{address}` passes the tag to the lookup. Structured
    answers then carry `city_localized` and `country_localized` where the database has the locale, as
    V1 did. A tag that is empty, longer than 16 characters, or holds characters other than ASCII letters,
@@ -91,7 +94,8 @@ stay correct are `/asn/<n>`, `/range`, `/batch`, `/diff`, `/ipv4`, `/ipv6`, `/me
    structured form is the document with a top-level `headers` object.
 8. With the IP module off, `GET /api/v1/ip` answers `?field=headers`, `?field=cidr` and
    `?field=ip` in plain form for the caller instead of 503. These need no lookup. Every other answer
-   that needs a lookup stays 503.
+   that needs a lookup stays 503, and a 503 charges no rate limiter. Structured `headers` carries
+   V1's `x_forwarded_for_chain` (the `X-Forwarded-For` hops, an empty list without the header).
 9. `POST /api/v1/ip/batch?dns=true` (or `1`) looks up reverse DNS per address; without it, batch
    stays as it is (no reverse DNS), as V1's batch defaulted.
 10. Every answer of `/api/v1/ip`, `/api/v1/ip/{address}`, `/ip/batch`, `/ip/range/*`, `/ip/diff` and
@@ -254,6 +258,16 @@ GIVEN the stub WHEN `ip_host` answers `/country` THEN it carries `X-RateLimit-Li
 - The domain IP module keeps no reverse DNS and its evidence keeps its columns. A hostname column
   would move every domain golden, and the inspector's hostname display belongs to the UI half
   (implementer under the operator's autonomy mandate, 2026-10-19).
+
+- Phase 1 review: `?ip=`, `?lang=` and `?format=` were ignored before and are validated now, so a
+  malformed value answers 400 where it got the caller's document. Those answers were wrong for the
+  request (the caller instead of X, no form instead of the asked one), so the stricter answer is
+  kept and the v1 contract's additivity is read as the document's shape, which only grows
+  (implementer under the operator's autonomy mandate, 2026-10-19).
+- Phase 1 review: a 503 charges no limiter, validation runs before any charge, and the answers that
+  need no lookup are charged once (implementer under the operator's autonomy mandate, 2026-10-19).
+- Phase 1 review: structured `headers` keeps V1's `x_forwarded_for_chain`; `all` keeps V1's
+  `headers` object without it (implementer under the operator's autonomy mandate, 2026-10-19).
 
 ## Open decisions
 
