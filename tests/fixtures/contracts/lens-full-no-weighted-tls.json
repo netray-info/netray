@@ -1386,7 +1386,7 @@
               }
             ],
             [
-              "response_ms",
+              "inspection_ms",
               {
                 "t": "duration",
                 "v": 87

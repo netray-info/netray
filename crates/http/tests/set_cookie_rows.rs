@@ -40,7 +40,9 @@ fn header_rows(resp: &InspectResponse) -> Vec<(String, String)> {
 }
 
 fn pairs(v: &[(&str, &str)]) -> Vec<(String, String)> {
-    v.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
+    v.iter()
+        .map(|(a, b)| (a.to_string(), b.to_string()))
+        .collect()
 }
 
 fn named<'a>(rows: &'a [(String, String)], prefix: &str) -> Vec<&'a (String, String)> {

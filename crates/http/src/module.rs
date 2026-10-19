@@ -79,7 +79,7 @@ pub const REGISTER: Register = Register {
         ("http.server", "final_url", ValueType::Text),
         ("http.server", "status_code", ValueType::Int),
         ("http.server", "http_version", ValueType::Text),
-        ("http.server", "response_ms", ValueType::Duration),
+        ("http.server", "inspection_ms", ValueType::Duration),
         ("http.server", "address", ValueType::Addr),
         ("http.server", "org", ValueType::Text),
         ("http.server", "network_type", ValueType::Text),
@@ -98,7 +98,7 @@ pub const REGISTER: Register = Register {
 };
 
 const VOLATILE: &[EvidencePath] = &[
-    EvidencePath("http.server/response_ms"),
+    EvidencePath("http.server/inspection_ms"),
     EvidencePath("http.headers/value@date"),
     EvidencePath("http.headers/value@age"),
     EvidencePath("http.headers/value@set-cookie"),
@@ -535,9 +535,10 @@ fn chain_block(id: &str, title: &str, hops: &[RedirectHop]) -> Block {
     }
 }
 
-/// One row per lowercased header name; a repeated header is joined into one value, `set-cookie`
-/// line by line, any other with `, `. Reads the raw headers, or after a JSON replay, which holds
-/// one value per name, the V1 `headers`.
+/// One row per lowercased header name; a repeated header is joined into one value with `, `,
+/// except `set-cookie`, which keeps one row per value in received order (`set-cookie`,
+/// `set-cookie#2`, ...). Reads the raw headers, or after a JSON replay, which holds one value
+/// per name, the V1 `headers`.
 fn headers_block(resp: &InspectResponse) -> Block {
     let raw: Vec<(&String, &String)> = if resp.raw_headers.is_empty() {
         resp.headers.iter().collect()
@@ -545,13 +546,34 @@ fn headers_block(resp: &InspectResponse) -> Block {
         resp.raw_headers.iter().map(|(n, v)| (n, v)).collect()
     };
     let mut joined: IndexMap<String, String> = IndexMap::new();
+    let raw_names: std::collections::HashSet<String> = raw
+        .iter()
+        .map(|(n, _)| n.to_lowercase())
+        .filter(|n| n != "set-cookie")
+        .collect();
+    let raw_names: std::collections::HashSet<&str> = raw_names.iter().map(String::as_str).collect();
+    let mut cookies = 0usize;
     for (name, value) in raw {
-        let name = name.to_lowercase();
-        let sep = if name == "set-cookie" { "\n" } else { ", " };
+        let mut name = name.to_lowercase();
+        if name == "set-cookie" {
+            // A server may send a header literally named `set-cookie#<n>` (`#` is a token
+            // character): skip to the next free ordinal rather than overwrite it.
+            loop {
+                cookies += 1;
+                if cookies > 1 {
+                    name = format!("set-cookie#{cookies}");
+                }
+                if !joined.contains_key(&name) && !raw_names.contains(name.as_str()) {
+                    break;
+                }
+            }
+            joined.insert(name, value.clone());
+            continue;
+        }
         joined
             .entry(name)
             .and_modify(|v| {
-                v.push_str(sep);
+                v.push_str(", ");
                 v.push_str(value);
             })
             .or_insert_with(|| value.clone());
@@ -572,7 +594,7 @@ fn headers_block(resp: &InspectResponse) -> Block {
 
 /// The server that answered the HTTPS probe; without a response, the target and the probe's
 /// error kind. `address`, `org` and `network_type` describe the first-hop target, the address
-/// V1 reports, not the host a redirect ended on. `response_ms` is the duration of the whole
+/// V1 reports, not the host a redirect ended on. `inspection_ms` is the duration of the whole
 /// inspection, all three probes and the enrichment lookup, not of one response.
 fn server_block(resp: &InspectResponse) -> Block {
     let mut fields: Fields = Vec::new();
@@ -584,7 +606,7 @@ fn server_block(resp: &InspectResponse) -> Block {
             EvValue::Text(resp.http_version.clone()),
         ));
     }
-    fields.push(("response_ms".into(), EvValue::Duration(resp.duration_ms)));
+    fields.push(("inspection_ms".into(), EvValue::Duration(resp.duration_ms)));
     if let Ok(ip) = resp.enrichment.ip.parse() {
         fields.push(("address".into(), EvValue::Addr(ip)));
     }
@@ -711,6 +733,29 @@ mod tests {
             .find(|c| c.id.to_string() == id)
             .unwrap_or_else(|| panic!("no check {id}"))
             .status
+    }
+
+    #[test]
+    fn set_cookie_rows_skip_a_received_set_cookie_hash_header() {
+        let mut resp = response(None, &[]);
+        resp.raw_headers = [
+            ("set-cookie#2", "x"),
+            ("set-cookie", "a=1"),
+            ("set-cookie", "b=2"),
+        ]
+        .map(|(n, v)| (n.to_string(), v.to_string()))
+        .into();
+        let Shape::Table { rows, .. } = headers_block(&resp).shape else {
+            panic!("http.headers is not a table");
+        };
+        let row = |k: &str| {
+            rows.iter()
+                .find(|r| r[0] == EvValue::Text(k.into()))
+                .map(|r| r[1].clone())
+        };
+        assert_eq!(row("set-cookie#2"), Some(EvValue::Text("x".into())));
+        assert_eq!(row("set-cookie"), Some(EvValue::Text("a=1".into())));
+        assert_eq!(row("set-cookie#3"), Some(EvValue::Text("b=2".into())));
     }
 
     #[test]

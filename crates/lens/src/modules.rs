@@ -189,7 +189,7 @@ pub(crate) fn ip_addresses(evidence: &[Block]) -> Vec<IpInfo> {
 pub(crate) struct HttpServer {
     pub status_code: Option<u16>,
     pub http_version: Option<String>,
-    pub response_ms: Option<u64>,
+    pub inspection_ms: Option<u64>,
     pub address: Option<String>,
     pub org: Option<String>,
     pub network_type: Option<String>,
@@ -206,7 +206,7 @@ impl HttpServer {
                 _ => None,
             },
             http_version: text(f, "http_version"),
-            response_ms: match field(f, "response_ms") {
+            inspection_ms: match field(f, "inspection_ms") {
                 Some(Value::Duration(ms)) => Some(*ms),
                 _ => None,
             },
@@ -479,7 +479,7 @@ impl ModuleSection {
                             ),
                             status_code: server.status_code,
                             http_version: server.http_version,
-                            response_duration_ms: server.response_ms,
+                            response_duration_ms: server.inspection_ms,
                             server_ip: server.address,
                             server_org: server.org,
                             server_network_type: server.network_type,
@@ -609,7 +609,9 @@ mod tests {
         let base = RunContext {
             deadline: Instant::now() + Duration::from_secs(5),
             domain: Domain::new("example.com"),
-            options: RunOptions { dkim_selectors: None },
+            options: RunOptions {
+                dkim_selectors: None,
+            },
         };
         let report =
             netray_engine::run(&section.registry, base, &[], Duration::from_secs(1), tx).await;

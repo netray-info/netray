@@ -52,7 +52,11 @@ fn volatile_row_path_covers_repeated_keys_in_fingerprint_and_diff() {
         ("set-cookie#3", "c=2"),
     ]);
     let d = diff(&a, &b, &VOLATILE, None);
-    assert!(d.evidence.is_empty(), "evidence must stay quiet: {:?}", d.evidence);
+    assert!(
+        d.evidence.is_empty(),
+        "evidence must stay quiet: {:?}",
+        d.evidence
+    );
     assert_eq!(fingerprint(&a, &VOLATILE), fingerprint(&b, &VOLATILE));
 }
 

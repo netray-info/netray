@@ -142,10 +142,10 @@ fn volatile_paths_name_registered_keys() {
         .expect("module builds");
     let volatile: &[EvidencePath] = module.volatile();
     let got: BTreeSet<&str> = volatile.iter().map(|p| p.0).collect();
-    // response_ms per run; address, org and network_type follow the resolver's answer order
+    // inspection_ms per run; address, org and network_type follow the resolver's answer order
     // (specs/features/v2-history R17).
     let mut want: BTreeSet<String> = [
-        "http.server/response_ms",
+        "http.server/inspection_ms",
         "http.server/address",
         "http.server/org",
         "http.server/network_type",

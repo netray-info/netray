@@ -179,9 +179,10 @@ GIVEN the catalogue and the profile WHEN read THEN the HTTP check IDs are the sa
   presence, which the block states (value or `missing`) for the UI half to render (implementer
   under the operator's autonomy mandate, 2026-10-19).
 - `response_ms` renamed to `inspection_ms`, not re-measured: V1's `duration_ms` measured the same
-  whole inspection, and a per-response timing is a new measurement no row asks for; the first run of
-  each domain after the rename diffs `response_ms` as removed once (implementer under the operator's
-  autonomy mandate, 2026-10-19).
+  whole inspection, and a per-response timing is a new measurement no row asks for. Both keys are
+  volatile, so a run that differs only by the rename records as identical and keeps `response_ms` in
+  the head entry; the removal shows once, beside the first real change of that domain (implementer
+  under the operator's autonomy mandate, 2026-10-19).
 - `Set-Cookie` as rows `set-cookie#<n>` over a list value: a table cell holds one value; `#<n>`
   follows `http.cookies`. The row-repeat volatile rule goes into the shared canonical form so the
   existing path `http.headers/value@set-cookie` covers every row (implementer under the operator's
@@ -200,6 +201,10 @@ GIVEN the catalogue and the profile WHEN read THEN the HTTP check IDs are the sa
 - New blocks also in the domain run: the stored evidence view shows them; the next run of each
   domain records them as added, accepted (implementer under the operator's autonomy mandate,
   2026-10-19).
+
+- Review of Phase 1: Referrer-Policy grades every header line joined with `, ` (RFC 9110 §5.3), not
+  only the first; a received header literally named `set-cookie#<n>` keeps its row and the cookie
+  takes the next free ordinal (implementer under the operator's autonomy mandate, 2026-10-19).
 
 ## Open decisions
 
