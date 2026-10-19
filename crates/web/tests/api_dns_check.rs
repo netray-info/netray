@@ -267,6 +267,8 @@ async fn names_the_check_cannot_run_on_are_400() {
         "example.com other",
         "example.com +dnssec",
         "@google",
+        " example.com",
+        "example.com\n",
         long.as_str(),
     ] {
         let r = send(
