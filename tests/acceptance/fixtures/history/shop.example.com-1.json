@@ -1,0 +1,2558 @@
+{
+  "domain": "shop.example.com",
+  "age_seconds": 1209600,
+  "run": {
+    "profile_version": 3,
+    "engine_version": "0.26.0",
+    "evidence_schema_version": 1,
+    "grade": "D",
+    "complete": true,
+    "sections": [
+      {
+        "protocol": "dns",
+        "outcome": "measured",
+        "reason": null
+      },
+      {
+        "protocol": "email",
+        "outcome": "measured",
+        "reason": null
+      },
+      {
+        "protocol": "http",
+        "outcome": "measured",
+        "reason": null
+      },
+      {
+        "protocol": "tls",
+        "outcome": "measured",
+        "reason": null
+      },
+      {
+        "protocol": "ip",
+        "outcome": "measured",
+        "reason": null
+      }
+    ],
+    "checks": [
+      {
+        "id": "dns.caa",
+        "status": "warn",
+        "findings": [
+          "No CAA records found: any Certificate Authority can issue certificates for this domain; cf. RFC 8659"
+        ],
+        "evidence": [
+          "dns.caa"
+        ]
+      },
+      {
+        "id": "dns.cname_apex",
+        "status": "pass",
+        "evidence": [
+          "dns.cname",
+          "dns.soa"
+        ]
+      },
+      {
+        "id": "dns.dnssec",
+        "status": "pass",
+        "evidence": [
+          "dns.dnskey",
+          "dns.ds",
+          "dns.nsec",
+          "dns.nsec3"
+        ]
+      },
+      {
+        "id": "dns.dnskey_algorithm",
+        "status": "pass",
+        "evidence": [
+          "dns.dnskey"
+        ]
+      },
+      {
+        "id": "dns.dnssec_rollover",
+        "status": "pass",
+        "evidence": [
+          "dns.dnskey",
+          "dns.ds"
+        ]
+      },
+      {
+        "id": "dns.https_svcb",
+        "status": "pass",
+        "evidence": [
+          "dns.https",
+          "dns.svcb"
+        ]
+      },
+      {
+        "id": "dns.ns",
+        "status": "pass",
+        "evidence": [
+          "dns.ns"
+        ]
+      },
+      {
+        "id": "dns.ns_lame",
+        "status": "pass",
+        "evidence": [
+          "dns.ns"
+        ]
+      },
+      {
+        "id": "dns.ns_delegation",
+        "status": "pass",
+        "evidence": [
+          "dns.ns"
+        ]
+      },
+      {
+        "id": "dns.ttl",
+        "status": "pass",
+        "evidence": [
+          "dns.a",
+          "dns.aaaa",
+          "dns.mx",
+          "dns.caa",
+          "dns.ns",
+          "dns.https",
+          "dns.cname",
+          "dns.dnskey",
+          "dns.ds",
+          "dns.nsec",
+          "dns.nsec3",
+          "dns.soa",
+          "dns.svcb",
+          "dns.txt"
+        ]
+      },
+      {
+        "id": "email.mx",
+        "status": "pass",
+        "evidence": [
+          "email.mx"
+        ]
+      },
+      {
+        "id": "email.spf",
+        "status": "pass",
+        "evidence": [
+          "email.spf",
+          "email.mx"
+        ]
+      },
+      {
+        "id": "email.dkim",
+        "status": "pass",
+        "evidence": [
+          "email.dkim"
+        ]
+      },
+      {
+        "id": "email.dmarc",
+        "status": "warn",
+        "findings": [
+          "no aggregate reports"
+        ],
+        "evidence": [
+          "email.dmarc"
+        ]
+      },
+      {
+        "id": "email.mta_sts",
+        "status": "pass",
+        "evidence": [
+          "email.mta_sts",
+          "email.mta_sts_policy"
+        ]
+      },
+      {
+        "id": "email.tls_rpt",
+        "status": "pass",
+        "evidence": [
+          "email.tls_rpt"
+        ]
+      },
+      {
+        "id": "email.bimi",
+        "status": "not_applicable",
+        "findings": [
+          "no BIMI record"
+        ],
+        "evidence": [
+          "email.bimi"
+        ]
+      },
+      {
+        "id": "email.dane",
+        "status": "warn",
+        "findings": [
+          "no TLSA records for mx1.shop.example.com"
+        ],
+        "evidence": [
+          "email.mx"
+        ]
+      },
+      {
+        "id": "email.dnsbl",
+        "status": "pass",
+        "evidence": [
+          "email.mx_addresses"
+        ]
+      },
+      {
+        "id": "email.fcrdns",
+        "status": "pass",
+        "evidence": [
+          "email.mx_addresses"
+        ]
+      },
+      {
+        "id": "http.https_redirect",
+        "status": "fail",
+        "findings": [
+          "HTTP port 80 does not redirect to HTTPS"
+        ],
+        "evidence": [
+          "http.port80",
+          "http.port80_probe"
+        ]
+      },
+      {
+        "id": "http.hsts",
+        "status": "fail",
+        "findings": [
+          "No HSTS header found"
+        ],
+        "evidence": [
+          "http.headers"
+        ]
+      },
+      {
+        "id": "http.cors",
+        "status": "pass",
+        "evidence": [
+          "http.cors"
+        ]
+      },
+      {
+        "id": "http.cookie_secure",
+        "status": "not_applicable",
+        "findings": [
+          "not applicable"
+        ],
+        "evidence": [
+          "http.cookies"
+        ]
+      },
+      {
+        "id": "http.csp",
+        "status": "warn",
+        "findings": [
+          "No Content-Security-Policy header"
+        ],
+        "evidence": [
+          "http.headers"
+        ]
+      },
+      {
+        "id": "http.x_frame_options",
+        "status": "warn",
+        "findings": [
+          "Missing x-frame-options header"
+        ],
+        "evidence": [
+          "http.headers"
+        ]
+      },
+      {
+        "id": "http.x_content_type_options",
+        "status": "warn",
+        "findings": [
+          "Missing x-content-type-options header"
+        ],
+        "evidence": [
+          "http.headers"
+        ]
+      },
+      {
+        "id": "http.referrer_policy",
+        "status": "warn",
+        "findings": [
+          "Missing referrer-policy header"
+        ],
+        "evidence": [
+          "http.headers"
+        ]
+      },
+      {
+        "id": "http.permissions_policy",
+        "status": "warn",
+        "findings": [
+          "Missing permissions-policy header"
+        ],
+        "evidence": [
+          "http.headers"
+        ]
+      },
+      {
+        "id": "http.deprecated_headers",
+        "status": "pass",
+        "evidence": [
+          "http.headers"
+        ]
+      },
+      {
+        "id": "http.info_leakage",
+        "status": "warn",
+        "findings": [
+          "Info leakage headers: Server"
+        ],
+        "evidence": [
+          "http.headers"
+        ]
+      },
+      {
+        "id": "http.caching",
+        "status": "warn",
+        "findings": [
+          "No Cache-Control header"
+        ],
+        "evidence": [
+          "http.headers"
+        ]
+      },
+      {
+        "id": "tls.tls_reachable",
+        "status": "pass",
+        "evidence": [
+          "tls.addresses"
+        ]
+      },
+      {
+        "id": "tls.chain_trusted",
+        "status": "pass",
+        "evidence": [
+          "tls.chain@192.0.2.10:443",
+          "tls.chain@198.51.100.10:443"
+        ]
+      },
+      {
+        "id": "tls.not_expired",
+        "status": "pass",
+        "evidence": [
+          "tls.chain@192.0.2.10:443",
+          "tls.chain@198.51.100.10:443"
+        ]
+      },
+      {
+        "id": "tls.hostname_match",
+        "status": "pass",
+        "evidence": [
+          "tls.chain@192.0.2.10:443",
+          "tls.chain@198.51.100.10:443"
+        ]
+      },
+      {
+        "id": "tls.chain_complete",
+        "status": "pass",
+        "evidence": [
+          "tls.chain@192.0.2.10:443",
+          "tls.chain@198.51.100.10:443"
+        ]
+      },
+      {
+        "id": "tls.strong_signature",
+        "status": "pass",
+        "evidence": [
+          "tls.chain@192.0.2.10:443",
+          "tls.chain@198.51.100.10:443"
+        ]
+      },
+      {
+        "id": "tls.key_strength",
+        "status": "pass",
+        "evidence": [
+          "tls.chain@192.0.2.10:443",
+          "tls.chain@198.51.100.10:443"
+        ]
+      },
+      {
+        "id": "tls.expiry_window",
+        "status": "pass",
+        "evidence": [
+          "tls.chain@192.0.2.10:443",
+          "tls.chain@198.51.100.10:443"
+        ]
+      },
+      {
+        "id": "tls.cert_lifetime",
+        "status": "pass",
+        "evidence": [
+          "tls.chain@192.0.2.10:443",
+          "tls.chain@198.51.100.10:443"
+        ]
+      },
+      {
+        "id": "tls.san_quality",
+        "status": "pass",
+        "evidence": [
+          "tls.chain@192.0.2.10:443",
+          "tls.chain@198.51.100.10:443"
+        ]
+      },
+      {
+        "id": "tls.aia_reachability",
+        "status": "not_applicable",
+        "findings": [
+          "Chain is complete; AIA URLs not required for verification"
+        ],
+        "evidence": [
+          "tls.chain@192.0.2.10:443",
+          "tls.chain@198.51.100.10:443"
+        ]
+      },
+      {
+        "id": "tls.tls_version",
+        "status": "pass",
+        "evidence": [
+          "tls.handshake@192.0.2.10:443",
+          "tls.handshake@198.51.100.10:443"
+        ]
+      },
+      {
+        "id": "tls.forward_secrecy",
+        "status": "pass",
+        "evidence": [
+          "tls.handshake@192.0.2.10:443",
+          "tls.handshake@198.51.100.10:443"
+        ]
+      },
+      {
+        "id": "tls.aead_cipher",
+        "status": "pass",
+        "evidence": [
+          "tls.handshake@192.0.2.10:443",
+          "tls.handshake@198.51.100.10:443"
+        ]
+      },
+      {
+        "id": "tls.ct_logged",
+        "status": "pass",
+        "evidence": [
+          "tls.ct"
+        ]
+      },
+      {
+        "id": "tls.ocsp_stapled",
+        "status": "pass",
+        "evidence": [
+          "tls.handshake@192.0.2.10:443",
+          "tls.handshake@198.51.100.10:443"
+        ]
+      },
+      {
+        "id": "tls.caa_compliant",
+        "status": "pass",
+        "evidence": [
+          "tls.caa"
+        ]
+      },
+      {
+        "id": "tls.dane_valid",
+        "status": "not_applicable",
+        "findings": [
+          "DANE check skipped (requires DNSSEC)"
+        ],
+        "evidence": [
+          "tls.chain@192.0.2.10:443",
+          "tls.chain@198.51.100.10:443"
+        ]
+      },
+      {
+        "id": "tls.consistency",
+        "status": "pass",
+        "evidence": [
+          "tls.chain@192.0.2.10:443",
+          "tls.chain@198.51.100.10:443",
+          "tls.handshake@192.0.2.10:443",
+          "tls.handshake@198.51.100.10:443"
+        ]
+      },
+      {
+        "id": "tls.alpn_consistency",
+        "status": "pass",
+        "evidence": [
+          "tls.handshake@192.0.2.10:443",
+          "tls.handshake@198.51.100.10:443"
+        ]
+      },
+      {
+        "id": "tls.ech_advertised",
+        "status": "warn",
+        "findings": [
+          "192.0.2.10: ECH not advertised in HTTPS DNS record",
+          "198.51.100.10: ECH not advertised in HTTPS DNS record"
+        ],
+        "evidence": [
+          "tls.handshake@192.0.2.10:443",
+          "tls.handshake@198.51.100.10:443",
+          "dns.https"
+        ]
+      },
+      {
+        "id": "ip.reputation",
+        "status": "pass",
+        "evidence": [
+          "ip.addresses"
+        ]
+      }
+    ],
+    "blocks": [
+      {
+        "id": "dns.a",
+        "title": "A",
+        "shape": {
+          "kind": "records",
+          "data": [
+            {
+              "owner": {
+                "t": "text",
+                "v": "shop.example.com."
+              },
+              "type": {
+                "t": "text",
+                "v": "A"
+              },
+              "ttl": {
+                "t": "int",
+                "v": 290
+              },
+              "data": {
+                "t": "text",
+                "v": "192.0.2.10"
+              }
+            },
+            {
+              "owner": {
+                "t": "text",
+                "v": "shop.example.com."
+              },
+              "type": {
+                "t": "text",
+                "v": "A"
+              },
+              "ttl": {
+                "t": "int",
+                "v": 290
+              },
+              "data": {
+                "t": "text",
+                "v": "198.51.100.10"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "dns.aaaa",
+        "title": "AAAA",
+        "shape": {
+          "kind": "records",
+          "data": [
+            {
+              "owner": {
+                "t": "text",
+                "v": "shop.example.com."
+              },
+              "type": {
+                "t": "text",
+                "v": "AAAA"
+              },
+              "ttl": {
+                "t": "int",
+                "v": 160
+              },
+              "data": {
+                "t": "text",
+                "v": "2001:db8::10"
+              }
+            },
+            {
+              "owner": {
+                "t": "text",
+                "v": "shop.example.com."
+              },
+              "type": {
+                "t": "text",
+                "v": "AAAA"
+              },
+              "ttl": {
+                "t": "int",
+                "v": 160
+              },
+              "data": {
+                "t": "text",
+                "v": "2001:db8::11"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "dns.mx",
+        "title": "MX",
+        "shape": {
+          "kind": "records",
+          "data": [
+            {
+              "owner": {
+                "t": "text",
+                "v": "shop.example.com."
+              },
+              "type": {
+                "t": "text",
+                "v": "MX"
+              },
+              "ttl": {
+                "t": "int",
+                "v": 300
+              },
+              "data": {
+                "t": "text",
+                "v": "10 mx1.shop.example.com."
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "dns.caa",
+        "title": "CAA",
+        "shape": {
+          "kind": "records",
+          "data": []
+        }
+      },
+      {
+        "id": "dns.ns",
+        "title": "NS",
+        "shape": {
+          "kind": "records",
+          "data": [
+            {
+              "owner": {
+                "t": "text",
+                "v": "shop.example.com."
+              },
+              "type": {
+                "t": "text",
+                "v": "NS"
+              },
+              "ttl": {
+                "t": "int",
+                "v": 77532
+              },
+              "data": {
+                "t": "text",
+                "v": "ns1.shop.example.com."
+              }
+            },
+            {
+              "owner": {
+                "t": "text",
+                "v": "shop.example.com."
+              },
+              "type": {
+                "t": "text",
+                "v": "NS"
+              },
+              "ttl": {
+                "t": "int",
+                "v": 77532
+              },
+              "data": {
+                "t": "text",
+                "v": "ns2.shop.example.com."
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "dns.https",
+        "title": "HTTPS",
+        "shape": {
+          "kind": "records",
+          "data": [
+            {
+              "owner": {
+                "t": "text",
+                "v": "shop.example.com."
+              },
+              "type": {
+                "t": "text",
+                "v": "HTTPS"
+              },
+              "ttl": {
+                "t": "int",
+                "v": 177
+              },
+              "data": {
+                "t": "text",
+                "v": "1 . alpn=h3,h2 ipv4hint=192.0.2.10,198.51.100.10 ipv6hint=2001:db8::10,2001:db8::11"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "dns.cname",
+        "title": "CNAME",
+        "shape": {
+          "kind": "records",
+          "data": []
+        }
+      },
+      {
+        "id": "dns.dnskey",
+        "title": "DNSKEY",
+        "shape": {
+          "kind": "records",
+          "data": [
+            {
+              "owner": {
+                "t": "text",
+                "v": "shop.example.com."
+              },
+              "type": {
+                "t": "text",
+                "v": "DNSKEY"
+              },
+              "ttl": {
+                "t": "int",
+                "v": 1722
+              },
+              "data": {
+                "t": "text",
+                "v": "256 3 13 MjyZielP0GqniI1+j+wAG/3t0ImDDIlj1CxR0oobkZQHSKH2Fqx6tm2NcYu57POJ83SzCWLkqIjZHS1mh5wbaw=="
+              }
+            },
+            {
+              "owner": {
+                "t": "text",
+                "v": "shop.example.com."
+              },
+              "type": {
+                "t": "text",
+                "v": "DNSKEY"
+              },
+              "ttl": {
+                "t": "int",
+                "v": 1722
+              },
+              "data": {
+                "t": "text",
+                "v": "256 3 13 kxipjoIbNZDsWqEKaYaGq6fM/XThrRp1ue6AV9R/n3eWxpGCeCWJb47PEEEj/Q6VAYFW/7UFo5mXoZfxKYZa3A=="
+              }
+            },
+            {
+              "owner": {
+                "t": "text",
+                "v": "shop.example.com."
+              },
+              "type": {
+                "t": "text",
+                "v": "DNSKEY"
+              },
+              "ttl": {
+                "t": "int",
+                "v": 1722
+              },
+              "data": {
+                "t": "text",
+                "v": "256 3 13 oJMRESz5E4gYzS/q6XDrvU1qMPYIjCWzJaOau8XNEZeqCYKD5ar0IRd8KqXXFJkqmVfRvMGPmM1x8fGAa2XhSA=="
+              }
+            },
+            {
+              "owner": {
+                "t": "text",
+                "v": "shop.example.com."
+              },
+              "type": {
+                "t": "text",
+                "v": "DNSKEY"
+              },
+              "ttl": {
+                "t": "int",
+                "v": 1722
+              },
+              "data": {
+                "t": "text",
+                "v": "257 3 13 mdsswUyr3DPW132mOi8V9xESWE8jTo0dxCjjnopKl+GqJxpVXckHAeF+KkxLbxILfDLUT0rAK9iUzy1L53eKGQ=="
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "dns.ds",
+        "title": "DS",
+        "shape": {
+          "kind": "records",
+          "data": [
+            {
+              "owner": {
+                "t": "text",
+                "v": "shop.example.com."
+              },
+              "type": {
+                "t": "text",
+                "v": "DS"
+              },
+              "ttl": {
+                "t": "int",
+                "v": 84873
+              },
+              "data": {
+                "t": "text",
+                "v": "2371 13 2 C988EC423E3880EB8DD8A46FE06CA230EE23F35B578D64E78B29C3E1C83D245A"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "dns.nsec",
+        "title": "NSEC",
+        "shape": {
+          "kind": "records",
+          "data": [
+            {
+              "owner": {
+                "t": "text",
+                "v": "shop.example.com."
+              },
+              "type": {
+                "t": "text",
+                "v": "NSEC"
+              },
+              "ttl": {
+                "t": "int",
+                "v": 1800
+              },
+              "data": {
+                "t": "text",
+                "v": "\\000.shop.example.com. A NS SOA PTR HINFO MX TXT AAAA Unknown SRV NAPTR CERT SSHFP RRSIG NSEC DNSKEY TLSA SMIMEA Unknown CDS CDNSKEY OPENPGPKEY SVCB HTTPS Unknown CAA"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "dns.nsec3",
+        "title": "NSEC3",
+        "shape": {
+          "kind": "records",
+          "data": []
+        }
+      },
+      {
+        "id": "dns.soa",
+        "title": "SOA",
+        "shape": {
+          "kind": "records",
+          "data": [
+            {
+              "owner": {
+                "t": "text",
+                "v": "shop.example.com."
+              },
+              "type": {
+                "t": "text",
+                "v": "SOA"
+              },
+              "ttl": {
+                "t": "int",
+                "v": 1800
+              },
+              "data": {
+                "t": "text",
+                "v": "ns1.shop.example.com. hostmaster.shop.example.com. 2416374680 10000 2400 604800 1800"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "dns.svcb",
+        "title": "SVCB",
+        "shape": {
+          "kind": "records",
+          "data": []
+        }
+      },
+      {
+        "id": "dns.txt",
+        "title": "TXT",
+        "shape": {
+          "kind": "records",
+          "data": [
+            {
+              "owner": {
+                "t": "text",
+                "v": "shop.example.com."
+              },
+              "type": {
+                "t": "text",
+                "v": "TXT"
+              },
+              "ttl": {
+                "t": "int",
+                "v": 300
+              },
+              "data": {
+                "t": "text",
+                "v": "\"_k2n1y4vw3qtb4skdx9e7dxt97qrmmq9\""
+              }
+            },
+            {
+              "owner": {
+                "t": "text",
+                "v": "shop.example.com."
+              },
+              "type": {
+                "t": "text",
+                "v": "TXT"
+              },
+              "ttl": {
+                "t": "int",
+                "v": 300
+              },
+              "data": {
+                "t": "text",
+                "v": "\"v=spf1 mx -all\""
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "email.mx",
+        "title": "MX",
+        "shape": {
+          "kind": "table",
+          "data": {
+            "key": "host",
+            "columns": [
+              "host",
+              "preference"
+            ],
+            "rows": [
+              [
+                {
+                  "t": "text",
+                  "v": "mx1.shop.example.com."
+                },
+                {
+                  "t": "int",
+                  "v": 10
+                }
+              ]
+            ]
+          }
+        }
+      },
+      {
+        "id": "email.mx_addresses",
+        "title": "MX addresses",
+        "shape": {
+          "kind": "table",
+          "data": {
+            "key": "address",
+            "columns": [
+              "address",
+              "host"
+            ],
+            "rows": [
+              [
+                {
+                  "t": "addr",
+                  "v": "192.0.2.25"
+                },
+                {
+                  "t": "text",
+                  "v": "mx1.shop.example.com."
+                }
+              ],
+              [
+                {
+                  "t": "addr",
+                  "v": "2001:db8::25"
+                },
+                {
+                  "t": "text",
+                  "v": "mx1.shop.example.com."
+                }
+              ]
+            ]
+          }
+        }
+      },
+      {
+        "id": "email.spf",
+        "title": "SPF",
+        "shape": {
+          "kind": "fields",
+          "data": [
+            [
+              "record",
+              {
+                "t": "text",
+                "v": "v=spf1 mx -all"
+              }
+            ],
+            [
+              "lookup_count",
+              {
+                "t": "int",
+                "v": 1
+              }
+            ],
+            [
+              "void_lookups",
+              {
+                "t": "int",
+                "v": 0
+              }
+            ]
+          ]
+        }
+      },
+      {
+        "id": "email.dmarc",
+        "title": "DMARC",
+        "shape": {
+          "kind": "fields",
+          "data": [
+            [
+              "record",
+              {
+                "t": "text",
+                "v": "v=DMARC1;p=reject;sp=reject;adkim=s;aspf=s"
+              }
+            ],
+            [
+              "p",
+              {
+                "t": "text",
+                "v": "reject"
+              }
+            ],
+            [
+              "sp",
+              {
+                "t": "text",
+                "v": "reject"
+              }
+            ],
+            [
+              "adkim",
+              {
+                "t": "text",
+                "v": "s"
+              }
+            ],
+            [
+              "aspf",
+              {
+                "t": "text",
+                "v": "s"
+              }
+            ]
+          ]
+        }
+      },
+      {
+        "id": "email.mta_sts",
+        "title": "MTA-STS",
+        "shape": {
+          "kind": "fields",
+          "data": [
+            [
+              "record",
+              {
+                "t": "text",
+                "v": "v=STSv1; id=20261018"
+              }
+            ],
+            [
+              "id",
+              {
+                "t": "text",
+                "v": "20261018"
+              }
+            ],
+            [
+              "policy_status",
+              {
+                "t": "int",
+                "v": 200
+              }
+            ],
+            [
+              "content_type",
+              {
+                "t": "text",
+                "v": "text/plain"
+              }
+            ]
+          ]
+        }
+      },
+      {
+        "id": "email.mta_sts_policy",
+        "title": "MTA-STS policy",
+        "shape": {
+          "kind": "text",
+          "data": "version: STSv1\nmode: enforce\nmx: mx1.shop.example.com\nmax_age: 604800\n"
+        }
+      },
+      {
+        "id": "email.tls_rpt",
+        "title": "TLS-RPT",
+        "shape": {
+          "kind": "fields",
+          "data": [
+            [
+              "record",
+              {
+                "t": "text",
+                "v": "v=TLSRPTv1; rua=mailto:tlsrpt@shop.example.com"
+              }
+            ],
+            [
+              "rua",
+              {
+                "t": "text",
+                "v": "mailto:tlsrpt@shop.example.com"
+              }
+            ]
+          ]
+        }
+      },
+      {
+        "id": "email.bimi",
+        "title": "BIMI",
+        "shape": {
+          "kind": "fields",
+          "data": []
+        }
+      },
+      {
+        "id": "email.dnssec",
+        "title": "DNSSEC",
+        "shape": {
+          "kind": "fields",
+          "data": [
+            [
+              "dnskey_present",
+              {
+                "t": "bool",
+                "v": true
+              }
+            ]
+          ]
+        }
+      },
+      {
+        "id": "email.dkim",
+        "title": "DKIM keys",
+        "shape": {
+          "kind": "table",
+          "data": {
+            "key": "key",
+            "columns": [
+              "key",
+              "selector",
+              "state",
+              "key_type",
+              "bits"
+            ],
+            "rows": [
+              [
+                {
+                  "t": "text",
+                  "v": "mail#1"
+                },
+                {
+                  "t": "text",
+                  "v": "mail"
+                },
+                {
+                  "t": "text",
+                  "v": "valid"
+                },
+                {
+                  "t": "text",
+                  "v": "rsa"
+                },
+                {
+                  "t": "int",
+                  "v": 2048
+                }
+              ]
+            ]
+          }
+        }
+      },
+      {
+        "id": "email.summary",
+        "title": "Summary",
+        "shape": {
+          "kind": "fields",
+          "data": [
+            [
+              "grade",
+              {
+                "t": "text",
+                "v": "A"
+              }
+            ]
+          ]
+        }
+      },
+      {
+        "id": "http.redirects",
+        "title": "Redirects",
+        "shape": {
+          "kind": "chain",
+          "data": []
+        }
+      },
+      {
+        "id": "http.port80",
+        "title": "Port 80 redirects",
+        "shape": {
+          "kind": "chain",
+          "data": []
+        }
+      },
+      {
+        "id": "http.port80_probe",
+        "title": "Port 80 probe",
+        "shape": {
+          "kind": "fields",
+          "data": [
+            [
+              "url",
+              {
+                "t": "text",
+                "v": "http://shop.example.com/"
+              }
+            ],
+            [
+              "status_code",
+              {
+                "t": "int",
+                "v": 200
+              }
+            ],
+            [
+              "redirects_to_https",
+              {
+                "t": "bool",
+                "v": false
+              }
+            ]
+          ]
+        }
+      },
+      {
+        "id": "http.headers",
+        "title": "Response headers",
+        "shape": {
+          "kind": "table",
+          "data": {
+            "key": "name",
+            "columns": [
+              "name",
+              "value"
+            ],
+            "rows": [
+              [
+                {
+                  "t": "text",
+                  "v": "date"
+                },
+                {
+                  "t": "text",
+                  "v": "Sun, 18 Oct 2026 16:45:31 GMT"
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "content-type"
+                },
+                {
+                  "t": "text",
+                  "v": "text/html; charset=utf-8"
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "server"
+                },
+                {
+                  "t": "text",
+                  "v": "example-edge"
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "last-modified"
+                },
+                {
+                  "t": "text",
+                  "v": "Tue, 13 Oct 2026 20:08:28 GMT"
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "allow"
+                },
+                {
+                  "t": "text",
+                  "v": "GET, HEAD"
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "age"
+                },
+                {
+                  "t": "text",
+                  "v": "9"
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "x-cache"
+                },
+                {
+                  "t": "text",
+                  "v": "HIT"
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "content-encoding"
+                },
+                {
+                  "t": "text",
+                  "v": "br"
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "x-request-id"
+                },
+                {
+                  "t": "text",
+                  "v": "0f3c9a1e"
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "alt-svc"
+                },
+                {
+                  "t": "text",
+                  "v": "h3=\":443\"; ma=86400"
+                }
+              ]
+            ]
+          }
+        }
+      },
+      {
+        "id": "http.server",
+        "title": "Server",
+        "shape": {
+          "kind": "fields",
+          "data": [
+            [
+              "final_url",
+              {
+                "t": "text",
+                "v": "https://shop.example.com/"
+              }
+            ],
+            [
+              "status_code",
+              {
+                "t": "int",
+                "v": 200
+              }
+            ],
+            [
+              "http_version",
+              {
+                "t": "text",
+                "v": "h2"
+              }
+            ],
+            [
+              "response_ms",
+              {
+                "t": "duration",
+                "v": 289
+              }
+            ],
+            [
+              "address",
+              {
+                "t": "addr",
+                "v": "198.51.100.10"
+              }
+            ],
+            [
+              "org",
+              {
+                "t": "text",
+                "v": "Example Networks"
+              }
+            ],
+            [
+              "network_type",
+              {
+                "t": "text",
+                "v": "cloud"
+              }
+            ]
+          ]
+        }
+      },
+      {
+        "id": "http.cors",
+        "title": "CORS",
+        "shape": {
+          "kind": "fields",
+          "data": [
+            [
+              "allows_any_origin",
+              {
+                "t": "bool",
+                "v": false
+              }
+            ],
+            [
+              "reflects_origin",
+              {
+                "t": "bool",
+                "v": false
+              }
+            ],
+            [
+              "allows_credentials",
+              {
+                "t": "bool",
+                "v": false
+              }
+            ]
+          ]
+        }
+      },
+      {
+        "id": "http.cookies",
+        "title": "Cookies",
+        "shape": {
+          "kind": "table",
+          "data": {
+            "key": "cookie",
+            "columns": [
+              "cookie",
+              "name",
+              "secure",
+              "http_only",
+              "same_site"
+            ],
+            "rows": []
+          }
+        }
+      },
+      {
+        "id": "tls.addresses",
+        "title": "Addresses",
+        "shape": {
+          "kind": "table",
+          "data": {
+            "key": "address",
+            "columns": [
+              "address",
+              "port",
+              "outcome",
+              "message"
+            ],
+            "rows": [
+              [
+                {
+                  "t": "addr",
+                  "v": "192.0.2.10"
+                },
+                {
+                  "t": "int",
+                  "v": 443
+                },
+                {
+                  "t": "text",
+                  "v": "ok"
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ],
+              [
+                {
+                  "t": "addr",
+                  "v": "198.51.100.10"
+                },
+                {
+                  "t": "int",
+                  "v": 443
+                },
+                {
+                  "t": "text",
+                  "v": "ok"
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ],
+              [
+                {
+                  "t": "addr",
+                  "v": "2001:db8::10"
+                },
+                {
+                  "t": "int",
+                  "v": 443
+                },
+                {
+                  "t": "text",
+                  "v": "HANDSHAKE_FAILED"
+                },
+                {
+                  "t": "text",
+                  "v": "No route to host (os error 65)"
+                }
+              ],
+              [
+                {
+                  "t": "addr",
+                  "v": "2001:db8::11"
+                },
+                {
+                  "t": "int",
+                  "v": 443
+                },
+                {
+                  "t": "text",
+                  "v": "HANDSHAKE_FAILED"
+                },
+                {
+                  "t": "text",
+                  "v": "No route to host (os error 65)"
+                }
+              ]
+            ]
+          }
+        }
+      },
+      {
+        "id": "tls.chain@192.0.2.10:443",
+        "title": "Certificate chain 192.0.2.10:443",
+        "shape": {
+          "kind": "chain",
+          "data": [
+            [
+              [
+                "position",
+                {
+                  "t": "text",
+                  "v": "leaf"
+                }
+              ],
+              [
+                "subject",
+                {
+                  "t": "text",
+                  "v": "CN=shop.example.com"
+                }
+              ],
+              [
+                "issuer",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Issuing ECC CA 1"
+                }
+              ],
+              [
+                "sans",
+                {
+                  "t": "text",
+                  "v": "shop.example.com"
+                }
+              ],
+              [
+                "sans",
+                {
+                  "t": "text",
+                  "v": "*.shop.example.com"
+                }
+              ],
+              [
+                "not_before",
+                {
+                  "t": "time",
+                  "v": "2026-09-26T22:49:11Z"
+                }
+              ],
+              [
+                "not_after",
+                {
+                  "t": "time",
+                  "v": "2026-12-25T22:56:35Z"
+                }
+              ],
+              [
+                "days_remaining",
+                {
+                  "t": "int",
+                  "v": 68
+                }
+              ],
+              [
+                "key",
+                {
+                  "t": "text",
+                  "v": "ECDSA P-256 256"
+                }
+              ],
+              [
+                "signature_algorithm",
+                {
+                  "t": "text",
+                  "v": "ecdsa-with-SHA256"
+                }
+              ],
+              [
+                "fingerprint_sha256",
+                {
+                  "t": "text",
+                  "v": "85:CA:6A:B0:68:E9:BC:CE:88:B6:C4:AA:3C:47:F7:D1:72:28:13:4A:45:7F:87:0D:38:00:E6:22:3A:0D:F0:7A"
+                }
+              ],
+              [
+                "ca_issuers_url",
+                {
+                  "t": "text",
+                  "v": "http://ca.shop.example.com/issuing-ecc.cer"
+                }
+              ]
+            ],
+            [
+              [
+                "position",
+                {
+                  "t": "text",
+                  "v": "intermediate"
+                }
+              ],
+              [
+                "subject",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Issuing ECC CA 1"
+                }
+              ],
+              [
+                "issuer",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
+                }
+              ],
+              [
+                "not_before",
+                {
+                  "t": "time",
+                  "v": "2025-05-29T19:49:45Z"
+                }
+              ],
+              [
+                "not_after",
+                {
+                  "t": "time",
+                  "v": "2035-05-27T19:49:44Z"
+                }
+              ],
+              [
+                "days_remaining",
+                {
+                  "t": "int",
+                  "v": 3143
+                }
+              ],
+              [
+                "key",
+                {
+                  "t": "text",
+                  "v": "ECDSA P-256 256"
+                }
+              ],
+              [
+                "signature_algorithm",
+                {
+                  "t": "text",
+                  "v": "ecdsa-with-SHA384"
+                }
+              ],
+              [
+                "fingerprint_sha256",
+                {
+                  "t": "text",
+                  "v": "F1:5F:29:AB:EF:73:AA:4D:D9:AB:75:4B:AE:AE:36:85:BD:D3:87:4B:46:B5:25:07:11:77:62:86:85:71:80:26"
+                }
+              ],
+              [
+                "ca_issuers_url",
+                {
+                  "t": "text",
+                  "v": "http://ca.shop.example.com/transit-ecc.cer"
+                }
+              ]
+            ],
+            [
+              [
+                "position",
+                {
+                  "t": "text",
+                  "v": "intermediate"
+                }
+              ],
+              [
+                "subject",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
+                }
+              ],
+              [
+                "issuer",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS ECC Root CA"
+                }
+              ],
+              [
+                "not_before",
+                {
+                  "t": "time",
+                  "v": "2022-10-21T17:02:23Z"
+                }
+              ],
+              [
+                "not_after",
+                {
+                  "t": "time",
+                  "v": "2037-10-17T17:02:22Z"
+                }
+              ],
+              [
+                "days_remaining",
+                {
+                  "t": "int",
+                  "v": 4017
+                }
+              ],
+              [
+                "key",
+                {
+                  "t": "text",
+                  "v": "ECDSA P-384 384"
+                }
+              ],
+              [
+                "signature_algorithm",
+                {
+                  "t": "text",
+                  "v": "ecdsa-with-SHA384"
+                }
+              ],
+              [
+                "fingerprint_sha256",
+                {
+                  "t": "text",
+                  "v": "5D:1B:C3:99:27:4E:64:9E:1C:72:69:7D:E9:1A:54:AD:72:50:88:C5:22:1C:B6:1E:17:EE:9C:29:0B:C4:2A:92"
+                }
+              ],
+              [
+                "ca_issuers_url",
+                {
+                  "t": "text",
+                  "v": "http://ca.shop.example.com/root-ecc.cer"
+                }
+              ]
+            ],
+            [
+              [
+                "position",
+                {
+                  "t": "text",
+                  "v": "intermediate"
+                }
+              ],
+              [
+                "subject",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS ECC Root CA"
+                }
+              ],
+              [
+                "issuer",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example Legacy Root"
+                }
+              ],
+              [
+                "not_before",
+                {
+                  "t": "time",
+                  "v": "2025-08-01T00:00:00Z"
+                }
+              ],
+              [
+                "not_after",
+                {
+                  "t": "time",
+                  "v": "2028-12-31T23:59:59Z"
+                }
+              ],
+              [
+                "days_remaining",
+                {
+                  "t": "int",
+                  "v": 805
+                }
+              ],
+              [
+                "key",
+                {
+                  "t": "text",
+                  "v": "ECDSA P-384 384"
+                }
+              ],
+              [
+                "signature_algorithm",
+                {
+                  "t": "text",
+                  "v": "sha256WithRSAEncryption"
+                }
+              ],
+              [
+                "fingerprint_sha256",
+                {
+                  "t": "text",
+                  "v": "BA:06:D3:D3:E3:48:FC:E7:47:8C:C8:4B:42:2D:0E:63:8E:9E:22:1E:F1:A0:B5:3A:DC:14:CC:70:E0:4B:8A:B8"
+                }
+              ]
+            ]
+          ]
+        }
+      },
+      {
+        "id": "tls.handshake@192.0.2.10:443",
+        "title": "Handshake 192.0.2.10:443",
+        "shape": {
+          "kind": "fields",
+          "data": [
+            [
+              "version",
+              {
+                "t": "text",
+                "v": "TLSv1.3"
+              }
+            ],
+            [
+              "cipher_suite",
+              {
+                "t": "text",
+                "v": "TLS13_AES_256_GCM_SHA384"
+              }
+            ],
+            [
+              "key_exchange_group",
+              {
+                "t": "text",
+                "v": "X25519"
+              }
+            ],
+            [
+              "ocsp_stapled",
+              {
+                "t": "bool",
+                "v": true
+              }
+            ],
+            [
+              "ech",
+              {
+                "t": "bool",
+                "v": false
+              }
+            ],
+            [
+              "handshake_ms",
+              {
+                "t": "duration",
+                "v": 60
+              }
+            ]
+          ]
+        }
+      },
+      {
+        "id": "tls.chain@198.51.100.10:443",
+        "title": "Certificate chain 198.51.100.10:443",
+        "shape": {
+          "kind": "chain",
+          "data": [
+            [
+              [
+                "position",
+                {
+                  "t": "text",
+                  "v": "leaf"
+                }
+              ],
+              [
+                "subject",
+                {
+                  "t": "text",
+                  "v": "CN=shop.example.com"
+                }
+              ],
+              [
+                "issuer",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Issuing ECC CA 1"
+                }
+              ],
+              [
+                "sans",
+                {
+                  "t": "text",
+                  "v": "shop.example.com"
+                }
+              ],
+              [
+                "sans",
+                {
+                  "t": "text",
+                  "v": "*.shop.example.com"
+                }
+              ],
+              [
+                "not_before",
+                {
+                  "t": "time",
+                  "v": "2026-09-26T22:49:11Z"
+                }
+              ],
+              [
+                "not_after",
+                {
+                  "t": "time",
+                  "v": "2026-12-25T22:56:35Z"
+                }
+              ],
+              [
+                "days_remaining",
+                {
+                  "t": "int",
+                  "v": 68
+                }
+              ],
+              [
+                "key",
+                {
+                  "t": "text",
+                  "v": "ECDSA P-256 256"
+                }
+              ],
+              [
+                "signature_algorithm",
+                {
+                  "t": "text",
+                  "v": "ecdsa-with-SHA256"
+                }
+              ],
+              [
+                "fingerprint_sha256",
+                {
+                  "t": "text",
+                  "v": "85:CA:6A:B0:68:E9:BC:CE:88:B6:C4:AA:3C:47:F7:D1:72:28:13:4A:45:7F:87:0D:38:00:E6:22:3A:0D:F0:7A"
+                }
+              ],
+              [
+                "ca_issuers_url",
+                {
+                  "t": "text",
+                  "v": "http://ca.shop.example.com/issuing-ecc.cer"
+                }
+              ]
+            ],
+            [
+              [
+                "position",
+                {
+                  "t": "text",
+                  "v": "intermediate"
+                }
+              ],
+              [
+                "subject",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Issuing ECC CA 1"
+                }
+              ],
+              [
+                "issuer",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
+                }
+              ],
+              [
+                "not_before",
+                {
+                  "t": "time",
+                  "v": "2025-05-29T19:49:45Z"
+                }
+              ],
+              [
+                "not_after",
+                {
+                  "t": "time",
+                  "v": "2035-05-27T19:49:44Z"
+                }
+              ],
+              [
+                "days_remaining",
+                {
+                  "t": "int",
+                  "v": 3143
+                }
+              ],
+              [
+                "key",
+                {
+                  "t": "text",
+                  "v": "ECDSA P-256 256"
+                }
+              ],
+              [
+                "signature_algorithm",
+                {
+                  "t": "text",
+                  "v": "ecdsa-with-SHA384"
+                }
+              ],
+              [
+                "fingerprint_sha256",
+                {
+                  "t": "text",
+                  "v": "F1:5F:29:AB:EF:73:AA:4D:D9:AB:75:4B:AE:AE:36:85:BD:D3:87:4B:46:B5:25:07:11:77:62:86:85:71:80:26"
+                }
+              ],
+              [
+                "ca_issuers_url",
+                {
+                  "t": "text",
+                  "v": "http://ca.shop.example.com/transit-ecc.cer"
+                }
+              ]
+            ],
+            [
+              [
+                "position",
+                {
+                  "t": "text",
+                  "v": "intermediate"
+                }
+              ],
+              [
+                "subject",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
+                }
+              ],
+              [
+                "issuer",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS ECC Root CA"
+                }
+              ],
+              [
+                "not_before",
+                {
+                  "t": "time",
+                  "v": "2022-10-21T17:02:23Z"
+                }
+              ],
+              [
+                "not_after",
+                {
+                  "t": "time",
+                  "v": "2037-10-17T17:02:22Z"
+                }
+              ],
+              [
+                "days_remaining",
+                {
+                  "t": "int",
+                  "v": 4017
+                }
+              ],
+              [
+                "key",
+                {
+                  "t": "text",
+                  "v": "ECDSA P-384 384"
+                }
+              ],
+              [
+                "signature_algorithm",
+                {
+                  "t": "text",
+                  "v": "ecdsa-with-SHA384"
+                }
+              ],
+              [
+                "fingerprint_sha256",
+                {
+                  "t": "text",
+                  "v": "5D:1B:C3:99:27:4E:64:9E:1C:72:69:7D:E9:1A:54:AD:72:50:88:C5:22:1C:B6:1E:17:EE:9C:29:0B:C4:2A:92"
+                }
+              ],
+              [
+                "ca_issuers_url",
+                {
+                  "t": "text",
+                  "v": "http://ca.shop.example.com/root-ecc.cer"
+                }
+              ]
+            ],
+            [
+              [
+                "position",
+                {
+                  "t": "text",
+                  "v": "intermediate"
+                }
+              ],
+              [
+                "subject",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS ECC Root CA"
+                }
+              ],
+              [
+                "issuer",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example Legacy Root"
+                }
+              ],
+              [
+                "not_before",
+                {
+                  "t": "time",
+                  "v": "2025-08-01T00:00:00Z"
+                }
+              ],
+              [
+                "not_after",
+                {
+                  "t": "time",
+                  "v": "2028-12-31T23:59:59Z"
+                }
+              ],
+              [
+                "days_remaining",
+                {
+                  "t": "int",
+                  "v": 805
+                }
+              ],
+              [
+                "key",
+                {
+                  "t": "text",
+                  "v": "ECDSA P-384 384"
+                }
+              ],
+              [
+                "signature_algorithm",
+                {
+                  "t": "text",
+                  "v": "sha256WithRSAEncryption"
+                }
+              ],
+              [
+                "fingerprint_sha256",
+                {
+                  "t": "text",
+                  "v": "BA:06:D3:D3:E3:48:FC:E7:47:8C:C8:4B:42:2D:0E:63:8E:9E:22:1E:F1:A0:B5:3A:DC:14:CC:70:E0:4B:8A:B8"
+                }
+              ]
+            ]
+          ]
+        }
+      },
+      {
+        "id": "tls.handshake@198.51.100.10:443",
+        "title": "Handshake 198.51.100.10:443",
+        "shape": {
+          "kind": "fields",
+          "data": [
+            [
+              "version",
+              {
+                "t": "text",
+                "v": "TLSv1.3"
+              }
+            ],
+            [
+              "cipher_suite",
+              {
+                "t": "text",
+                "v": "TLS13_AES_256_GCM_SHA384"
+              }
+            ],
+            [
+              "key_exchange_group",
+              {
+                "t": "text",
+                "v": "X25519"
+              }
+            ],
+            [
+              "ocsp_stapled",
+              {
+                "t": "bool",
+                "v": true
+              }
+            ],
+            [
+              "ech",
+              {
+                "t": "bool",
+                "v": false
+              }
+            ],
+            [
+              "handshake_ms",
+              {
+                "t": "duration",
+                "v": 55
+              }
+            ]
+          ]
+        }
+      },
+      {
+        "id": "tls.ct",
+        "title": "Certificate Transparency",
+        "shape": {
+          "kind": "table",
+          "data": {
+            "key": "address",
+            "columns": [
+              "address",
+              "sct_count",
+              "log_ids"
+            ],
+            "rows": [
+              [
+                {
+                  "t": "addr",
+                  "v": "192.0.2.10"
+                },
+                {
+                  "t": "int",
+                  "v": 2
+                },
+                {
+                  "t": "text",
+                  "v": "944e4387faecc1ef81f3192426a8186501c7d35f3802013f72677d55372e19d8, cb38f715897c84a1445f5bc1ddfbc96ef29a59cd470a690585b0cb14c31458e7"
+                }
+              ],
+              [
+                {
+                  "t": "addr",
+                  "v": "198.51.100.10"
+                },
+                {
+                  "t": "int",
+                  "v": 2
+                },
+                {
+                  "t": "text",
+                  "v": "944e4387faecc1ef81f3192426a8186501c7d35f3802013f72677d55372e19d8, cb38f715897c84a1445f5bc1ddfbc96ef29a59cd470a690585b0cb14c31458e7"
+                }
+              ]
+            ]
+          }
+        }
+      },
+      {
+        "id": "tls.caa",
+        "title": "CAA",
+        "shape": {
+          "kind": "records",
+          "data": []
+        }
+      },
+      {
+        "id": "ip.addresses",
+        "title": "Addresses",
+        "shape": {
+          "kind": "table",
+          "data": {
+            "key": "address",
+            "columns": [
+              "address",
+              "asn",
+              "org",
+              "prefix",
+              "network_type",
+              "country",
+              "city",
+              "spamhaus",
+              "c2",
+              "tor",
+              "vpn"
+            ],
+            "rows": [
+              [
+                {
+                  "t": "addr",
+                  "v": "192.0.2.10"
+                },
+                {
+                  "t": "text",
+                  "v": "AS64500"
+                },
+                {
+                  "t": "text",
+                  "v": "Example Networks"
+                },
+                {
+                  "t": "text",
+                  "v": "192.0.2.0/24"
+                },
+                {
+                  "t": "text",
+                  "v": "cloud"
+                },
+                {
+                  "t": "text",
+                  "v": "US"
+                },
+                {
+                  "t": "text",
+                  "v": "San Francisco"
+                },
+                {
+                  "t": "bool",
+                  "v": false
+                },
+                {
+                  "t": "bool",
+                  "v": false
+                },
+                {
+                  "t": "bool",
+                  "v": false
+                },
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ],
+              [
+                {
+                  "t": "addr",
+                  "v": "198.51.100.10"
+                },
+                {
+                  "t": "text",
+                  "v": "AS64500"
+                },
+                {
+                  "t": "text",
+                  "v": "Example Networks"
+                },
+                {
+                  "t": "text",
+                  "v": "198.51.100.0/24"
+                },
+                {
+                  "t": "text",
+                  "v": "cloud"
+                },
+                {
+                  "t": "text",
+                  "v": "US"
+                },
+                {
+                  "t": "text",
+                  "v": "San Francisco"
+                },
+                {
+                  "t": "bool",
+                  "v": false
+                },
+                {
+                  "t": "bool",
+                  "v": false
+                },
+                {
+                  "t": "bool",
+                  "v": false
+                },
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ],
+              [
+                {
+                  "t": "addr",
+                  "v": "2001:db8::10"
+                },
+                {
+                  "t": "text",
+                  "v": "AS64500"
+                },
+                {
+                  "t": "text",
+                  "v": "Example Networks"
+                },
+                {
+                  "t": "text",
+                  "v": "2001:db8::/32"
+                },
+                {
+                  "t": "text",
+                  "v": "cloud"
+                },
+                {
+                  "t": "text",
+                  "v": "US"
+                },
+                {
+                  "t": "text",
+                  "v": "San Francisco"
+                },
+                {
+                  "t": "bool",
+                  "v": false
+                },
+                {
+                  "t": "bool",
+                  "v": false
+                },
+                {
+                  "t": "bool",
+                  "v": false
+                },
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ],
+              [
+                {
+                  "t": "addr",
+                  "v": "2001:db8::11"
+                },
+                {
+                  "t": "text",
+                  "v": "AS64500"
+                },
+                {
+                  "t": "text",
+                  "v": "Example Networks"
+                },
+                {
+                  "t": "text",
+                  "v": "2001:db8::/32"
+                },
+                {
+                  "t": "text",
+                  "v": "cloud"
+                },
+                {
+                  "t": "text",
+                  "v": "US"
+                },
+                {
+                  "t": "text",
+                  "v": "San Francisco"
+                },
+                {
+                  "t": "bool",
+                  "v": false
+                },
+                {
+                  "t": "bool",
+                  "v": false
+                },
+                {
+                  "t": "bool",
+                  "v": false
+                },
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ]
+            ]
+          }
+        }
+      }
+    ]
+  }
+}
