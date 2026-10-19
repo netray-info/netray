@@ -98,9 +98,11 @@ stay correct are `/asn/<n>`, `/range`, `/batch`, `/diff`, `/ipv4`, `/ipv6`, `/me
    V1's `x_forwarded_for_chain` (the `X-Forwarded-For` hops, an empty list without the header).
 9. `POST /api/v1/ip/batch?dns=true` (or `1`) looks up reverse DNS per address; without it, batch
    stays as it is (no reverse DNS), as V1's batch defaulted.
-10. Every answer of `/api/v1/ip`, `/api/v1/ip/{address}`, `/ip/batch`, `/ip/range/*`, `/ip/diff` and
-    `/asn/{n}` carries `X-RateLimit-Limit` (`[api.ip] per_ip_per_minute`) and `X-RateLimit-Remaining`
-    (the per-IP budget left after this request; `0` on a 429). When the seam reports a GeoIP build
+10. Every answer the handlers of `/api/v1/ip`, `/api/v1/ip/{address}`, `/ip/batch`, `/ip/range/*`, `/ip/diff` and
+    `/asn/{n}` produce carries `X-RateLimit-Limit` (`[api.ip] per_ip_per_minute`). Every answer to a request
+    the per-IP limiter charged also carries `X-RateLimit-Remaining` (the budget left after this
+    request; `0` on any 429, whichever limiter refused). A 413 that lens's body limit answers
+    before routing, or rewrites, is not such an answer. When the seam reports a GeoIP build
     time, each answer also carries `X-GeoIP-Database-Date` (an HTTP date) and
     `X-GeoIP-Database-Age-Days` (whole days since the build).
 11. A 200 answer to a GET on those endpoints carries a strong `ETag` derived from the body bytes and,
@@ -268,6 +270,11 @@ GIVEN the stub WHEN `ip_host` answers `/country` THEN it carries `X-RateLimit-Li
   need no lookup are charged once (implementer under the operator's autonomy mandate, 2026-10-19).
 - Phase 1 review: structured `headers` keeps V1's `x_forwarded_for_chain`; `all` keeps V1's
   `headers` object without it (implementer under the operator's autonomy mandate, 2026-10-19).
+
+- `X-RateLimit-Remaining` only on charged requests: governor reports the remaining budget only when
+  it charges, and a request refused before the charge (validation, module off) costs nothing since
+  Phase 1's review, so it carries the limit alone (implementer under the operator's autonomy
+  mandate, 2026-10-19).
 
 ## Open decisions
 

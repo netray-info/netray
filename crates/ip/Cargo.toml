@@ -24,7 +24,7 @@ governor = { workspace = true }
 netray-engine = { workspace = true }
 netray-model = { workspace = true }
 netray-common = { workspace = true, features = ["schema", "middleware", "server", "spa", "otel", "cors"] }
-httpdate = "1"
+httpdate = { workspace = true }
 ip_network = { workspace = true }
 ip_network_table = "0.2"
 lru = "0.18"

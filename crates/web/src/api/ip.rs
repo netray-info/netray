@@ -2,14 +2,20 @@
 //! `netray_ip::IpLookup` seam. Every handler answers 503 first, charges the per-IP limiter, validates,
 //! charges the per-target or batch limiter, then looks up; the caller's `headers`, `cidr` and plain
 //! `ip` need no lookup and are answered before the seam check.
+use std::cell::Cell;
 use std::collections::HashSet;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU32;
 use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use axum::body::Body;
 use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
-use axum::extract::{ConnectInfo, Path, Query, State};
-use axum::http::{HeaderMap, StatusCode, header};
+use axum::extract::{ConnectInfo, Path, Query, Request, State};
+use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, header};
+use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Extension, Json, Router};
@@ -428,6 +434,92 @@ pub(super) fn charge(
     })
 }
 
+tokio::task_local! {
+    static REMAINING: Cell<Option<u32>>;
+}
+
+fn note_remaining(remaining: u32) {
+    let _ = REMAINING.try_with(|slot| slot.set(Some(remaining)));
+}
+
+const BODY_LIMIT: usize = 4 * 1024 * 1024;
+
+/// Adds the metadata headers to an ip route's answer: the rate-limit pair, the GeoIP database date and
+/// age, and for a 200 GET a strong ETag, `Last-Modified` and the 304 for a matching `If-None-Match`.
+pub(super) async fn metadata(
+    State(state): State<ApiState>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let is_get = request.method() == Method::GET;
+    let if_none_match = request.headers().get(header::IF_NONE_MATCH).cloned();
+    let (mut response, remaining) = REMAINING
+        .scope(Cell::new(None), async {
+            let response = next.run(request).await;
+            let remaining = REMAINING.with(Cell::get);
+            (response, remaining)
+        })
+        .await;
+    // Any 429 (per-IP, per-target or batch) tells the client it has nothing left.
+    let remaining = if response.status() == StatusCode::TOO_MANY_REQUESTS {
+        Some(0)
+    } else {
+        remaining
+    };
+    let headers = response.headers_mut();
+    headers.insert(
+        "x-ratelimit-limit",
+        HeaderValue::from(state.config().ip.per_ip_per_minute),
+    );
+    if let Some(remaining) = remaining {
+        headers.insert("x-ratelimit-remaining", HeaderValue::from(remaining));
+    }
+    let date = state
+        .ip_lookup()
+        .and_then(|ip| ip.geoip_build_epoch())
+        .and_then(|epoch| {
+            let built = UNIX_EPOCH + Duration::from_secs(epoch);
+            let age = SystemTime::now().duration_since(built).unwrap_or_default();
+            HeaderValue::from_str(&httpdate::fmt_http_date(built))
+                .ok()
+                .map(|date| (date, age.as_secs() / 86400))
+        });
+    if let Some((date, age_days)) = &date {
+        headers.insert("x-geoip-database-date", date.clone());
+        headers.insert("x-geoip-database-age-days", HeaderValue::from(*age_days));
+    }
+    if !is_get || response.status() != StatusCode::OK {
+        return response;
+    }
+    let (mut parts, body) = response.into_parts();
+    let Ok(bytes) = axum::body::to_bytes(body, BODY_LIMIT).await else {
+        return Response::from_parts(parts, Body::empty());
+    };
+    let mut hasher = DefaultHasher::new();
+    bytes.hash(&mut hasher);
+    let etag = HeaderValue::from_str(&format!("\"{:016x}\"", hasher.finish()))
+        .expect("a hex digest in quotes is a header value");
+    parts.headers.insert(header::ETAG, etag.clone());
+    if let Some((date, _)) = date {
+        parts.headers.insert(header::LAST_MODIFIED, date);
+    }
+    let matches = if_none_match
+        .as_ref()
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|list| {
+            list.split(',')
+                .map(str::trim)
+                .any(|tag| tag == "*" || tag.as_bytes() == etag.as_bytes())
+        });
+    if matches {
+        parts.status = StatusCode::NOT_MODIFIED;
+        parts.headers.remove(header::CONTENT_LENGTH);
+        parts.headers.remove(header::CONTENT_TYPE);
+        return Response::from_parts(parts, Body::empty());
+    }
+    Response::from_parts(parts, Body::from(bytes))
+}
+
 fn charge_caller(
     state: &ApiState,
     headers: &HeaderMap,
@@ -436,7 +528,13 @@ fn charge_caller(
 ) -> Result<IpAddr, V1Error> {
     let client = limit::client(state, headers, peer);
     state.ip_limiters().prune_if_due();
-    charge(&state.ip_limiters().per_ip, client, cost, "api_v1_ip")?;
+    match state.ip_limiters().charge_per_ip(client, cost) {
+        Ok(remaining) => note_remaining(remaining),
+        Err(retry_after_secs) => {
+            note_remaining(0);
+            return Err(V1Error::RateLimited { retry_after_secs });
+        }
+    }
     Ok(client)
 }
 
@@ -861,7 +959,7 @@ pub(super) fn ip_doc_routes() -> OpenApiRouter<ApiState> {
 
 /// The routes the router serves: `{cidr}` would not match a prefix's unescaped slash, so the range
 /// is registered as `{*cidr}` by hand, with a bare `/ip/range` answering 400.
-pub(super) fn ip_routes() -> Router<ApiState> {
+pub(super) fn ip_routes(state: ApiState) -> Router<ApiState> {
     let (router, _) = OpenApiRouter::new()
         .routes(routes!(caller))
         .routes(routes!(address))
@@ -872,4 +970,5 @@ pub(super) fn ip_routes() -> Router<ApiState> {
     router
         .route("/ip/range/{*cidr}", get(range))
         .route("/ip/range", get(range_missing))
+        .route_layer(axum::middleware::from_fn_with_state(state, metadata))
 }

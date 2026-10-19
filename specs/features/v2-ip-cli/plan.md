@@ -38,3 +38,29 @@ protected tests. `GEOIP_ATTRIBUTION` lands in `lib.rs` with G1 so the groups nev
    `CALLER_ONLY`; enum expectations grow by `host`, `cidr`, `all`.
 5. `specs/sdd/v2.md`: S40 row; §7.1 ip, batch and meta cells; §7.2 paragraph (first cells unchanged).
 6. `tests/fixtures/contracts/api-v1.openapi.json`: regenerated with `UPDATE_GOLDEN=1`.
+
+## Phase 2 — Response metadata headers
+
+### Groups
+
+G1: C1–C10 (one response step; every criterion hangs on it).
+
+### Plan
+
+#### G1
+1. `Cargo.toml`, `crates/ip/Cargo.toml`, `crates/web/Cargo.toml`: `httpdate = "1"` moves to
+   `[workspace.dependencies]` (two crates use it); both crates take `{ workspace = true }`.
+2. `crates/web/src/api/state.rs`: `IpLimiters.per_ip` becomes a keyed governor limiter with
+   `StateInformationMiddleware`; `IpLimiters::charge_per_ip(client, cost) -> Result<u32, u64>`
+   (remaining burst, or retry-after seconds); `prune_if_due` keeps pruning it.
+3. `crates/web/src/api/ip.rs`: a `tokio::task_local!` slot for the per-IP remaining budget;
+   `charge_caller` charges through `charge_per_ip` and writes the slot (0 on refusal).
+   `pub(super) async fn metadata(State<ApiState>, Request, Next) -> Response` runs the request
+   inside the slot's scope, then adds `x-ratelimit-limit` (`[api.ip] per_ip_per_minute`),
+   `x-ratelimit-remaining` (the slot, when the request was charged; 0 on a 429),
+   `x-geoip-database-date`/`-age-days` (from `IpLookup::geoip_build_epoch`), and for a GET with
+   status 200: buffers the body, a strong ETag from its hash, `last-modified` (GeoIP date), and a
+   304 with empty body when `If-None-Match` lists the ETag or `*`.
+4. `crates/web/src/api/jobs.rs`: the inspector's per-IP admission charges through
+   `charge_per_ip`.
+5. `crates/web/src/api/mod.rs`: the ip routes get `route_layer(from_fn_with_state(state, ip::metadata))`.

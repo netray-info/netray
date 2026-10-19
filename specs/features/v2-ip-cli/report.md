@@ -85,3 +85,61 @@ module off (no GeoIP locally), `curl -H 'X-Forwarded-For: 203.0.113.9'`:
 
 Lookups with data (reverse DNS, `?lang=`, formats of a document) are covered by the stub tests
 only: no GeoIP data locally and public resolvers are blocked locally.
+
+## Phase 2 — Response metadata headers
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R10: every answer of the ip handlers carries X-RateLimit-Limit, a charged one X-RateLimit-Remaining (0 on any 429), and, with a known GeoIP build time, X-GeoIP-Database-Date and X-GeoIP-Database-Age-Days | green | crates/web/tests/api_ip_headers.rs |
+| C2 | R11: a 200 GET carries a strong body-derived ETag and Last-Modified (GeoIP date); If-None-Match equal or * gives 304 with ETag, empty body | green | crates/web/tests/api_ip_headers.rs |
+| C3 | S: per_ip_per_minute 60, GET /ip has X-RateLimit-Limit 60 and Remaining one below the burst | green | crates/web/tests/api_ip_headers.rs |
+| C4 | S: past the burst, 429 with X-RateLimit-Remaining 0 and Retry-After | green | crates/web/tests/api_ip_headers.rs |
+| C5 | S: stub epoch gives X-GeoIP-Database-Date as HTTP date and Age-Days whole days since | green | crates/web/tests/api_ip_headers.rs |
+| C6 | S: a seam without build epoch gives no GeoIP header and no Last-Modified | green | crates/web/tests/api_ip_headers.rs |
+| C7 | S: two GETs of /ip/198.51.100.1 carry the same strong ETag; Last-Modified equals the GeoIP date | green | crates/web/tests/api_ip_headers.rs |
+| C8 | S: If-None-Match set to the ETag gives 304, same ETag, empty body | green | crates/web/tests/api_ip_headers.rs |
+| C9 | S: a different If-None-Match gives 200 with the body | green | crates/web/tests/api_ip_headers.rs |
+| C10 | S: POST /ip/diff and GET /asn/15169 carry the rate-limit headers; the POST no ETag | green | crates/web/tests/api_ip_headers.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 2 | sonnet | 54886 | 93 |
+
+### Review
+
+Reader over the phase diff: 1 BLOCKER, 1 AMENDMENT, 4 NIT.
+
+- BLOCKER (fixed, second pass by the orchestrator, test `crates/web/tests/api_ip_headers_review.rs`):
+  a 429 from the per-target or batch limiter carried the caller's per-IP budget as
+  `X-RateLimit-Remaining`; any 429 now carries 0.
+- AMENDMENT (repaired in phase, spec): lens's body limit answers or rewrites a 413 under
+  `/api/v1` without the ip handlers' headers; requirement 10 now names the answers the handlers
+  produce.
+- NIT (not acted on): `If-None-Match` compared strongly (a `W/` tag from a proxy misses), only
+  its first field line read, HEAD gets no 304; C1's text predated the amended R10 (corrected).
+
+### Behavioural verification
+
+`netray lens` from this worktree, IP module off (no GeoIP locally, so no GeoIP headers or
+Last-Modified here; the stub tests cover them):
+
+```
+== GET /api/v1/ip?field=cidr
+HTTP/1.1 200 OK
+x-ratelimit-limit: 60
+x-ratelimit-remaining: 9
+etag: "7f428b5b40aa8013"
+127.0.0.1/32
+== GET /api/v1/ip?field=cidr If-None-Match: "7f428b5b40aa8013"
+HTTP/1.1 304 Not Modified
+etag: "7f428b5b40aa8013"
+x-ratelimit-limit: 60
+x-ratelimit-remaining: 7
+== GET /api/v1/ip?field=country
+HTTP/1.1 503 Service Unavailable
+x-ratelimit-limit: 60
+```

@@ -267,7 +267,9 @@ impl InspectJobs {
         }
         let limiters = self.state.ip_limiters();
         limiters.prune_if_due();
-        charge(&limiters.per_ip, client, 1, "api_v1_ip").map_err(retry_after)?;
+        limiters
+            .charge_per_ip(client, 1)
+            .map_err(Duration::from_secs)?;
         let input = input.trim();
         let target = if input.is_empty() {
             Some(client)

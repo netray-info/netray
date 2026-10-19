@@ -108,7 +108,7 @@ pub fn router(state: ApiState) -> Router {
     limited
         .route_layer(middleware::from_fn_with_state(state.clone(), limit::per_ip))
         .merge(unlimited)
-        .merge(ip::ip_routes())
+        .merge(ip::ip_routes(state.clone()))
         .merge(inspectors::tls_doc_routes().split_for_parts().0)
         .merge(inspectors::http_doc_routes().split_for_parts().0)
         .merge(email::email_doc_routes().split_for_parts().0)
