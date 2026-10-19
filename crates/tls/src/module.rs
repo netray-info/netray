@@ -86,6 +86,12 @@ pub const REGISTER: Register = Register {
         ("tls.chain", "fingerprint_sha256", ValueType::Text),
         ("tls.chain", "position", ValueType::Text),
         ("tls.chain", "ca_issuers_url", ValueType::Text),
+        ("tls.chain", "serial", ValueType::Text),
+        ("tls.chain", "fingerprint_sha1", ValueType::Text),
+        ("tls.chain", "policy", ValueType::Text),
+        ("tls.chain", "self_signed", ValueType::Bool),
+        ("tls.chain", "expired", ValueType::Bool),
+        ("tls.chain", "ocsp_url", ValueType::Text),
         ("tls.handshake", "version", ValueType::Text),
         ("tls.handshake", "cipher_suite", ValueType::Text),
         ("tls.handshake", "alpn", ValueType::Text),
@@ -93,6 +99,14 @@ pub const REGISTER: Register = Register {
         ("tls.handshake", "ocsp_stapled", ValueType::Bool),
         ("tls.handshake", "ech", ValueType::Bool),
         ("tls.handshake", "handshake_ms", ValueType::Duration),
+        ("tls.handshake", "sni", ValueType::Text),
+        ("tls.handshake", "starttls", ValueType::Text),
+        ("tls.handshake", "ocsp_status", ValueType::Text),
+        ("tls.handshake", "ocsp_this_update", ValueType::Time),
+        ("tls.handshake", "ocsp_next_update", ValueType::Time),
+        ("tls.handshake", "ocsp_live_status", ValueType::Text),
+        ("tls.handshake", "ocsp_live_revoked_at", ValueType::Time),
+        ("tls.handshake", "ocsp_live_reason", ValueType::Text),
         ("tls.tlsa", "owner", ValueType::Text),
         ("tls.tlsa", "type", ValueType::Text),
         ("tls.tlsa", "ttl", ValueType::Int),
@@ -110,6 +124,11 @@ pub const REGISTER: Register = Register {
 const VOLATILE: &[EvidencePath] = &[
     EvidencePath("tls.chain/days_remaining"),
     EvidencePath("tls.handshake/handshake_ms"),
+    EvidencePath("tls.handshake/ocsp_this_update"),
+    EvidencePath("tls.handshake/ocsp_next_update"),
+    EvidencePath("tls.handshake/ocsp_live_status"),
+    EvidencePath("tls.handshake/ocsp_live_revoked_at"),
+    EvidencePath("tls.handshake/ocsp_live_reason"),
     EvidencePath("tls.tlsa/ttl"),
     EvidencePath("tls.caa/ttl"),
 ];
@@ -627,6 +646,31 @@ fn cert_fields(cert: &CertInfo) -> Fields {
     }
     fields.push(text("signature_algorithm", &cert.signature_algorithm));
     fields.push(text("fingerprint_sha256", &cert.fingerprint_sha256));
+    if !cert.fingerprint_sha1.is_empty() {
+        fields.push(text("fingerprint_sha1", &cert.fingerprint_sha1));
+    }
+    if !cert.serial.is_empty() {
+        fields.push(text("serial", &cert.serial));
+    }
+    if matches!(cert.cert_policy.as_str(), "EV" | "OV" | "DV") {
+        fields.push(text("policy", &cert.cert_policy));
+    }
+    // A certificate that did not parse has no issuer: its flags are defaults, not facts.
+    if !cert.issuer.is_empty() {
+        fields.push((
+            "self_signed".to_string(),
+            EvValue::Bool(cert.is_self_signed),
+        ));
+        // `is_expired` truncates to whole days: a certificate lapsed hours ago is expired too.
+        let lapsed = DateTime::parse_from_rfc3339(&cert.not_after)
+            .or_else(|_| DateTime::parse_from_str(&cert.not_after, "%b %e %H:%M:%S %Y %:z"))
+            .is_ok_and(|t| t < Utc::now());
+        fields.push((
+            "expired".to_string(),
+            EvValue::Bool(cert.is_expired || lapsed),
+        ));
+    }
+    fields.extend(cert.ocsp_url.as_deref().map(|url| text("ocsp_url", url)));
     fields.extend(
         cert.ca_issuers_url
             .as_deref()
@@ -659,7 +703,28 @@ fn handshake_fields(tls: &TlsParams, https_failed: bool) -> Fields {
             .as_deref()
             .map(|v| text("key_exchange_group", v)),
     );
+    fields.extend(tls.sni.as_deref().map(|v| text("sni", v)));
+    // Only SMTP is upgraded (`tls::connect`); IMAP and FTP carry the port's label without one.
+    fields.extend(
+        tls.starttls
+            .as_deref()
+            .filter(|v| *v == "smtp")
+            .map(|v| text("starttls", v)),
+    );
     fields.push(("ocsp_stapled".to_string(), EvValue::Bool(tls.ocsp.stapled)));
+    fields.extend(tls.ocsp.status.as_deref().map(|v| text("ocsp_status", v)));
+    let time = |k: &str, v: &Option<String>| {
+        v.as_deref()
+            .and_then(rfc3339)
+            .map(|t| (k.to_string(), EvValue::Time(t)))
+    };
+    fields.extend(time("ocsp_this_update", &tls.ocsp.this_update));
+    fields.extend(time("ocsp_next_update", &tls.ocsp.next_update));
+    if let Some(live) = tls.ocsp_live.as_ref().filter(|live| live.answered) {
+        fields.push(text("ocsp_live_status", &live.status));
+        fields.extend(time("ocsp_live_revoked_at", &live.revoked_at));
+        fields.extend(live.reason.as_deref().map(|v| text("ocsp_live_reason", v)));
+    }
     fields.extend(
         tls.ech_advertised
             .filter(|_| !https_failed)

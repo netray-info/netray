@@ -187,6 +187,11 @@ async fn volatile_paths_are_registered_keys() {
     let want: BTreeSet<String> = [
         "tls.chain/days_remaining",
         "tls.handshake/handshake_ms",
+        "tls.handshake/ocsp_this_update",
+        "tls.handshake/ocsp_next_update",
+        "tls.handshake/ocsp_live_status",
+        "tls.handshake/ocsp_live_revoked_at",
+        "tls.handshake/ocsp_live_reason",
         "tls.tlsa/ttl",
         "tls.caa/ttl",
     ]

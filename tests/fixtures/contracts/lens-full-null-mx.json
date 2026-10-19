@@ -1424,6 +1424,48 @@
                   "t": "text",
                   "v": "AA:BB"
                 }
+              ],
+              [
+                "fingerprint_sha1",
+                {
+                  "t": "text",
+                  "v": "CC:DD"
+                }
+              ],
+              [
+                "serial",
+                {
+                  "t": "text",
+                  "v": "01:02:03"
+                }
+              ],
+              [
+                "policy",
+                {
+                  "t": "text",
+                  "v": "DV"
+                }
+              ],
+              [
+                "self_signed",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ],
+              [
+                "expired",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ],
+              [
+                "ocsp_url",
+                {
+                  "t": "text",
+                  "v": "http://ocsp.example.com"
+                }
               ]
             ]
           ],
@@ -1461,6 +1503,13 @@
               {
                 "t": "text",
                 "v": "X25519"
+              }
+            ],
+            [
+              "sni",
+              {
+                "t": "text",
+                "v": "example.com"
               }
             ],
             [
