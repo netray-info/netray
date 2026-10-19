@@ -126,3 +126,7 @@ HTTP/1.1 400 Bad Request
 $ curl ... -d '{"domain":"example.com","record_types":["A"],"servers":["cloudflare"]}'
 HTTP/1.1 200 OK
 ```
+
+### Checks to build
+
+None: both lessons are judgement (where a refusal belongs, which form a domain takes).

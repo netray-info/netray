@@ -1,7 +1,8 @@
 # Spec: v2-input-edges
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-19
+Finished: 2026-10-20
 
 ## Goal
 
@@ -197,6 +198,10 @@ GIVEN the inspect page with `[api.tls] per_ip_burst = 2` WHEN the TLS job runs `
   segment got the lower-case hint) held; both are fixed on this branch, R6's order in the code and
   the POST refusal naming the normal form, and the fix range is read again (implementer under the
   operator's autonomy mandate, 2026-10-20).
+
+- Finish: two CLAUDE.md bullets (a cost above a burst is input, not 429; domain input is the
+  A-label); no check to build, no solutions note (implementer under the operator's autonomy
+  mandate, 2026-10-20).
 
 ## Open decisions
 
