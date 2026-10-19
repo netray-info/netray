@@ -471,7 +471,10 @@ async fn cost_limit_c6_compare_above_per_target_burst_is_refused() {
 #[test]
 fn cost_limit_cost_exceeds_limit_maps_to_invalid_input() {
     assert!(matches!(
-        DnsRefusal::from(ApiError::CostExceedsLimit { cost: 30, limit: 20 }),
+        DnsRefusal::from(ApiError::CostExceedsLimit {
+            cost: 30,
+            limit: 20
+        }),
         DnsRefusal::InvalidInput(_)
     ));
 }

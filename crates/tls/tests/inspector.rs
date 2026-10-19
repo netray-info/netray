@@ -255,7 +255,10 @@ mod cost_limit {
         assert!(message.contains('3') && message.contains('2'), "{message}");
 
         let refusal = TlsRefusal::from(AppError::CostExceedsLimit { cost: 3, limit: 2 });
-        assert!(matches!(refusal, TlsRefusal::InvalidInput(_)), "{refusal:?}");
+        assert!(
+            matches!(refusal, TlsRefusal::InvalidInput(_)),
+            "{refusal:?}"
+        );
     }
 
     #[tokio::test]

@@ -366,5 +366,8 @@ async fn cost_limit_c7_prism_compare_above_global_burst_is_422_without_retry_aft
     let v: Value = serde_json::from_slice(&bytes).expect("JSON error body");
     assert_eq!(v["error"]["code"], "COST_EXCEEDS_LIMIT", "{v}");
     let message = v["error"]["message"].as_str().expect("message");
-    assert!(message.contains("60") && message.contains("50"), "{message}");
+    assert!(
+        message.contains("60") && message.contains("50"),
+        "{message}"
+    );
 }
