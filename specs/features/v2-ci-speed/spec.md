@@ -1,7 +1,8 @@
 # Spec: CI check job in under ten minutes
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-19
+Finished: 2026-10-19
 
 ## Goal
 
@@ -196,6 +197,8 @@ GIVEN a CI run without the disk workarounds WHEN it completes THEN `df` after `j
 - "Free runner disk" dropped, `CARGO_PROFILE_DEV_DEBUG: line-tables-only` kept: the runner had 108G free before freeing; the debuginfo bound speeds linking and is part of the rust-cache key (implementer under the operator's autonomy mandate, 2026-10-19).
 
 - Final review (f2fe046): netray-common's four plain test files merged into its `it` target; the tests/it guard refuses `tests/it` files outside the merged crates; the build script also watches `reftable/`; R4, R7 and R9 reworded to what the decision log decided (implementer under the operator's autonomy mandate, 2026-10-19).
+
+- Finish: one solutions note (paused clock raced only in the shared binary, environment-decides-the-outcome), one check to build (pause after opening a HistoryStore), CLAUDE.md's paused-clock bullet sharpened; CI duration recorded on the finish row; no removal (implementer under the operator's autonomy mandate, 2026-10-19).
 
 ## Open decisions
 

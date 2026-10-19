@@ -53,7 +53,7 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - `adlc feature start` branches from `origin/main`: with unpushed commits on local `main`, fast-forward the new feature branch to `main` before writing the spec.
 - lens records a run after its response: a test reading `history.db` or the record-error counter after a response polls with a bound or awaits `state.runs.drain()`.
 - lens starts one run per domain per 60 s on tokio's clock: a second run of one domain in a test needs `common::pass_throttle()` (current_thread) or another domain.
-- A paused tokio clock times out sqlx pool acquires: never combine `start_paused` or `pause()` with a `HistoryStore`.
+- A paused tokio clock times out sqlx pool acquires and auto-advances through deadlines while the runtime idles on the store: never `start_paused` with a `HistoryStore`; `pause()` only after the store work is drained (`result_run_c15`).
 - governor's `check` spends a token whatever follows: take a keyed limiter after every refusal that must cost nothing.
 - Adding a field to a protected test's struct literal still needs `ADLC-Test-Change`: the gate's tamper check flags any change.
 - lens reads every `LENS_*` variable as a config key, `LENS_EXTRA` included: `acceptance-local` unsets it after building lens's env row.

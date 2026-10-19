@@ -188,3 +188,7 @@ Run 39282555459 (same tree before the c15 fix) failed `result_run_c15` once; rep
 | final review: netray-common's four plain test files not merged | MAJOR | merged (config_loader, ip_extract_no_cf, prefetch, target_policy_results_table) |
 | final review: required-features targets pass the guard outside the listed exceptions | MAJOR | rule-based exception stated in R7 (they cannot share `it`'s features) |
 | final review: R4 and R9 text stale against the decision log | MINOR | reworded |
+
+### Checks to build
+
+- A `crates/*/tests/**` test that calls `tokio::time::pause()` or uses `start_paused` after opening a `HistoryStore` (tests/repo check with an sg pattern); see specs/solutions/2026-10-19-paused-clock-raced-only-in-the-shared-binary.md.
