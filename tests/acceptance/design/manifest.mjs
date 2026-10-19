@@ -125,6 +125,14 @@ export function loadManifest(path) {
       throw new ManifestError('manifest: accepted must be an array');
     }
     manifest.accepted.forEach(checkAccepted);
+    const keys = new Map();
+    manifest.accepted.forEach((a, i) => {
+      const key = JSON.stringify([a.board, a.element, a.property]);
+      if (keys.has(key)) {
+        throw new ManifestError(`accepted[${i}]: duplicate of accepted[${keys.get(key)}] (${a.board} / ${a.element} / ${a.property})`);
+      }
+      keys.set(key, i);
+    });
   }
   return manifest;
 }

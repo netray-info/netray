@@ -1,10 +1,20 @@
-// The design check's runner (specs/features/v2-design-gate): `just design-check` starts the
-// stack, then calls `node tests/acceptance/design/check.mjs <manifest> <out dir>`.
-// Exit 0: every board has a state; 1: a board has none; 2: manifest or setup error.
-import { mkdirSync, writeFileSync } from 'node:fs';
+// The design check's runner (specs/features/v2-design-gate, specs/rules/design-rules.md):
+// `just design-check` starts the stack, then calls
+// `node tests/acceptance/design/check.mjs <manifest> <out dir>`.
+// Exit 0: every measured property within tolerance or accepted and every board in a state;
+// 1: open deviations or stale accepted entries; 2: manifest or setup error.
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadManifest, ManifestError } from './manifest.mjs';
+import { loadManifest, ManifestError, resolveExport, slug } from './manifest.mjs';
 import { measurePage } from './page.mjs';
+import { measureBoard, openExport, sideBySide } from './board.mjs';
+import {
+  applyAccepted,
+  deviations,
+  noStateDeviation,
+  reportMarkdown,
+  summary,
+} from './compare.mjs';
 
 function setupError(msg) {
   console.error(`design-check: ${msg}`);
@@ -21,6 +31,9 @@ try {
   setupError(e instanceof ManifestError ? e.message : `cannot read ${manifestPath}: ${e.message}`);
 }
 
+const exportPath = resolveExport(manifest, manifestPath);
+if (!existsSync(exportPath)) setupError(`export not found: ${exportPath}`);
+
 const baseUrls = {};
 for (const host of new Set(manifest.boards.map((b) => b.host))) {
   const url = process.env[`LOCAL_${host.toUpperCase()}_URL`];
@@ -30,9 +43,14 @@ for (const host of new Set(manifest.boards.map((b) => b.host))) {
 
 try {
   mkdirSync(outDir, { recursive: true });
+  // Drop this check's files of an earlier run, so no image or report outlives its board.
+  for (const f of readdirSync(outDir)) {
+    if (/-(board|page|sbs)\.png$|^page\.json$|^report\.md$/.test(f)) rmSync(join(outDir, f));
+  }
 } catch (e) {
   setupError(`cannot create ${outDir}: ${e.message}`);
 }
+
 let browser;
 try {
   // Imported here so a missing tests/acceptance/node_modules is a setup error (exit 2).
@@ -42,26 +60,43 @@ try {
   setupError(`cannot launch chromium: ${e.message}`);
 }
 
+const found = [];
+const sideBySides = [];
 const pages = [];
-const noState = [];
 try {
+  const exportPage = await openExport(browser, exportPath);
   for (const board of manifest.boards) {
-    const r = await measurePage(browser, board, baseUrls, outDir);
-    pages.push(r);
+    const page = await measurePage(browser, board, baseUrls, outDir);
+    pages.push(page);
     // A page that failed to answer, or a result page that would start a live run, has no state.
-    if (r.status === null || r.status >= 400) noState.push(`${board.title}: no state (HTTP ${r.status})`);
-    else if (r.state !== null && r.state !== 'fresh') noState.push(`${board.title}: no state (data-state=${r.state})`);
+    if (page.status === null || page.status >= 400) {
+      found.push(noStateDeviation(board, `HTTP ${page.status}`));
+      continue;
+    }
+    if (page.state !== null && page.state !== 'fresh') {
+      found.push(noStateDeviation(board, `data-state=${page.state}`));
+      continue;
+    }
+    const measured = await measureBoard(exportPage, board, outDir);
+    found.push(...deviations(board, measured.values, page.values));
+    const sbs = join(outDir, `${slug(board.title)}-sbs.png`);
+    await sideBySide(browser, measured.screenshot, page.screenshot, sbs);
+    sideBySides.push(sbs);
   }
 } catch (e) {
   await browser.close();
-  setupError(`page side failed: ${e.message}`);
+  setupError(e.message);
 }
 await browser.close();
 
+const { open, accepted, stale } = applyAccepted(found, manifest.accepted ?? []);
 try {
   writeFileSync(join(outDir, 'page.json'), JSON.stringify(pages, null, 2) + '\n');
+  writeFileSync(join(outDir, 'report.md'), reportMarkdown({ open, accepted, stale, sideBySides }));
 } catch (e) {
-  setupError(`cannot write ${outDir}/page.json: ${e.message}`);
+  setupError(`cannot write the report into ${outDir}: ${e.message}`);
 }
-for (const line of noState) console.log(line);
-process.exit(noState.length > 0 ? 1 : 0);
+const result = summary({ open, stale, titles: manifest.boards.map((b) => b.title) });
+for (const line of result.lines) console.log(line);
+console.log(`report: ${join(outDir, 'report.md')}`);
+process.exit(result.status);

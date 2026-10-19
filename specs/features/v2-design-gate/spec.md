@@ -69,10 +69,11 @@ a board. This feature adds that step; features 1–7 of the V2 gap closure use i
    takes a full-page screenshot into `target/design/<board>-page.png`, and reads the same properties
    of each named element.
 5. **Comparison.** A property is within tolerance when: `spacing` (margins, paddings, gaps,
-   heights, widths, offsets between named elements) differs by at most 4 px; `typography` (font
+   heights, widths; box shorthands compared side by side after expanding to four values; distances
+   between elements are judged by the visual channel under hierarchy) differs by at most 4 px; `typography` (font
    size, line height, letter spacing) by at most 1 px, with font weight and font family (first
    family) exact; `colour` (colour, background colour, border colour) exact after normalising to
-   lowercase hex with alpha. A selector that matches nothing on either side is a class-1 row
+   lowercase hex with alpha. An empty value (a property the browser cannot read) never matches. A selector that matches nothing on either side is a class-1 row
    (`element missing on page` or `element missing on board`). A board without a reachable state is
    a `no state` row.
 6. **Report.** The check writes `target/design/report.md` with one four-cell table row per
@@ -171,6 +172,14 @@ GIVEN CLAUDE.md WHEN read THEN its rules table names `specs/rules/design-rules.m
   slugs collide are refused; a page answering HTTP 400 or above is a `no state` row, as is a result
   page whose stored state is not fresh (implementer under the operator's autonomy mandate,
   2026-10-19).
+- Phase 2 review amendments: distances between named elements leave the measured spacing class
+  (no CSS property carries them; the manifest names properties) and are judged as hierarchy from
+  the side-by-sides; box shorthands are compared after expansion to four sides; an empty value
+  never matches; an `accepted` entry of a board without a state is neither matched nor stale;
+  duplicate `accepted` entries are refused. A `no state` signal for inspector boards (pages that
+  answer 200 and load their result over a stream) is deferred to the first feature whose manifest
+  names an inspector board: this feature's manifest covers result boards only, where the signal is
+  the HTTP status and `data-state` (implementer under the operator's autonomy mandate, 2026-10-19).
 - Spec drafted and approved by the implementer under the operator's mandate for features 0–7
   (operator, 2026-10-19).
 

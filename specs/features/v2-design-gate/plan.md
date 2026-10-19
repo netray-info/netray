@@ -26,3 +26,26 @@ G1: C4, C5, C6 · G2: C7 · G3: C3, C8 · G4: C1, C2. No production file is shar
 - **G4** `tests/acceptance/design/check.mjs` (new) and `justfile` recipe `design-check manifest=""`:
   resolve `NETRAY_DESIGN_DIR` (default beside the main checkout), validate, seed and start via
   `stack.sh`, run the page side per board, print `no state` for a non-fresh result, exit 0/1/2.
+
+## Phase 2 — Board side, comparison and report
+
+### Groups
+
+G1: C2, C5–C13 (comparator, report rows, summary) · G2: C1 (board side, side-by-side) ·
+G3: C3, C4, C14 (runner: export check first, board and page sides, report file, exit status).
+G3 imports G1 and G2 without editing them.
+
+### Plan
+
+- **G1** `tests/acceptance/design/compare.mjs` (new, pure, no dependencies): `normalizeColour`,
+  per-class tolerance (`spacing` 4 px component-wise; `typography` 1 px for sizes, weight and first
+  family exact; `colour` exact `#rrggbbaa`; non-px values exact), `deviations`, `noStateDeviation`,
+  `criterion`, `applyAccepted`, `reportRows` (pipes in cells become `/`), `reportMarkdown`, `summary`.
+- **G2** `tests/acceptance/design/board.mjs` (new): `openExport` (file URL, 1600x3200 viewport,
+  waits for every iframe body), `measureBoard` (iframe by exact title, grown to content height,
+  element screenshot `<slug>-board.png`, computed values inside the frame), `sideBySide` (one page
+  holding both PNGs at natural size, full-page screenshot).
+- **G3** `tests/acceptance/design/check.mjs`: resolve the export via `resolveExport` and exit 2
+  naming it before service URLs or the browser; per board: page side (a `no state` deviation for
+  HTTP >= 400 or a non-fresh result), board side, deviations, side-by-side; then `applyAccepted`,
+  `target/design/report.md`, the summary lines, exit `summary.status`.
