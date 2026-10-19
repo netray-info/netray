@@ -52,7 +52,8 @@ fn every_error_response_references_error_response() {
     for (path, item) in doc["paths"].as_object().unwrap() {
         for (method, op) in item.as_object().unwrap() {
             for (status, resp) in op["responses"].as_object().unwrap() {
-                if status.starts_with('2') {
+                // 2xx answers and redirects carry no error body.
+                if status.starts_with('2') || status.starts_with('3') {
                     continue;
                 }
                 checked += 1;
