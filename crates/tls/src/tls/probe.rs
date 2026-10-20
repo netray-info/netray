@@ -253,6 +253,59 @@ pub struct ProtocolProbes {
 }
 
 impl ProtocolProbes {
+    /// The probes of an address after a handshake that negotiated `negotiated`: each probed kind
+    /// from `outcome`, TLS 1.2 probed only after a TLS 1.3 handshake, TLS 1.3 from the handshake.
+    pub fn from_handshake(
+        negotiated: &str,
+        mut outcome: impl FnMut(ProbeKind) -> ProbeOutcome,
+    ) -> Self {
+        let tls1_2 = if negotiated == "TLSv1.3" {
+            outcome(ProbeKind::Tls12)
+        } else if negotiated == "TLSv1.2" {
+            ProbeOutcome {
+                verdict: Verdict::Accepted,
+                version: Some("TLSv1.2".into()),
+                cipher_suite: None,
+                detail: "handshake TLSv1.2".into(),
+            }
+        } else {
+            ProbeOutcome::new(Verdict::Refused, format!("handshake {negotiated}"))
+        };
+        let tls1_3 = if negotiated == "TLSv1.3" {
+            ProbeOutcome {
+                verdict: Verdict::Accepted,
+                version: Some("TLSv1.3".into()),
+                cipher_suite: None,
+                detail: "handshake TLSv1.3".into(),
+            }
+        } else {
+            ProbeOutcome {
+                verdict: Verdict::Refused,
+                version: Some(negotiated.to_string()),
+                cipher_suite: None,
+                detail: format!("handshake {negotiated}"),
+            }
+        };
+        Self {
+            ssl3: outcome(ProbeKind::Ssl3),
+            tls1_0: outcome(ProbeKind::Tls10),
+            tls1_1: outcome(ProbeKind::Tls11),
+            tls1_2,
+            tls1_3,
+            suites_insecure: outcome(ProbeKind::SuitesInsecure),
+            suites_cbc: outcome(ProbeKind::SuitesCbc),
+            suites_static_rsa: outcome(ProbeKind::SuitesStaticRsa),
+        }
+    }
+
+    /// Every kind the address would have probed unanswered with `detail` (the probe deadline
+    /// passed); TLS 1.2 and 1.3 keep their handshake-derived values.
+    pub fn unanswered(negotiated: &str, detail: &str) -> Self {
+        Self::from_handshake(negotiated, |_| {
+            ProbeOutcome::new(Verdict::Unanswered, detail)
+        })
+    }
+
     /// The probes in evidence order, by key.
     pub fn entries(&self) -> [(&'static str, &ProbeOutcome); 8] {
         [
@@ -642,50 +695,11 @@ pub async fn probe_address(
             results.push(r);
         }
     }
-    let take = |kind: ProbeKind| {
+    ProtocolProbes::from_handshake(negotiated, |kind| {
         results
             .iter()
             .find(|(k, _)| *k == kind)
             .map(|(_, o)| o.clone())
             .unwrap_or_else(|| ProbeOutcome::new(Verdict::Unanswered, "probe failed"))
-    };
-
-    let tls1_2 = if negotiated == "TLSv1.3" {
-        take(ProbeKind::Tls12)
-    } else if negotiated == "TLSv1.2" {
-        ProbeOutcome {
-            verdict: Verdict::Accepted,
-            version: Some("TLSv1.2".into()),
-            cipher_suite: None,
-            detail: "handshake TLSv1.2".into(),
-        }
-    } else {
-        ProbeOutcome::new(Verdict::Refused, format!("handshake {negotiated}"))
-    };
-    let tls1_3 = if negotiated == "TLSv1.3" {
-        ProbeOutcome {
-            verdict: Verdict::Accepted,
-            version: Some("TLSv1.3".into()),
-            cipher_suite: None,
-            detail: "handshake TLSv1.3".into(),
-        }
-    } else {
-        ProbeOutcome {
-            verdict: Verdict::Refused,
-            version: Some(negotiated.to_string()),
-            cipher_suite: None,
-            detail: format!("handshake {negotiated}"),
-        }
-    };
-
-    ProtocolProbes {
-        ssl3: take(ProbeKind::Ssl3),
-        tls1_0: take(ProbeKind::Tls10),
-        tls1_1: take(ProbeKind::Tls11),
-        tls1_2,
-        tls1_3,
-        suites_insecure: take(ProbeKind::SuitesInsecure),
-        suites_cbc: take(ProbeKind::SuitesCbc),
-        suites_static_rsa: take(ProbeKind::SuitesStaticRsa),
-    }
+    })
 }

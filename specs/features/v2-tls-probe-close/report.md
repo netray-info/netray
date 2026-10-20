@@ -91,3 +91,38 @@ skipped: the entry points (`POST /api/v1/tls/inspect`, the inspect page, lens ru
 live target, blocked locally; the inspector, the module and the job admission run end to end over
 the stub backend in `crates/tls/tests/inspector.rs`, `crates/tls/tests/it/module_limits.rs` and
 `crates/web/tests/it/inspect_tls_probe_cost.rs`.
+
+## Phase 3 — Permits and the probe deadline
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R10 the handshake permit is released when the handshake returns | green | crates/tls/tests/inspector.rs |
+| C2 | R11 probes take a separate probe permit; wait and probes bounded by the handshake timeout; past it unanswered timed out | green | crates/tls/tests/inspector.rs |
+| C3 | R12 SDD §3.7 states the permits and the deadline | test-unwritable | prose: specs/sdd/v2.md §3.7 |
+| C4 | one handshake permit, probes hanging 10 s, two addresses: both handshakes, done within 1.8 s | green | crates/tls/tests/inspector.rs |
+| C5 | probes hanging 10 s: probed kinds unanswered timed out, TLS 1.3 enabled, legacy_versions unmeasured | green | crates/tls/tests/inspector.rs |
+| C6 | probe permit held elsewhere: probes unanswered timed out within about one timeout | green | crates/tls/tests/inspector.rs |
+| C7 | review: answers a backend returns at the time left are kept | green | crates/tls/tests/inspector.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 0 | implementer (permit scope and probe deadline in routes.rs, coded directly) | 0 | 0 |
+
+### Review
+
+- BLOCKER (fixed, second pass green): one outer timer at the deadline raced the per-probe timers
+  and wiped answered probes when one hung (94 of 100 runs in the reviewer's repro). The deadline
+  now bounds the permit wait only; probes run on the time left with a 250 ms grace. C7 pins it
+  with a stub that returns its answers just after the time left.
+- NIT (fixed with C7): the stub ignored its timeout.
+- Checked: the handshake permit is block-scoped; from_handshake matches the replaced code.
+
+### Behavioural verification
+
+skipped: the permit and deadline paths need a hanging live server behind a resolvable name (DNS
+blocked locally); they run end to end through the inspector over the stub in
+`crates/tls/tests/inspector.rs`.

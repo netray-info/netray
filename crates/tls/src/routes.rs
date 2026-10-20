@@ -765,6 +765,7 @@ pub async fn inspect(
             let trust_store = state.trust_store.load_full();
             let check_ct = config.validation.check_ct;
             let semaphore = Arc::clone(&state.handshake_semaphore);
+            let probe_semaphore = Arc::clone(&state.probe_semaphore);
             let backend = Arc::clone(&state.backend);
             join_set.spawn(async move {
                 inspect_port(
@@ -776,6 +777,7 @@ pub async fn inspect(
                         trust_store,
                         check_ct,
                         semaphore,
+                        probe_semaphore,
                         backend,
                         probed,
                     },
@@ -1099,12 +1101,18 @@ fn starttls_protocol_for_port(port: u16) -> Option<String> {
     }
 }
 
+/// How long past its own timeout a backend's probes may take before their answers are dropped:
+/// `probe_address` returns only after its per-probe timers, started after the call, fire.
+const PROBE_GRACE: Duration = Duration::from_millis(250);
+
 /// What a port's handshakes share: trust anchors, the CT switch, the handshake permits and
 /// the backend that performs them.
 struct PortEnv {
     trust_store: Arc<rustls::RootCertStore>,
     check_ct: bool,
     semaphore: Arc<tokio::sync::Semaphore>,
+    /// Permits of the addresses probing at once, apart from the handshake permits.
+    probe_semaphore: Arc<tokio::sync::Semaphore>,
     backend: Arc<dyn TlsBackend>,
     /// The addresses, from the first, whose probes the plan charged.
     probed: usize,
@@ -1122,6 +1130,7 @@ async fn inspect_port(
         trust_store,
         check_ct,
         semaphore,
+        probe_semaphore,
         backend,
         probed,
     } = env;
@@ -1129,14 +1138,19 @@ async fn inspect_port(
 
     for (idx, &ip) in ips.iter().enumerate() {
         let semaphore = Arc::clone(&semaphore);
+        let probe_semaphore = Arc::clone(&probe_semaphore);
         let trust_store = Arc::clone(&trust_store);
         let backend = Arc::clone(&backend);
         let hostname = hostname.map(|h| h.to_string());
         join_set.spawn(async move {
-            let _permit = semaphore.acquire().await.ok();
-            let mut result = backend
-                .handshake(ip, port, hostname.as_deref(), timeout)
-                .await;
+            // The handshake permit covers the handshake only: validation, live OCSP and the
+            // probes run after it is released, so a hanging server never holds it.
+            let mut result = {
+                let _permit = semaphore.acquire().await.ok();
+                backend
+                    .handshake(ip, port, hostname.as_deref(), timeout)
+                    .await
+            };
             if result.error.is_some() {
                 metrics::counter!("tlsight_handshake_errors_total").increment(1);
             }
@@ -1173,15 +1187,28 @@ async fn inspect_port(
                 let issuer_der = raw_certs.get(1).map(|c| c.as_ref().to_vec())?;
                 Some(tls::ocsp::check_live_ocsp(&ocsp_url, &leaf_der, &issuer_der).await)
             };
+            // The probes take a probe permit; the wait and the probes together are bounded by
+            // the handshake timeout: the wait by the deadline, the probes by the time left, which
+            // each probe enforces itself, so answers that arrived are kept. Past the deadline
+            // every kind the address would have probed is unanswered (Rule M). The grace only
+            // backstops a backend that overruns its own timeout.
             let probes = async {
-                match version.as_ref().filter(|_| idx < probed) {
-                    Some(version) => {
-                        backend
-                            .probe(ip, port, hostname.as_deref(), version, timeout)
-                            .await
-                    }
-                    None => None,
-                }
+                let version = version.as_ref().filter(|_| idx < probed)?;
+                let timed_out = || {
+                    (backend.probe_connections() > 0)
+                        .then(|| tls::probe::ProtocolProbes::unanswered(version, "timed out"))
+                };
+                let deadline = tokio::time::Instant::now() + timeout;
+                let Ok(_permit) =
+                    tokio::time::timeout_at(deadline, probe_semaphore.acquire()).await
+                else {
+                    return timed_out();
+                };
+                let left = deadline.saturating_duration_since(tokio::time::Instant::now());
+                let run = backend.probe(ip, port, hostname.as_deref(), version, left);
+                tokio::time::timeout(left + PROBE_GRACE, run)
+                    .await
+                    .unwrap_or_else(|_| timed_out())
             };
             let (live_ocsp, probes) = tokio::join!(live_ocsp, probes);
             if let (Some(ocsp_result), Some(tls_params)) = (live_ocsp, result.tls.as_mut()) {

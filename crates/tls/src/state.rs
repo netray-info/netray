@@ -21,6 +21,9 @@ pub struct AppState {
     /// Trust store wrapped in ArcSwap so it can be hot-reloaded on SIGHUP.
     pub trust_store: Arc<ArcSwap<rustls::RootCertStore>>,
     pub handshake_semaphore: Arc<Semaphore>,
+    /// Addresses probing at once (each up to seven connections), apart from the handshake
+    /// permits so a hanging probe never holds one.
+    pub probe_semaphore: Arc<Semaphore>,
     pub hsts_tls_connector: Arc<tokio_rustls::TlsConnector>,
     pub dns_resolver: Option<Arc<DnsResolver>>,
     pub backend: Arc<dyn TlsBackend>,
@@ -65,6 +68,7 @@ impl AppState {
             rate_limiter: Arc::new(RateLimitState::new(&config.limits)),
             trust_store,
             handshake_semaphore: Arc::new(Semaphore::new(config.limits.max_concurrent_handshakes)),
+            probe_semaphore: Arc::new(Semaphore::new(config.limits.max_concurrent_handshakes)),
             hsts_tls_connector,
             dns_resolver: None, // Initialized async in main
             backend: Arc::new(LiveBackend { resolver: None }),

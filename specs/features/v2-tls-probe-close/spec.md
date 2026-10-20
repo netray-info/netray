@@ -83,7 +83,9 @@ the request timeout.
     probes.
 11. Probes of one address take a permit of a separate probe semaphore (`AppState`, size
     `max_concurrent_handshakes`); the wait for it and the probes together are bounded by the
-    handshake timeout, and each probe gets the time left. When that deadline passes, every probe
+    handshake timeout: the wait by the deadline, the probes by the time left, which each probe
+    enforces itself, so answers that arrived are kept (a 250 ms grace backstops a backend that
+    overruns its timeout). When that deadline passes, every probe
     kind the address would have sent is `unanswered` `timed out`, and TLS 1.2 and 1.3 keep their
     handshake-derived values.
 12. SDD `specs/sdd/v2.md` states the close rule as a decision row refining S34 and S41 and amends
@@ -198,6 +200,10 @@ GIVEN a probe semaphore permit held elsewhere for longer than the handshake time
   budget its admission plans against, so a job never probes an address its admission did not
   charge (was the per-IP burst alone: with a smaller per-target burst, admission charged 1 and the
   job opened 8 connections) (implementer under the operator's autonomy mandate, 2026-10-19).
+- Phase 3 review (BLOCKER, fixed): one outer timer at the deadline raced the per-probe timers
+  and usually replaced every answered probe with `timed out` when one probe hung. The deadline
+  now bounds the permit wait; the probes run on the time left with a 250 ms grace for the
+  backend's own join (implementer under the operator's autonomy mandate, 2026-10-19).
 - No global limiter is added: the TLS inspection has none to charge (implementer under the
   operator's autonomy mandate, 2026-10-19).
 - Probe concurrency reuses `max_concurrent_handshakes` as the number of addresses probing at once
