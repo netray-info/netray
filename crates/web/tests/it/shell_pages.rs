@@ -268,6 +268,13 @@ async fn evidence_views_carry_help_tools_and_export() {
         assert!(tools.contains("inspector-help__open"), "{path}");
         assert!(tools.contains("inspect-export"), "{path}");
         assert!(html.contains("data-island=\"page\""), "{path}");
+        // `r` re-checks here too (requirement 25): the view carries the domain's re-check form.
+        assert!(
+            html.contains(&format!(
+                r#"<form id="recheck" method="post" action="/{DOMAIN}/run""#
+            )),
+            "{path}: no re-check form"
+        );
     }
 }
 

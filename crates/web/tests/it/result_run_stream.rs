@@ -427,6 +427,8 @@ async fn c14_a_fresh_head_answers_from_the_store_on_visit_and_runs_on_recheck() 
             "evidence-nav",
             "evidence-meta",
             "passed",
+            // v2-inspector-shell review: the head's export, which may be newer than the page's.
+            "inspect-export",
             "recheck-button"
         ]
     );

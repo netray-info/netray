@@ -173,3 +173,22 @@ describe("shell autocomplete", () => {
     expect(options()).toEqual([]);
   });
 });
+
+// Final review: the autocomplete hook looks the provider up by the name the view gives; a name
+// with no provider offers nothing.
+describe("autocomplete provider hook", () => {
+  it("offers nothing for a provider name it does not know", () => {
+    document.body.innerHTML = markup(
+      'data-tool="http" data-field="url" data-suggest="http" data-suggest-types="A AAAA CAA" data-suggest-flags="+trace" data-suggest-servers="cloudflare"',
+      "url",
+      "http",
+    );
+    mount(document);
+    const input = document.querySelector(".query-input__field") as HTMLInputElement;
+    input.value = "example.com @cl";
+    input.setSelectionRange(input.value.length, input.value.length);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    const list = document.getElementById("inspector-suggest") as HTMLElement;
+    expect(list.hidden || list.children.length === 0).toBe(true);
+  });
+});

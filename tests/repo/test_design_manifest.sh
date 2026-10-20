@@ -66,6 +66,8 @@ table=(
     "R14 two boards one title different states|m.boards[0].state = \"short domain\"; m.boards.push({...JSON.parse(JSON.stringify(m.boards[0])), state: \"long domain\"})|0|"
     "R14 one title and state twice|m.boards[0].state = \"long domain\"; m.boards.push(JSON.parse(JSON.stringify(m.boards[0])))|2|boards[1];;result-page-light-long-domain"
     "R14 empty state|m.boards[0].state = \"\"|2|state"
+    "v2-inspector-shell wait selector on a board|m.boards[0].wait = \"form[data-stream-state=done]\"|0|"
+    "v2-inspector-shell empty wait|m.boards[0].wait = \"\"|2|wait"
 )
 
 for row in "${table[@]}"; do
