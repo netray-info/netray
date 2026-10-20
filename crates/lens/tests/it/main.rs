@@ -53,6 +53,8 @@ mod history_badge;
 mod history_cache;
 mod history_cache_badge_og;
 mod history_findings;
+mod history_fixtures_consistent;
+mod history_fixtures_story;
 mod history_record;
 mod http_in_process;
 mod idna_domain_routes;
