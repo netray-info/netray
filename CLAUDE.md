@@ -62,6 +62,9 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - lens starts one run per domain per 60 s on tokio's clock: a second run of one domain in a test needs `common::pass_throttle()` (current_thread) or another domain.
 - A paused tokio clock times out sqlx pool acquires and auto-advances through deadlines while the runtime idles on the store: never `start_paused` with a `HistoryStore`; `pause()` only after the store work is drained (`result_run_c15`).
 - governor's `check` spends a token whatever follows: take a keyed limiter after every refusal that must cost nothing.
+- Never wrap self-timed work in an outer timeout at the same deadline: it races the inner timers and drops answers. Bound the wait by the deadline, the work by the time left plus a grace.
+- Probe slots go to the first addresses whose handshake succeeded, decided per address (`SlotBoard`), never behind a port-wide barrier: one SYN-dropping address would push the TLS section past its window.
+- Never edit another feature's `specs/features/<name>/` on a feature branch: `adlc next` refuses two features. Supersede old decisions in the new spec's decision log.
 - A cost above a limiter's burst never passes: refuse it as input (`CostExceedsLimit`, API v1 `INVALID_INPUT`) against the stored bursts before charging, never as `429`.
 - Adding a field to a protected test's struct literal still needs `ADLC-Test-Change`: the gate's tamper check flags any change.
 - lens reads every `LENS_*` variable as a config key, `LENS_EXTRA` included: `acceptance-local` unsets it after building lens's env row.

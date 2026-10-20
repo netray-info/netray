@@ -86,6 +86,11 @@ impl TlsInspector {
         Self { state }
     }
 
+    /// The connections the backend's probes of one address cost per port.
+    pub fn probe_connections(&self) -> u32 {
+        self.state.backend.probe_connections()
+    }
+
     /// tlsight's input rules with this inspector's `limits.max_ports`.
     pub fn parse(&self, input: &str) -> Result<ParsedInput, AppError> {
         let mut parsed = input::parse_input(input, self.state.config.load().limits.max_ports)?;
@@ -152,7 +157,6 @@ impl TlsInspector {
             Target::Ip(ip) => ip.to_string(),
         };
         let mut warnings = Vec::new();
-        let mut skipped_ips = Vec::new();
 
         tracing::info!(
             hostname = %hostname_str,
@@ -176,51 +180,37 @@ impl TlsInspector {
             );
         })?;
 
-        // Cap-and-warn: compute cost and reduce IPs if over budget
-        let full_cost = parsed.ports.len() as u32 * allowed_ips.len() as u32;
-        let inspected_ips = if limits
-            .check_cost(client_ip, &hostname_str, full_cost)
-            .is_ok()
-        {
-            allowed_ips
-        } else {
-            // Try with reduced IPs
-            let budget = limits.remaining_budget(client_ip);
-            let (selected, skipped) =
-                routes::cap_to_budget(&allowed_ips, parsed.ports.len(), budget, &mut warnings);
-
-            if selected.is_empty() {
-                // Not one address fits a burst: no wait admits the request.
-                return Err(AppError::CostExceedsLimit {
-                    cost: parsed.ports.len() as u32,
-                    limit: budget,
-                });
+        // Cap-and-warn: the addresses and probes that fit the smaller burst, charged once. A
+        // port count beyond a burst still plans one address and is refused as
+        // `CostExceedsLimit` without a charge; probes are capped, never refused.
+        let budget = limits.remaining_budget(client_ip);
+        let plan = routes::plan_budget(
+            &allowed_ips,
+            parsed.ports.len(),
+            budget,
+            state.backend.probe_connections(),
+            &mut warnings,
+        );
+        if let Err(e) = limits.check_cost(client_ip, &hostname_str, plan.cost) {
+            if let AppError::RateLimited { scope, .. } = &e {
+                tracing::warn!(
+                    client_ip = %client_ip,
+                    scope = *scope,
+                    "rate limited"
+                );
             }
-
-            let reduced_cost = parsed.ports.len() as u32 * selected.len() as u32;
-            if let Err(e) = limits.check_cost(client_ip, &hostname_str, reduced_cost) {
-                if let AppError::RateLimited { scope, .. } = &e {
-                    tracing::warn!(
-                        client_ip = %client_ip,
-                        scope = *scope,
-                        "rate limited"
-                    );
-                }
-                return Err(e);
-            }
-
-            skipped_ips = skipped;
-            selected
-        };
+            return Err(e);
+        }
 
         routes::inspect(
             state,
             &config,
             InspectRequest {
                 parsed,
-                ips: inspected_ips,
+                ips: plan.ips,
+                probed: plan.probed,
                 warnings,
-                skipped_ips,
+                skipped_ips: plan.skipped,
                 request_id,
                 start: request_start,
                 caa: None,

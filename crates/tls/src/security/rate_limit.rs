@@ -5,8 +5,9 @@
 //! - **Per-IP**: Limits total inspection cost per client IP per minute.
 //! - **Per-target**: Limits total inspection cost per target hostname per minute.
 //!
-//! Inspection cost is computed as `ports * inspected_ips` — the number of individual
-//! TLS handshakes that will be issued.
+//! Inspection cost is the number of connections a request opens: per port one handshake per
+//! inspected address plus `TlsBackend::probe_connections` per probed address
+//! (`routes::plan_budget`).
 
 use std::net::IpAddr;
 use std::num::NonZeroU32;

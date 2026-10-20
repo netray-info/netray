@@ -291,7 +291,21 @@ impl InspectJobs {
         };
         let limiters = self.state.tls_limiters();
         limiters.prune_if_due();
-        match limiters.check_cost(client, &target, parsed.ports.len().max(1) as u32) {
+        // One address on every port with its probes, as the plan charges it; a port count beyond
+        // the burst still costs the ports alone and is answered by the job start.
+        let (inspected, probed) = netray_tls::routes::plan_counts(
+            1,
+            parsed.ports.len(),
+            limiters.remaining_budget(client),
+            inspector.probe_connections(),
+        );
+        let cost = netray_tls::routes::plan_cost(
+            parsed.ports.len(),
+            inspected,
+            probed,
+            inspector.probe_connections(),
+        );
+        match limiters.check_cost(client, &target, cost) {
             // Charged nothing and no wait admits it: the job start answers it as the notice.
             Err(netray_tls::error::AppError::CostExceedsLimit { .. }) => Ok(()),
             Err(netray_tls::error::AppError::RateLimited {
@@ -358,11 +372,12 @@ impl InspectJobs {
             .tls_limiters()
             .cost_within_bursts(parsed.ports.len().max(1) as u32)
             .map_err(|e| e.to_string())?;
+        // The job plans against the budget its admission planned against (the smaller burst),
+        // so the probes it runs are the ones admission charged.
         let burst = self
             .state
-            .config()
-            .tls
-            .per_ip_burst
+            .tls_limiters()
+            .remaining_budget(req.client)
             .max(parsed.ports.len() as u32)
             .max(1);
         let limiters = netray_tls::security::RateLimitState::scoped(

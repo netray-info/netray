@@ -1,8 +1,11 @@
 //! Raw protocol-version and suite-group probes.
 //!
 //! Each probe opens one TCP connection, sends one hand-built ClientHello and reads only the
-//! server's first answer: a ServerHello or an alert says something about the target; a reset,
-//! a timeout, a close, garbage or a suite that was never offered says nothing, and is
+//! server's first answer: a ServerHello or an alert says something about the target, and so does
+//! a close (FIN or RST) with nothing sent after the ClientHello arrived: the server read the offer
+//! and ended the connection, which is how Windows SChannel refuses a disabled version
+//! (v2-tls-probe-close). A timeout, garbage, a partial answer before the close, a suite that was
+//! never offered or a failure before the ClientHello was written says nothing, and is
 //! `Unanswered`. The connection is dropped after that answer; no handshake is completed.
 
 use std::io;
@@ -194,7 +197,7 @@ impl ProbeKind {
 pub enum Verdict {
     /// The server answered with a ServerHello for what the probe offered.
     Accepted,
-    /// The server answered with an alert or another version.
+    /// The server answered with an alert or another version, or closed after the ClientHello.
     Refused,
     /// The server said nothing usable: not a verdict on the target.
     Unanswered,
@@ -225,10 +228,15 @@ impl ProbeOutcome {
 /// How a probe connection ended when no answer had arrived.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StreamEnd {
+    /// End of stream after the ClientHello was written.
     Eof,
+    /// A reset after the ClientHello was written.
     Reset,
     Timeout,
     ConnectFailed(String),
+    /// The connection failed after connecting but before the ClientHello was written (the
+    /// STARTTLS upgrade or the write): the server never saw the offer.
+    NotSent(String),
 }
 
 /// The probes of one address.
@@ -245,6 +253,59 @@ pub struct ProtocolProbes {
 }
 
 impl ProtocolProbes {
+    /// The probes of an address after a handshake that negotiated `negotiated`: each probed kind
+    /// from `outcome`, TLS 1.2 probed only after a TLS 1.3 handshake, TLS 1.3 from the handshake.
+    pub fn from_handshake(
+        negotiated: &str,
+        mut outcome: impl FnMut(ProbeKind) -> ProbeOutcome,
+    ) -> Self {
+        let tls1_2 = if negotiated == "TLSv1.3" {
+            outcome(ProbeKind::Tls12)
+        } else if negotiated == "TLSv1.2" {
+            ProbeOutcome {
+                verdict: Verdict::Accepted,
+                version: Some("TLSv1.2".into()),
+                cipher_suite: None,
+                detail: "handshake TLSv1.2".into(),
+            }
+        } else {
+            ProbeOutcome::new(Verdict::Refused, format!("handshake {negotiated}"))
+        };
+        let tls1_3 = if negotiated == "TLSv1.3" {
+            ProbeOutcome {
+                verdict: Verdict::Accepted,
+                version: Some("TLSv1.3".into()),
+                cipher_suite: None,
+                detail: "handshake TLSv1.3".into(),
+            }
+        } else {
+            ProbeOutcome {
+                verdict: Verdict::Refused,
+                version: Some(negotiated.to_string()),
+                cipher_suite: None,
+                detail: format!("handshake {negotiated}"),
+            }
+        };
+        Self {
+            ssl3: outcome(ProbeKind::Ssl3),
+            tls1_0: outcome(ProbeKind::Tls10),
+            tls1_1: outcome(ProbeKind::Tls11),
+            tls1_2,
+            tls1_3,
+            suites_insecure: outcome(ProbeKind::SuitesInsecure),
+            suites_cbc: outcome(ProbeKind::SuitesCbc),
+            suites_static_rsa: outcome(ProbeKind::SuitesStaticRsa),
+        }
+    }
+
+    /// Every kind the address would have probed unanswered with `detail` (the probe deadline
+    /// passed); TLS 1.2 and 1.3 keep their handshake-derived values.
+    pub fn unanswered(negotiated: &str, detail: &str) -> Self {
+        Self::from_handshake(negotiated, |_| {
+            ProbeOutcome::new(Verdict::Unanswered, detail)
+        })
+    }
+
     /// The probes in evidence order, by key.
     pub fn entries(&self) -> [(&'static str, &ProbeOutcome); 8] {
         [
@@ -523,17 +584,23 @@ fn decide(kind: ProbeKind, bytes: &[u8]) -> Option<ProbeOutcome> {
 }
 
 /// Read the server's first answer to a probe of `kind` from `bytes`.
+///
+/// A close or reset with no byte received refuses the offer (`closed`, `closed (reset)`): the
+/// ClientHello was written, so the server read it and ended the connection instead of answering.
+/// Bytes that decide nothing before the close leave the probe unanswered.
 pub fn classify(kind: ProbeKind, bytes: &[u8], end: StreamEnd) -> ProbeOutcome {
-    decide(kind, bytes).unwrap_or_else(|| {
-        ProbeOutcome::new(
-            Verdict::Unanswered,
-            match end {
-                StreamEnd::Eof => "closed without an answer".to_string(),
-                StreamEnd::Reset => "reset".to_string(),
-                StreamEnd::Timeout => "timed out".to_string(),
-                StreamEnd::ConnectFailed(m) => format!("connect failed: {m}"),
-            },
-        )
+    decide(kind, bytes).unwrap_or_else(|| match end {
+        StreamEnd::Eof if bytes.is_empty() => ProbeOutcome::new(Verdict::Refused, "closed"),
+        StreamEnd::Reset if bytes.is_empty() => {
+            ProbeOutcome::new(Verdict::Refused, "closed (reset)")
+        }
+        StreamEnd::Eof => ProbeOutcome::new(Verdict::Unanswered, "closed without an answer"),
+        StreamEnd::Reset => ProbeOutcome::new(Verdict::Unanswered, "reset"),
+        StreamEnd::Timeout => ProbeOutcome::new(Verdict::Unanswered, "timed out"),
+        StreamEnd::ConnectFailed(m) => {
+            ProbeOutcome::new(Verdict::Unanswered, format!("connect failed: {m}"))
+        }
+        StreamEnd::NotSent(m) => ProbeOutcome::new(Verdict::Unanswered, format!("not sent: {m}")),
     })
 }
 
@@ -560,12 +627,14 @@ async fn exchange(
         .map_err(|e| StreamEnd::ConnectFailed(e.to_string()))?;
     let _ = stream.set_nodelay(true);
     if port == 25 || port == 587 {
-        smtp_starttls(&mut stream).await.map_err(|e| end_of(&e))?;
+        smtp_starttls(&mut stream)
+            .await
+            .map_err(|e| StreamEnd::NotSent(format!("starttls: {e}")))?;
     }
     stream
         .write_all(&client_hello(kind, sni))
         .await
-        .map_err(|e| end_of(&e))?;
+        .map_err(|e| StreamEnd::NotSent(format!("write: {e}")))?;
 
     let mut chunk = [0u8; 4096];
     while buf.len() < READ_CAP {
@@ -626,50 +695,11 @@ pub async fn probe_address(
             results.push(r);
         }
     }
-    let take = |kind: ProbeKind| {
+    ProtocolProbes::from_handshake(negotiated, |kind| {
         results
             .iter()
             .find(|(k, _)| *k == kind)
             .map(|(_, o)| o.clone())
             .unwrap_or_else(|| ProbeOutcome::new(Verdict::Unanswered, "probe failed"))
-    };
-
-    let tls1_2 = if negotiated == "TLSv1.3" {
-        take(ProbeKind::Tls12)
-    } else if negotiated == "TLSv1.2" {
-        ProbeOutcome {
-            verdict: Verdict::Accepted,
-            version: Some("TLSv1.2".into()),
-            cipher_suite: None,
-            detail: "handshake TLSv1.2".into(),
-        }
-    } else {
-        ProbeOutcome::new(Verdict::Refused, format!("handshake {negotiated}"))
-    };
-    let tls1_3 = if negotiated == "TLSv1.3" {
-        ProbeOutcome {
-            verdict: Verdict::Accepted,
-            version: Some("TLSv1.3".into()),
-            cipher_suite: None,
-            detail: "handshake TLSv1.3".into(),
-        }
-    } else {
-        ProbeOutcome {
-            verdict: Verdict::Refused,
-            version: Some(negotiated.to_string()),
-            cipher_suite: None,
-            detail: format!("handshake {negotiated}"),
-        }
-    };
-
-    ProtocolProbes {
-        ssl3: take(ProbeKind::Ssl3),
-        tls1_0: take(ProbeKind::Tls10),
-        tls1_1: take(ProbeKind::Tls11),
-        tls1_2,
-        tls1_3,
-        suites_insecure: take(ProbeKind::SuitesInsecure),
-        suites_cbc: take(ProbeKind::SuitesCbc),
-        suites_static_rsa: take(ProbeKind::SuitesStaticRsa),
-    }
+    })
 }
