@@ -130,7 +130,10 @@ what the review found by eye.
 
 ## Phase 1 — Compact evidence tabs
 
-Requirements 1–10. `crates/web/src/compact.rs` (new) builds the compact view; `evidence::panel`
+**Depends on:** none
+**Requirements:** 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+
+`crates/web/src/compact.rs` (new) builds the compact view; `evidence::panel`
 carries it; `partials/result_evidence.html` renders it; `pages.css` styles it.
 
 ### Test Scenarios
@@ -168,7 +171,8 @@ carries it; `partials/result_evidence.html` renders it; `pages.css` styles it.
 
 ## Phase 2 — Hero: descriptor, run title, long domains
 
-Requirements 11–13.
+**Depends on:** none
+**Requirements:** 11, 12, 13
 
 ### Test Scenarios
 
@@ -184,7 +188,8 @@ Requirements 11–13.
 
 ## Phase 3 — Design gate states and canvas
 
-Requirements 14–17.
+**Depends on:** Phase 1, Phase 2
+**Requirements:** 14, 15, 16, 17
 
 ### Test Scenarios
 
