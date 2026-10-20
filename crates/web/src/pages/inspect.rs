@@ -24,7 +24,7 @@ use futures::stream::{BoxStream, FuturesUnordered};
 use netray_common::ip_extract::IpExtractor;
 use netray_engine::profile::Profiles;
 use netray_model::evidence::Block;
-use netray_model::{CheckResult, Grade, Protocol, Status};
+use netray_model::{CheckId, CheckResult, Grade, Protocol, Status};
 use percent_encoding::{percent_decode_str, utf8_percent_encode};
 use serde::de::{Deserialize, Deserializer};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
@@ -39,11 +39,12 @@ use crate::client::client_ip;
 use crate::components::{self, QueryInputView, RunLineView, SpectrumView};
 use crate::entries::view::grade_letter;
 use crate::evidence::{
-    Badge, EvidenceRow, block_view_with, live_rows, live_run_title, shared_run_title,
+    Badge, EvidenceRow, block_feeds, live_rows, live_run_title, shared_run_title, slot,
 };
 use crate::export::{self, ExportInput};
 use crate::links;
 use crate::pages::result::views::line_code;
+use crate::pages::views;
 use crate::spectrum::{RunInput, layout};
 use crate::stream::{end, fragment};
 
@@ -752,7 +753,7 @@ async fn shared_result(deps: &InspectDeps, tool: Tool, key: &str) -> Shared {
             None,
             vec![(
                 cached.mode.clone(),
-                part_html(0, &cached.mode, &blocks, &[]),
+                part_html(0, &cached.mode, &blocks, &[], &[]),
             )],
             BandSlot::Done(band),
             (share_html(Tool::Dns, Some(key.to_string()))?, export, None),
@@ -1014,21 +1015,34 @@ impl Run {
     }
 }
 
-/// A part's section: its blocks or its error text.
+/// A part's section: its blocks, each as its protocol view when one claims it, read with the
+/// run's `checks`, or its error text.
 fn part_html(
     n: usize,
     label: &str,
     result: &PartResult,
     badges: &[(IpAddr, Vec<Badge>)],
+    checks: &[CheckResult],
 ) -> Option<String> {
     let decorate = links::decorate(badges);
+    let statuses: Vec<(CheckId, Status)> =
+        checks.iter().map(|c| (c.id.clone(), c.status)).collect();
+    let evidence = |id: &CheckId| {
+        checks
+            .iter()
+            .find(|c| &c.id == id)
+            .map(|c| c.evidence.as_slice())
+    };
     let (html, text) = match result {
         Ok(blocks) => {
             let mut html = String::new();
             for block in blocks {
-                html.push_str(
-                    &components::evidence_block(&block_view_with(block, &decorate)).ok()?,
-                );
+                let feeds = block_feeds(evidence, &block.id);
+                let slot = slot(block, &decorate, &statuses, &feeds);
+                match slot.view {
+                    Some(view) => html.push_str(&view),
+                    None => html.push_str(&components::evidence_block(&slot.block).ok()?),
+                }
             }
             (Some(html), String::new())
         }
@@ -1050,8 +1064,9 @@ fn part_event(
     label: &str,
     result: &PartResult,
     badges: &[(IpAddr, Vec<Badge>)],
+    checks: &[CheckResult],
 ) -> Option<Event> {
-    let html = part_html(n, label, result, badges)?;
+    let html = part_html(n, label, result, badges, checks)?;
     Some(fragment(&format!("inspect-part-{n}"), &html))
 }
 
@@ -1175,11 +1190,20 @@ fn shared_html(run: &SharedRun, key: &str) -> Option<String> {
         Some((protocol, result)) => BandSlot::Done(band_region_html(*protocol, &blocks, result)?),
         None => BandSlot::Absent,
     };
+    let checks = match &run.band {
+        Some((_, Ok(checks))) => checks.as_slice(),
+        _ => &[],
+    };
     let parts = run
         .parts
         .iter()
         .enumerate()
-        .map(|(n, (label, result))| (label.clone(), part_html(n, label, result, &run.badges)))
+        .map(|(n, (label, result))| {
+            (
+                label.clone(),
+                part_html(n, label, result, &run.badges, checks),
+            )
+        })
         .collect();
     let export = export_html(
         run.tool,
@@ -1305,7 +1329,7 @@ fn band_html(protocol: Protocol, checks: &[CheckResult]) -> Result<String, Strin
     let l = layout(&input, &[], &catalogue, BAND_WIDTH)
         .map_err(|_| "the band could not be laid out".to_string())?;
     let label = format!("{} checks", protocol.as_str().to_ascii_uppercase());
-    components::spectrum(&SpectrumView::from_layout(&l, &label, 0)).map_err(|e| e.to_string())
+    components::spectrum_slim(&SpectrumView::from_layout(&l, &label, 0)).map_err(|e| e.to_string())
 }
 
 /// What the start fragment's head shows: the target, the back link and the stored grade.
@@ -1424,6 +1448,22 @@ fn stream_job(
                         band_event(protocol, &run.blocks, &result)
                             .unwrap_or_else(|| fragment(BAND_ID, "render failed")),
                     );
+                    // The checks reach the views: a part holding a claimed block comes again.
+                    if let Ok(checks) = &result
+                        && !checks.is_empty()
+                    {
+                        for (n, part) in run.results.iter().enumerate() {
+                            let Some(part @ Ok(blocks)) = part else {
+                                continue;
+                            };
+                            if blocks.iter().any(views::claims)
+                                && let Some(event) =
+                                    part_event(n, &run.labels[n], part, &run.badges, checks)
+                            {
+                                run.queue.push_back(event);
+                            }
+                        }
+                    }
                     run.band_out = Some((protocol, result));
                     continue;
                 }
@@ -1491,7 +1531,7 @@ fn stream_job(
                             run.badges.extend(found);
                         }
                     }
-                    let event = part_event(n, &run.labels[n], &result, &run.badges)
+                    let event = part_event(n, &run.labels[n], &result, &run.badges, &[])
                         .unwrap_or_else(|| fragment(&format!("inspect-part-{n}"), "render failed"));
                     run.results[n] = Some(result);
                     return Some((Ok(event), run));
@@ -1502,7 +1542,7 @@ fn stream_job(
                     let late: Vec<usize> = std::mem::take(&mut run.waiting).into_iter().collect();
                     for n in late {
                         let timed_out = Err("timed out".to_string());
-                        if let Some(event) = part_event(n, &run.labels[n], &timed_out, &[]) {
+                        if let Some(event) = part_event(n, &run.labels[n], &timed_out, &[], &[]) {
                             run.queue.push_back(event);
                         }
                     }

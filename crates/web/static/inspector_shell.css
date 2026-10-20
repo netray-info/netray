@@ -125,7 +125,8 @@
 }
 /* The band scrolls inside its column when its named lines need more room than the page gives. */
 .inspector-band {
-  margin: 0;
+  /* board G: the plate stands clear of the h1; the label band used to give this distance */
+  margin: var(--space-5) 0 0;
   overflow-x: auto;
 }
 .inspector-band__inner {

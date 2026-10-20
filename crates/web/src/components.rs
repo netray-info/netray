@@ -1,4 +1,4 @@
-//! The ten R44 components of the V2 design system. Each is an askama macro under
+//! The eleven R44 components of the V2 design system. Each is an askama macro under
 //! `templates/components/` and a stylesheet under `static/`; the functions here render a macro
 //! from a view. Styling lives in CSS keyed on classes and `data-*` attributes, never in markup.
 
@@ -48,12 +48,15 @@ impl SegmentState {
     }
 }
 
-/// One value of an evidence block: its text, the inspector page it links to and its badges.
+/// One value of an evidence block: its text, the inspector page it links to and its badges;
+/// `datetime` holds the stored RFC 3339 value of a time, `key` the full key of a repeated key.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Cell {
     pub text: String,
     pub href: Option<String>,
     pub badges: Vec<Badge>,
+    pub datetime: Option<String>,
+    pub key: Option<String>,
 }
 
 impl From<String> for Cell {
@@ -554,6 +557,29 @@ pub struct EvidenceBlockView {
     pub shape: EvidenceShape,
 }
 
+/// One cell of a facts grid: a label over its values, shown as chips when `chips` is set, with
+/// the tone bar of `tone`.
+#[derive(Debug, Clone)]
+pub struct FactCell {
+    pub label: String,
+    pub values: Vec<Cell>,
+    pub chips: bool,
+    pub tone: Option<Tone>,
+}
+
+/// A grid of labelled facts.
+#[derive(Debug, Clone)]
+pub struct FactsGridView {
+    pub cells: Vec<FactCell>,
+}
+
+impl FactsGridView {
+    /// Whether any cell carries a tone: then every cell keeps the tone bar's slot.
+    pub fn toned(&self) -> bool {
+        self.cells.iter().any(|c| c.tone.is_some())
+    }
+}
+
 /// One change between two runs.
 #[derive(Debug, Clone)]
 pub struct DiffEntry {
@@ -638,17 +664,32 @@ component!(
     spectrum,
     SpectrumTemplate,
     SpectrumView,
-    "{% import \"components/spectrum.html\" as c %}{% call c::spectrum(view, \"\") %}{% endcall %}"
+    "{% import \"components/spectrum.html\" as c %}{% call c::spectrum(view, \"\", false) %}{% endcall %}"
 );
 
 #[derive(Template)]
 #[template(
-    source = "{% import \"components/spectrum.html\" as c %}{% call c::spectrum(view, live) %}{% endcall %}",
+    source = "{% import \"components/spectrum.html\" as c %}{% call c::spectrum(view, live, false) %}{% endcall %}",
     ext = "html"
 )]
 struct SpectrumLiveTemplate<'a> {
     view: &'a SpectrumView,
     live: &'a str,
+}
+
+#[derive(Template)]
+#[template(
+    source = "{% import \"components/spectrum.html\" as c %}{% call c::spectrum(view, \"\", true) %}{% endcall %}",
+    ext = "html"
+)]
+struct SpectrumSlimTemplate<'a> {
+    view: &'a SpectrumView,
+}
+
+/// Renders the `spectrum` component as the inspector band: plate and line names only, without
+/// the label band, targets, axis and region labels.
+pub fn spectrum_slim(view: &SpectrumView) -> askama::Result<String> {
+    SpectrumSlimTemplate { view }.render()
 }
 
 /// Renders the `spectrum` component with the bands named in `live` (space-separated protocol
@@ -691,4 +732,10 @@ component!(
     QueryInputTemplate,
     QueryInputView,
     "{% import \"components/query_input.html\" as c %}{% call c::query_input(view) %}{% endcall %}"
+);
+component!(
+    facts_grid,
+    FactsGridTemplate,
+    FactsGridView,
+    "{% import \"components/facts_grid.html\" as c %}{% call c::facts_grid(view) %}{% endcall %}"
 );

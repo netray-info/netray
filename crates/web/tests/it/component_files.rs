@@ -3,7 +3,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const NAMES: [&str; 10] = [
+const NAMES: [&str; 11] = [
     "grade",
     "run_line",
     "progress_ray",
@@ -14,6 +14,7 @@ const NAMES: [&str; 10] = [
     "diff_block",
     "grouping_switch",
     "query_input",
+    "facts_grid",
 ];
 
 fn root() -> PathBuf {

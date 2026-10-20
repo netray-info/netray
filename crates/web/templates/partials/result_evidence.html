@@ -12,7 +12,7 @@
 <a class="evidence-tabs__explore" href="{{ panel.explore.href }}">{{ panel.explore.label }} →</a>
 </div>
 {% if panel.all_href.is_none() && !panel.blocks.is_empty() %}<details class="evidence-tabs__blocks"><summary>All evidence</summary>
-{% for block in panel.blocks %}{% call evidence_block::evidence_block(block) %}{% endcall %}
+{% for block in panel.blocks %}{% if let Some(html) = block.view %}{{ html|safe }}{% else %}{% call evidence_block::evidence_block(block.block) %}{% endcall %}{% endif %}
 {% endfor %}</details>
 {% endif %}
 {% endif %}

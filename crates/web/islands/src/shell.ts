@@ -199,7 +199,7 @@ export function shell(el: HTMLElement): void {
   focusHelpOpenerOnClose(el);
 
   const step = (dir: number): void => {
-    const rows = [...document.querySelectorAll<HTMLElement>("#inspect-result .check-row, #inspect-result .evidence-block")];
+    const rows = [...document.querySelectorAll<HTMLElement>("#inspect-result .check-row, #inspect-result .evidence-block, #inspect-result .protocol-view")];
     // The item holding focus, also when focus sits on a link inside it.
     const active = document.activeElement;
     const at = rows.findIndex((row) => row === active || row.contains(active));

@@ -1237,3 +1237,103 @@ main td {
     margin-left: 0;
   }
 }
+/* A protocol view stands in a block's place: board G's section heading above a card. */
+/* board G's distance from one section's card to the next heading */
+.protocol-view {
+  min-width: 0;
+  max-width: 100%;
+  margin-block-start: var(--space-9);
+}
+.protocol-view__title {
+  margin: 0 0 var(--space-3);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-h2);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.protocol-view__card {
+  min-width: 0;
+  overflow-x: auto;
+  padding: 18px;
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: var(--color-surface);
+}
+.protocol-view__note {
+  margin: var(--space-3) 0 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-caption);
+}
+.protocol-view__empty {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+}
+.protocol-view__feeds {
+  margin: var(--space-3) 0 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-caption);
+}
+.csp-view__mode {
+  margin: 0;
+  color: var(--color-ink);
+  font-weight: var(--font-weight-strong);
+}
+.csp-view__mode[data-tone="warn"] {
+  color: var(--status-warn-text);
+}
+.csp-view__mode + .protocol-view__note {
+  margin-top: var(--space-1);
+}
+.csp-view__count {
+  margin: var(--space-2) 0 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+}
+.csp-view__issues {
+  margin: var(--space-2) 0 0;
+  padding-inline-start: var(--space-4);
+  color: var(--color-ink);
+  font-size: var(--font-size-small);
+}
+.csp-view__scroll {
+  min-width: 0;
+  margin-top: var(--space-3);
+  overflow-x: auto;
+}
+.csp-view__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.csp-view__table tr + tr > * {
+  border-top: var(--line-hair) solid var(--color-line);
+}
+.csp-view__directive,
+.csp-view__sources {
+  padding: var(--space-2) var(--space-3) var(--space-2) 0;
+  vertical-align: top;
+  text-align: left;
+}
+.csp-view__directive {
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.csp-view__source {
+  display: inline-block;
+  margin-inline-end: var(--space-2);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+}
+.csp-view__directive-issues {
+  margin: var(--space-1) 0 0;
+  padding-inline-start: var(--space-4);
+  font-size: var(--font-size-small);
+}
+.csp-view__directive-issues [data-tone="pass"] { color: var(--status-pass-text); }
+.csp-view__directive-issues [data-tone="warn"] { color: var(--status-warn-text); }
+.csp-view__directive-issues [data-tone="fail"] { color: var(--status-fail-text); }
