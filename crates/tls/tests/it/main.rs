@@ -24,6 +24,7 @@ mod module_limits;
 mod module_v3;
 mod port_results_table;
 mod probe_address;
+mod probe_alerts;
 mod probe_classify;
 mod probe_client_hello;
 mod reachable_unmeasured;

@@ -74,7 +74,9 @@ of inventory row 4.25 (COOP); CORP and COEP stay evidence
 2. `netray_tls::tls::probe::classify(kind, bytes, end)` reads the server's first answer: a
    ServerHello at the probed version is `accepted` (with version and suite); for a suite group, a
    ServerHello of any version up to TLS 1.2 choosing an offered suite is `accepted`. A ServerHello
-   at another version is `refused` naming that version; a TLS alert is `refused` naming the alert.
+   at another version is `refused` naming that version; a fatal handshake_failure, protocol_version
+   or insufficient_security alert is `refused` naming the alert. A warning alert before the
+   ServerHello is skipped; close_notify and any other alert are `unanswered`.
    A timeout, a reset, a close before any answer, a failed connect, a ServerHello choosing a suite
    that was not offered and bytes that are not a TLS record are `unanswered` naming why. A
    ServerHello split across records is read whole.
@@ -262,6 +264,12 @@ GIVEN checkMeta.ts and the catalogue WHEN `test_checkmeta_catalogue.sh` runs THE
   checks as "added by release" and splits the grade change into the profile's effect (the
   predecessor re-scored under v4) and the domain's (SDD §4.3). Stated in SDD §2 and
   `CHANGELOG.md` (implementer under the operator's autonomy mandate, 2026-10-19).
+
+- Amendment in Phase 1 (review): only a fatal handshake_failure, protocol_version or
+  insufficient_security alert refuses a probe. A warning alert before the ServerHello (an
+  unrecognized_name warning from an SNI callback) is skipped, and internal_error, decode_error,
+  unrecognized_name or close_notify say nothing about the offered version or suite, so they leave
+  the probe unanswered (Rule M) (implementer under the operator's autonomy mandate, 2026-10-19).
 
 ## Open decisions
 
