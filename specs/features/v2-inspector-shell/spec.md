@@ -1,7 +1,8 @@
 # Spec: v2-inspector-shell
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-19
+Finished: 2026-10-20
 
 ## Goal
 

@@ -446,3 +446,8 @@ or codes overlapping, and at 390 px no visible link, button, input, select or su
 (checkboxes counted by their label). Screenshots in the session
 scratchpad (`shots/<tool>-<state>-<width>-<theme>.png`), read by an independent reader beside
 boards 17/18; its 9 open findings became rows V6-V15 above.
+
+### Checks to build
+
+- None confirmed: the manifest `wait` key got its `tests/repo/test_design_manifest.sh` rows in this
+  block (P35).
