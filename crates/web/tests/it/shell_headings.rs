@@ -219,6 +219,14 @@ async fn c7_c20_sections_are_cards_with_h2_and_the_idle_h1_is_hidden_and_named()
         after.replace_range(from..to, &result);
     }
     assert_ne!(after, page, "idle result region not found");
+    // The help dialog (requirement 17) is a document of its own, closed until opened: its
+    // headings are not the page's outline.
+    let after = match (after.find("<dialog"), after.find("</dialog>")) {
+        (Some(a), Some(b)) if a < b => {
+            format!("{}{}", &after[..a], &after[b + "</dialog>".len()..])
+        }
+        _ => after,
+    };
     let hs = headings(&after);
     assert_eq!(hs.iter().filter(|h| h.0 == 1).count(), 1, "{hs:?}");
     let h2: Vec<&str> = hs
