@@ -817,3 +817,69 @@ mod probe_slots {
         assert!(elapsed < Duration::from_millis(1800), "took {elapsed:?}");
     }
 }
+
+// specs/features/v2-tls-probe-close final review, second pass: a slow failing first address
+// hands its slot on without holding the port: the next address's probe deadline runs from its
+// own handshake.
+mod probe_slot_no_barrier {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    use netray_tls::tls::probe::{ProbeOutcome, ProtocolProbes, Verdict};
+
+    fn refused() -> ProbeOutcome {
+        ProbeOutcome {
+            verdict: Verdict::Refused,
+            version: None,
+            cipher_suite: None,
+            detail: "alert protocol_version".into(),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_slow_failed_first_handshake_does_not_delay_the_port() {
+        let canned = ProtocolProbes {
+            ssl3: refused(),
+            tls1_0: refused(),
+            tls1_1: refused(),
+            tls1_2: refused(),
+            tls1_3: refused(),
+            suites_insecure: refused(),
+            suites_cbc: refused(),
+            suites_static_rsa: refused(),
+        };
+        let (slow, good) = (ip("93.184.215.14"), ip("93.184.215.15"));
+        let stub = Arc::new(
+            StubTlsBackend::new()
+                .with_host("example.com", vec![slow, good])
+                .with_handshake_delay(slow, Duration::from_millis(1000))
+                .with_failed_handshake(slow)
+                .with_probes(canned)
+                .with_probe_delay(Duration::from_secs(10))
+                .honouring_probe_timeout(),
+        );
+        let mut state = stub_state(stub.clone());
+        let mut config = stub_config();
+        config.limits.handshake_timeout_secs = 1;
+        state.config.store(Arc::new(config));
+        let start = Instant::now();
+        let resp = state
+            .inspector()
+            .inspect(&req("example.com", 443), caller(), &limits(), "rid".into())
+            .await
+            .expect("inspection answers");
+        let elapsed = start.elapsed();
+        assert!(elapsed < Duration::from_millis(1800), "took {elapsed:?}");
+        let good_res = resp.ports[0]
+            .ips
+            .iter()
+            .find(|r| r.ip == good.to_string())
+            .unwrap();
+        let probes = good_res
+            .probes
+            .clone()
+            .expect("the slot passed to the good address");
+        assert_eq!(probes.tls1_0.verdict, Verdict::Unanswered, "{probes:?}");
+        assert_eq!(probes.tls1_0.detail, "timed out");
+    }
+}

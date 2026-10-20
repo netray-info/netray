@@ -67,6 +67,7 @@ pub struct StubTlsBackend {
     probe_calls: Mutex<Vec<(IpAddr, u16, String)>>,
     probe_delay: Option<Duration>,
     honour_probe_timeout: bool,
+    handshake_delay: Vec<(IpAddr, Duration)>,
 }
 
 impl Default for StubTlsBackend {
@@ -85,6 +86,7 @@ impl StubTlsBackend {
             probe_calls: Mutex::new(Vec::new()),
             probe_delay: None,
             honour_probe_timeout: false,
+            handshake_delay: Vec::new(),
         }
     }
 
@@ -111,6 +113,12 @@ impl StubTlsBackend {
     /// its answers only after its per-probe timers, started after the call, have fired.
     pub fn honouring_probe_timeout(mut self) -> Self {
         self.honour_probe_timeout = true;
+        self
+    }
+
+    /// The handshake with `ip` answers only after `delay`, as a server dropping SYNs would.
+    pub fn with_handshake_delay(mut self, ip: IpAddr, delay: Duration) -> Self {
+        self.handshake_delay.push((ip, delay));
         self
     }
 
@@ -156,6 +164,9 @@ impl TlsBackend for StubTlsBackend {
                 .lock()
                 .expect("calls lock")
                 .push((ip, port, sni.map(str::to_string)));
+            if let Some((_, delay)) = self.handshake_delay.iter().find(|(i, _)| *i == ip) {
+                tokio::time::sleep(*delay).await;
+            }
             if self.failed.contains(&ip) {
                 return IpInspectionResult {
                     ip: ip.to_string(),
