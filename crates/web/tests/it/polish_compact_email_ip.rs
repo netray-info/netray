@@ -124,7 +124,7 @@ async fn c8_the_email_panel_lists_the_mail_records() {
             "<td>DMARC</td><td>v=DMARC1;p=reject;sp=reject;adkim=s;aspf=s</td>",
             "<td>MTA-STS</td><td>v=STSv1; id=20261018</td>",
             "<td>TLS-RPT</td><td>v=TLSRPTv1; rua=mailto:tlsrpt@shop.example.com</td>",
-            "<td>DKIM</td><td>mail: ok, rsa 2048</td>",
+            "<td>DKIM</td><td>default: ok, rsa 2048</td>",
         ],
     );
     assert!(
@@ -161,7 +161,7 @@ async fn c17_a_sparse_email_run_keeps_the_present_rows_in_order() {
             "<td>MX</td>",
             "<td>SPF</td>",
             "<td>DMARC</td><td>v=DMARC1;p=reject;sp=reject;adkim=s;aspf=s</td>",
-            "<td>DKIM</td><td>mail: ok, rsa 2048</td>",
+            "<td>DKIM</td><td>default: ok, rsa 2048</td>",
         ],
     );
     for absent in ["<td>MTA-STS</td>", "<td>TLS-RPT</td>", "<td>BIMI</td>"] {
