@@ -152,7 +152,9 @@ fn app_without_history() -> Router {
 }
 
 fn is_result_router_page(body: &str) -> bool {
-    body.contains("id=\"result\"") || (body.contains(IDLE_FORM) && body.contains("/inspect/dns"))
+    // The idle page's inspector line; every frame links /inspect/dns in its menu and footer.
+    body.contains("id=\"result\"")
+        || (body.contains(IDLE_FORM) && body.contains("One protocol only"))
 }
 
 #[tokio::test]

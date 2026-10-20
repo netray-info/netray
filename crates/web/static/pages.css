@@ -65,6 +65,9 @@
   color: var(--color-muted);
   text-decoration: none;
 }
+.page-footer a {
+  color: var(--color-ink);
+}
 .page-nav a:hover,
 .page-footer a:hover {
   color: var(--color-ink);
@@ -189,24 +192,56 @@ main a {
   color: var(--color-ink);
 }
 .page-footer {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: var(--space-4);
   box-sizing: border-box;
   max-width: var(--layout-max-width);
   margin: 0 auto;
-  padding: var(--space-4) var(--layout-gutter);
+  padding: 0 var(--layout-gutter);
+  padding-bottom: 40px;
+}
+.page-footer__inner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 24px 48px;
+  padding-top: 24px;
   border-top: var(--line-hair) solid var(--color-line);
   color: var(--color-muted);
   font-size: var(--font-size-small);
 }
+.page-footer__about {
+  display: flex;
+  flex: 1 1 260px;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+}
 .page-footer p {
   margin: 0;
 }
-.page-footer nav {
+.page-footer__version {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+.page-footer__nav {
   display: flex;
-  gap: var(--space-4);
+  flex-wrap: wrap;
+  gap: 20px 48px;
+}
+.page-footer__group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.page-footer__heading {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  letter-spacing: var(--font-tracking-caps);
+  text-transform: uppercase;
+}
+.page-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
 }
 .guide-lede {
   font-size: var(--font-size-h2);
@@ -806,6 +841,29 @@ main td {
   }
   .page-nav a {
     padding-inline: 14px;
+  }
+  /* Board M's footer: one column, the version line last. */
+  .page-footer {
+    padding-bottom: 24px;
+  }
+  .page-footer__inner {
+    flex-direction: column;
+    gap: 20px;
+    padding-top: 20px;
+  }
+  .page-footer__about {
+    display: contents;
+  }
+  .page-footer__nav {
+    flex-direction: column;
+    gap: 16px;
+  }
+  .page-footer__version {
+    order: 2;
+    font-size: var(--font-size-label);
+  }
+  .page-footer__heading {
+    font-size: var(--font-size-label);
   }
   /* Board M's sheet: the menu's summary is the "Inspectors" label, its panel always shown. */
   .nav-menu::details-content {

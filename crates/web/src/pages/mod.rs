@@ -30,6 +30,9 @@ pub use inspect::{
 /// The speculation rules every page embeds; the CSP allows exactly their hash.
 pub const SPECULATION_RULES: &str = r#"{"prerender":[{"where":{"or":[{"href_matches":"/guide/*"},{"href_matches":"/r/*"},{"href_matches":"/inspect/*"}]},"eagerness":"moderate"}]}"#;
 
+/// The netray version of the build, for the footer's version line.
+pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// The header menu's inspectors: label, tool name, description (board `D3 · Inspectors menu`).
 pub(crate) const INSPECTOR_MENU: [(&str, &str, &str); 5] = [
     ("DNS", "dns", "DNS records and resolvers"),

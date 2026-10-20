@@ -25,3 +25,13 @@
 - G1: `templates/base.html` (nav), `src/pages/mod.rs` (`Frame.nav`, `INSPECTOR_MENU`), `src/pages/inspect.rs` (frame nav), `templates/pages/inspector.html`, `static/pages.css`, `islands/src/menu.ts`, `islands/src/main.ts`.
 - G2: `src/pages/tools.rs`, `templates/pages/tools.html`, `src/pages/mod.rs` (`router`), SDD §7.3 row.
 - G3: `src/entries/render.rs` (`privacy`), `templates/pages/privacy.html`, `src/entries/routes.rs` (secure headers), `src/pages/inspect.rs` (`tagline`).
+
+## Phase 3 — Footer
+
+## Groups
+
+- G1 (C1–C6): footer markup and styles.
+
+## Plan
+
+- G1: `templates/base.html` (footer), `src/pages/mod.rs` (`VERSION`), `static/pages.css` (desktop and phone rules), `src/entries/render.rs` (the gone page's inline sheet).

@@ -226,6 +226,8 @@ async fn c8_tools_page_lists_five_inspector_cards_and_featured_guides() {
         .split("<h2>Featured guides</h2>")
         .nth(1)
         .expect("Featured guides");
+    // Up to the end of main: the footer's Guides link is no featured guide.
+    let after = &after[..after.find("</main>").expect("main closes")];
     assert!(after.matches(r#"href="/guide/"#).count() >= 10);
     for href in after.split(r#"href="/guide/"#).skip(1) {
         let slug = href.split('"').next().unwrap();

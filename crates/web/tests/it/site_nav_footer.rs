@@ -41,7 +41,7 @@ async fn get_on(app: Router, path: &str) -> (StatusCode, axum::http::HeaderMap, 
 }
 
 async fn pages_get(path: &str) -> (StatusCode, axum::http::HeaderMap, String) {
-    get_on(pages::router(), path).await
+    get_on(pages::router().fallback(pages::not_found), path).await
 }
 
 async fn inspect(path: &str) -> String {
@@ -249,4 +249,19 @@ fn c2_c6_the_footer_is_one_column_on_a_phone_with_44px_links() {
             .collect();
         assert!(declared(&blocks, decl), "phone: {selector} lacks {decl}");
     }
+}
+
+/// Reader, phase 3: the expired-entry page inlines its sheet; the footer's rules are in it.
+#[test]
+fn c1_the_gone_page_inlines_the_footer_styles() {
+    let html = render::gone().unwrap();
+    let style = &html[html.find("<style>").unwrap()..html.find("</style>").unwrap()];
+    for selector in [
+        ".page-footer__inner",
+        ".page-footer__links",
+        ".page-footer__heading",
+    ] {
+        assert!(style.contains(selector), "gone page sheet lacks {selector}");
+    }
+    assert!(html.contains(r#"<nav class="page-footer__nav" aria-label="Footer">"#));
 }

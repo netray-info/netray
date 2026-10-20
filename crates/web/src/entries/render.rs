@@ -27,6 +27,8 @@ fn stylesheet() -> &'static str {
     SHEET.get_or_init(|| {
         let mut parts = vec![tokens::CSS, include_str!("../../static/base.css")];
         parts.extend(COMPONENT_CSS);
+        // The frame's own rules (the footer every page carries, spec v2-site-nav requirement 10).
+        parts.push(include_str!("../../static/pages.css"));
         parts.join("\n")
     })
 }

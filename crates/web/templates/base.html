@@ -36,12 +36,17 @@
 </header>{% endblock %}
 <main>{% block main %}{% endblock %}</main>
 <footer class="page-footer">
+<div class="page-footer__inner">
+<div class="page-footer__about">
 <p>{% include "partials/tagline.html" %}</p>
-<nav>
-<a href="/privacy">Privacy</a>
-<a href="/status">Status</a>
-<a href="/compare">Compare</a>
+<span class="page-footer__version">netray {{ crate::pages::VERSION }}</span>
+</div>
+<nav class="page-footer__nav" aria-label="Footer">
+<div class="page-footer__group"><span class="page-footer__heading">Inspectors</span><div class="page-footer__links">{% for (label, tool, _desc) in crate::pages::INSPECTOR_MENU %}<a href="/inspect/{{ tool }}">{{ label }}</a>{% endfor %}</div></div>
+<div class="page-footer__group"><span class="page-footer__heading">Site</span><div class="page-footer__links"><a href="/guide/">Guides</a><a href="/compare">Compare</a><a href="/status">Status</a><a href="/api/v1/docs">API docs</a></div></div>
+<div class="page-footer__group"><span class="page-footer__heading">About</span><div class="page-footer__links"><a href="/privacy">Privacy</a><a href="https://github.com/netray-info/netray" rel="noopener">GitHub</a></div></div>
 </nav>
+</div>
 </footer>
 {% block scripts %}<script type="module" src="/static/islands.js"></script>
 <script type="speculationrules">{{ frame.rules|safe }}</script>{% endblock %}

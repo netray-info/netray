@@ -88,3 +88,34 @@ Changed protected tests: `pages_legacy_urls.rs` (`/tools/` moves to `/tools`, `/
 ### Behavioural verification
 
 skipped: router-level tests render every page; the live stack and screenshots are Phase 7 (`just design-check`).
+
+## Phase 3 — Footer
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R10 full footer: tagline over the version line; nav Footer with Inspectors, Site, About groups; GitHub rel noopener; Compare not in the header; board desktop styles | green | crates/web/tests/it/site_nav_footer.rs |
+| C2 | R11 phone footer: one column, tagline, groups, version last; links at least 44 px | green | crates/web/tests/it/site_nav_footer.rs |
+| C3 | S footer holds tagline, nav Footer with the three groups and their links, and netray version | green | crates/web/tests/it/site_nav_footer.rs |
+| C4 | S GitHub links the repository with rel noopener; inspector links are /inspect/tool | green | crates/web/tests/it/site_nav_footer.rs |
+| C5 | S Compare not in the header, once in the footer | green | crates/web/tests/it/site_nav_footer.rs |
+| C6 | S stylesheet: desktop footer values; phone column; links at least 44 px | green | crates/web/tests/it/site_nav_footer.rs |
+
+Changed protected tests: `entries_gone.rs` (host names are read outside the site footer, whose GitHub link is the project's), `site_nav_footer.rs` (the 404 page needs the not-found fallback; a test for the gone page's inline footer styles), `site_nav_header.rs` (featured guides end with main, the footer's Guides link is none), `crates/lens/tests/it/result_mount.rs` (the idle page is recognised by its inspector line; every frame links `/inspect/dns` in menu and footer).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 footer markup and styles | 3 | orchestrator | 0 | 0 |
+
+### Review
+
+| class | where | finding | disposition |
+|---|---|---|---|
+| BLOCKER | crates/web/templates/base.html:45 | the gone page's inline sheet lacked the footer rules; links ran together | fixed: the inline sheet appends `pages.css`; `site_nav_footer.rs` checks it |
+
+### Behavioural verification
+
+skipped: router-level tests; desktop and phone values measured in headless Chromium by the reader (1280, 480 and 390 px match boards F, G and M); the live stack runs in Phase 7.
