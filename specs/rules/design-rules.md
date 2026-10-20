@@ -2,7 +2,7 @@
 
 How a V2 page is measured against the design canvas before a UI feature merges. The canvas is
 private (claude.ai design artifact); its HTML export, board images and the manifest live in the
-private netray-ops checkout under `specs/netray/design/canvas/` (cited here as "(private)").
+private netray.info checkout under `specs/design/canvas/` (cited here as "(private)").
 Binding are the reference boards the canvas README names: `D3 · Analyzer — history …` and
 `D3 · Analyzer — first visit …` (result page), `D3 · History: trace with time lens …`,
 `D3 · TLS inspector …`, `D3 · Mobile result …`, `D3 · W5 Scale, developed` and `D3 · Tokens …`.
@@ -18,7 +18,7 @@ it needs the private canvas and a browser.
 ## The check
 
 `just design-check [manifest]` reads the manifest (default `$NETRAY_DESIGN_DIR/manifest.json`;
-`NETRAY_DESIGN_DIR` defaults to `../netray-ops/specs/netray/design/canvas` beside the main
+`NETRAY_DESIGN_DIR` defaults to `../netray.info/specs/design/canvas` beside the main
 checkout), seeds lens's history from the manifest's fixture directory, starts lens (and the
 inspectors the boards name) with a cache ttl no fixture outlives, renders each board from the
 export and its page at the board's width and theme, and writes `target/design/`:

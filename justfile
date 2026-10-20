@@ -182,14 +182,14 @@ acceptance-local *args:
 # V2 pages against the private design canvas (specs/rules/design-rules.md): seeds lens's history,
 # starts lens and the manifest's inspectors on free ports, writes target/design/. Exit 0 within
 # tolerance, 1 deviations, 2 setup error. Manifest: the argument, else $NETRAY_DESIGN_DIR/manifest.json
-# (default: netray-ops beside the main checkout).
+# (default: the netray.info checkout beside the main checkout).
 design-check manifest="":
     #!/usr/bin/env bash
     set -uo pipefail
     source tests/repo/lib/netray.sh
     source tests/acceptance/design/stack.sh
     main_checkout=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
-    export NETRAY_DESIGN_DIR="${NETRAY_DESIGN_DIR:-$main_checkout/../netray-ops/specs/netray/design/canvas}"
+    export NETRAY_DESIGN_DIR="${NETRAY_DESIGN_DIR:-$main_checkout/../netray.info/specs/design/canvas}"
     m={{quote(manifest)}}
     [ -n "$m" ] || m="$NETRAY_DESIGN_DIR/manifest.json"
     loader=tests/acceptance/design/manifest.mjs
