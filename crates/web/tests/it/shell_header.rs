@@ -79,14 +79,18 @@ async fn inspector_header_names_the_inspector_and_marks_inspectors_current() {
             "{tool}: site tagline must be replaced: {header}"
         );
 
-        let nav = between(header, r#"<nav class="page-nav">"#, "</nav>");
-        let link = nav
-            .split("<a ")
-            .find(|a| a.contains(">Inspectors</a>"))
-            .unwrap_or_else(|| panic!("{tool}: no Inspectors link in {nav}"));
+        // The Inspectors menu is current and the tool's own entry carries aria-current
+        // (v2-site-nav requirement 5).
+        let nav = between(header, r#"<nav class="page-nav""#, "</nav>");
         assert!(
-            link.contains(r#"aria-current="page""#),
-            "{tool}: Inspectors not current: {link}"
+            nav.contains(r#"<details class="nav-menu nav-menu--current">"#),
+            "{tool}: Inspectors not current: {nav}"
+        );
+        assert!(
+            nav.contains(&format!(
+                r#"<a class="nav-menu__item" href="/inspect/{tool}" aria-current="page">"#
+            )),
+            "{tool}: own entry not current: {nav}"
         );
 
         // The only h1 on the idle page is the visually hidden one.

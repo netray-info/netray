@@ -521,6 +521,7 @@ pub async fn show(slug: Result<Path<String>, PathRejection>) -> Response {
         canonical: format!("/guide/{}", guide.slug),
         og_image: format!("{ORIGIN}/static/og/{}", guide.og_image),
         rules: SPECULATION_RULES,
+        nav: "",
     };
     let related = guide.related.iter().filter_map(|s| find(s)).collect();
     render(frame, guide, related, ld)

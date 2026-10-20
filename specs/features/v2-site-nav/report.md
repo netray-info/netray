@@ -40,3 +40,51 @@ Changed protected tests: `pages_sitemap.rs` (the sitemap now lists `/tools`, `/a
 ### Behavioural verification
 
 skipped: the routes are exercised through the routers in `site_nav_links.rs`; the live stack runs in Phase 7 (`just design-check`), whose screenshots cover `/guide/csp`.
+
+## Phase 2 — Header menu, phone sheet, tools page, privacy, taglines
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R5 header nav: details Inspectors with the five inspector links, descriptions and All tools, then Guides, API, Status; current marking; no JavaScript needed | green | crates/web/tests/it/site_nav_header.rs |
+| C2 | R6 phone sheet: label, five links, All tools, Guides, API, Status, rows at least 44 px | green | crates/web/tests/it/site_nav_header.rs |
+| C3 | R7 GET /tools renders the inspector index; /tools/ answers 301 to /tools | green | crates/web/tests/it/site_nav_header.rs |
+| C4 | R8 /privacy renders in the site frame titled Privacy · netray | green | crates/web/tests/it/site_nav_header.rs |
+| C5 | R9 inspector taglines DNS, resolved; TLS, illuminated; HTTP, inspected; Email, verified; IP, located | green | crates/web/tests/it/site_nav_header.rs |
+| C6 | S any page: header nav entries in order, panel links and All tools | green | crates/web/tests/it/site_nav_header.rs |
+| C7 | S /inspect/tls: summary marked current, TLS link aria-current | green | crates/web/tests/it/site_nav_header.rs |
+| C8 | S /tools: summary marked current | green | crates/web/tests/it/site_nav_header.rs |
+| C9 | S stylesheet: menu panel, links, labels, descriptions, All tools at board values; phone rows at least 44 px | green | crates/web/tests/it/site_nav_header.rs |
+| C10 | S menu island closes the details on Escape and on a click outside | green | crates/web/islands/test/menu.test.ts |
+| C11 | S GET /tools: 200, h1 Inspectors, five cards with tagline, quick form, Open link; Featured guides; API docs link | green | crates/web/tests/it/site_nav_header.rs |
+| C12 | S GET /tools/ answers 301 to /tools | green | crates/web/tests/it/site_nav_header.rs |
+| C13 | S /privacy carries header, footer, /static/app.css and the title | green | crates/web/tests/it/site_nav_header.rs |
+| C14 | S /inspect/email tagline Email, verified | green | crates/web/tests/it/site_nav_header.rs |
+
+Changed protected tests: `pages_legacy_urls.rs` (`/tools/` moves to `/tools`, `/tools` is a page), `entries_frame.rs` (privacy renders in the site frame, no longer self-contained), `pages_frame.rs`, `fidelity_header.rs`, `fidelity_phone_header.rs`, `fidelity_review_p6.rs`, `shell_header.rs` (the Inspectors entry is the menu's summary; the nav carries the `nav-menu` island; the nested details closes before the page menu's), `site_nav_header.rs` (featured guides are a subset of the guide list; the island is `nav-menu` because the gate reads `menu` as a CSS system colour; the chevron is a span), `menu.test.ts` (island name).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 header menu, sheet, island | 3 | orchestrator | 0 | 0 |
+| G2 tools page, redirect | 2 | orchestrator | 0 | 0 |
+| G3 privacy frame, tagline | 1 | orchestrator | 0 | 0 |
+
+### Review
+
+| class | where | finding | disposition |
+|---|---|---|---|
+| BLOCKER | crates/web/src/pages/mod.rs:145 | unused `Frame::version` fails clippy | removed (the footer reads a constant, Phase 3) |
+| AMENDMENT | crates/web/static/pages.css:803 | sheet items centred by `.page-nav a` | repaired: `align-items: stretch` |
+| AMENDMENT | crates/web/static/pages.css:820 | no fallback without `::details-content` | repaired: the label stays a disclosure under `@supports not selector(::details-content)` |
+| AMENDMENT | crates/web/static/pages.css:126 | panel has no shadow; no shadow token, gate refuses an rgba literal | decision log: the panel keeps border and surface, no shadow (not a measured class) |
+| AMENDMENT | crates/web/src/entries/routes.rs:73 | /privacy (and /r/<id>) served without the pages' CSP | repaired: the entries pages go through `pages::headers::secure` |
+| DEFERRED | crates/web/static/pages.css:142 | sheet labels 11 px (phone label token) against board M's 12 px | Phase 7 measures it |
+| NIT | crates/web/islands/src/menu.ts:10 | Escape stole focus from a field | fixed: focus returns to the summary only from the menu or the body |
+| NIT | crates/web/templates/base.html:24 | at phone width the summary toggles with no visible change | kept: harmless, the links stay reachable |
+
+### Behavioural verification
+
+skipped: router-level tests render every page; the live stack and screenshots are Phase 7 (`just design-check`).

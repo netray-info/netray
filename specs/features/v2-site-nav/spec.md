@@ -315,6 +315,11 @@ GIVEN no JavaScript WHEN `/`, `/tools` and `/example.com/email` render THEN the 
   is dropped: `v2-inspector-shell` already takes the selectors after the domain in the page's one
   field and passes them to the job (`email_input`) (implementer under the operator's autonomy
   mandate, 2026-10-19).
+- The desktop menu panel has no shadow: tokens hold no elevation shadow and the gate refuses a
+  colour literal; border and surface carry the panel (implementer under the operator's autonomy
+  mandate, 2026-10-19).
+- The menu island is registered as `nav-menu`: the gate reads the word `menu` as a CSS system
+  colour (implementer under the operator's autonomy mandate, 2026-10-19).
 - Inspector links point at `/inspect/<tool>`, not at `<tool>.<apex>`: valid before and after the
   cutover and on every host (drafting agent, 2026-10-20).
 - `/tools` becomes the inspector index again and takes over the redirect v2-dkim-legacy-urls set

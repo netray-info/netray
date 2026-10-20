@@ -108,7 +108,7 @@ impl Tool {
         self as usize
     }
 
-    fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Tool::Dns => "DNS inspector",
             Tool::Tls => "TLS inspector",
@@ -118,17 +118,17 @@ impl Tool {
         }
     }
 
-    fn tagline(self) -> &'static str {
+    pub(crate) fn tagline(self) -> &'static str {
         match self {
             Tool::Dns => "DNS, resolved",
             Tool::Tls => "TLS, illuminated",
             Tool::Http => "HTTP, inspected",
-            Tool::Email => "Email, authenticated",
+            Tool::Email => "Email, verified",
             Tool::Ip => "IP, located",
         }
     }
 
-    fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
             Tool::Dns => "Query",
             Tool::Tls => "Host",
@@ -148,7 +148,7 @@ impl Tool {
         }
     }
 
-    fn what(self) -> &'static str {
+    pub(crate) fn what(self) -> &'static str {
         match self {
             Tool::Dns => {
                 "Resolves a name live, with the record types, flags and resolvers of a dig query."
@@ -184,7 +184,7 @@ impl Tool {
         }
     }
 
-    fn placeholder(self) -> &'static str {
+    pub(crate) fn placeholder(self) -> &'static str {
         match self {
             Tool::Dns => "example.com A",
             Tool::Tls => "example.com:443",
@@ -685,11 +685,14 @@ async fn show(
         status,
         "no-cache",
         &InspectorPage {
-            frame: Frame::new(
-                &format!("{} - netray", tool.name()),
-                "Run one check live and read the evidence as it arrives.",
-                &format!("/inspect/{name}"),
-            ),
+            frame: Frame {
+                nav: name,
+                ..Frame::new(
+                    &format!("{} - netray", tool.name()),
+                    "Run one check live and read the evidence as it arrives.",
+                    &format!("/inspect/{name}"),
+                )
+            },
             shell,
         },
     )

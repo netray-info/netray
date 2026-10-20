@@ -48,7 +48,7 @@ struct GonePage {
 #[derive(Template)]
 #[template(path = "pages/privacy.html")]
 struct PrivacyPage {
-    styles: &'static str,
+    frame: Frame,
 }
 
 /// The entry page of a stored entry.
@@ -83,7 +83,11 @@ pub fn gone() -> askama::Result<String> {
 /// The privacy page.
 pub fn privacy() -> askama::Result<String> {
     PrivacyPage {
-        styles: stylesheet(),
+        frame: Frame::new(
+            "Privacy · netray",
+            "What netray stores about a check and what it keeps about the visitor: nothing.",
+            "/privacy",
+        ),
     }
     .render()
 }

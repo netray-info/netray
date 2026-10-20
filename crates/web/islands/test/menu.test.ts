@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { menu } from "../src/menu";
 import { mount } from "../src/main";
 
-const FIXTURE = `<nav class="page-nav" data-island="menu">
+const FIXTURE = `<nav class="page-nav" data-island="nav-menu">
 <details class="nav-menu"><summary class="nav-menu__button">Inspectors</summary>
 <div class="nav-menu__panel" id="inspectors-menu">
 <a class="nav-menu__item" href="/inspect/dns">DNS</a>

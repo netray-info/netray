@@ -6,11 +6,12 @@ pub mod compare;
 mod errors;
 mod evidence;
 pub mod guides;
-mod headers;
+pub(crate) mod headers;
 mod inspect;
 mod jsonld;
 pub mod result;
 mod status;
+mod tools;
 
 use askama::Template;
 use axum::Router;
@@ -29,11 +30,21 @@ pub use inspect::{
 /// The speculation rules every page embeds; the CSP allows exactly their hash.
 pub const SPECULATION_RULES: &str = r#"{"prerender":[{"where":{"or":[{"href_matches":"/guide/*"},{"href_matches":"/r/*"},{"href_matches":"/inspect/*"}]},"eagerness":"moderate"}]}"#;
 
+/// The header menu's inspectors: label, tool name, description (board `D3 · Inspectors menu`).
+pub(crate) const INSPECTOR_MENU: [(&str, &str, &str); 5] = [
+    ("DNS", "dns", "DNS records and resolvers"),
+    ("TLS", "tls", "TLS certificates and handshake"),
+    ("HTTP", "http", "HTTP headers and redirects"),
+    ("Email", "email", "Email MX, SPF, DKIM, DMARC"),
+    ("IP", "ip", "IP location and network"),
+];
+
 /// The one origin of the canonical link and of every absolute link a page offers to copy.
 pub(crate) const ORIGIN: &str = "https://netray.info";
 
-/// The guides, compare, status, the sitemap and the static files under `/static`, plus the 301s
-/// of V1's site paths (`/compare/`, `/status/`, `/tools`; `/guide/<slug>.html` in `guides::show`).
+/// The guides, compare, status, the inspector index `/tools`, the sitemap and the static files
+/// under `/static`, plus the 301s of V1's site paths (`/compare/`, `/status/`, `/tools/`;
+/// `/guide/<slug>.html` in `guides::show`).
 pub fn router() -> Router {
     Router::new()
         .route("/guide", get(guides::index_redirect))
@@ -44,8 +55,8 @@ pub fn router() -> Router {
         .route("/compare/", get(|| async { guides::moved("/compare") }))
         .route("/status", get(status::show))
         .route("/status/", get(|| async { guides::moved("/status") }))
-        .route("/tools", get(|| async { guides::moved("/") }))
-        .route("/tools/", get(|| async { guides::moved("/") }))
+        .route("/tools", get(tools::show))
+        .route("/tools/", get(|| async { guides::moved("/tools") }))
         .route("/sitemap.xml", get(sitemap))
         .route("/static/", get(errors::not_found))
         .route("/static/{*path}", get(assets::serve))
@@ -104,6 +115,9 @@ pub(crate) struct Frame {
     pub canonical: String,
     pub og_image: String,
     pub rules: &'static str,
+    /// The header's current section: a tool name (`dns` … `ip`) on its inspector page, `tools` on
+    /// the inspector index, else empty.
+    pub nav: &'static str,
 }
 
 impl Frame {
@@ -118,7 +132,13 @@ impl Frame {
             canonical: canonical.to_string(),
             og_image: format!("{ORIGIN}/static/og/landing.png"),
             rules: SPECULATION_RULES,
+            nav: "",
         }
+    }
+
+    /// Whether the header's Inspectors menu is the current section.
+    pub(crate) fn nav_inspectors(&self) -> bool {
+        !self.nav.is_empty()
     }
 }
 

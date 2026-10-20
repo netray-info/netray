@@ -34,7 +34,11 @@ async fn get_on(app: Router, path: &str) -> (StatusCode, axum::http::HeaderMap, 
         .unwrap();
     let (status, headers) = (res.status(), res.headers().clone());
     let bytes = res.into_body().collect().await.unwrap().to_bytes();
-    (status, headers, String::from_utf8_lossy(&bytes).into_owned())
+    (
+        status,
+        headers,
+        String::from_utf8_lossy(&bytes).into_owned(),
+    )
 }
 
 async fn pages_get(path: &str) -> (StatusCode, axum::http::HeaderMap, String) {
@@ -80,14 +84,16 @@ fn in_order(html: &str, needles: &[String], ctx: &str) {
 #[tokio::test]
 async fn c6_the_header_nav_is_the_menu_then_guides_api_status() {
     let mut needles = vec![
-        r#"<nav class="page-nav" data-island="menu">"#.to_string(),
+        r#"<nav class="page-nav" data-island="nav-menu">"#.to_string(),
         r#"<details class="nav-menu"#.to_string(),
         r#"<summary class="nav-menu__button">Inspectors"#.to_string(),
-        "<svg".to_string(),
+        r#"<span class="nav-menu__chevron" aria-hidden="true"></span></summary>"#.to_string(),
         r#"<div class="nav-menu__panel" id="inspectors-menu">"#.to_string(),
     ];
     for (tool, label, desc) in TOOLS {
-        needles.push(format!(r#"<a class="nav-menu__item" href="/inspect/{tool}""#));
+        needles.push(format!(
+            r#"<a class="nav-menu__item" href="/inspect/{tool}""#
+        ));
         needles.push(format!(
             r#"<span class="nav-menu__label">{label}</span><span class="nav-menu__desc">{desc}</span>"#
         ));
@@ -121,7 +127,8 @@ async fn c7_the_menu_marks_the_current_inspector_and_the_tools_page() {
     assert!(tls.contains(r#"<a class="nav-menu__item" href="/inspect/tls" aria-current="page">"#));
     assert_eq!(tls.matches("nav-menu__item").count(), 5);
     assert_eq!(
-        tls.matches(r#"class="nav-menu__item" href="/inspect/"#).count(),
+        tls.matches(r#"class="nav-menu__item" href="/inspect/"#)
+            .count(),
         5
     );
     assert_eq!(tls.matches(r#" aria-current="page">"#).count() >= 1, true);
@@ -149,21 +156,51 @@ async fn c8_tools_page_lists_five_inspector_cards_and_featured_guides() {
     let (status, _, html) = pages_get("/tools").await;
     assert_eq!(status, StatusCode::OK);
     assert!(html.contains("<h1>Inspectors</h1>"));
-    let title = html.split("<title>").nth(1).unwrap().split("</title>").next().unwrap();
+    let title = html
+        .split("<title>")
+        .nth(1)
+        .unwrap()
+        .split("</title>")
+        .next()
+        .unwrap();
     assert!(title.contains("Inspectors"), "title: {title}");
 
-    let cards: Vec<&str> = html.split(r#"<article class="tool-card">"#).skip(1).collect();
+    let cards: Vec<&str> = html
+        .split(r#"<article class="tool-card">"#)
+        .skip(1)
+        .collect();
     assert_eq!(cards.len(), 5);
     let rows = [
-        ("dns", "DNS", "DNS, resolved", "a name and record types", "q"),
+        (
+            "dns",
+            "DNS",
+            "DNS, resolved",
+            "a name and record types",
+            "q",
+        ),
         ("tls", "TLS", "TLS, illuminated", "a host and ports", "h"),
         ("http", "HTTP", "HTTP, inspected", "a URL", "url"),
-        ("email", "Email", "Email, verified", "a domain and DKIM selectors", "d"),
-        ("ip", "IP", "IP, located", "an address, or none for yours", "ip"),
+        (
+            "email",
+            "Email",
+            "Email, verified",
+            "a domain and DKIM selectors",
+            "d",
+        ),
+        (
+            "ip",
+            "IP",
+            "IP, located",
+            "an address, or none for yours",
+            "ip",
+        ),
     ];
     for (card, (tool, name, tagline, takes, field)) in cards.iter().zip(rows) {
         let card = card.split("</article>").next().unwrap();
-        assert!(card.contains(&format!("<h2>{name} inspector</h2>")), "{tool}");
+        assert!(
+            card.contains(&format!("<h2>{name} inspector</h2>")),
+            "{tool}"
+        );
         assert!(
             card.contains(&format!(r#"<p class="tool-card__tagline">{tagline}</p>"#)),
             "{tool}"
@@ -172,18 +209,30 @@ async fn c8_tools_page_lists_five_inspector_cards_and_featured_guides() {
             card.contains(&format!(r#"<p class="tool-card__takes">{takes}</p>"#)),
             "{tool}"
         );
-        assert!(card.contains(&format!(r#"action="/inspect/{tool}""#)), "{tool}");
+        assert!(
+            card.contains(&format!(r#"action="/inspect/{tool}""#)),
+            "{tool}"
+        );
         assert!(card.contains(&format!(r#"name="{field}""#)), "{tool}");
         assert!(
-            card.contains(&format!(r#"<a href="/inspect/{tool}">Open the {name} inspector →</a>"#)),
+            card.contains(&format!(
+                r#"<a href="/inspect/{tool}">Open the {name} inspector →</a>"#
+            )),
             "{tool}"
         );
     }
 
-    let after = html.split("<h2>Featured guides</h2>").nth(1).expect("Featured guides");
+    let after = html
+        .split("<h2>Featured guides</h2>")
+        .nth(1)
+        .expect("Featured guides");
     assert!(after.matches(r#"href="/guide/"#).count() >= 10);
-    for g in guides::GUIDES {
-        assert!(after.contains(&format!(r#"href="/guide/{}""#, g.slug)), "{}", g.slug);
+    for href in after.split(r#"href="/guide/"#).skip(1) {
+        let slug = href.split('"').next().unwrap();
+        assert!(
+            guides::GUIDES.iter().any(|g| g.slug == slug),
+            "{slug}: not a guide"
+        );
     }
     let last_guide = after.rfind(r#"href="/guide/"#).unwrap();
     let api = after.find(r#"href="/api/v1/docs""#).expect("API link");
@@ -252,7 +301,10 @@ fn blocks_in(css: &str, selector: &str) -> Vec<String> {
         let Some(close) = rest[open..].find('}') else {
             break;
         };
-        if squash(&rest[..open]).split(',').any(|s| s == squash(selector)) {
+        if squash(&rest[..open])
+            .split(',')
+            .any(|s| s == squash(selector))
+        {
             out.push(squash(&rest[open + 1..open + close]));
         }
         rest = &rest[open + close + 1..];
@@ -318,5 +370,8 @@ fn c14_the_menu_panel_is_static_inside_the_phone_query() {
         .flat_map(|c| phone_regions(c))
         .flat_map(|r| blocks_in(&r, ".nav-menu__panel"))
         .collect();
-    assert!(declared(&blocks, "position:static"), "phone blocks: {blocks:?}");
+    assert!(
+        declared(&blocks, "position:static"),
+        "phone blocks: {blocks:?}"
+    );
 }
