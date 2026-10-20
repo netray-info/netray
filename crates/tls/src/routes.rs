@@ -524,6 +524,9 @@ async fn do_inspect(
 pub struct InspectRequest {
     pub parsed: input::ParsedInput,
     pub ips: Vec<IpAddr>,
+    /// How many of `ips` are probed (the plan's charge): the first, in order, whose handshake
+    /// succeeded.
+    pub probed: usize,
     pub warnings: Vec<String>,
     pub skipped_ips: Vec<String>,
     pub request_id: String,
@@ -570,16 +573,53 @@ pub fn filter_allowed(
     Ok(allowed_ips)
 }
 
-/// The addresses `budget` handshakes over `ports` ports cover (at least one): all of them if
-/// they fit, else representative ones with the cap-and-warn warning, and the skipped ones.
-pub fn cap_to_budget(
+/// The addresses an inspection covers within a rate-limit budget, how many of them (the first,
+/// in selection order) are probed, and what that costs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Plan {
+    pub ips: Vec<IpAddr>,
+    pub skipped: Vec<String>,
+    pub probed: usize,
+    pub cost: u32,
+}
+
+/// The counts of inspected and probed addresses out of `addresses` within `budget`: on each of
+/// `ports` ports an inspected address costs 1 and a probed one `probes` more. All of them when
+/// the whole cost fits; else, when one probed address fits on every port, as many inspected
+/// addresses as leave room for it and as many probed as the rest pays for; else at least one
+/// inspected address and none probed. With `probes` 0 every inspected address is probed.
+pub fn plan_counts(addresses: usize, ports: usize, budget: u32, probes: u32) -> (usize, usize) {
+    let ports = ports.max(1) as u32;
+    let total = addresses as u32;
+    if ports * total * (1 + probes) <= budget {
+        return (addresses, addresses);
+    }
+    if probes > 0 && budget >= ports * (1 + probes) {
+        let inspected = ((budget - ports * probes) / ports).min(total);
+        let probed = ((budget - ports * inspected) / (ports * probes)).min(inspected);
+        return (inspected as usize, probed as usize);
+    }
+    let inspected = (budget / ports).max(1).min(total.max(1)) as usize;
+    (inspected, if probes == 0 { inspected } else { 0 })
+}
+
+/// The cost of `inspected` addresses, `probed` of them probed, over `ports` ports.
+pub fn plan_cost(ports: usize, inspected: usize, probed: usize, probes: u32) -> u32 {
+    ports.max(1) as u32 * (inspected as u32 + probes * probed as u32)
+}
+
+/// The plan for `ips` over `ports` ports within `budget` (see `plan_counts`): representative
+/// addresses with the cap-and-warn warning when not all fit, and a warning when not every
+/// inspected address is probed.
+pub fn plan_budget(
     ips: &[IpAddr],
     ports: usize,
     budget: u32,
+    probes: u32,
     warnings: &mut Vec<String>,
-) -> (Vec<IpAddr>, Vec<String>) {
-    let ip_budget = (budget / ports as u32).max(1) as usize;
-    let (selected, skipped) = select_representative_ips(ips, ip_budget);
+) -> Plan {
+    let (inspected, probed) = plan_counts(ips.len(), ports, budget, probes);
+    let (selected, skipped) = select_representative_ips(ips, inspected);
     if !skipped.is_empty() {
         warnings.push(format!(
             "rate limit: inspecting {} of {} IPs to stay within budget",
@@ -587,7 +627,19 @@ pub fn cap_to_budget(
             selected.len() + skipped.len()
         ));
     }
-    (selected, skipped.iter().map(|ip| ip.to_string()).collect())
+    let probed = probed.min(selected.len());
+    if probed < selected.len() {
+        warnings.push(format!(
+            "rate limit: probing {probed} of {} addresses to stay within budget",
+            selected.len()
+        ));
+    }
+    Plan {
+        cost: plan_cost(ports, selected.len(), probed, probes),
+        ips: selected,
+        skipped: skipped.iter().map(|ip| ip.to_string()).collect(),
+        probed,
+    }
 }
 
 /// The inspection of `req.ips`: enrichment, CAA/TLSA/ECH, per-port handshakes, consistency,
@@ -600,6 +652,7 @@ pub async fn inspect(
     let InspectRequest {
         parsed,
         ips: inspected_ips,
+        probed,
         mut warnings,
         skipped_ips,
         request_id,
@@ -713,6 +766,7 @@ pub async fn inspect(
             let trust_store = state.trust_store.load_full();
             let check_ct = config.validation.check_ct;
             let semaphore = Arc::clone(&state.handshake_semaphore);
+            let probe_semaphore = Arc::clone(&state.probe_semaphore);
             let backend = Arc::clone(&state.backend);
             join_set.spawn(async move {
                 inspect_port(
@@ -724,7 +778,9 @@ pub async fn inspect(
                         trust_store,
                         check_ct,
                         semaphore,
+                        probe_semaphore,
                         backend,
+                        probed,
                     },
                 )
                 .await
@@ -1046,13 +1102,68 @@ fn starttls_protocol_for_port(port: u16) -> Option<String> {
     }
 }
 
+/// The handshake outcome of each address of a port, in selection order: which addresses get the
+/// charged probe slots.
+struct SlotBoard {
+    /// `None` while the handshake runs, then whether it succeeded.
+    done: std::sync::Mutex<Vec<Option<bool>>>,
+    changed: tokio::sync::Notify,
+}
+
+impl SlotBoard {
+    fn new(addresses: usize) -> Self {
+        Self {
+            done: std::sync::Mutex::new(vec![None; addresses]),
+            changed: tokio::sync::Notify::new(),
+        }
+    }
+
+    fn finish(&self, idx: usize, succeeded: bool) {
+        self.done.lock().expect("slot board lock")[idx] = Some(succeeded);
+        self.changed.notify_waiters();
+    }
+
+    /// Whether the address at `idx`, whose handshake succeeded, is among the first `slots`
+    /// successes: decided as soon as the earlier addresses that are still running can no longer
+    /// change the answer.
+    async fn claim(&self, idx: usize, slots: usize) -> bool {
+        loop {
+            let changed = self.changed.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            {
+                let done = self.done.lock().expect("slot board lock");
+                let earlier = &done[..idx];
+                let succeeded = earlier.iter().filter(|d| **d == Some(true)).count();
+                let running = earlier.iter().filter(|d| d.is_none()).count();
+                if succeeded >= slots {
+                    return false;
+                }
+                if succeeded + running < slots {
+                    return true;
+                }
+            }
+            changed.await;
+        }
+    }
+}
+
+/// How long past its own timeout a backend's probes may take before their answers are dropped:
+/// `probe_address` returns only after its per-probe timers, started after the call, fire.
+const PROBE_GRACE: Duration = Duration::from_millis(250);
+
 /// What a port's handshakes share: trust anchors, the CT switch, the handshake permits and
 /// the backend that performs them.
 struct PortEnv {
     trust_store: Arc<rustls::RootCertStore>,
     check_ct: bool,
     semaphore: Arc<tokio::sync::Semaphore>,
+    /// Permits of the addresses probing at once, apart from the handshake permits.
+    probe_semaphore: Arc<tokio::sync::Semaphore>,
     backend: Arc<dyn TlsBackend>,
+    /// How many addresses' probes the plan charged; the slots go to the first addresses whose
+    /// handshake succeeded.
+    probed: usize,
 }
 
 /// Inspect a single port across all IPs.
@@ -1067,29 +1178,41 @@ async fn inspect_port(
         trust_store,
         check_ct,
         semaphore,
+        probe_semaphore,
         backend,
+        probed,
     } = env;
+    // The probe slots the plan charged go to the first addresses, in selection order, whose
+    // handshake succeeded. An address knows its slot once every earlier address has finished its
+    // handshake; its probe deadline runs from its own handshake, so waiting on a slow earlier
+    // address costs probe time, never the inspection's.
+    let slots = Arc::new(SlotBoard::new(ips.len()));
     let mut join_set = tokio::task::JoinSet::new();
-
     for (idx, &ip) in ips.iter().enumerate() {
         let semaphore = Arc::clone(&semaphore);
+        let probe_semaphore = Arc::clone(&probe_semaphore);
         let trust_store = Arc::clone(&trust_store);
         let backend = Arc::clone(&backend);
+        let slots = Arc::clone(&slots);
         let hostname = hostname.map(|h| h.to_string());
         join_set.spawn(async move {
-            let _permit = semaphore.acquire().await.ok();
-            let mut result = backend
-                .handshake(ip, port, hostname.as_deref(), timeout)
-                .await;
+            // The handshake permit covers the handshake only.
+            let mut result = {
+                let _permit = semaphore.acquire().await.ok();
+                backend
+                    .handshake(ip, port, hostname.as_deref(), timeout)
+                    .await
+            };
             if result.error.is_some() {
                 metrics::counter!("tlsight_handshake_errors_total").increment(1);
             }
-
             let version = result
                 .tls
                 .as_ref()
                 .filter(|_| result.error.is_none())
                 .map(|t| t.version.clone());
+            slots.finish(idx, version.is_some());
+            let deadline = tokio::time::Instant::now() + timeout;
 
             // Run validation if we got a chain
             if let Some(chain) = &result.chain {
@@ -1117,22 +1240,40 @@ async fn inspect_port(
                 let issuer_der = raw_certs.get(1).map(|c| c.as_ref().to_vec())?;
                 Some(tls::ocsp::check_live_ocsp(&ocsp_url, &leaf_der, &issuer_der).await)
             };
+            // The probes take a probe permit; the wait and the probes together are bounded by
+            // the handshake timeout from the end of the handshake: the slot and permit waits by
+            // the deadline, the probes by the time left, which each probe enforces itself, so
+            // answers that arrived are kept. Past the deadline every kind the address would have
+            // probed is unanswered (Rule M). The grace only backstops a backend that overruns
+            // its own timeout.
             let probes = async {
-                match &version {
-                    Some(version) => {
-                        backend
-                            .probe(ip, port, hostname.as_deref(), version, timeout)
-                            .await
-                    }
-                    None => None,
+                let version = version.as_ref()?;
+                if !slots.claim(idx, probed).await {
+                    return None;
                 }
+                let timed_out = || {
+                    (backend.probe_connections() > 0)
+                        .then(|| tls::probe::ProtocolProbes::unanswered(version, "timed out"))
+                };
+                let Ok(_permit) =
+                    tokio::time::timeout_at(deadline, probe_semaphore.acquire()).await
+                else {
+                    return timed_out();
+                };
+                let left = deadline.saturating_duration_since(tokio::time::Instant::now());
+                if left.is_zero() {
+                    return timed_out();
+                }
+                let run = backend.probe(ip, port, hostname.as_deref(), version, left);
+                tokio::time::timeout(left + PROBE_GRACE, run)
+                    .await
+                    .unwrap_or_else(|_| timed_out())
             };
             let (live_ocsp, probes) = tokio::join!(live_ocsp, probes);
             if let (Some(ocsp_result), Some(tls_params)) = (live_ocsp, result.tls.as_mut()) {
                 tls_params.ocsp_live = Some(ocsp_result);
             }
             result.probes = probes;
-
             (idx, result)
         });
     }

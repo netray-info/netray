@@ -65,6 +65,9 @@ pub struct StubTlsBackend {
     probes: Option<ProtocolProbes>,
     failed: Vec<IpAddr>,
     probe_calls: Mutex<Vec<(IpAddr, u16, String)>>,
+    probe_delay: Option<Duration>,
+    honour_probe_timeout: bool,
+    handshake_delay: Vec<(IpAddr, Duration)>,
 }
 
 impl Default for StubTlsBackend {
@@ -81,6 +84,9 @@ impl StubTlsBackend {
             probes: None,
             failed: Vec::new(),
             probe_calls: Mutex::new(Vec::new()),
+            probe_delay: None,
+            honour_probe_timeout: false,
+            handshake_delay: Vec::new(),
         }
     }
 
@@ -93,6 +99,26 @@ impl StubTlsBackend {
     /// Every probe answers `probes`.
     pub fn with_probes(mut self, probes: ProtocolProbes) -> Self {
         self.probes = Some(probes);
+        self
+    }
+
+    /// Every probe answers only after `delay`, as a hanging server would.
+    pub fn with_probe_delay(mut self, delay: Duration) -> Self {
+        self.probe_delay = Some(delay);
+        self
+    }
+
+    /// The probe delay ends at the probe's timeout, as the live backend's probes do: the
+    /// canned answers come back 50 ms after the time left runs out, as `probe_address` returns
+    /// its answers only after its per-probe timers, started after the call, have fired.
+    pub fn honouring_probe_timeout(mut self) -> Self {
+        self.honour_probe_timeout = true;
+        self
+    }
+
+    /// The handshake with `ip` answers only after `delay`, as a server dropping SYNs would.
+    pub fn with_handshake_delay(mut self, ip: IpAddr, delay: Duration) -> Self {
+        self.handshake_delay.push((ip, delay));
         self
     }
 
@@ -138,6 +164,9 @@ impl TlsBackend for StubTlsBackend {
                 .lock()
                 .expect("calls lock")
                 .push((ip, port, sni.map(str::to_string)));
+            if let Some((_, delay)) = self.handshake_delay.iter().find(|(i, _)| *i == ip) {
+                tokio::time::sleep(*delay).await;
+            }
             if self.failed.contains(&ip) {
                 return IpInspectionResult {
                     ip: ip.to_string(),
@@ -174,13 +203,22 @@ impl TlsBackend for StubTlsBackend {
         })
     }
 
+    /// Canned probes cost what the live backend's do; without them the stub probes nothing.
+    fn probe_connections(&self) -> u32 {
+        if self.probes.is_some() {
+            crate::tls::probe::ProbeKind::ALL.len() as u32
+        } else {
+            0
+        }
+    }
+
     fn probe<'a>(
         &'a self,
         ip: IpAddr,
         port: u16,
         _sni: Option<&'a str>,
         negotiated: &'a str,
-        _timeout: Duration,
+        timeout: Duration,
     ) -> BoxFuture<'a, Option<ProtocolProbes>> {
         Box::pin(async move {
             self.probe_calls.lock().expect("probe calls lock").push((
@@ -188,6 +226,14 @@ impl TlsBackend for StubTlsBackend {
                 port,
                 negotiated.to_string(),
             ));
+            if let Some(delay) = self.probe_delay {
+                let delay = if self.honour_probe_timeout {
+                    delay.min(timeout + Duration::from_millis(50))
+                } else {
+                    delay
+                };
+                tokio::time::sleep(delay).await;
+            }
             self.probes.clone()
         })
     }

@@ -217,15 +217,19 @@ impl TlsModule {
         };
 
         let ips: Vec<IpAddr> = routes::resolve_target(&self.state, &parsed.target).await?;
+        // Probe connections count: the plan fits handshakes and probes into the check budget and
+        // the per-target burst it is charged to.
         let selection = select_ips(
             ips,
             config.limits.allow_blocked_targets,
             &hostname,
             parsed.ports.len(),
-            self.check_budget,
+            self.check_budget.min(config.limits.per_target_burst),
+            self.state.backend.probe_connections(),
         );
-        let inspected = selection.as_ref().map_or(1, |s| s.ips.len());
-        let cost = parsed.ports.len() as u32 * inspected as u32;
+        let cost = selection
+            .as_ref()
+            .map_or(parsed.ports.len() as u32, |s| s.plan.cost);
         check_keyed_cost(
             &self.per_target,
             &hostname.to_lowercase(),
@@ -237,20 +241,17 @@ impl TlsModule {
             retry_after_secs: r.retry_after_secs,
             scope: r.scope,
         })?;
-        let Selection {
-            ips,
-            warnings,
-            skipped_ips,
-        } = selection?;
+        let Selection { plan, warnings } = selection?;
 
         routes::inspect(
             &self.state,
             &config,
             InspectRequest {
                 parsed,
-                ips,
+                ips: plan.ips,
+                probed: plan.probed,
                 warnings,
-                skipped_ips,
+                skipped_ips: plan.skipped,
                 request_id: String::new(),
                 start,
                 caa: (!facts.caa.is_empty()).then(|| CaaLookup::from_presentation(&facts.caa)),
@@ -261,29 +262,26 @@ impl TlsModule {
     }
 }
 
-/// The addresses to inspect, the warnings so far and the addresses the budget skipped.
+/// The plan (addresses, probed addresses, cost) and the warnings so far.
 struct Selection {
-    ips: Vec<IpAddr>,
+    plan: routes::Plan,
     warnings: Vec<String>,
-    skipped_ips: Vec<String>,
 }
 
-/// The target policy, then the addresses `budget` handshakes over `ports` ports cover.
+/// The target policy, then the plan for `budget` over `ports` ports with `probes` connections
+/// per probed address.
 fn select_ips(
     ips: Vec<IpAddr>,
     allow_blocked: bool,
     hostname: &str,
     ports: usize,
     budget: u32,
+    probes: u32,
 ) -> Result<Selection, AppError> {
     let mut warnings = Vec::new();
     let allowed = routes::filter_allowed(ips, allow_blocked, hostname, &mut warnings)?;
-    let (selected, skipped) = routes::cap_to_budget(&allowed, ports, budget, &mut warnings);
-    Ok(Selection {
-        ips: selected,
-        warnings,
-        skipped_ips: skipped,
-    })
+    let plan = routes::plan_budget(&allowed, ports, budget, probes, &mut warnings);
+    Ok(Selection { plan, warnings })
 }
 
 impl Module for TlsModule {
@@ -1256,11 +1254,9 @@ mod tests {
     #[test]
     fn over_budget_selects_representative_ips_with_warning() {
         let ips: Vec<IpAddr> = (1..=25).map(public).collect();
-        let Selection {
-            ips: selected,
-            warnings,
-            skipped_ips: skipped,
-        } = select_ips(ips, false, "example.com", 1, 10).expect("allowed");
+        let Selection { plan, warnings } =
+            select_ips(ips, false, "example.com", 1, 10, 0).expect("allowed");
+        let (selected, skipped) = (plan.ips, plan.skipped);
         assert_eq!(selected.len(), 10);
         assert_eq!(skipped.len(), 15);
         assert_eq!(
@@ -1273,11 +1269,9 @@ mod tests {
     fn target_policy_applies_before_the_budget() {
         let blocked = (1..=6).map(|n| IpAddr::from([10, 0, 0, n]));
         let ips: Vec<IpAddr> = blocked.chain((1..=15).map(public)).collect();
-        let Selection {
-            ips: selected,
-            warnings,
-            skipped_ips: skipped,
-        } = select_ips(ips, false, "example.com", 1, 10).expect("allowed");
+        let Selection { plan, warnings } =
+            select_ips(ips, false, "example.com", 1, 10, 0).expect("allowed");
+        let (selected, skipped) = (plan.ips, plan.skipped);
         assert_eq!(selected, (1..=10).map(public).collect::<Vec<_>>());
         assert_eq!(skipped.len(), 5);
         assert_eq!(warnings.iter().filter(|w| w.contains("blocked")).count(), 6);

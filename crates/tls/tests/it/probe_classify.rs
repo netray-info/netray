@@ -38,6 +38,10 @@ fn alert(desc: u8) -> Vec<u8> {
     vec![21, 3, 1, 0, 2, 2, desc]
 }
 
+fn alert_warning(desc: u8) -> Vec<u8> {
+    vec![21, 3, 1, 0, 2, 1, desc]
+}
+
 #[test]
 fn accepted_at_probed_version_carries_version_and_suite() {
     let o = classify(
@@ -126,9 +130,16 @@ fn no_answer_is_unanswered_never_refused() {
         b
     };
     let rows: Vec<(&str, Vec<u8>, StreamEnd, &str)> = vec![
-        ("eof", vec![], StreamEnd::Eof, "close"),
-        ("reset", vec![], StreamEnd::Reset, "reset"),
+        // v2-tls-probe-close: an end of stream or reset with nothing received is a refusal now
+        // (`close_after_the_hello_is_refused`); a warning alert before the close decides nothing.
+        ("warning then eof", alert_warning(112), StreamEnd::Eof, ""),
         ("timeout", vec![], StreamEnd::Timeout, "timed out"),
+        (
+            "not sent",
+            vec![],
+            StreamEnd::NotSent("starttls: 554 no".into()),
+            "starttls",
+        ),
         (
             "connect",
             vec![],
@@ -147,5 +158,38 @@ fn no_answer_is_unanswered_never_refused() {
         let o = classify(ProbeKind::Tls10, &bytes, end);
         assert_eq!(o.verdict, Verdict::Unanswered, "{name}: {o:?}");
         assert!(o.detail.contains(frag), "{name}: {o:?}");
+    }
+}
+
+// v2-tls-probe-close, C1, C5, C6: a close (FIN or RST) after the written ClientHello with nothing
+// received is the server's refusal, recorded as `closed` or `closed (reset)`.
+#[test]
+fn close_after_the_hello_is_refused() {
+    for kind in [ProbeKind::Ssl3, ProbeKind::Tls10, ProbeKind::SuitesInsecure] {
+        let o = classify(kind, &[], StreamEnd::Eof);
+        assert_eq!(o.verdict, Verdict::Refused, "{kind:?} eof: {o:?}");
+        assert_eq!(o.detail, "closed", "{kind:?} eof: {o:?}");
+        assert_eq!(o.version, None);
+        assert_eq!(o.cipher_suite, None);
+
+        let o = classify(kind, &[], StreamEnd::Reset);
+        assert_eq!(o.verdict, Verdict::Refused, "{kind:?} reset: {o:?}");
+        assert_eq!(o.detail, "closed (reset)", "{kind:?} reset: {o:?}");
+        assert_eq!(o.version, None);
+        assert_eq!(o.cipher_suite, None);
+    }
+}
+
+// v2-tls-probe-close, C2, C7, C8: bytes that decide nothing before a close or a reset keep the
+// probe unanswered.
+#[test]
+fn a_partial_answer_before_the_close_stays_unanswered() {
+    let mut partial = server_hello(0x0301, 0xC013);
+    partial.truncate(3);
+    for (name, bytes) in [("partial", partial), ("warning", alert_warning(112))] {
+        for end in [StreamEnd::Eof, StreamEnd::Reset] {
+            let o = classify(ProbeKind::Tls10, &bytes, end.clone());
+            assert_eq!(o.verdict, Verdict::Unanswered, "{name} {end:?}: {o:?}");
+        }
     }
 }

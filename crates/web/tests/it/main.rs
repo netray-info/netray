@@ -164,6 +164,7 @@ mod inspect_speculation;
 mod inspect_stream;
 mod inspect_tls_jobs;
 mod inspect_tls_ports;
+mod inspect_tls_probe_cost;
 mod ip_host_misc;
 mod ip_host_paths;
 mod ip_host_review;

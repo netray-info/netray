@@ -26,6 +26,10 @@ pub trait TlsBackend: Send + Sync + 'static {
         timeout: Duration,
     ) -> BoxFuture<'a, IpInspectionResult>;
 
+    /// The connections the probes of one address cost on one port, charged to the rate limiters
+    /// beside its handshake; 0 for a backend that does not probe.
+    fn probe_connections(&self) -> u32;
+
     /// The protocol-version and suite-group probes of `ip:port`, after a handshake that
     /// negotiated `negotiated`; `None` when the backend does not probe.
     fn probe<'a>(
@@ -61,6 +65,10 @@ impl TlsBackend for LiveBackend {
         timeout: Duration,
     ) -> BoxFuture<'a, IpInspectionResult> {
         Box::pin(tls::inspect_ip(ip, port, sni, timeout))
+    }
+
+    fn probe_connections(&self) -> u32 {
+        tls::probe::ProbeKind::ALL.len() as u32
     }
 
     fn probe<'a>(
