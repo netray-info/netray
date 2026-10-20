@@ -28,14 +28,16 @@ function submit(value: string): void {
   form().requestSubmit();
 }
 
+// One listener for the whole file: a listener per test would count every submit once per test so far.
+document.addEventListener("submit", (e) => {
+  submits += 1;
+  e.preventDefault();
+});
+
 beforeEach(() => {
   history.replaceState(null, "", "/inspect/tls");
   document.body.innerHTML = MARKUP;
   submits = 0;
-  document.addEventListener("submit", (e) => {
-    submits += 1;
-    e.preventDefault();
-  });
   vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
   try {
     localStorage.clear();

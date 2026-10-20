@@ -211,7 +211,13 @@ async fn c10_shared_page_run_title_reads_shared_and_a_utc_start_time() {
     let (_, page) = get(&app, &format!("/inspect/http?r={key}")).await;
 
     let title = between(&page, r#"<p class="run-line run-line--title">"#, "</p>");
-    let parts: Vec<&str> = title.split(" · ").map(str::trim).collect();
+    // The run title's parts are its `run-line__part` spans (the separators are their own spans).
+    let parts: Vec<&str> = title
+        .split(r#"<span class="run-line__part">"#)
+        .skip(1)
+        .filter_map(|s| s.split("</span>").next())
+        .map(str::trim)
+        .collect();
     assert_eq!(parts[0], "shared", "{title}");
     let date = parts[1];
     let b = date.as_bytes();
