@@ -78,3 +78,79 @@ skipped: the phase adds test-support functions (`testing` feature) with no runti
 ### Behavioural verification
 
 skipped: test-support functions behind the `testing` feature, no runtime entry point; Phase 3's guard runs them over every fixture.
+
+## Phase 3 — Guard and consistent fixtures
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R7 every fixture equals lens's run over modules answering from_evidence of its blocks, engine_version aside; a difference names the fixture and the first differing check or block | green | crates/lens/tests/it/history_fixtures_consistent.rs |
+| C2 | R8 UPDATE_FIXTURES=1 rewrites each fixture's run, keeping domain, age_seconds and engine_version | green | crates/lens/tests/it/history_fixtures_consistent.rs |
+| C3 | R9 every fixture passes R7, the story statuses and grades hold, the catalogue and design fixture checks pass | green | crates/lens/tests/it/history_fixtures_consistent.rs, crates/lens/tests/it/history_fixtures_story.rs, tests/repo/test_design_fixtures.sh, crates/engine/tests/it/history_fixtures.rs |
+| C4 | R10 just design-check exits 0 against the private manifest | green | design-check |
+| C5 | a stored email.dmarc status differing from the recomputed one fails naming the fixture and email.dmarc | green | crates/lens/tests/it/history_fixtures_consistent.rs |
+| C6 | every committed fixture passes the guard | green | crates/lens/tests/it/history_fixtures_consistent.rs |
+| C7 | a regenerated fixture keeps domain, age_seconds and engine_version and then passes the guard | green | crates/lens/tests/it/history_fixtures_consistent.rs |
+| C8 | shop run 1: dkim fail, dmarc fail, mta_sts warn, hsts pass, expiry_window warn; run 2 the same with dmarc warn; run 3: dkim, mta_sts, expiry_window pass, dmarc warn, hsts fail | green | crates/lens/tests/it/history_fixtures_story.rs |
+| C9 | new, the shop runs and the long domain graded A; example.com and stale B | green | crates/lens/tests/it/history_fixtures_story.rs |
+| C10 | just design-check exits 0 | green | design-check |
+
+C5, C7, C8 and C9 passed on the committed fixtures when written (`already_implemented`
+in effect: the guard's mechanics and the story statuses held); they are kept as protection. C1/C6
+failed on all seven fixtures until the evidence below was corrected.
+
+### Contradictions found and fixed
+
+Recomputing every fixture through the modules (UPDATE_FIXTURES=1 over the unedited fixtures)
+showed these statuses contradicting their own evidence; each was resolved by changing the
+evidence so the stored status follows, except where noted.
+
+| fixture(s) | check | stored | evidence said | resolution |
+|---|---|---|---|---|
+| new, shop 1–3, long domain | http.https_redirect | pass | port-80 probe 200, no redirect | port-80 hop 301 to https |
+| new, shop 1–3, long domain | http.x_frame_options, x_content_type_options, referrer_policy, permissions_policy | pass | headers not sent | headers added |
+| new, shop 1–3, long domain | http.info_leakage | pass | `server: example-edge` sent | Server header removed |
+| new, shop 1–3, long domain | http.caching | pass | no Cache-Control | `cache-control: public, max-age=300` |
+| shop 1, 2 | http.hsts | pass | no Strict-Transport-Security | header `max-age=31536000` added |
+| all | tls.chain_trusted, tls.chain_complete | pass | chain ends at a cross-signed root (not self-signed) | last item a self-signed root |
+| all | tls.aia_reachability | not_applicable | (follows chain_complete) | follows the root fix |
+| all | tls.ocsp_stapled | pass | leaf has no OCSP URL | leaf `ocsp_url` added |
+| shop 1, 2 | tls.expiry_window | warn | leaf 68 days left, same cert as run 3 | older certificate (own fingerprint) with 21 and 14 days left at runs 14 and 7 days before run 3; every chain's `days_remaining`, the `date` and `last-modified` headers follow that one clock |
+| shop 1, 2 | email.dkim | fail | a valid RSA 2048 key | RSA 512 key (fails < 1024) |
+| shop 1 | email.dmarc | fail | a p=reject record | no DMARC record |
+| shop 1, 2 | email.mta_sts | warn | enforce policy | policy in testing mode |
+| new, shop 2, 3 | email.dmarc | warn "p=none" | p=reject record | status kept; finding now the real cause "no aggregate reports" (no rua) |
+| all | email.dane, email.fcrdns, email.dnsbl | pass/warn | no TLSA, PTR or DNSBL evidence at all | DANE, FCrDNS and DNSBL blocks added; example.com and stale have no TLSA: dane not_applicable (was warn, unreachable from evidence) |
+| all | http.coop | not_applicable "not reported" | the current module judges COOP | A fixtures send `same-origin` (pass); example.com, stale warn |
+| all | dns.nsec block | `\000` next name | unreadable by the parser | next name `www.<domain>.` |
+
+Also regenerated with the module output: `profile_version` 3 to 4, `http.server` `response_ms` to
+`inspection_ms`, the MX host without its trailing dot, DKIM state `valid` to the module's `ok`, and
+the blocks the current modules emit (`http.hsts`, `http.caching`, `http.isolation`, `email.*`).
+Grades hold: new, shop 1–3, long domain A; example.com and stale B.
+
+Two web tests asserted the old hand-made values (MX trailing dot, DKIM state `valid`) and inserted
+`null` for a check without `evidence` (the module omits an empty list): updated with
+`ADLC-Test-Change`.
+
+### Review
+
+- AMENDMENT (repaired): the new self-signed roots carried an RSA signature on an EC key, a validity shorter than their subordinates' and the cross-sign's fingerprint: now `ecdsa-with-SHA384`, 2020 to 2045, own fingerprint.
+- AMENDMENT (repaired): shop runs 1 and 2 mixed run 3's CA `days_remaining`, `date` and `last-modified` with the older leaf: all derived from one measurement time per run.
+- AMENDMENT (repaired): `http.server/inspection_ms` regenerated as 0 (a placeholder): the measured 289 ms carried over from the old `response_ms` key.
+- AMENDMENT (repaired): NSEC next name `www.<domain>.` denied names the zone uses: `0.<domain>.`.
+- NIT (repaired): shop runs 1 and 2 have their own MTA-STS id `20260901`; the older leaf's dates fit `age_seconds`.
+- NIT (decision log): the DNSBL blocks name the module's real zones (zen.spamhaus.org and others): the rebuild queries the module's configured zones, as the contract goldens do.
+- DEFERRED (repaired): DS digests are the SHA-256 over each zone's own KSK; leaf fingerprints are distinct per domain.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 fixtures (evidence edits and regeneration, by the implementer) | 3 regenerations | implementer | n/a | n/a |
+
+### Behavioural verification
+
+`just design-check` against the private manifest: `0 open deviation(s), 0 stale accepted entries`
+(seeded 7 fixtures). The manifest is unchanged.

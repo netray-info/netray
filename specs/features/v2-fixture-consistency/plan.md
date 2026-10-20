@@ -67,3 +67,17 @@ The groups share no production file; they are coded in parallel.
   the recorded MTA-STS status, content type and body (rcgen self-signed, `accept_invalid_certs`,
   `allow = |_| true`, `with_mta_sts_port`), runs the inspection with the rows' selectors and
   `translate`s the events.
+
+## Phase 3 — Guard and consistent fixtures
+
+## Groups
+
+- G1 (C1–C10): the fixtures under `tests/acceptance/fixtures/history/` — evidence edits for the
+  story, then `UPDATE_FIXTURES=1` regeneration until the guard is stable.
+
+## Plan
+
+- Regenerate the unedited fixtures, diff each status against the stored one, change the evidence
+  where the stored status is the story's (headers, port-80 chain, chain roots, OCSP URL, older
+  certificate, DKIM key size, DMARC and MTA-STS records, DANE/FCrDNS/DNSBL blocks, NSEC next name),
+  regenerate until a second pass changes nothing, then `just design-check`.

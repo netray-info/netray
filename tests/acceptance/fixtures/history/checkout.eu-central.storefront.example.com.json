@@ -2,7 +2,7 @@
   "domain": "checkout.eu-central.storefront.example.com",
   "age_seconds": 0,
   "run": {
-    "profile_version": 3,
+    "profile_version": 4,
     "engine_version": "0.26.0",
     "evidence_schema_version": 1,
     "grade": "A",
@@ -24,12 +24,12 @@
         "reason": null
       },
       {
-        "protocol": "tls",
+        "protocol": "ip",
         "outcome": "measured",
         "reason": null
       },
       {
-        "protocol": "ip",
+        "protocol": "tls",
         "outcome": "measured",
         "reason": null
       }
@@ -130,16 +130,19 @@
       {
         "id": "email.mx",
         "status": "pass",
+        "findings": [
+          "only one MX record, but it resolves to 2 IP addresses"
+        ],
         "evidence": [
-          "email.mx"
+          "email.mx",
+          "email.mx_addresses"
         ]
       },
       {
         "id": "email.spf",
         "status": "pass",
         "evidence": [
-          "email.spf",
-          "email.mx"
+          "email.spf"
         ]
       },
       {
@@ -153,7 +156,7 @@
         "id": "email.dmarc",
         "status": "warn",
         "findings": [
-          "DMARC policy is p=none: receivers report spoofed mail but still deliver it"
+          "no aggregate reports"
         ],
         "evidence": [
           "email.dmarc"
@@ -164,30 +167,30 @@
         "status": "pass",
         "evidence": [
           "email.mta_sts",
-          "email.mta_sts_policy"
+          "email.mta_sts_policy",
+          "email.mx"
         ]
       },
       {
         "id": "email.tls_rpt",
         "status": "pass",
         "evidence": [
-          "email.tls_rpt"
+          "email.tls_rpt",
+          "email.mx"
         ]
       },
       {
         "id": "email.bimi",
         "status": "not_applicable",
         "findings": [
-          "no BIMI record"
-        ],
-        "evidence": [
-          "email.bimi"
+          "No BIMI record"
         ]
       },
       {
         "id": "email.dane",
         "status": "pass",
         "evidence": [
+          "email.dane",
           "email.mx"
         ]
       },
@@ -195,14 +198,17 @@
         "id": "email.dnsbl",
         "status": "pass",
         "evidence": [
-          "email.mx_addresses"
+          "email.dnsbl",
+          "email.dnsbl_domain",
+          "email.mx"
         ]
       },
       {
         "id": "email.fcrdns",
         "status": "pass",
         "evidence": [
-          "email.mx_addresses"
+          "email.fcrdns",
+          "email.mx"
         ]
       },
       {
@@ -280,11 +286,11 @@
       },
       {
         "id": "http.coop",
-        "status": "not_applicable",
-        "findings": [
-          "not reported"
-        ],
-        "evidence": []
+        "status": "pass",
+        "evidence": [
+          "http.headers",
+          "http.isolation"
+        ]
       },
       {
         "id": "http.deprecated_headers",
@@ -304,7 +310,15 @@
         "id": "http.caching",
         "status": "pass",
         "evidence": [
-          "http.headers"
+          "http.headers",
+          "http.caching"
+        ]
+      },
+      {
+        "id": "ip.reputation",
+        "status": "pass",
+        "evidence": [
+          "ip.addresses"
         ]
       },
       {
@@ -452,16 +466,14 @@
         "status": "not_applicable",
         "findings": [
           "not reported"
-        ],
-        "evidence": []
+        ]
       },
       {
         "id": "tls.weak_suites",
         "status": "not_applicable",
         "findings": [
           "not reported"
-        ],
-        "evidence": []
+        ]
       },
       {
         "id": "tls.ct_logged",
@@ -528,21 +540,17 @@
         "id": "tls.ech_advertised",
         "status": "warn",
         "findings": [
-          "ECH not advertised in HTTPS DNS record"
+          "192.0.2.10: ECH not advertised in HTTPS DNS record",
+          "198.51.100.10: ECH not advertised in HTTPS DNS record",
+          "2001:db8::10: ECH not advertised in HTTPS DNS record",
+          "2001:db8::11: ECH not advertised in HTTPS DNS record"
         ],
         "evidence": [
-          "dns.https",
           "tls.handshake@192.0.2.10:443",
           "tls.handshake@198.51.100.10:443",
           "tls.handshake@[2001:db8::10]:443",
-          "tls.handshake@[2001:db8::11]:443"
-        ]
-      },
-      {
-        "id": "ip.reputation",
-        "status": "pass",
-        "evidence": [
-          "ip.addresses"
+          "tls.handshake@[2001:db8::11]:443",
+          "dns.https"
         ]
       }
     ],
@@ -854,7 +862,7 @@
               },
               "data": {
                 "t": "text",
-                "v": "2371 13 2 C988EC423E3880EB8DD8A46FE06CA230EE23F35B578D64E78B29C3E1C83D245A"
+                "v": "2371 13 2 9C0C4AAEB8EBC6EB3FE4E6018A31F36BC1ECDB3C8536CF7E072A8A5123F3BA4E"
               }
             }
           ]
@@ -881,7 +889,7 @@
               },
               "data": {
                 "t": "text",
-                "v": "\\000.checkout.eu-central.storefront.example.com. A NS SOA PTR HINFO MX TXT AAAA Unknown SRV NAPTR CERT SSHFP RRSIG NSEC DNSKEY TLSA SMIMEA Unknown CDS CDNSKEY OPENPGPKEY SVCB HTTPS Unknown CAA"
+                "v": "0.checkout.eu-central.storefront.example.com. A NS SOA PTR HINFO MX TXT AAAA Unknown SRV NAPTR CERT SSHFP RRSIG NSEC DNSKEY TLSA SMIMEA Unknown CDS CDNSKEY OPENPGPKEY SVCB HTTPS Unknown CAA"
               }
             }
           ]
@@ -984,17 +992,22 @@
             "key": "host",
             "columns": [
               "host",
-              "preference"
+              "preference",
+              "cname"
             ],
             "rows": [
               [
                 {
                   "t": "text",
-                  "v": "mx1.checkout.eu-central.storefront.example.com."
+                  "v": "mx1.checkout.eu-central.storefront.example.com"
                 },
                 {
                   "t": "int",
                   "v": 10
+                },
+                {
+                  "t": "text",
+                  "v": ""
                 }
               ]
             ]
@@ -1020,7 +1033,7 @@
                 },
                 {
                   "t": "text",
-                  "v": "mx1.checkout.eu-central.storefront.example.com."
+                  "v": "mx1.checkout.eu-central.storefront.example.com"
                 }
               ],
               [
@@ -1030,7 +1043,7 @@
                 },
                 {
                   "t": "text",
-                  "v": "mx1.checkout.eu-central.storefront.example.com."
+                  "v": "mx1.checkout.eu-central.storefront.example.com"
                 }
               ]
             ]
@@ -1048,6 +1061,20 @@
               {
                 "t": "text",
                 "v": "v=spf1 mx -all"
+              }
+            ],
+            [
+              "authorized_prefixes",
+              {
+                "t": "text",
+                "v": "192.0.2.25/32"
+              }
+            ],
+            [
+              "authorized_prefixes",
+              {
+                "t": "text",
+                "v": "2001:db8::25/128"
               }
             ],
             [
@@ -1229,15 +1256,227 @@
                 },
                 {
                   "t": "text",
-                  "v": "valid"
+                  "v": "ok"
                 },
                 {
                   "t": "text",
                   "v": "rsa"
                 },
                 {
+                  "t": "text",
+                  "v": "2048"
+                }
+              ]
+            ]
+          }
+        }
+      },
+      {
+        "id": "email.dane",
+        "title": "DANE TLSA",
+        "shape": {
+          "kind": "table",
+          "data": {
+            "key": "record",
+            "columns": [
+              "record",
+              "host",
+              "usage",
+              "selector",
+              "matching_type"
+            ],
+            "rows": [
+              [
+                {
+                  "t": "text",
+                  "v": "_25._tcp.mx1.checkout.eu-central.storefront.example.com 3 1 1"
+                },
+                {
+                  "t": "text",
+                  "v": "mx1.checkout.eu-central.storefront.example.com"
+                },
+                {
                   "t": "int",
-                  "v": 2048
+                  "v": 3
+                },
+                {
+                  "t": "int",
+                  "v": 1
+                },
+                {
+                  "t": "int",
+                  "v": 1
+                }
+              ]
+            ]
+          }
+        }
+      },
+      {
+        "id": "email.dnsbl",
+        "title": "DNSBL",
+        "shape": {
+          "kind": "table",
+          "data": {
+            "key": "query",
+            "columns": [
+              "query",
+              "zone",
+              "target",
+              "answered",
+              "answer"
+            ],
+            "rows": [
+              [
+                {
+                  "t": "text",
+                  "v": "192.0.2.25@zen.spamhaus.org"
+                },
+                {
+                  "t": "text",
+                  "v": "zen.spamhaus.org"
+                },
+                {
+                  "t": "text",
+                  "v": "192.0.2.25"
+                },
+                {
+                  "t": "bool",
+                  "v": true
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "192.0.2.25@b.barracudacentral.org"
+                },
+                {
+                  "t": "text",
+                  "v": "b.barracudacentral.org"
+                },
+                {
+                  "t": "text",
+                  "v": "192.0.2.25"
+                },
+                {
+                  "t": "bool",
+                  "v": true
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "192.0.2.25@bl.spamcop.net"
+                },
+                {
+                  "t": "text",
+                  "v": "bl.spamcop.net"
+                },
+                {
+                  "t": "text",
+                  "v": "192.0.2.25"
+                },
+                {
+                  "t": "bool",
+                  "v": true
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ]
+            ]
+          }
+        }
+      },
+      {
+        "id": "email.dnsbl_domain",
+        "title": "DNSBL (domain)",
+        "shape": {
+          "kind": "table",
+          "data": {
+            "key": "query",
+            "columns": [
+              "query",
+              "zone",
+              "target",
+              "answered",
+              "answer"
+            ],
+            "rows": [
+              [
+                {
+                  "t": "text",
+                  "v": "checkout.eu-central.storefront.example.com@dbl.spamhaus.org"
+                },
+                {
+                  "t": "text",
+                  "v": "dbl.spamhaus.org"
+                },
+                {
+                  "t": "text",
+                  "v": "checkout.eu-central.storefront.example.com"
+                },
+                {
+                  "t": "bool",
+                  "v": true
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ]
+            ]
+          }
+        }
+      },
+      {
+        "id": "email.fcrdns",
+        "title": "FCrDNS",
+        "shape": {
+          "kind": "table",
+          "data": {
+            "key": "address",
+            "columns": [
+              "address",
+              "ptr",
+              "confirmed"
+            ],
+            "rows": [
+              [
+                {
+                  "t": "addr",
+                  "v": "192.0.2.25"
+                },
+                {
+                  "t": "text",
+                  "v": "mx1.checkout.eu-central.storefront.example.com"
+                },
+                {
+                  "t": "bool",
+                  "v": true
+                }
+              ],
+              [
+                {
+                  "t": "addr",
+                  "v": "2001:db8::25"
+                },
+                {
+                  "t": "text",
+                  "v": "mx1.checkout.eu-central.storefront.example.com"
+                },
+                {
+                  "t": "bool",
+                  "v": true
                 }
               ]
             ]
@@ -1254,7 +1493,7 @@
               "grade",
               {
                 "t": "text",
-                "v": "A"
+                "v": "B"
               }
             ]
           ]
@@ -1273,7 +1512,38 @@
         "title": "Port 80 redirects",
         "shape": {
           "kind": "chain",
-          "data": []
+          "data": [
+            [
+              [
+                "url",
+                {
+                  "t": "text",
+                  "v": "http://checkout.eu-central.storefront.example.com/"
+                }
+              ],
+              [
+                "status",
+                {
+                  "t": "int",
+                  "v": 301
+                }
+              ],
+              [
+                "location",
+                {
+                  "t": "text",
+                  "v": "https://checkout.eu-central.storefront.example.com/"
+                }
+              ],
+              [
+                "http_version",
+                {
+                  "t": "text",
+                  "v": "HTTP/1.1"
+                }
+              ]
+            ]
+          ]
         }
       },
       {
@@ -1297,10 +1567,17 @@
               }
             ],
             [
+              "location",
+              {
+                "t": "text",
+                "v": "https://checkout.eu-central.storefront.example.com/"
+              }
+            ],
+            [
               "redirects_to_https",
               {
                 "t": "bool",
-                "v": false
+                "v": true
               }
             ]
           ]
@@ -1336,16 +1613,6 @@
                 {
                   "t": "text",
                   "v": "text/html; charset=utf-8"
-                }
-              ],
-              [
-                {
-                  "t": "text",
-                  "v": "server"
-                },
-                {
-                  "t": "text",
-                  "v": "example-edge"
                 }
               ],
               [
@@ -1417,9 +1684,166 @@
                   "t": "text",
                   "v": "h3=\":443\"; ma=86400"
                 }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "x-frame-options"
+                },
+                {
+                  "t": "text",
+                  "v": "DENY"
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "x-content-type-options"
+                },
+                {
+                  "t": "text",
+                  "v": "nosniff"
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "referrer-policy"
+                },
+                {
+                  "t": "text",
+                  "v": "strict-origin-when-cross-origin"
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "permissions-policy"
+                },
+                {
+                  "t": "text",
+                  "v": "camera=(), microphone=(), geolocation=()"
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "cross-origin-opener-policy"
+                },
+                {
+                  "t": "text",
+                  "v": "same-origin"
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "cache-control"
+                },
+                {
+                  "t": "text",
+                  "v": "public, max-age=300"
+                }
               ]
             ]
           }
+        }
+      },
+      {
+        "id": "http.caching",
+        "title": "Caching",
+        "shape": {
+          "kind": "fields",
+          "data": [
+            [
+              "directive",
+              {
+                "t": "text",
+                "v": "public"
+              }
+            ],
+            [
+              "max_age",
+              {
+                "t": "int",
+                "v": 300
+              }
+            ],
+            [
+              "last_modified",
+              {
+                "t": "time",
+                "v": "2026-10-13T20:08:28Z"
+              }
+            ],
+            [
+              "age",
+              {
+                "t": "int",
+                "v": 9
+              }
+            ]
+          ]
+        }
+      },
+      {
+        "id": "http.cdn",
+        "title": "CDN",
+        "shape": {
+          "kind": "fields",
+          "data": [
+            [
+              "provider",
+              {
+                "t": "text",
+                "v": "Generic CDN"
+              }
+            ],
+            [
+              "cache_status",
+              {
+                "t": "text",
+                "v": "HIT"
+              }
+            ],
+            [
+              "indicator",
+              {
+                "t": "text",
+                "v": "x-cache"
+              }
+            ]
+          ]
+        }
+      },
+      {
+        "id": "http.isolation",
+        "title": "Cross-origin isolation",
+        "shape": {
+          "kind": "fields",
+          "data": [
+            [
+              "coop",
+              {
+                "t": "text",
+                "v": "same-origin"
+              }
+            ],
+            [
+              "missing",
+              {
+                "t": "text",
+                "v": "cross-origin-embedder-policy"
+              }
+            ],
+            [
+              "missing",
+              {
+                "t": "text",
+                "v": "cross-origin-resource-policy"
+              }
+            ]
+          ]
         }
       },
       {
@@ -1450,7 +1874,7 @@
               }
             ],
             [
-              "response_ms",
+              "inspection_ms",
               {
                 "t": "duration",
                 "v": 289
@@ -1526,1337 +1950,6 @@
             ],
             "rows": []
           }
-        }
-      },
-      {
-        "id": "tls.addresses",
-        "title": "Addresses",
-        "shape": {
-          "kind": "table",
-          "data": {
-            "key": "address",
-            "columns": [
-              "address",
-              "port",
-              "outcome",
-              "message"
-            ],
-            "rows": [
-              [
-                {
-                  "t": "addr",
-                  "v": "192.0.2.10"
-                },
-                {
-                  "t": "int",
-                  "v": 443
-                },
-                {
-                  "t": "text",
-                  "v": "ok"
-                },
-                {
-                  "t": "text",
-                  "v": ""
-                }
-              ],
-              [
-                {
-                  "t": "addr",
-                  "v": "198.51.100.10"
-                },
-                {
-                  "t": "int",
-                  "v": 443
-                },
-                {
-                  "t": "text",
-                  "v": "ok"
-                },
-                {
-                  "t": "text",
-                  "v": ""
-                }
-              ],
-              [
-                {
-                  "t": "addr",
-                  "v": "2001:db8::10"
-                },
-                {
-                  "t": "int",
-                  "v": 443
-                },
-                {
-                  "t": "text",
-                  "v": "ok"
-                },
-                {
-                  "t": "text",
-                  "v": ""
-                }
-              ],
-              [
-                {
-                  "t": "addr",
-                  "v": "2001:db8::11"
-                },
-                {
-                  "t": "int",
-                  "v": 443
-                },
-                {
-                  "t": "text",
-                  "v": "ok"
-                },
-                {
-                  "t": "text",
-                  "v": ""
-                }
-              ]
-            ]
-          }
-        }
-      },
-      {
-        "id": "tls.chain@192.0.2.10:443",
-        "title": "Certificate chain 192.0.2.10:443",
-        "shape": {
-          "kind": "chain",
-          "data": [
-            [
-              [
-                "position",
-                {
-                  "t": "text",
-                  "v": "leaf"
-                }
-              ],
-              [
-                "subject",
-                {
-                  "t": "text",
-                  "v": "CN=checkout.eu-central.storefront.example.com"
-                }
-              ],
-              [
-                "issuer",
-                {
-                  "t": "text",
-                  "v": "C=US, O=Example CA, CN=Example TLS Issuing ECC CA 1"
-                }
-              ],
-              [
-                "sans",
-                {
-                  "t": "text",
-                  "v": "checkout.eu-central.storefront.example.com"
-                }
-              ],
-              [
-                "sans",
-                {
-                  "t": "text",
-                  "v": "*.checkout.eu-central.storefront.example.com"
-                }
-              ],
-              [
-                "not_before",
-                {
-                  "t": "time",
-                  "v": "2026-09-26T22:49:11Z"
-                }
-              ],
-              [
-                "not_after",
-                {
-                  "t": "time",
-                  "v": "2026-12-25T22:56:35Z"
-                }
-              ],
-              [
-                "days_remaining",
-                {
-                  "t": "int",
-                  "v": 68
-                }
-              ],
-              [
-                "key",
-                {
-                  "t": "text",
-                  "v": "ECDSA P-256 256"
-                }
-              ],
-              [
-                "signature_algorithm",
-                {
-                  "t": "text",
-                  "v": "ecdsa-with-SHA256"
-                }
-              ],
-              [
-                "fingerprint_sha256",
-                {
-                  "t": "text",
-                  "v": "85:CA:6A:B0:68:E9:BC:CE:88:B6:C4:AA:3C:47:F7:D1:72:28:13:4A:45:7F:87:0D:38:00:E6:22:3A:0D:F0:7A"
-                }
-              ],
-              [
-                "ca_issuers_url",
-                {
-                  "t": "text",
-                  "v": "http://ca.checkout.eu-central.storefront.example.com/issuing-ecc.cer"
-                }
-              ]
-            ],
-            [
-              [
-                "position",
-                {
-                  "t": "text",
-                  "v": "intermediate"
-                }
-              ],
-              [
-                "subject",
-                {
-                  "t": "text",
-                  "v": "C=US, O=Example CA, CN=Example TLS Issuing ECC CA 1"
-                }
-              ],
-              [
-                "issuer",
-                {
-                  "t": "text",
-                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
-                }
-              ],
-              [
-                "not_before",
-                {
-                  "t": "time",
-                  "v": "2025-05-29T19:49:45Z"
-                }
-              ],
-              [
-                "not_after",
-                {
-                  "t": "time",
-                  "v": "2035-05-27T19:49:44Z"
-                }
-              ],
-              [
-                "days_remaining",
-                {
-                  "t": "int",
-                  "v": 3143
-                }
-              ],
-              [
-                "key",
-                {
-                  "t": "text",
-                  "v": "ECDSA P-256 256"
-                }
-              ],
-              [
-                "signature_algorithm",
-                {
-                  "t": "text",
-                  "v": "ecdsa-with-SHA384"
-                }
-              ],
-              [
-                "fingerprint_sha256",
-                {
-                  "t": "text",
-                  "v": "F1:5F:29:AB:EF:73:AA:4D:D9:AB:75:4B:AE:AE:36:85:BD:D3:87:4B:46:B5:25:07:11:77:62:86:85:71:80:26"
-                }
-              ],
-              [
-                "ca_issuers_url",
-                {
-                  "t": "text",
-                  "v": "http://ca.checkout.eu-central.storefront.example.com/transit-ecc.cer"
-                }
-              ]
-            ],
-            [
-              [
-                "position",
-                {
-                  "t": "text",
-                  "v": "root"
-                }
-              ],
-              [
-                "subject",
-                {
-                  "t": "text",
-                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
-                }
-              ],
-              [
-                "issuer",
-                {
-                  "t": "text",
-                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
-                }
-              ],
-              [
-                "not_before",
-                {
-                  "t": "time",
-                  "v": "2025-05-29T19:49:45Z"
-                }
-              ],
-              [
-                "not_after",
-                {
-                  "t": "time",
-                  "v": "2040-01-01T00:00:00Z"
-                }
-              ],
-              [
-                "days_remaining",
-                {
-                  "t": "int",
-                  "v": 4823
-                }
-              ],
-              [
-                "key",
-                {
-                  "t": "text",
-                  "v": "ECDSA P-384 384"
-                }
-              ],
-              [
-                "signature_algorithm",
-                {
-                  "t": "text",
-                  "v": "ecdsa-with-SHA384"
-                }
-              ],
-              [
-                "fingerprint_sha256",
-                {
-                  "t": "text",
-                  "v": "C5:91:63:10:01:30:C7:30:8A:CB:46:77:61:F8:C3:45:0B:B3:CD:2D:75:D3:3A:21:B4:C7:E9:D3:18:85:77:08"
-                }
-              ],
-              [
-                "self_signed",
-                {
-                  "t": "bool",
-                  "v": true
-                }
-              ]
-            ]
-          ]
-        }
-      },
-      {
-        "id": "tls.handshake@192.0.2.10:443",
-        "title": "Handshake 192.0.2.10:443",
-        "shape": {
-          "kind": "fields",
-          "data": [
-            [
-              "version",
-              {
-                "t": "text",
-                "v": "TLSv1.3"
-              }
-            ],
-            [
-              "cipher_suite",
-              {
-                "t": "text",
-                "v": "TLS13_AES_256_GCM_SHA384"
-              }
-            ],
-            [
-              "key_exchange_group",
-              {
-                "t": "text",
-                "v": "X25519"
-              }
-            ],
-            [
-              "ocsp_stapled",
-              {
-                "t": "bool",
-                "v": true
-              }
-            ],
-            [
-              "ech",
-              {
-                "t": "bool",
-                "v": false
-              }
-            ],
-            [
-              "handshake_ms",
-              {
-                "t": "duration",
-                "v": 60
-              }
-            ]
-          ]
-        }
-      },
-      {
-        "id": "tls.chain@198.51.100.10:443",
-        "title": "Certificate chain 198.51.100.10:443",
-        "shape": {
-          "kind": "chain",
-          "data": [
-            [
-              [
-                "position",
-                {
-                  "t": "text",
-                  "v": "leaf"
-                }
-              ],
-              [
-                "subject",
-                {
-                  "t": "text",
-                  "v": "CN=checkout.eu-central.storefront.example.com"
-                }
-              ],
-              [
-                "issuer",
-                {
-                  "t": "text",
-                  "v": "C=US, O=Example CA, CN=Example TLS Issuing ECC CA 1"
-                }
-              ],
-              [
-                "sans",
-                {
-                  "t": "text",
-                  "v": "checkout.eu-central.storefront.example.com"
-                }
-              ],
-              [
-                "sans",
-                {
-                  "t": "text",
-                  "v": "*.checkout.eu-central.storefront.example.com"
-                }
-              ],
-              [
-                "not_before",
-                {
-                  "t": "time",
-                  "v": "2026-09-26T22:49:11Z"
-                }
-              ],
-              [
-                "not_after",
-                {
-                  "t": "time",
-                  "v": "2026-12-25T22:56:35Z"
-                }
-              ],
-              [
-                "days_remaining",
-                {
-                  "t": "int",
-                  "v": 68
-                }
-              ],
-              [
-                "key",
-                {
-                  "t": "text",
-                  "v": "ECDSA P-256 256"
-                }
-              ],
-              [
-                "signature_algorithm",
-                {
-                  "t": "text",
-                  "v": "ecdsa-with-SHA256"
-                }
-              ],
-              [
-                "fingerprint_sha256",
-                {
-                  "t": "text",
-                  "v": "85:CA:6A:B0:68:E9:BC:CE:88:B6:C4:AA:3C:47:F7:D1:72:28:13:4A:45:7F:87:0D:38:00:E6:22:3A:0D:F0:7A"
-                }
-              ],
-              [
-                "ca_issuers_url",
-                {
-                  "t": "text",
-                  "v": "http://ca.checkout.eu-central.storefront.example.com/issuing-ecc.cer"
-                }
-              ]
-            ],
-            [
-              [
-                "position",
-                {
-                  "t": "text",
-                  "v": "intermediate"
-                }
-              ],
-              [
-                "subject",
-                {
-                  "t": "text",
-                  "v": "C=US, O=Example CA, CN=Example TLS Issuing ECC CA 1"
-                }
-              ],
-              [
-                "issuer",
-                {
-                  "t": "text",
-                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
-                }
-              ],
-              [
-                "not_before",
-                {
-                  "t": "time",
-                  "v": "2025-05-29T19:49:45Z"
-                }
-              ],
-              [
-                "not_after",
-                {
-                  "t": "time",
-                  "v": "2035-05-27T19:49:44Z"
-                }
-              ],
-              [
-                "days_remaining",
-                {
-                  "t": "int",
-                  "v": 3143
-                }
-              ],
-              [
-                "key",
-                {
-                  "t": "text",
-                  "v": "ECDSA P-256 256"
-                }
-              ],
-              [
-                "signature_algorithm",
-                {
-                  "t": "text",
-                  "v": "ecdsa-with-SHA384"
-                }
-              ],
-              [
-                "fingerprint_sha256",
-                {
-                  "t": "text",
-                  "v": "F1:5F:29:AB:EF:73:AA:4D:D9:AB:75:4B:AE:AE:36:85:BD:D3:87:4B:46:B5:25:07:11:77:62:86:85:71:80:26"
-                }
-              ],
-              [
-                "ca_issuers_url",
-                {
-                  "t": "text",
-                  "v": "http://ca.checkout.eu-central.storefront.example.com/transit-ecc.cer"
-                }
-              ]
-            ],
-            [
-              [
-                "position",
-                {
-                  "t": "text",
-                  "v": "root"
-                }
-              ],
-              [
-                "subject",
-                {
-                  "t": "text",
-                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
-                }
-              ],
-              [
-                "issuer",
-                {
-                  "t": "text",
-                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
-                }
-              ],
-              [
-                "not_before",
-                {
-                  "t": "time",
-                  "v": "2025-05-29T19:49:45Z"
-                }
-              ],
-              [
-                "not_after",
-                {
-                  "t": "time",
-                  "v": "2040-01-01T00:00:00Z"
-                }
-              ],
-              [
-                "days_remaining",
-                {
-                  "t": "int",
-                  "v": 4823
-                }
-              ],
-              [
-                "key",
-                {
-                  "t": "text",
-                  "v": "ECDSA P-384 384"
-                }
-              ],
-              [
-                "signature_algorithm",
-                {
-                  "t": "text",
-                  "v": "ecdsa-with-SHA384"
-                }
-              ],
-              [
-                "fingerprint_sha256",
-                {
-                  "t": "text",
-                  "v": "C5:91:63:10:01:30:C7:30:8A:CB:46:77:61:F8:C3:45:0B:B3:CD:2D:75:D3:3A:21:B4:C7:E9:D3:18:85:77:08"
-                }
-              ],
-              [
-                "self_signed",
-                {
-                  "t": "bool",
-                  "v": true
-                }
-              ]
-            ]
-          ]
-        }
-      },
-      {
-        "id": "tls.handshake@198.51.100.10:443",
-        "title": "Handshake 198.51.100.10:443",
-        "shape": {
-          "kind": "fields",
-          "data": [
-            [
-              "version",
-              {
-                "t": "text",
-                "v": "TLSv1.3"
-              }
-            ],
-            [
-              "cipher_suite",
-              {
-                "t": "text",
-                "v": "TLS13_AES_256_GCM_SHA384"
-              }
-            ],
-            [
-              "key_exchange_group",
-              {
-                "t": "text",
-                "v": "X25519"
-              }
-            ],
-            [
-              "ocsp_stapled",
-              {
-                "t": "bool",
-                "v": true
-              }
-            ],
-            [
-              "ech",
-              {
-                "t": "bool",
-                "v": false
-              }
-            ],
-            [
-              "handshake_ms",
-              {
-                "t": "duration",
-                "v": 60
-              }
-            ]
-          ]
-        }
-      },
-      {
-        "id": "tls.chain@[2001:db8::10]:443",
-        "title": "Certificate chain [2001:db8::10]:443",
-        "shape": {
-          "kind": "chain",
-          "data": [
-            [
-              [
-                "position",
-                {
-                  "t": "text",
-                  "v": "leaf"
-                }
-              ],
-              [
-                "subject",
-                {
-                  "t": "text",
-                  "v": "CN=checkout.eu-central.storefront.example.com"
-                }
-              ],
-              [
-                "issuer",
-                {
-                  "t": "text",
-                  "v": "C=US, O=Example CA, CN=Example TLS Issuing ECC CA 1"
-                }
-              ],
-              [
-                "sans",
-                {
-                  "t": "text",
-                  "v": "checkout.eu-central.storefront.example.com"
-                }
-              ],
-              [
-                "sans",
-                {
-                  "t": "text",
-                  "v": "*.checkout.eu-central.storefront.example.com"
-                }
-              ],
-              [
-                "not_before",
-                {
-                  "t": "time",
-                  "v": "2026-09-26T22:49:11Z"
-                }
-              ],
-              [
-                "not_after",
-                {
-                  "t": "time",
-                  "v": "2026-12-25T22:56:35Z"
-                }
-              ],
-              [
-                "days_remaining",
-                {
-                  "t": "int",
-                  "v": 68
-                }
-              ],
-              [
-                "key",
-                {
-                  "t": "text",
-                  "v": "ECDSA P-256 256"
-                }
-              ],
-              [
-                "signature_algorithm",
-                {
-                  "t": "text",
-                  "v": "ecdsa-with-SHA256"
-                }
-              ],
-              [
-                "fingerprint_sha256",
-                {
-                  "t": "text",
-                  "v": "85:CA:6A:B0:68:E9:BC:CE:88:B6:C4:AA:3C:47:F7:D1:72:28:13:4A:45:7F:87:0D:38:00:E6:22:3A:0D:F0:7A"
-                }
-              ],
-              [
-                "ca_issuers_url",
-                {
-                  "t": "text",
-                  "v": "http://ca.checkout.eu-central.storefront.example.com/issuing-ecc.cer"
-                }
-              ]
-            ],
-            [
-              [
-                "position",
-                {
-                  "t": "text",
-                  "v": "intermediate"
-                }
-              ],
-              [
-                "subject",
-                {
-                  "t": "text",
-                  "v": "C=US, O=Example CA, CN=Example TLS Issuing ECC CA 1"
-                }
-              ],
-              [
-                "issuer",
-                {
-                  "t": "text",
-                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
-                }
-              ],
-              [
-                "not_before",
-                {
-                  "t": "time",
-                  "v": "2025-05-29T19:49:45Z"
-                }
-              ],
-              [
-                "not_after",
-                {
-                  "t": "time",
-                  "v": "2035-05-27T19:49:44Z"
-                }
-              ],
-              [
-                "days_remaining",
-                {
-                  "t": "int",
-                  "v": 3143
-                }
-              ],
-              [
-                "key",
-                {
-                  "t": "text",
-                  "v": "ECDSA P-256 256"
-                }
-              ],
-              [
-                "signature_algorithm",
-                {
-                  "t": "text",
-                  "v": "ecdsa-with-SHA384"
-                }
-              ],
-              [
-                "fingerprint_sha256",
-                {
-                  "t": "text",
-                  "v": "F1:5F:29:AB:EF:73:AA:4D:D9:AB:75:4B:AE:AE:36:85:BD:D3:87:4B:46:B5:25:07:11:77:62:86:85:71:80:26"
-                }
-              ],
-              [
-                "ca_issuers_url",
-                {
-                  "t": "text",
-                  "v": "http://ca.checkout.eu-central.storefront.example.com/transit-ecc.cer"
-                }
-              ]
-            ],
-            [
-              [
-                "position",
-                {
-                  "t": "text",
-                  "v": "root"
-                }
-              ],
-              [
-                "subject",
-                {
-                  "t": "text",
-                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
-                }
-              ],
-              [
-                "issuer",
-                {
-                  "t": "text",
-                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
-                }
-              ],
-              [
-                "not_before",
-                {
-                  "t": "time",
-                  "v": "2025-05-29T19:49:45Z"
-                }
-              ],
-              [
-                "not_after",
-                {
-                  "t": "time",
-                  "v": "2040-01-01T00:00:00Z"
-                }
-              ],
-              [
-                "days_remaining",
-                {
-                  "t": "int",
-                  "v": 4823
-                }
-              ],
-              [
-                "key",
-                {
-                  "t": "text",
-                  "v": "ECDSA P-384 384"
-                }
-              ],
-              [
-                "signature_algorithm",
-                {
-                  "t": "text",
-                  "v": "ecdsa-with-SHA384"
-                }
-              ],
-              [
-                "fingerprint_sha256",
-                {
-                  "t": "text",
-                  "v": "C5:91:63:10:01:30:C7:30:8A:CB:46:77:61:F8:C3:45:0B:B3:CD:2D:75:D3:3A:21:B4:C7:E9:D3:18:85:77:08"
-                }
-              ],
-              [
-                "self_signed",
-                {
-                  "t": "bool",
-                  "v": true
-                }
-              ]
-            ]
-          ]
-        }
-      },
-      {
-        "id": "tls.handshake@[2001:db8::10]:443",
-        "title": "Handshake [2001:db8::10]:443",
-        "shape": {
-          "kind": "fields",
-          "data": [
-            [
-              "version",
-              {
-                "t": "text",
-                "v": "TLSv1.3"
-              }
-            ],
-            [
-              "cipher_suite",
-              {
-                "t": "text",
-                "v": "TLS13_AES_256_GCM_SHA384"
-              }
-            ],
-            [
-              "key_exchange_group",
-              {
-                "t": "text",
-                "v": "X25519"
-              }
-            ],
-            [
-              "ocsp_stapled",
-              {
-                "t": "bool",
-                "v": true
-              }
-            ],
-            [
-              "ech",
-              {
-                "t": "bool",
-                "v": false
-              }
-            ],
-            [
-              "handshake_ms",
-              {
-                "t": "duration",
-                "v": 60
-              }
-            ]
-          ]
-        }
-      },
-      {
-        "id": "tls.chain@[2001:db8::11]:443",
-        "title": "Certificate chain [2001:db8::11]:443",
-        "shape": {
-          "kind": "chain",
-          "data": [
-            [
-              [
-                "position",
-                {
-                  "t": "text",
-                  "v": "leaf"
-                }
-              ],
-              [
-                "subject",
-                {
-                  "t": "text",
-                  "v": "CN=checkout.eu-central.storefront.example.com"
-                }
-              ],
-              [
-                "issuer",
-                {
-                  "t": "text",
-                  "v": "C=US, O=Example CA, CN=Example TLS Issuing ECC CA 1"
-                }
-              ],
-              [
-                "sans",
-                {
-                  "t": "text",
-                  "v": "checkout.eu-central.storefront.example.com"
-                }
-              ],
-              [
-                "sans",
-                {
-                  "t": "text",
-                  "v": "*.checkout.eu-central.storefront.example.com"
-                }
-              ],
-              [
-                "not_before",
-                {
-                  "t": "time",
-                  "v": "2026-09-26T22:49:11Z"
-                }
-              ],
-              [
-                "not_after",
-                {
-                  "t": "time",
-                  "v": "2026-12-25T22:56:35Z"
-                }
-              ],
-              [
-                "days_remaining",
-                {
-                  "t": "int",
-                  "v": 68
-                }
-              ],
-              [
-                "key",
-                {
-                  "t": "text",
-                  "v": "ECDSA P-256 256"
-                }
-              ],
-              [
-                "signature_algorithm",
-                {
-                  "t": "text",
-                  "v": "ecdsa-with-SHA256"
-                }
-              ],
-              [
-                "fingerprint_sha256",
-                {
-                  "t": "text",
-                  "v": "85:CA:6A:B0:68:E9:BC:CE:88:B6:C4:AA:3C:47:F7:D1:72:28:13:4A:45:7F:87:0D:38:00:E6:22:3A:0D:F0:7A"
-                }
-              ],
-              [
-                "ca_issuers_url",
-                {
-                  "t": "text",
-                  "v": "http://ca.checkout.eu-central.storefront.example.com/issuing-ecc.cer"
-                }
-              ]
-            ],
-            [
-              [
-                "position",
-                {
-                  "t": "text",
-                  "v": "intermediate"
-                }
-              ],
-              [
-                "subject",
-                {
-                  "t": "text",
-                  "v": "C=US, O=Example CA, CN=Example TLS Issuing ECC CA 1"
-                }
-              ],
-              [
-                "issuer",
-                {
-                  "t": "text",
-                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
-                }
-              ],
-              [
-                "not_before",
-                {
-                  "t": "time",
-                  "v": "2025-05-29T19:49:45Z"
-                }
-              ],
-              [
-                "not_after",
-                {
-                  "t": "time",
-                  "v": "2035-05-27T19:49:44Z"
-                }
-              ],
-              [
-                "days_remaining",
-                {
-                  "t": "int",
-                  "v": 3143
-                }
-              ],
-              [
-                "key",
-                {
-                  "t": "text",
-                  "v": "ECDSA P-256 256"
-                }
-              ],
-              [
-                "signature_algorithm",
-                {
-                  "t": "text",
-                  "v": "ecdsa-with-SHA384"
-                }
-              ],
-              [
-                "fingerprint_sha256",
-                {
-                  "t": "text",
-                  "v": "F1:5F:29:AB:EF:73:AA:4D:D9:AB:75:4B:AE:AE:36:85:BD:D3:87:4B:46:B5:25:07:11:77:62:86:85:71:80:26"
-                }
-              ],
-              [
-                "ca_issuers_url",
-                {
-                  "t": "text",
-                  "v": "http://ca.checkout.eu-central.storefront.example.com/transit-ecc.cer"
-                }
-              ]
-            ],
-            [
-              [
-                "position",
-                {
-                  "t": "text",
-                  "v": "root"
-                }
-              ],
-              [
-                "subject",
-                {
-                  "t": "text",
-                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
-                }
-              ],
-              [
-                "issuer",
-                {
-                  "t": "text",
-                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
-                }
-              ],
-              [
-                "not_before",
-                {
-                  "t": "time",
-                  "v": "2025-05-29T19:49:45Z"
-                }
-              ],
-              [
-                "not_after",
-                {
-                  "t": "time",
-                  "v": "2040-01-01T00:00:00Z"
-                }
-              ],
-              [
-                "days_remaining",
-                {
-                  "t": "int",
-                  "v": 4823
-                }
-              ],
-              [
-                "key",
-                {
-                  "t": "text",
-                  "v": "ECDSA P-384 384"
-                }
-              ],
-              [
-                "signature_algorithm",
-                {
-                  "t": "text",
-                  "v": "ecdsa-with-SHA384"
-                }
-              ],
-              [
-                "fingerprint_sha256",
-                {
-                  "t": "text",
-                  "v": "C5:91:63:10:01:30:C7:30:8A:CB:46:77:61:F8:C3:45:0B:B3:CD:2D:75:D3:3A:21:B4:C7:E9:D3:18:85:77:08"
-                }
-              ],
-              [
-                "self_signed",
-                {
-                  "t": "bool",
-                  "v": true
-                }
-              ]
-            ]
-          ]
-        }
-      },
-      {
-        "id": "tls.handshake@[2001:db8::11]:443",
-        "title": "Handshake [2001:db8::11]:443",
-        "shape": {
-          "kind": "fields",
-          "data": [
-            [
-              "version",
-              {
-                "t": "text",
-                "v": "TLSv1.3"
-              }
-            ],
-            [
-              "cipher_suite",
-              {
-                "t": "text",
-                "v": "TLS13_AES_256_GCM_SHA384"
-              }
-            ],
-            [
-              "key_exchange_group",
-              {
-                "t": "text",
-                "v": "X25519"
-              }
-            ],
-            [
-              "ocsp_stapled",
-              {
-                "t": "bool",
-                "v": true
-              }
-            ],
-            [
-              "ech",
-              {
-                "t": "bool",
-                "v": false
-              }
-            ],
-            [
-              "handshake_ms",
-              {
-                "t": "duration",
-                "v": 60
-              }
-            ]
-          ]
-        }
-      },
-      {
-        "id": "tls.ct",
-        "title": "Certificate Transparency",
-        "shape": {
-          "kind": "table",
-          "data": {
-            "key": "address",
-            "columns": [
-              "address",
-              "sct_count",
-              "log_ids"
-            ],
-            "rows": [
-              [
-                {
-                  "t": "addr",
-                  "v": "192.0.2.10"
-                },
-                {
-                  "t": "int",
-                  "v": 2
-                },
-                {
-                  "t": "text",
-                  "v": "944e4387faecc1ef81f3192426a8186501c7d35f3802013f72677d55372e19d8, cb38f715897c84a1445f5bc1ddfbc96ef29a59cd470a690585b0cb14c31458e7"
-                }
-              ],
-              [
-                {
-                  "t": "addr",
-                  "v": "198.51.100.10"
-                },
-                {
-                  "t": "int",
-                  "v": 2
-                },
-                {
-                  "t": "text",
-                  "v": "944e4387faecc1ef81f3192426a8186501c7d35f3802013f72677d55372e19d8, cb38f715897c84a1445f5bc1ddfbc96ef29a59cd470a690585b0cb14c31458e7"
-                }
-              ],
-              [
-                {
-                  "t": "addr",
-                  "v": "2001:db8::10"
-                },
-                {
-                  "t": "int",
-                  "v": 2
-                },
-                {
-                  "t": "text",
-                  "v": "944e4387faecc1ef81f3192426a8186501c7d35f3802013f72677d55372e19d8, cb38f715897c84a1445f5bc1ddfbc96ef29a59cd470a690585b0cb14c31458e7"
-                }
-              ],
-              [
-                {
-                  "t": "addr",
-                  "v": "2001:db8::11"
-                },
-                {
-                  "t": "int",
-                  "v": 2
-                },
-                {
-                  "t": "text",
-                  "v": "944e4387faecc1ef81f3192426a8186501c7d35f3802013f72677d55372e19d8, cb38f715897c84a1445f5bc1ddfbc96ef29a59cd470a690585b0cb14c31458e7"
-                }
-              ]
-            ]
-          }
-        }
-      },
-      {
-        "id": "tls.caa",
-        "title": "CAA",
-        "shape": {
-          "kind": "records",
-          "data": []
         }
       },
       {
@@ -3066,6 +2159,1505 @@
               ]
             ]
           }
+        }
+      },
+      {
+        "id": "tls.addresses",
+        "title": "Addresses",
+        "shape": {
+          "kind": "table",
+          "data": {
+            "key": "address",
+            "columns": [
+              "address",
+              "port",
+              "outcome",
+              "message"
+            ],
+            "rows": [
+              [
+                {
+                  "t": "addr",
+                  "v": "192.0.2.10"
+                },
+                {
+                  "t": "int",
+                  "v": 443
+                },
+                {
+                  "t": "text",
+                  "v": "ok"
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ],
+              [
+                {
+                  "t": "addr",
+                  "v": "198.51.100.10"
+                },
+                {
+                  "t": "int",
+                  "v": 443
+                },
+                {
+                  "t": "text",
+                  "v": "ok"
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ],
+              [
+                {
+                  "t": "addr",
+                  "v": "2001:db8::10"
+                },
+                {
+                  "t": "int",
+                  "v": 443
+                },
+                {
+                  "t": "text",
+                  "v": "ok"
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ],
+              [
+                {
+                  "t": "addr",
+                  "v": "2001:db8::11"
+                },
+                {
+                  "t": "int",
+                  "v": 443
+                },
+                {
+                  "t": "text",
+                  "v": "ok"
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ]
+            ]
+          }
+        }
+      },
+      {
+        "id": "tls.chain@192.0.2.10:443",
+        "title": "Certificate chain 192.0.2.10:443",
+        "shape": {
+          "kind": "chain",
+          "data": [
+            [
+              [
+                "position",
+                {
+                  "t": "text",
+                  "v": "leaf"
+                }
+              ],
+              [
+                "subject",
+                {
+                  "t": "text",
+                  "v": "CN=checkout.eu-central.storefront.example.com"
+                }
+              ],
+              [
+                "issuer",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Issuing ECC CA 1"
+                }
+              ],
+              [
+                "sans",
+                {
+                  "t": "text",
+                  "v": "checkout.eu-central.storefront.example.com"
+                }
+              ],
+              [
+                "sans",
+                {
+                  "t": "text",
+                  "v": "*.checkout.eu-central.storefront.example.com"
+                }
+              ],
+              [
+                "not_before",
+                {
+                  "t": "time",
+                  "v": "2026-09-26T22:49:11Z"
+                }
+              ],
+              [
+                "not_after",
+                {
+                  "t": "time",
+                  "v": "2026-12-25T22:56:35Z"
+                }
+              ],
+              [
+                "days_remaining",
+                {
+                  "t": "int",
+                  "v": 68
+                }
+              ],
+              [
+                "key",
+                {
+                  "t": "text",
+                  "v": "ECDSA P-256 256"
+                }
+              ],
+              [
+                "signature_algorithm",
+                {
+                  "t": "text",
+                  "v": "ecdsa-with-SHA256"
+                }
+              ],
+              [
+                "fingerprint_sha256",
+                {
+                  "t": "text",
+                  "v": "F0:FB:E2:88:27:69:45:5C:2E:27:D4:D6:BD:21:4C:EB:56:B8:A4:5D:FD:27:32:4A:25:29:4D:8B:E5:EC:AD:74"
+                }
+              ],
+              [
+                "self_signed",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ],
+              [
+                "expired",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ],
+              [
+                "ocsp_url",
+                {
+                  "t": "text",
+                  "v": "http://ocsp.checkout.eu-central.storefront.example.com/"
+                }
+              ],
+              [
+                "ca_issuers_url",
+                {
+                  "t": "text",
+                  "v": "http://ca.checkout.eu-central.storefront.example.com/issuing-ecc.cer"
+                }
+              ]
+            ],
+            [
+              [
+                "position",
+                {
+                  "t": "text",
+                  "v": "intermediate"
+                }
+              ],
+              [
+                "subject",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Issuing ECC CA 1"
+                }
+              ],
+              [
+                "issuer",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
+                }
+              ],
+              [
+                "not_before",
+                {
+                  "t": "time",
+                  "v": "2025-05-29T19:49:45Z"
+                }
+              ],
+              [
+                "not_after",
+                {
+                  "t": "time",
+                  "v": "2035-05-27T19:49:44Z"
+                }
+              ],
+              [
+                "days_remaining",
+                {
+                  "t": "int",
+                  "v": 3142
+                }
+              ],
+              [
+                "key",
+                {
+                  "t": "text",
+                  "v": "ECDSA P-256 256"
+                }
+              ],
+              [
+                "signature_algorithm",
+                {
+                  "t": "text",
+                  "v": "ecdsa-with-SHA384"
+                }
+              ],
+              [
+                "fingerprint_sha256",
+                {
+                  "t": "text",
+                  "v": "F1:5F:29:AB:EF:73:AA:4D:D9:AB:75:4B:AE:AE:36:85:BD:D3:87:4B:46:B5:25:07:11:77:62:86:85:71:80:26"
+                }
+              ],
+              [
+                "self_signed",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ],
+              [
+                "expired",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ],
+              [
+                "ca_issuers_url",
+                {
+                  "t": "text",
+                  "v": "http://ca.checkout.eu-central.storefront.example.com/transit-ecc.cer"
+                }
+              ]
+            ],
+            [
+              [
+                "position",
+                {
+                  "t": "text",
+                  "v": "root"
+                }
+              ],
+              [
+                "subject",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
+                }
+              ],
+              [
+                "issuer",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
+                }
+              ],
+              [
+                "not_before",
+                {
+                  "t": "time",
+                  "v": "2025-05-29T19:49:45Z"
+                }
+              ],
+              [
+                "not_after",
+                {
+                  "t": "time",
+                  "v": "2040-01-01T00:00:00Z"
+                }
+              ],
+              [
+                "days_remaining",
+                {
+                  "t": "int",
+                  "v": 4822
+                }
+              ],
+              [
+                "key",
+                {
+                  "t": "text",
+                  "v": "ECDSA P-384 384"
+                }
+              ],
+              [
+                "signature_algorithm",
+                {
+                  "t": "text",
+                  "v": "ecdsa-with-SHA384"
+                }
+              ],
+              [
+                "fingerprint_sha256",
+                {
+                  "t": "text",
+                  "v": "C5:91:63:10:01:30:C7:30:8A:CB:46:77:61:F8:C3:45:0B:B3:CD:2D:75:D3:3A:21:B4:C7:E9:D3:18:85:77:08"
+                }
+              ],
+              [
+                "self_signed",
+                {
+                  "t": "bool",
+                  "v": true
+                }
+              ],
+              [
+                "expired",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ]
+            ]
+          ]
+        }
+      },
+      {
+        "id": "tls.handshake@192.0.2.10:443",
+        "title": "Handshake 192.0.2.10:443",
+        "shape": {
+          "kind": "fields",
+          "data": [
+            [
+              "version",
+              {
+                "t": "text",
+                "v": "TLSv1.3"
+              }
+            ],
+            [
+              "cipher_suite",
+              {
+                "t": "text",
+                "v": "TLS13_AES_256_GCM_SHA384"
+              }
+            ],
+            [
+              "key_exchange_group",
+              {
+                "t": "text",
+                "v": "X25519"
+              }
+            ],
+            [
+              "ocsp_stapled",
+              {
+                "t": "bool",
+                "v": true
+              }
+            ],
+            [
+              "ech",
+              {
+                "t": "bool",
+                "v": false
+              }
+            ],
+            [
+              "handshake_ms",
+              {
+                "t": "duration",
+                "v": 60
+              }
+            ]
+          ]
+        }
+      },
+      {
+        "id": "tls.chain@198.51.100.10:443",
+        "title": "Certificate chain 198.51.100.10:443",
+        "shape": {
+          "kind": "chain",
+          "data": [
+            [
+              [
+                "position",
+                {
+                  "t": "text",
+                  "v": "leaf"
+                }
+              ],
+              [
+                "subject",
+                {
+                  "t": "text",
+                  "v": "CN=checkout.eu-central.storefront.example.com"
+                }
+              ],
+              [
+                "issuer",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Issuing ECC CA 1"
+                }
+              ],
+              [
+                "sans",
+                {
+                  "t": "text",
+                  "v": "checkout.eu-central.storefront.example.com"
+                }
+              ],
+              [
+                "sans",
+                {
+                  "t": "text",
+                  "v": "*.checkout.eu-central.storefront.example.com"
+                }
+              ],
+              [
+                "not_before",
+                {
+                  "t": "time",
+                  "v": "2026-09-26T22:49:11Z"
+                }
+              ],
+              [
+                "not_after",
+                {
+                  "t": "time",
+                  "v": "2026-12-25T22:56:35Z"
+                }
+              ],
+              [
+                "days_remaining",
+                {
+                  "t": "int",
+                  "v": 68
+                }
+              ],
+              [
+                "key",
+                {
+                  "t": "text",
+                  "v": "ECDSA P-256 256"
+                }
+              ],
+              [
+                "signature_algorithm",
+                {
+                  "t": "text",
+                  "v": "ecdsa-with-SHA256"
+                }
+              ],
+              [
+                "fingerprint_sha256",
+                {
+                  "t": "text",
+                  "v": "F0:FB:E2:88:27:69:45:5C:2E:27:D4:D6:BD:21:4C:EB:56:B8:A4:5D:FD:27:32:4A:25:29:4D:8B:E5:EC:AD:74"
+                }
+              ],
+              [
+                "self_signed",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ],
+              [
+                "expired",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ],
+              [
+                "ocsp_url",
+                {
+                  "t": "text",
+                  "v": "http://ocsp.checkout.eu-central.storefront.example.com/"
+                }
+              ],
+              [
+                "ca_issuers_url",
+                {
+                  "t": "text",
+                  "v": "http://ca.checkout.eu-central.storefront.example.com/issuing-ecc.cer"
+                }
+              ]
+            ],
+            [
+              [
+                "position",
+                {
+                  "t": "text",
+                  "v": "intermediate"
+                }
+              ],
+              [
+                "subject",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Issuing ECC CA 1"
+                }
+              ],
+              [
+                "issuer",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
+                }
+              ],
+              [
+                "not_before",
+                {
+                  "t": "time",
+                  "v": "2025-05-29T19:49:45Z"
+                }
+              ],
+              [
+                "not_after",
+                {
+                  "t": "time",
+                  "v": "2035-05-27T19:49:44Z"
+                }
+              ],
+              [
+                "days_remaining",
+                {
+                  "t": "int",
+                  "v": 3142
+                }
+              ],
+              [
+                "key",
+                {
+                  "t": "text",
+                  "v": "ECDSA P-256 256"
+                }
+              ],
+              [
+                "signature_algorithm",
+                {
+                  "t": "text",
+                  "v": "ecdsa-with-SHA384"
+                }
+              ],
+              [
+                "fingerprint_sha256",
+                {
+                  "t": "text",
+                  "v": "F1:5F:29:AB:EF:73:AA:4D:D9:AB:75:4B:AE:AE:36:85:BD:D3:87:4B:46:B5:25:07:11:77:62:86:85:71:80:26"
+                }
+              ],
+              [
+                "self_signed",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ],
+              [
+                "expired",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ],
+              [
+                "ca_issuers_url",
+                {
+                  "t": "text",
+                  "v": "http://ca.checkout.eu-central.storefront.example.com/transit-ecc.cer"
+                }
+              ]
+            ],
+            [
+              [
+                "position",
+                {
+                  "t": "text",
+                  "v": "root"
+                }
+              ],
+              [
+                "subject",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
+                }
+              ],
+              [
+                "issuer",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
+                }
+              ],
+              [
+                "not_before",
+                {
+                  "t": "time",
+                  "v": "2025-05-29T19:49:45Z"
+                }
+              ],
+              [
+                "not_after",
+                {
+                  "t": "time",
+                  "v": "2040-01-01T00:00:00Z"
+                }
+              ],
+              [
+                "days_remaining",
+                {
+                  "t": "int",
+                  "v": 4822
+                }
+              ],
+              [
+                "key",
+                {
+                  "t": "text",
+                  "v": "ECDSA P-384 384"
+                }
+              ],
+              [
+                "signature_algorithm",
+                {
+                  "t": "text",
+                  "v": "ecdsa-with-SHA384"
+                }
+              ],
+              [
+                "fingerprint_sha256",
+                {
+                  "t": "text",
+                  "v": "C5:91:63:10:01:30:C7:30:8A:CB:46:77:61:F8:C3:45:0B:B3:CD:2D:75:D3:3A:21:B4:C7:E9:D3:18:85:77:08"
+                }
+              ],
+              [
+                "self_signed",
+                {
+                  "t": "bool",
+                  "v": true
+                }
+              ],
+              [
+                "expired",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ]
+            ]
+          ]
+        }
+      },
+      {
+        "id": "tls.handshake@198.51.100.10:443",
+        "title": "Handshake 198.51.100.10:443",
+        "shape": {
+          "kind": "fields",
+          "data": [
+            [
+              "version",
+              {
+                "t": "text",
+                "v": "TLSv1.3"
+              }
+            ],
+            [
+              "cipher_suite",
+              {
+                "t": "text",
+                "v": "TLS13_AES_256_GCM_SHA384"
+              }
+            ],
+            [
+              "key_exchange_group",
+              {
+                "t": "text",
+                "v": "X25519"
+              }
+            ],
+            [
+              "ocsp_stapled",
+              {
+                "t": "bool",
+                "v": true
+              }
+            ],
+            [
+              "ech",
+              {
+                "t": "bool",
+                "v": false
+              }
+            ],
+            [
+              "handshake_ms",
+              {
+                "t": "duration",
+                "v": 60
+              }
+            ]
+          ]
+        }
+      },
+      {
+        "id": "tls.chain@[2001:db8::10]:443",
+        "title": "Certificate chain [2001:db8::10]:443",
+        "shape": {
+          "kind": "chain",
+          "data": [
+            [
+              [
+                "position",
+                {
+                  "t": "text",
+                  "v": "leaf"
+                }
+              ],
+              [
+                "subject",
+                {
+                  "t": "text",
+                  "v": "CN=checkout.eu-central.storefront.example.com"
+                }
+              ],
+              [
+                "issuer",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Issuing ECC CA 1"
+                }
+              ],
+              [
+                "sans",
+                {
+                  "t": "text",
+                  "v": "checkout.eu-central.storefront.example.com"
+                }
+              ],
+              [
+                "sans",
+                {
+                  "t": "text",
+                  "v": "*.checkout.eu-central.storefront.example.com"
+                }
+              ],
+              [
+                "not_before",
+                {
+                  "t": "time",
+                  "v": "2026-09-26T22:49:11Z"
+                }
+              ],
+              [
+                "not_after",
+                {
+                  "t": "time",
+                  "v": "2026-12-25T22:56:35Z"
+                }
+              ],
+              [
+                "days_remaining",
+                {
+                  "t": "int",
+                  "v": 68
+                }
+              ],
+              [
+                "key",
+                {
+                  "t": "text",
+                  "v": "ECDSA P-256 256"
+                }
+              ],
+              [
+                "signature_algorithm",
+                {
+                  "t": "text",
+                  "v": "ecdsa-with-SHA256"
+                }
+              ],
+              [
+                "fingerprint_sha256",
+                {
+                  "t": "text",
+                  "v": "F0:FB:E2:88:27:69:45:5C:2E:27:D4:D6:BD:21:4C:EB:56:B8:A4:5D:FD:27:32:4A:25:29:4D:8B:E5:EC:AD:74"
+                }
+              ],
+              [
+                "self_signed",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ],
+              [
+                "expired",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ],
+              [
+                "ocsp_url",
+                {
+                  "t": "text",
+                  "v": "http://ocsp.checkout.eu-central.storefront.example.com/"
+                }
+              ],
+              [
+                "ca_issuers_url",
+                {
+                  "t": "text",
+                  "v": "http://ca.checkout.eu-central.storefront.example.com/issuing-ecc.cer"
+                }
+              ]
+            ],
+            [
+              [
+                "position",
+                {
+                  "t": "text",
+                  "v": "intermediate"
+                }
+              ],
+              [
+                "subject",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Issuing ECC CA 1"
+                }
+              ],
+              [
+                "issuer",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
+                }
+              ],
+              [
+                "not_before",
+                {
+                  "t": "time",
+                  "v": "2025-05-29T19:49:45Z"
+                }
+              ],
+              [
+                "not_after",
+                {
+                  "t": "time",
+                  "v": "2035-05-27T19:49:44Z"
+                }
+              ],
+              [
+                "days_remaining",
+                {
+                  "t": "int",
+                  "v": 3142
+                }
+              ],
+              [
+                "key",
+                {
+                  "t": "text",
+                  "v": "ECDSA P-256 256"
+                }
+              ],
+              [
+                "signature_algorithm",
+                {
+                  "t": "text",
+                  "v": "ecdsa-with-SHA384"
+                }
+              ],
+              [
+                "fingerprint_sha256",
+                {
+                  "t": "text",
+                  "v": "F1:5F:29:AB:EF:73:AA:4D:D9:AB:75:4B:AE:AE:36:85:BD:D3:87:4B:46:B5:25:07:11:77:62:86:85:71:80:26"
+                }
+              ],
+              [
+                "self_signed",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ],
+              [
+                "expired",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ],
+              [
+                "ca_issuers_url",
+                {
+                  "t": "text",
+                  "v": "http://ca.checkout.eu-central.storefront.example.com/transit-ecc.cer"
+                }
+              ]
+            ],
+            [
+              [
+                "position",
+                {
+                  "t": "text",
+                  "v": "root"
+                }
+              ],
+              [
+                "subject",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
+                }
+              ],
+              [
+                "issuer",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
+                }
+              ],
+              [
+                "not_before",
+                {
+                  "t": "time",
+                  "v": "2025-05-29T19:49:45Z"
+                }
+              ],
+              [
+                "not_after",
+                {
+                  "t": "time",
+                  "v": "2040-01-01T00:00:00Z"
+                }
+              ],
+              [
+                "days_remaining",
+                {
+                  "t": "int",
+                  "v": 4822
+                }
+              ],
+              [
+                "key",
+                {
+                  "t": "text",
+                  "v": "ECDSA P-384 384"
+                }
+              ],
+              [
+                "signature_algorithm",
+                {
+                  "t": "text",
+                  "v": "ecdsa-with-SHA384"
+                }
+              ],
+              [
+                "fingerprint_sha256",
+                {
+                  "t": "text",
+                  "v": "C5:91:63:10:01:30:C7:30:8A:CB:46:77:61:F8:C3:45:0B:B3:CD:2D:75:D3:3A:21:B4:C7:E9:D3:18:85:77:08"
+                }
+              ],
+              [
+                "self_signed",
+                {
+                  "t": "bool",
+                  "v": true
+                }
+              ],
+              [
+                "expired",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ]
+            ]
+          ]
+        }
+      },
+      {
+        "id": "tls.handshake@[2001:db8::10]:443",
+        "title": "Handshake [2001:db8::10]:443",
+        "shape": {
+          "kind": "fields",
+          "data": [
+            [
+              "version",
+              {
+                "t": "text",
+                "v": "TLSv1.3"
+              }
+            ],
+            [
+              "cipher_suite",
+              {
+                "t": "text",
+                "v": "TLS13_AES_256_GCM_SHA384"
+              }
+            ],
+            [
+              "key_exchange_group",
+              {
+                "t": "text",
+                "v": "X25519"
+              }
+            ],
+            [
+              "ocsp_stapled",
+              {
+                "t": "bool",
+                "v": true
+              }
+            ],
+            [
+              "ech",
+              {
+                "t": "bool",
+                "v": false
+              }
+            ],
+            [
+              "handshake_ms",
+              {
+                "t": "duration",
+                "v": 60
+              }
+            ]
+          ]
+        }
+      },
+      {
+        "id": "tls.chain@[2001:db8::11]:443",
+        "title": "Certificate chain [2001:db8::11]:443",
+        "shape": {
+          "kind": "chain",
+          "data": [
+            [
+              [
+                "position",
+                {
+                  "t": "text",
+                  "v": "leaf"
+                }
+              ],
+              [
+                "subject",
+                {
+                  "t": "text",
+                  "v": "CN=checkout.eu-central.storefront.example.com"
+                }
+              ],
+              [
+                "issuer",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Issuing ECC CA 1"
+                }
+              ],
+              [
+                "sans",
+                {
+                  "t": "text",
+                  "v": "checkout.eu-central.storefront.example.com"
+                }
+              ],
+              [
+                "sans",
+                {
+                  "t": "text",
+                  "v": "*.checkout.eu-central.storefront.example.com"
+                }
+              ],
+              [
+                "not_before",
+                {
+                  "t": "time",
+                  "v": "2026-09-26T22:49:11Z"
+                }
+              ],
+              [
+                "not_after",
+                {
+                  "t": "time",
+                  "v": "2026-12-25T22:56:35Z"
+                }
+              ],
+              [
+                "days_remaining",
+                {
+                  "t": "int",
+                  "v": 68
+                }
+              ],
+              [
+                "key",
+                {
+                  "t": "text",
+                  "v": "ECDSA P-256 256"
+                }
+              ],
+              [
+                "signature_algorithm",
+                {
+                  "t": "text",
+                  "v": "ecdsa-with-SHA256"
+                }
+              ],
+              [
+                "fingerprint_sha256",
+                {
+                  "t": "text",
+                  "v": "F0:FB:E2:88:27:69:45:5C:2E:27:D4:D6:BD:21:4C:EB:56:B8:A4:5D:FD:27:32:4A:25:29:4D:8B:E5:EC:AD:74"
+                }
+              ],
+              [
+                "self_signed",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ],
+              [
+                "expired",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ],
+              [
+                "ocsp_url",
+                {
+                  "t": "text",
+                  "v": "http://ocsp.checkout.eu-central.storefront.example.com/"
+                }
+              ],
+              [
+                "ca_issuers_url",
+                {
+                  "t": "text",
+                  "v": "http://ca.checkout.eu-central.storefront.example.com/issuing-ecc.cer"
+                }
+              ]
+            ],
+            [
+              [
+                "position",
+                {
+                  "t": "text",
+                  "v": "intermediate"
+                }
+              ],
+              [
+                "subject",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Issuing ECC CA 1"
+                }
+              ],
+              [
+                "issuer",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
+                }
+              ],
+              [
+                "not_before",
+                {
+                  "t": "time",
+                  "v": "2025-05-29T19:49:45Z"
+                }
+              ],
+              [
+                "not_after",
+                {
+                  "t": "time",
+                  "v": "2035-05-27T19:49:44Z"
+                }
+              ],
+              [
+                "days_remaining",
+                {
+                  "t": "int",
+                  "v": 3142
+                }
+              ],
+              [
+                "key",
+                {
+                  "t": "text",
+                  "v": "ECDSA P-256 256"
+                }
+              ],
+              [
+                "signature_algorithm",
+                {
+                  "t": "text",
+                  "v": "ecdsa-with-SHA384"
+                }
+              ],
+              [
+                "fingerprint_sha256",
+                {
+                  "t": "text",
+                  "v": "F1:5F:29:AB:EF:73:AA:4D:D9:AB:75:4B:AE:AE:36:85:BD:D3:87:4B:46:B5:25:07:11:77:62:86:85:71:80:26"
+                }
+              ],
+              [
+                "self_signed",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ],
+              [
+                "expired",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ],
+              [
+                "ca_issuers_url",
+                {
+                  "t": "text",
+                  "v": "http://ca.checkout.eu-central.storefront.example.com/transit-ecc.cer"
+                }
+              ]
+            ],
+            [
+              [
+                "position",
+                {
+                  "t": "text",
+                  "v": "root"
+                }
+              ],
+              [
+                "subject",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
+                }
+              ],
+              [
+                "issuer",
+                {
+                  "t": "text",
+                  "v": "C=US, O=Example CA, CN=Example TLS Transit ECC CA"
+                }
+              ],
+              [
+                "not_before",
+                {
+                  "t": "time",
+                  "v": "2025-05-29T19:49:45Z"
+                }
+              ],
+              [
+                "not_after",
+                {
+                  "t": "time",
+                  "v": "2040-01-01T00:00:00Z"
+                }
+              ],
+              [
+                "days_remaining",
+                {
+                  "t": "int",
+                  "v": 4822
+                }
+              ],
+              [
+                "key",
+                {
+                  "t": "text",
+                  "v": "ECDSA P-384 384"
+                }
+              ],
+              [
+                "signature_algorithm",
+                {
+                  "t": "text",
+                  "v": "ecdsa-with-SHA384"
+                }
+              ],
+              [
+                "fingerprint_sha256",
+                {
+                  "t": "text",
+                  "v": "C5:91:63:10:01:30:C7:30:8A:CB:46:77:61:F8:C3:45:0B:B3:CD:2D:75:D3:3A:21:B4:C7:E9:D3:18:85:77:08"
+                }
+              ],
+              [
+                "self_signed",
+                {
+                  "t": "bool",
+                  "v": true
+                }
+              ],
+              [
+                "expired",
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ]
+            ]
+          ]
+        }
+      },
+      {
+        "id": "tls.handshake@[2001:db8::11]:443",
+        "title": "Handshake [2001:db8::11]:443",
+        "shape": {
+          "kind": "fields",
+          "data": [
+            [
+              "version",
+              {
+                "t": "text",
+                "v": "TLSv1.3"
+              }
+            ],
+            [
+              "cipher_suite",
+              {
+                "t": "text",
+                "v": "TLS13_AES_256_GCM_SHA384"
+              }
+            ],
+            [
+              "key_exchange_group",
+              {
+                "t": "text",
+                "v": "X25519"
+              }
+            ],
+            [
+              "ocsp_stapled",
+              {
+                "t": "bool",
+                "v": true
+              }
+            ],
+            [
+              "ech",
+              {
+                "t": "bool",
+                "v": false
+              }
+            ],
+            [
+              "handshake_ms",
+              {
+                "t": "duration",
+                "v": 60
+              }
+            ]
+          ]
+        }
+      },
+      {
+        "id": "tls.ct",
+        "title": "Certificate Transparency",
+        "shape": {
+          "kind": "table",
+          "data": {
+            "key": "address",
+            "columns": [
+              "address",
+              "sct_count",
+              "log_ids"
+            ],
+            "rows": [
+              [
+                {
+                  "t": "addr",
+                  "v": "192.0.2.10"
+                },
+                {
+                  "t": "int",
+                  "v": 2
+                },
+                {
+                  "t": "text",
+                  "v": "944e4387faecc1ef81f3192426a8186501c7d35f3802013f72677d55372e19d8, cb38f715897c84a1445f5bc1ddfbc96ef29a59cd470a690585b0cb14c31458e7"
+                }
+              ],
+              [
+                {
+                  "t": "addr",
+                  "v": "198.51.100.10"
+                },
+                {
+                  "t": "int",
+                  "v": 2
+                },
+                {
+                  "t": "text",
+                  "v": "944e4387faecc1ef81f3192426a8186501c7d35f3802013f72677d55372e19d8, cb38f715897c84a1445f5bc1ddfbc96ef29a59cd470a690585b0cb14c31458e7"
+                }
+              ],
+              [
+                {
+                  "t": "addr",
+                  "v": "2001:db8::10"
+                },
+                {
+                  "t": "int",
+                  "v": 2
+                },
+                {
+                  "t": "text",
+                  "v": "944e4387faecc1ef81f3192426a8186501c7d35f3802013f72677d55372e19d8, cb38f715897c84a1445f5bc1ddfbc96ef29a59cd470a690585b0cb14c31458e7"
+                }
+              ],
+              [
+                {
+                  "t": "addr",
+                  "v": "2001:db8::11"
+                },
+                {
+                  "t": "int",
+                  "v": 2
+                },
+                {
+                  "t": "text",
+                  "v": "944e4387faecc1ef81f3192426a8186501c7d35f3802013f72677d55372e19d8, cb38f715897c84a1445f5bc1ddfbc96ef29a59cd470a690585b0cb14c31458e7"
+                }
+              ]
+            ]
+          }
+        }
+      },
+      {
+        "id": "tls.caa",
+        "title": "CAA",
+        "shape": {
+          "kind": "records",
+          "data": []
         }
       }
     ]
