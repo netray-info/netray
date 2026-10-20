@@ -225,6 +225,7 @@ mod result_views_recorded;
 mod shell_band;
 mod shell_checks;
 mod shell_examples;
+mod shell_export;
 mod shell_form;
 mod shell_frame;
 mod shell_header;
