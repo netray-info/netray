@@ -157,3 +157,27 @@ templates equal the live run's.
 
 G2: `islands/src/shell.ts`: unhide export buttons; `[data-export-action]` copies Markdown or
 downloads CSV/JSON as a named Blob, status announced. `static/inspector_shell.css`: export rules.
+
+## Phase 6 — Cross-links and IP enrichment
+
+### Groups
+
+G1: C9, C11 (renderer, link function, stored views) · G2: C1–C8, C10 (inspector runs: links,
+badges, related box). G2 depends on G1.
+
+### Plan
+
+G1: `crates/web/src/links.rs` (new): `value_link(block, key, value)` (addr → IP inspector; A/AAAA
+data parsed as an address; NS/CNAME/MX data and `email.mx` host/cname → DNS inspector),
+`addresses(block)` (every address a block holds, for enrichment), `dns_query_href`, `decorate(badges)`.
+`components.rs`: `Cell {text, href, badges}` (with `From<&str>`/`From<String>`) for record, field and
+table cells. `evidence.rs`: `Decoration`, `Badge`, `BadgeTone`; `block_view_with(block, decorate)`;
+`block_view` stays undecorated; `build_section` and `panel` decorate with links, no badges.
+`components/evidence_block.html`: a cell macro emitting the text, the link and the badges.
+`static/evidence_block.css`: link and badge rules (tokens only).
+
+G2: `pages/inspect.rs`: `InspectorJobs::enrich` (default empty); the run enriches each finished
+part's addresses (bounded by the deadline) and renders with badges; `SharedRun` keeps the badges;
+the TLS run's related box in the start fragment and the shared page. `api/jobs.rs`: `enrich` over
+the IP lookup (org, network type, Tor, VPN, Spamhaus, C2). `partials/inspect_start.html`,
+`static/inspector_shell.css`: the related box.

@@ -1,6 +1,7 @@
 //! The finished inspector runs a share key opens (spec v2-inspector-shell, requirement 13): kept
 //! in memory as data, never in the history.
 
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -8,6 +9,7 @@ use netray_model::evidence::Block;
 use netray_model::{CheckResult, Protocol};
 
 use super::Tool;
+use crate::evidence::Badge;
 
 const MAX_RUNS: u64 = 1_000;
 const TTL: Duration = Duration::from_secs(3_600);
@@ -22,6 +24,7 @@ pub(crate) struct SharedRun {
     pub(crate) grade: Option<&'static str>,
     pub(crate) parts: Vec<(String, Result<Vec<Block>, String>)>,
     pub(crate) band: Option<(Protocol, Result<Vec<CheckResult>, String>)>,
+    pub(crate) badges: Vec<(IpAddr, Vec<Badge>)>,
 }
 
 /// The finished runs under their share keys, bounded by count and age; a full cache drops the

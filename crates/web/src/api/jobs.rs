@@ -23,6 +23,7 @@ use super::error::V1Error;
 use super::inspectors::{HTTP_OFF, TLS_OFF};
 use super::ip::charge;
 use super::state::ApiState;
+use crate::evidence::{Badge, BadgeTone};
 use crate::pages::{
     CachedDns, DnsResults, InspectorJobs, Job, JobPart, JobRequest, Refusal, Tool,
     registrable_domain,
@@ -703,4 +704,63 @@ impl InspectorJobs for InspectJobs {
             Tool::Dns => self.start_dns(req),
         }
     }
+
+    fn enrich(&self, addrs: Vec<IpAddr>) -> BoxFuture<'static, Vec<(IpAddr, Vec<Badge>)>> {
+        let Some(ip) = self.state.ip_lookup().cloned() else {
+            return Box::pin(async { Vec::new() });
+        };
+        let mut unique: Vec<IpAddr> = Vec::new();
+        for addr in addrs {
+            if !unique.contains(&addr) {
+                unique.push(addr);
+            }
+        }
+        Box::pin(async move {
+            let lookups = unique.into_iter().map(|addr| {
+                let ip = ip.clone();
+                async move { (addr, ip.lookup(addr).await) }
+            });
+            futures::future::join_all(lookups)
+                .await
+                .into_iter()
+                .filter_map(|(addr, found)| {
+                    let badges = badges(&found.ok()?.network);
+                    (!badges.is_empty()).then_some((addr, badges))
+                })
+                .collect()
+        })
+    }
+}
+
+/// The badges of a looked-up address: organisation, network type, then the threat flags.
+fn badges(network: &netray_ip::backend::Network) -> Vec<Badge> {
+    let muted = |label: &str| Badge {
+        label: label.to_string(),
+        tone: BadgeTone::Muted,
+    };
+    let mut out: Vec<Badge> = network.org.iter().map(|org| muted(org)).collect();
+    out.extend(
+        // The infrastructure, apart from the threat classification `network_type` holds.
+        match network.infra_type.as_str() {
+            "cloud" => Some("cloud"),
+            "datacenter" => Some("hosting"),
+            "residential" => Some("residential"),
+            _ => None,
+        }
+        .map(muted),
+    );
+    for (flag, label, tone) in [
+        (network.is_tor, "Tor", BadgeTone::Fail),
+        (network.is_vpn, "VPN", BadgeTone::Warn),
+        (network.is_spamhaus, "Spamhaus", BadgeTone::Fail),
+        (network.is_c2, "C2", BadgeTone::Fail),
+    ] {
+        if flag {
+            out.push(Badge {
+                label: label.to_string(),
+                tone,
+            });
+        }
+    }
+    out
 }

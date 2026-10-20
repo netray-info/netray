@@ -38,8 +38,11 @@ use crate::api::InspectJobs;
 use crate::client::client_ip;
 use crate::components::{self, QueryInputView, RunLineView, SpectrumView};
 use crate::entries::view::grade_letter;
-use crate::evidence::{EvidenceRow, block_view, live_rows, live_run_title, shared_run_title};
+use crate::evidence::{
+    Badge, EvidenceRow, block_view_with, live_rows, live_run_title, shared_run_title,
+};
 use crate::export::{self, ExportInput};
+use crate::links;
 use crate::pages::result::views::line_code;
 use crate::spectrum::{RunInput, layout};
 use crate::stream::{end, fragment};
@@ -350,6 +353,11 @@ pub trait InspectorJobs: Send + Sync + 'static {
     fn admit(&self, tool: Tool, client: IpAddr, input: &str) -> Result<(), Duration>;
     /// Starts the job; `Err` is the job function's validation message.
     fn start(&self, req: JobRequest) -> Result<Job, String>;
+    /// The badges of each address the lookup knows; an address it does not know is left out.
+    fn enrich(&self, addrs: Vec<IpAddr>) -> BoxFuture<'static, Vec<(IpAddr, Vec<Badge>)>> {
+        let _ = addrs;
+        Box::pin(async { Vec::new() })
+    }
 }
 
 #[derive(Clone)]
@@ -508,6 +516,7 @@ struct StartFragment {
     band: BandSlot,
     share: String,
     export: String,
+    related: Option<String>,
 }
 
 /// The band region of the start fragment: none, a placeholder the stream fills, or rendered.
@@ -721,9 +730,12 @@ async fn shared_result(deps: &InspectDeps, tool: Tool, key: &str) -> Shared {
             cached.query.clone(),
             backlink(Tool::Dns, &cached.query),
             None,
-            vec![(cached.mode.clone(), part_html(0, &cached.mode, &blocks))],
+            vec![(
+                cached.mode.clone(),
+                part_html(0, &cached.mode, &blocks, &[]),
+            )],
             BandSlot::Done(band),
-            (share_html(Tool::Dns, Some(key.to_string()))?, export),
+            (share_html(Tool::Dns, Some(key.to_string()))?, export, None),
         )
     });
     match html {
@@ -906,6 +918,7 @@ async fn run(
     }
     match stream_job(
         job,
+        deps.jobs.clone(),
         StartHead {
             tool,
             input: posted,
@@ -931,6 +944,8 @@ type BandResult = Result<Vec<CheckResult>, String>;
 
 struct Run {
     _permit: OwnedSemaphorePermit,
+    jobs: Arc<dyn InspectorJobs>,
+    badges: Vec<(IpAddr, Vec<Badge>)>,
     pending: FuturesUnordered<BoxFuture<'static, PartOutput>>,
     waiting: BTreeSet<usize>,
     queue: VecDeque<Event>,
@@ -974,17 +989,26 @@ impl Run {
             grade: self.grade,
             parts,
             band: self.band_out.take(),
+            badges: std::mem::take(&mut self.badges),
         }
     }
 }
 
 /// A part's section: its blocks or its error text.
-fn part_html(n: usize, label: &str, result: &PartResult) -> Option<String> {
+fn part_html(
+    n: usize,
+    label: &str,
+    result: &PartResult,
+    badges: &[(IpAddr, Vec<Badge>)],
+) -> Option<String> {
+    let decorate = links::decorate(badges);
     let (html, text) = match result {
         Ok(blocks) => {
             let mut html = String::new();
             for block in blocks {
-                html.push_str(&components::evidence_block(&block_view(block)).ok()?);
+                html.push_str(
+                    &components::evidence_block(&block_view_with(block, &decorate)).ok()?,
+                );
             }
             (Some(html), String::new())
         }
@@ -1001,8 +1025,13 @@ fn part_html(n: usize, label: &str, result: &PartResult) -> Option<String> {
     .ok()
 }
 
-fn part_event(n: usize, label: &str, result: &PartResult) -> Option<Event> {
-    let html = part_html(n, label, result)?;
+fn part_event(
+    n: usize,
+    label: &str,
+    result: &PartResult,
+    badges: &[(IpAddr, Vec<Badge>)],
+) -> Option<Event> {
+    let html = part_html(n, label, result, badges)?;
     Some(fragment(&format!("inspect-part-{n}"), &html))
 }
 
@@ -1093,7 +1122,7 @@ fn finished_html(
     grade: Option<&'static str>,
     parts: Vec<(String, Option<String>)>,
     band: BandSlot,
-    (share, export): (String, String),
+    (share, export, related): (String, String, Option<String>),
 ) -> Option<String> {
     let mut rendered = Vec::with_capacity(parts.len());
     for (n, (label, html)) in parts.into_iter().enumerate() {
@@ -1108,6 +1137,7 @@ fn finished_html(
         band,
         share,
         export,
+        related,
     }
     .render()
     .ok()
@@ -1130,7 +1160,7 @@ fn shared_html(run: &SharedRun, key: &str) -> Option<String> {
         .parts
         .iter()
         .enumerate()
-        .map(|(n, (label, result))| (label.clone(), part_html(n, label, result)))
+        .map(|(n, (label, result))| (label.clone(), part_html(n, label, result, &run.badges)))
         .collect();
     let export = export_html(
         run.tool,
@@ -1153,8 +1183,20 @@ fn shared_html(run: &SharedRun, key: &str) -> Option<String> {
         run.grade,
         parts,
         band,
-        (share_html(run.tool, Some(key.to_string()))?, export),
+        (
+            share_html(run.tool, Some(key.to_string()))?,
+            export,
+            related(run.tool, &run.input),
+        ),
     )
+}
+
+/// The DNS inspector query of the records that belong beside a TLS run of a host: its CAA.
+fn related(tool: Tool, input: &str) -> Option<String> {
+    if tool != Tool::Tls {
+        return None;
+    }
+    target_host(tool, input).map(|host| links::dns_query_href(&format!("{host} CAA")))
 }
 
 fn band_view(
@@ -1255,6 +1297,7 @@ fn letter(grade: Grade) -> Option<&'static str> {
 
 fn stream_job(
     job: Job,
+    jobs: Arc<dyn InspectorJobs>,
     head: StartHead,
     permit: OwnedSemaphorePermit,
     deadline: Instant,
@@ -1290,6 +1333,7 @@ fn stream_job(
             &[],
             false,
         )?,
+        related: related(head.tool, &head.input),
     }
     .render()
     .ok()?;
@@ -1303,6 +1347,8 @@ fn stream_job(
         .collect();
     let run = Run {
         _permit: permit,
+        jobs,
+        badges: Vec::new(),
         waiting: (0..pending.len()).collect(),
         pending,
         queue: [
@@ -1398,8 +1444,22 @@ fn stream_job(
                     run.waiting.remove(&n);
                     if let Ok(blocks) = &result {
                         run.blocks.extend(blocks.iter().cloned());
+                        let mut addrs: Vec<IpAddr> = Vec::new();
+                        for addr in blocks.iter().flat_map(links::addresses) {
+                            if !addrs.contains(&addr) && !run.badges.iter().any(|(a, _)| *a == addr)
+                            {
+                                addrs.push(addr);
+                            }
+                        }
+                        // The IP inspector's own lookup is its evidence: no second lookup.
+                        if run.tool != Tool::Ip && !addrs.is_empty() {
+                            let found = timeout_at(run.deadline, run.jobs.enrich(addrs))
+                                .await
+                                .unwrap_or_default();
+                            run.badges.extend(found);
+                        }
                     }
-                    let event = part_event(n, &run.labels[n], &result)
+                    let event = part_event(n, &run.labels[n], &result, &run.badges)
                         .unwrap_or_else(|| fragment(&format!("inspect-part-{n}"), "render failed"));
                     run.results[n] = Some(result);
                     return Some((Ok(event), run));
@@ -1410,7 +1470,7 @@ fn stream_job(
                     let late: Vec<usize> = std::mem::take(&mut run.waiting).into_iter().collect();
                     for n in late {
                         let timed_out = Err("timed out".to_string());
-                        if let Some(event) = part_event(n, &run.labels[n], &timed_out) {
+                        if let Some(event) = part_event(n, &run.labels[n], &timed_out, &[]) {
                             run.queue.push_back(event);
                         }
                     }

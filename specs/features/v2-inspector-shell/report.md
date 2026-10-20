@@ -273,3 +273,44 @@ entry. Amendments folded into requirement 19: the `errors` field; a leading `'` 
 spreadsheet would read as formulas. Deferred, fixed anyway: "Copied Markdown" only after the write
 succeeds. Deferred: per-port headings in multi-port TLS Markdown (TLS depth feature). Nit: CSV CRLF
 becomes LF through the template's HTML parsing; accepted.
+
+## Phase 6 — Cross-links and IP enrichment
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R21 Address and host links from one function over typed values: addr to the IP inspector, NS/MX/CNAME and the TLS, HTTP, MX hosts to the DNS inspector | green | tests/it/shell_links.rs |
+| C2 | R22 IP badges in inspector runs from the IP lookup: org, network type, threat flags in status tones; renderer takes an optional enrichment; stored views none; without modules.ip none | green | tests/it/shell_badges.rs |
+| C3 | R23 Related records box at the end of a TLS run linking the DNS inspector with CAA | green | tests/it/shell_links.rs |
+| C4 | GIVEN a DNS run whose dns.a block holds 192.0.2.24 THEN the value links to /inspect/ip?ip=192.0.2.24 | green | tests/it/shell_links.rs |
+| C5 | GIVEN a TLS run whose tls.addresses holds 2001:db8::24 THEN the link percent-encodes the address | green | tests/it/shell_links.rs |
+| C6 | GIVEN an IP lookup stub with org, cloud and Tor for 192.0.2.24 WHEN an HTTP run renders its server address THEN three chips show, Tor in the fail tone | green | tests/it/shell_badges.rs |
+| C7 | GIVEN a run with email.mx_addresses WHEN rendered live THEN each address carries its badges | green | tests/it/shell_badges.rs |
+| C8 | GIVEN no modules.ip WHEN any inspector renders THEN no badge and the run is complete | green | tests/it/shell_badges.rs |
+| C9 | GIVEN the stored view /example.com/tls THEN its addresses link to the IP inspector and carry no badges | green | tests/it/shell_links.rs |
+| C10 | GIVEN a TLS run of example.com:443 THEN the related-records box links to /inspect/dns?q=example.com%20CAA | green | tests/it/shell_links.rs |
+| C11 | GIVEN the renderer's source WHEN scanned THEN it names no module or block | green | tests/it/shell_links.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1+G2 (one coder) | 3 | opus | 112449 | 646 |
+| review fixes (shell_review_p6) | 1 | orchestrator | 0 | 0 |
+
+### Behavioural verification
+
+Local lens (`lens.dev.toml`, no `[modules.ip]`): an HTTP run of `https://1.1.1.1/` renders the
+server address as `<a class="evidence-value__link" href="/inspect/ip?ip=1.1.1.1">` and no badge
+(no IP module: none expected); a TLS run of `1.1.1.1:443` has no related-records box (an address
+target has no host). Badges with an IP module are covered by `tests/it/shell_badges.rs`.
+
+### Review
+
+Reader: 2 blockers, fixed (`tests/it/shell_review_p6.rs`): an NS answer's A/AAAA glue linked to the
+DNS inspector (links now follow the row's record type, passed as `data:<TYPE>`); the network chip
+read the threat classification (`network_type`) instead of the infrastructure (`infra_type`).
+Amendments folded into requirement 21: CNAME rows link in any block; trees stay text (theme D).
+Deferred: badges on the API-cache fallback page. Planner finding folded in: the IP inspector's own
+run is not enriched (its run is the lookup; requirement 22).

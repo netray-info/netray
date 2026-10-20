@@ -8,4 +8,5 @@
 {% match band %}{% when BandSlot::Pending %}<div id="inspect-band"></div>
 {% when BandSlot::Done(html) %}{{ html|safe }}
 {% when BandSlot::Absent %}{% endmatch %}{% for (n, label, html) in parts %}{% if let Some(html) = html %}{{ html|safe }}{% else %}<section class="inspector-section" id="inspect-part-{{ n }}"><h2>{{ label }}</h2><p>pending</p></section>
-{% endif %}{% endfor %}</div>
+{% endif %}{% endfor %}{% if let Some(href) = related %}<aside class="inspector-related">Related records live in the DNS inspector: CAA · TLSA · HTTPS <a class="inspector-related__link" href="{{ href }}">Open in the DNS inspector →</a></aside>
+{% endif %}</div>

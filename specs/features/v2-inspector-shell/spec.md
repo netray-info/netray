@@ -264,11 +264,16 @@ Each requirement names the inventory rows or board rows it closes.
 
 ### Cross-links and IP enrichment
 
-21. **Address and host links.** In inspector runs, every `addr` value in a block links to
-    `/inspect/ip?ip=<address>`; host names in `tls.addresses`, `http.server`, `email.mx` and DNS
-    record data (NS, MX, CNAME targets) link to the DNS inspector `?q=<host>`. The links come from
+21. **Address and host links.** Every `addr` value in a block links to `/inspect/ip?ip=<address>`,
+    and so does the address an A or AAAA record's data holds; host names in `email.mx` and DNS record
+    data (NS, MX, CNAME targets) link to the DNS inspector `?q=<host>` (`tls.addresses` and
+    `http.server` carry addresses, no host name). A record links by its own type, whatever block
+    holds it (an NS answer's glue addresses go to the IP inspector). Links render in inspector runs
+    and in the stored evidence views alike; tree-shaped blocks (a DNS trace) stay text until the DNS
+    depth feature renders them. The links come from
     one function over the block's typed values, not per view. (2.23, 3.33, 4.15, 6.7)
-22. **IP badges.** In inspector runs, each `addr` value carries badges from the process's IP
+22. **IP badges.** In inspector runs (except the IP inspector, whose run is that lookup), each
+    `addr` value carries badges from the process's IP
     lookup: organisation, network type (cloud, hosting, residential) and threat flags (Tor, VPN,
     Spamhaus, C2), each a short labelled chip in the status tones (threat in fail, VPN in warn,
     others muted). The evidence renderer takes an optional enrichment lookup and stays free of
@@ -568,6 +573,15 @@ GIVEN the screenshots WHEN read beside board G THEN every finding is a `report.m
   write succeeded. Deferred: Markdown headings of a multi-port TLS run do not name the port (the
   TLS depth feature owns per-port views) (implementer under the operator's autonomy mandate,
   2026-10-20).
+- DNS A and AAAA records carry their address as text: the link function reads the address from
+  their data, so they link and get badges as V1's prism did; `tls.addresses` and `http.server`
+  carry no host name to link (planner finding, implementer under the operator's autonomy mandate,
+  2026-10-20).
+- Phase 6 review: links follow a record's own type; the network chip reads the IP module's
+  infrastructure field (`infra_type`), so a Tor exit in a hosting network shows both; tree blocks
+  are not linked (theme D). Deferred: a DNS key served by the API cache fallback after the shell
+  cache evicted it shows no badges, as it shows no band (implementer under the operator's autonomy
+  mandate, 2026-10-20).
 - The Inspectors menu and the full footer of canvas v43 belong to the site-navigation feature
   (theme J); a reader's finding on G's chevron or footer is answered by this non-goal
   (implementer under the operator's autonomy mandate, 2026-10-20).

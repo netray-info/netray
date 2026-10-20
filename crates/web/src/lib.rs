@@ -16,6 +16,7 @@ pub mod explore;
 pub mod export;
 pub mod gate;
 pub mod grade_legend;
+pub mod links;
 pub mod pages;
 pub mod plate;
 pub mod selectors;

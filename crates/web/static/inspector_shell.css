@@ -335,3 +335,17 @@
 .inspector-help__close:hover {
   color: var(--color-ink);
 }
+.inspector-related {
+  margin-top: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  border: var(--line-hair) dashed var(--color-line);
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+}
+.inspector-related__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-inline-start: var(--space-2);
+  color: var(--color-ink);
+}
