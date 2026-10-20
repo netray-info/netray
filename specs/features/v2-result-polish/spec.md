@@ -1,7 +1,8 @@
 # Spec: v2-result-polish
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-20
+Finished: 2026-10-20
 
 ## Goal
 
@@ -222,6 +223,9 @@ carries it; `partials/result_evidence.html` renders it; `pages.css` styles it.
 - Run title (item 3): the descriptor stops widening the grade block, which gives the title column the width for "… · CACHED · FIRST RUN"; the title is not shortened and no part is dropped (implementer under the operator's autonomy mandate, 2026-10-20).
 - Long domains (item 4): break points after the dots (`<wbr>`), each label an inline-block box so a hyphen (browsers break after one) is none (review of Phase 2), keeping board M's `overflow-wrap: anywhere` as the last resort for a single label wider than the line, on both widths; no font scaling, which would put the h1 off the board's 40 and 26 px (implementer under the operator's autonomy mandate, 2026-10-20).
 - Gate blind spots (item 5): a manifest board `state` lets one canvas board measure several page states; the panel's "no full evidence block" rule is an element whose page selector only matches a compact panel, and the one-line run title is the title column's height row (the board's span has no measurable height); a wrap point is not measurable, so the long-domain states also serve the side-by-side reading (implementer under the operator's autonomy mandate, 2026-10-20).
+
+- Finish entries (CLAUDE.md bullets, the solutions note, the check to build) written without an operator question under the mandate (implementer under the operator's autonomy mandate, 2026-10-20).
+- Review of the range: the phone compact table read the 11 px phone label; a token `font.size.evidence` (13 px, 12 px at phone width) carries board M's 12 px; R16 names "title column height", the board's run title span having no measurable height (implementer under the operator's autonomy mandate, 2026-10-20).
 
 ## Open decisions
 

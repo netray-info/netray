@@ -45,6 +45,8 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - `just design-check` needs the private canvas: its export serves boards as sandboxed blob: iframes; reach them with Playwright's `contentFrame()`, never `iframe.contentDocument`.
 - A board's interpolated text sits in a `span.sc-interp`: select its parent with `:has(> span:text-is(…))`, and write a regex digit as `\\\\d` in the manifest's JSON text (Playwright's selector parser unescapes once more).
 - The design fixtures' stored grades must equal `score_run`'s, or the score guard hides the score on every gated page.
+- A board span in a flex column can read `height: auto` in the export: measure a one-line text through its container's height ("title column height").
+- The gate's 1 px typography tolerance cannot tell 11 from 12 px: pin a board size through its own token, never a label token a `*Phone` value lowers.
 - A Playwright test serving fixtures from its own process spawns children with async `spawn`: `spawnSync` blocks the event loop and the fixture server never answers.
 - A repo check over Cargo dependencies reads `cargo metadata`, never the TOML text: renames, dotted keys and inline tables escape a text scan.
 - The gate's clippy runs without `--all-targets`; a narrower command with `--all-targets` hits old test-code lints the gate never sees.
@@ -135,6 +137,8 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **No `Router` word in `crates/web/src` outside `entries/`, `pages/`, `api/`**, comments included: `tests/repo/test_web_crate.sh` greps the text.
 - **Inspector parts stream in completion order**: a test reads each part's own `inspect-part-<n>` fragment, never stream order, and a bare `handshake` also matches `tls.handshake@` ids.
 - **Page tests assert a component by its markup** (`class="diff-block"`), never the bare class name: netray-web's pages inline every component stylesheet.
+- **A new table inside `main` inherits `main th, main td`** (muted cells, a bottom rule): override colour and borders in its own rules.
+- **A browser breaks after a hyphen**: to break a domain only at its dots, wrap each label in an inline-block box (`.result-hero__label`).
 - **Identifier-valued CSS properties** (`grid-area`, `transition`) go into `IDENTIFIER_PROPERTIES` in `crates/web/src/gate.rs`, or the gate refuses colour words in them.
 - **`site/` is frozen until v2-cutover; content changes go to netray-web:** guide prose to `crates/web/templates/pages/guides/`, guide titles and descriptions to `crates/web/src/pages/guides.rs`, compare rows to `crates/web/compare.toml`.
 

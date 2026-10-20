@@ -170,3 +170,13 @@ Reader over the phase diff: no blocker.
 | NIT | no test drives the file names and summary lines through check.mjs end to end (only `boardSlug` and `boardName` directly) | listed; the design run above wrote `…-long-domain-{board,page,sbs}.png` and "[long domain]" summary lines |
 | NIT | the generated root certificate copied the intermediate's `days_remaining`, an RSA key beside an ECDSA signature and a placeholder fingerprint | repaired: days to 2040-01-01, ECDSA P-384, a SHA-256 of the subject as fingerprint |
 | DEFERRED | verdicts inherited from `new.example.com.json` contradict their blocks (passing header checks without the headers in `http.headers`, DMARC warn with p=reject); the compact HTTP table now shows "not sent" beside a passing line | the design fixtures' check statuses predate the compact tables; a fixture-consistency pass belongs to a later fixture feature |
+
+## Deferred
+
+- The design fixtures' check statuses predate the compact tables and contradict some blocks (header checks pass without their `http.headers` rows; DMARC warns beside p=reject): a fixture-consistency feature.
+- The `/r/<id>` entry page and the history page h1 carry no label boxes (outside R13).
+- `.evidence-tabs__panel table` (0,1,1) sets the desktop compact size, not `.evidence-tabs__compact` (both 13 px today; review minor).
+
+### Checks to build
+
+- Resolve each board-pinned `var(--font-size-*)` through tokens.json, phone values included, and compare with the board's px value (crates/web/tests/it); the gate's 1 px tolerance cannot see 11 against 12 px.
