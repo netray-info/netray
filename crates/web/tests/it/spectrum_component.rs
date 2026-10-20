@@ -10,8 +10,8 @@ use netray_model::{CheckId, Protocol, Status};
 use netray_web::components::{SpectrumView, spectrum};
 use netray_web::spectrum::{Layout, RunInput, SectionState, layout};
 
-/// The plate width the page places at: 54 checks at the narrowest pitch.
-const W: u32 = 432;
+/// The plate width the page places at: 57 checks at the narrowest pitch.
+const W: u32 = 456;
 
 fn id(s: &str) -> CheckId {
     CheckId::parse(s).expect("check id")
@@ -213,7 +213,7 @@ fn tone_of(group: &str, code: &str) -> String {
 
 #[test]
 fn c1_label_edge_shift_and_plate_height() {
-    // The last line (`ip.reputation`, x = 428 px of 432) fails: its box is shifted off the edge.
+    // The last line (`ip.reputation`, x = 452 px of 456) fails: its box is shifted off the edge.
     let l = lay(&run(&[(id("ip.reputation"), Some(Status::Fail))]), &[]);
     let html = render(&l, 0);
 
@@ -223,10 +223,10 @@ fn c1_label_edge_shift_and_plate_height() {
     let width = format!("{:.2}", l.runs[0].labels[0].width);
     assert_eq!(
         style_value(labels[0], "left"),
-        format!("clamp(0px, 99.0741%, calc(100% - {width}px))")
+        format!("clamp(0px, 99.1228%, calc(100% - {width}px))")
     );
     let leaders = leaders_of(set.1);
-    assert_eq!(style_value(leaders[0], "left"), "99.0741%");
+    assert_eq!(style_value(leaders[0], "left"), "99.1228%");
 
     // The plate height: y2 is 100 minus the layout height in percent.
     let l = lay(&run(&[(id("dns.dnssec"), Some(Status::Fail))]), &[]);
@@ -263,13 +263,13 @@ fn c5_first_line_x_and_scroll_box_min_width() {
     let l = lay(&run(&[(id("dns.dnssec"), Some(Status::Fail))]), &[]);
     let html = render(&l, 0);
     let marks = line_marks(band(&html, "dns"));
-    assert_eq!(attr(marks[0], "x1"), Some("0.9259%"));
-    assert_eq!(attr(marks[0], "x2"), Some("0.9259%"));
+    assert_eq!(attr(marks[0], "x1"), Some("0.8772%"));
+    assert_eq!(attr(marks[0], "x2"), Some("0.8772%"));
     let boxed = tags(&html, "div")
         .into_iter()
         .find(|t| has_class(t, "spectrum__box"))
         .expect("box");
-    assert_eq!(attr(boxed, "style"), Some("--spectrum-lines: 54"));
+    assert_eq!(attr(boxed, "style"), Some("--spectrum-lines: 57"));
 }
 
 #[test]
@@ -290,8 +290,8 @@ fn c6_row_two_label_sits_on_the_calc_and_its_leader_is_36px() {
         })
         .expect("a leader of row 2");
     assert_eq!(attr(leader, "data-tone"), Some(tone));
-    // The third dns line sits at x = 20 of 432 px.
-    assert_eq!(style_value(leader, "left"), "4.6296%");
+    // The third dns line sits at x = 20 of 456 px.
+    assert_eq!(style_value(leader, "left"), "4.3860%");
 }
 
 #[test]
@@ -328,7 +328,7 @@ fn c7_band_height_follows_the_largest_row_count() {
 fn c8_bands_in_protocol_order_with_their_lines() {
     let html = render(&lay(&run(&[]), &[run(&[])]), 0);
     let order = ["dns", "tls", "http", "email", "ip"];
-    let counts = [10, 21, 12, 10, 1];
+    let counts = [10, 23, 13, 10, 1];
     let mut last = 0;
     for (p, n) in order.iter().zip(counts) {
         let needle = format!("id=\"band-{p}\"");

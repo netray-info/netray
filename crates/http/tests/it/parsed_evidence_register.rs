@@ -1,6 +1,7 @@
 // V2 http checks, Phase 2 (criteria C8, C23, C24, C25): the register declares the parsed
 // header blocks, the volatile list names their unstable keys, a refused HTTPS probe emits none
-// of them, and the twelve check ids stay as they were.
+// of them, and the check ids stay as they were plus `http.coop` (v2-tls-versions-coop,
+// requirement 10: thirteen).
 //
 // Spec: specs/features/v2-http-checks/spec.md.
 
@@ -26,7 +27,7 @@ const PARSED: [&str; 5] = [
     "http.isolation",
 ];
 
-const TWELVE: [&str; 12] = [
+const THIRTEEN: [&str; 13] = [
     "http.https_redirect",
     "http.hsts",
     "http.cors",
@@ -36,6 +37,7 @@ const TWELVE: [&str; 12] = [
     "http.x_content_type_options",
     "http.referrer_policy",
     "http.permissions_policy",
+    "http.coop",
     "http.deprecated_headers",
     "http.info_leakage",
     "http.caching",
@@ -136,12 +138,12 @@ fn refused_https_probe_emits_no_parsed_blocks() {
 }
 
 #[test]
-fn the_twelve_http_check_ids_are_unchanged() {
+fn the_thirteen_http_check_ids_are_unchanged() {
     let ids: Vec<String> = module().checks().iter().map(|c| c.to_string()).collect();
-    assert_eq!(ids, TWELVE);
+    assert_eq!(ids, THIRTEEN);
 
     let section = &Profiles::current().sections[&Protocol::Http];
     let in_profile: BTreeSet<String> = section.checks.keys().map(|c| c.to_string()).collect();
-    let want: BTreeSet<String> = TWELVE.iter().map(|s| s.to_string()).collect();
+    let want: BTreeSet<String> = THIRTEEN.iter().map(|s| s.to_string()).collect();
     assert_eq!(in_profile, want);
 }

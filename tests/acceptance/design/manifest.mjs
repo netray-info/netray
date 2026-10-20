@@ -12,7 +12,7 @@ const DEFAULT_FIXTURES = 'tests/acceptance/fixtures/history';
 const TOP = { required: [], optional: ['export', 'fixtures', 'boards', 'accepted'] };
 const BOARD = {
   required: ['title', 'host', 'path', 'width', 'theme', 'elements'],
-  optional: ['target'],
+  optional: ['target', 'state'],
 };
 const ELEMENT = { required: ['name', 'board', 'page', 'class', 'properties'], optional: [] };
 const ACCEPTED = { required: ['board', 'element', 'property', 'reason'], optional: [] };
@@ -25,6 +25,16 @@ export function slug(title) {
     .replace(/\(.*?\)/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
+}
+
+// A board's state names one page state of a canvas board: its files, rows and accepted entries
+// carry it, so one board title can be measured in several states (v2-result-polish R14).
+export function boardName(board) {
+  return board.state ? `${board.title} [${board.state}]` : board.title;
+}
+
+export function boardSlug(board) {
+  return board.state ? `${slug(board.title)}-${slug(board.state)}` : slug(board.title);
 }
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -69,7 +79,7 @@ function checkBoard(board, index) {
   const where = `boards[${index}]`;
   if (!isObject(board)) throw new ManifestError(`${where}: must be an object`);
   checkKeys(board, BOARD, where);
-  for (const key of ['title', 'host', 'path', 'theme', 'target']) checkString(board, key, where);
+  for (const key of ['title', 'host', 'path', 'theme', 'target', 'state']) checkString(board, key, where);
   if (!HOSTS.includes(board.host)) {
     throw new ManifestError(`${where}: host "${board.host}" is not one of ${HOSTS.join(', ')}`);
   }
@@ -114,9 +124,9 @@ export function loadManifest(path) {
   // Output files are named by the title's slug: two boards on one slug would overwrite each other.
   const slugs = new Map();
   manifest.boards.forEach((b, i) => {
-    const s = slug(b.title);
+    const s = boardSlug(b);
     if (slugs.has(s)) {
-      throw new ManifestError(`boards[${i}]: title "${b.title}" names the same files as boards[${slugs.get(s)}] (${s})`);
+      throw new ManifestError(`boards[${i}]: board "${boardName(b)}" names the same files as boards[${slugs.get(s)}] (${s})`);
     }
     slugs.set(s, i);
   });

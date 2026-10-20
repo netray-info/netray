@@ -7,6 +7,7 @@
 
 pub mod api;
 mod client;
+pub mod compact;
 pub mod components;
 pub mod contrast;
 pub mod entries;

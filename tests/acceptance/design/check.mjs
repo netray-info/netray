@@ -5,7 +5,7 @@
 // 1: open deviations or stale accepted entries; 2: manifest or setup error.
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadManifest, ManifestError, resolveExport, slug } from './manifest.mjs';
+import { boardName, boardSlug, loadManifest, ManifestError, resolveExport } from './manifest.mjs';
 import { measurePage } from './page.mjs';
 import { measureBoard, openExport, sideBySide } from './board.mjs';
 import {
@@ -78,7 +78,7 @@ try {
     } else {
       found.push(...deviations(board, measured.values, page.values));
     }
-    const sbs = join(outDir, `${slug(board.title)}-sbs.png`);
+    const sbs = join(outDir, `${boardSlug(board)}-sbs.png`);
     await sideBySide(browser, measured.screenshot, page.screenshot, sbs);
     sideBySides.push(sbs);
   }
@@ -95,7 +95,7 @@ try {
 } catch (e) {
   setupError(`cannot write the report into ${outDir}: ${e.message}`);
 }
-const result = summary({ open, stale, titles: manifest.boards.map((b) => b.title) });
+const result = summary({ open, stale, titles: manifest.boards.map(boardName) });
 for (const line of result.lines) console.log(line);
 console.log(`report: ${join(outDir, 'report.md')}`);
 process.exit(result.status);

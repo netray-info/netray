@@ -75,7 +75,7 @@ describe("issues island (requirement 10)", () => {
   it("reveals the switch and regroups the same rows in place", () => {
     mount();
     expect(option("owner").closest("[hidden]")).toBeNull();
-    const rows = ["4", "44", "11", "32", "53"].map(rowOf);
+    const rows = ["4", "47", "11", "34", "56"].map(rowOf);
 
     option("protocol").click();
     expect(keys()).toEqual(["tls", "ip", "email", "http", "dns"]);
@@ -83,7 +83,7 @@ describe("issues island (requirement 10)", () => {
       "TLS", "IP", "Email", "HTTP", "DNS",
     ]);
     expect(rowOf("4")).toBe(rows[0]);
-    expect(rowOf("53")).toBe(rows[4]);
+    expect(rowOf("56")).toBe(rows[4]);
     expect(rows.every((r) => root().contains(r))).toBe(true);
     expect(pressed()).toEqual(["owner=false", "severity=false", "protocol=true"]);
 
@@ -92,16 +92,16 @@ describe("issues island (requirement 10)", () => {
     expect(groups().map((g) => g.querySelector("h3")?.textContent?.trim())).toEqual([
       "critical", "high", "medium",
     ]);
-    expect(groups().map(orders)).toEqual([["11"], ["53", "32"], ["44", "4"]]);
+    expect(groups().map(orders)).toEqual([["11"], ["56", "34"], ["47", "4"]]);
     expect(pressed()).toEqual(["owner=false", "severity=true", "protocol=false"]);
-    expect(rowOf("44")).toBe(rows[1]);
+    expect(rowOf("47")).toBe(rows[1]);
 
     option("owner").click();
     expect(keys()).toEqual(["web_server", "hosting", "dns_provider"]);
     expect(groups().map((g) => g.querySelector("h3")?.textContent?.trim())).toEqual([
       "Your web server configuration", "Your hosting provider", "Your DNS provider",
     ]);
-    expect(groups().map(orders)).toEqual([["11", "32"], ["53"], ["44", "4"]]);
+    expect(groups().map(orders)).toEqual([["11", "34"], ["56"], ["47", "4"]]);
     expect(pressed()).toEqual(["owner=true", "severity=false", "protocol=false"]);
     expect(rowOf("11")).toBe(rows[2]);
   });

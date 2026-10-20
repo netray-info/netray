@@ -34,6 +34,7 @@ static CHECKS: LazyLock<Vec<CheckId>> = LazyLock::new(|| {
         "x_content_type_options",
         "referrer_policy",
         "permissions_policy",
+        "coop",
         "deprecated_headers",
         "info_leakage",
         "caching",
@@ -281,7 +282,7 @@ impl Module for HttpModule {
     }
 }
 
-/// Maps the inspection onto the twelve HTTP checks and their blocks.
+/// Maps the inspection onto the thirteen HTTP checks and their blocks.
 pub fn translate(resp: &InspectResponse) -> SectionOutcome {
     let quality = &resp.quality.checks;
 
@@ -385,6 +386,15 @@ fn check_result(
             evidence: vec![],
         };
     }
+    if name == "coop" {
+        let (status, findings) = coop_verdict(&resp.security.coop);
+        return CheckResult {
+            id: id.clone(),
+            status,
+            findings,
+            evidence: vec![],
+        };
+    }
     let csp = &resp.security.csp;
     if name == "csp"
         && (csp.enforced || csp.report_only)
@@ -429,9 +439,35 @@ fn check_result(
     }
 }
 
+/// `http.coop` from the received Cross-Origin-Opener-Policy value, judged here rather than in
+/// the V1 security report, whose presence-only verdict stays on the V1 wire. The policy is the
+/// token before any `;` (a structured-field token: no surrounding space, case-sensitive);
+/// `same-origin`, `same-origin-allow-popups` and `noopener-allow-popups` pass, anything else or
+/// no readable header warns.
+fn coop_verdict(coop: &crate::inspect::assembler::HeaderCheck) -> (Status, Vec<String>) {
+    let Some(value) = coop.value.as_deref() else {
+        let finding = coop
+            .message
+            .clone()
+            .unwrap_or_else(|| "Missing cross-origin-opener-policy header".to_string());
+        return (Status::Warn, vec![finding]);
+    };
+    let token = value.trim().split(';').next().unwrap_or("");
+    match token {
+        "same-origin" | "same-origin-allow-popups" | "noopener-allow-popups" => {
+            (Status::Pass, vec![])
+        }
+        "unsafe-none" => (
+            Status::Warn,
+            vec!["Permissive policy: unsafe-none".to_string()],
+        ),
+        _ => (Status::Warn, vec![format!("Unrecognized value: {value}")]),
+    }
+}
+
 /// The blocks a check judged by: `https_redirect` the port-80 chain and the port-80 probe, and
 /// the HTTPS chain when it hit the redirect limit; on a refused, reset or failed-TLS HTTPS probe
-/// the ten response checks judged the error held in `http.server`.
+/// the eleven response checks judged the error held in `http.server`.
 fn references(name: &str, resp: &InspectResponse) -> Vec<BlockId> {
     let block = match name {
         "https_redirect" => {
@@ -455,6 +491,12 @@ fn references(name: &str, resp: &InspectResponse) -> Vec<BlockId> {
             return vec![
                 static_block_id("http.headers"),
                 static_block_id("http.hsts"),
+            ];
+        }
+        "coop" => {
+            return vec![
+                static_block_id("http.headers"),
+                static_block_id("http.isolation"),
             ];
         }
         "csp" => return vec![static_block_id("http.headers"), static_block_id("http.csp")],
@@ -1020,7 +1062,7 @@ mod tests {
     }
 
     #[test]
-    fn twelve_checks_always_present() {
+    fn thirteen_checks_always_present() {
         let resp = response(
             Some(true),
             &[
@@ -1051,6 +1093,7 @@ mod tests {
                 "http.x_content_type_options",
                 "http.referrer_policy",
                 "http.permissions_policy",
+                "http.coop",
                 "http.deprecated_headers",
                 "http.info_leakage",
                 "http.caching",

@@ -9,11 +9,13 @@ trap '_netray_cleanup' EXIT
 mod="$REPO_ROOT/tests/acceptance/design/compare.mjs"
 [ -f "$mod" ] || { echo "FAIL: compare module missing: tests/acceptance/design/compare.mjs" >&2; exit 1; }
 
-COMPARE_URL="file://$mod" node --input-type=module <<'JS'
+manifest="$REPO_ROOT/tests/acceptance/design/manifest.mjs"
+COMPARE_URL="file://$mod" MANIFEST_URL="file://$manifest" node --input-type=module <<'JS'
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const m = await import(process.env.COMPARE_URL);
+const mf = await import(process.env.MANIFEST_URL);
 
 const board = { title: 'Result page, light', host: 'lens', path: '/{target}', width: 1280, theme: 'light', elements: [] };
 const el = (name, cls, props) => ({ name, board: '.a', page: '.a', class: cls, properties: props });
@@ -111,6 +113,41 @@ test('noStateDeviation criterion', () => {
   const d = m.noStateDeviation(board, 'no seed');
   assert.equal(d.kind, 'no state');
   assert.equal(m.criterion(d), 'Result page, light 1280/light: no state (no seed)');
+});
+
+// v2-result-polish R14: a board may carry a state; its name is "title [state]".
+const stated = { ...board, state: 'long domain', elements: [el('e', 'typography', ['font-size'])] };
+const statedName = 'Result page, light [long domain]';
+
+test('boardName appends the state in brackets', () => {
+  assert.equal(mf.boardName({ title: 'Result page, light', state: 'long domain' }), statedName);
+  assert.equal(mf.boardName({ title: 'Result page, light' }), 'Result page, light');
+});
+
+test('boardSlug appends the state', () => {
+  assert.equal(mf.boardSlug({ title: 'Result page, light', state: 'long domain' }), 'result-page-light-long-domain');
+  assert.equal(mf.boardSlug({ title: 'Result page, light' }), mf.slug('Result page, light'));
+});
+
+test('deviations of a board with a state carry the board name', () => {
+  const devs = m.deviations(stated, { e: { 'font-size': '40px' } }, { e: { 'font-size': '44px' } });
+  assert.equal(devs.length, 1);
+  assert.equal(devs[0].board, statedName);
+  assert.ok(m.criterion(devs[0]).startsWith(`${statedName} 1280/light:`), m.criterion(devs[0]));
+});
+
+test('accepted entry matches by board name with state only', () => {
+  const [d] = m.deviations(stated, { e: { 'font-size': '40px' } }, { e: { 'font-size': '44px' } });
+  const named = { board: statedName, element: 'e', property: 'font-size', reason: 'kept' };
+  const titleOnly = { board: 'Result page, light', element: 'e', property: 'font-size', reason: 'kept' };
+  assert.equal(m.applyAccepted([d], [named]).open.length, 0);
+  const r = m.applyAccepted([d], [titleOnly]);
+  assert.equal(r.open.length, 1);
+  assert.equal(r.stale.length, 1);
+});
+
+test('noStateDeviation names the board with its state', () => {
+  assert.equal(m.noStateDeviation(stated, 'x').board, statedName);
 });
 
 test('report rows have four cells and no stray pipe', () => {

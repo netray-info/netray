@@ -4,7 +4,7 @@ use lens::score::{CheckResult, CheckVerdict, grade_label, score, section_weights
 use netray_engine::profile::{Profile, Profiles};
 /// Pure unit regression tests for lens's scoring through the engine.
 ///
-/// No network access. Tests use the engine's current profile (v3).
+/// No network access. Tests use the engine's current profile (v4).
 use std::collections::HashMap;
 
 type Section = Result<BackendResult, SectionError>;
@@ -101,8 +101,8 @@ fn default_profile_parses_correctly() {
     let profile = default_profile();
 
     // Basic structural checks
-    assert_eq!(profile.name, "v3");
-    assert_eq!(profile.version, 3);
+    assert_eq!(profile.name, "v4");
+    assert_eq!(profile.version, 4);
 
     // Section weights are non-zero
     for section in ["dns", "tls", "ip"] {

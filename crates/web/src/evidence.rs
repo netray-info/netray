@@ -9,6 +9,7 @@ use netray_model::evidence::{Block, BlockId, Fields, Node, Shape, Value};
 use netray_model::run::{Run, RunCheck, SectionKind};
 use netray_model::{Grade, Protocol, Status};
 
+use crate::compact::{CompactView, compact};
 use crate::components::{
     CheckRowView, EvidenceBlockView, EvidenceShape, Field, RecordRow, RunLineView, TableColumn,
     TreeItem,
@@ -356,6 +357,7 @@ pub struct PanelFeed {
 #[derive(Debug, Clone)]
 pub struct PanelView {
     pub blocks: Vec<EvidenceBlockView>,
+    pub compact: Option<CompactView>,
     pub feeds: Vec<PanelFeed>,
     pub all_href: Option<String>,
     pub explore: ExploreLink,
@@ -363,15 +365,9 @@ pub struct PanelView {
 }
 
 impl PanelView {
-    /// Whether a block renders as a table, the only shape the phone's swipe note is for.
+    /// Whether the panel holds a table, the only shape the phone's swipe note is for.
     pub fn has_table(&self) -> bool {
-        self.blocks.iter().any(|b| {
-            matches!(
-                b.shape,
-                crate::components::EvidenceShape::Table { .. }
-                    | crate::components::EvidenceShape::Records(_)
-            )
-        })
+        self.compact.is_some()
     }
 }
 
@@ -379,13 +375,19 @@ impl PanelView {
 /// entry's view (`entry_id` of a stored entry) and the explore-live link of `domain`.
 pub fn panel(run: &Run, protocol: Protocol, domain: &str, entry_id: Option<&str>) -> PanelView {
     let owner = protocol.as_str();
+    let compact = compact(run, protocol);
     let mut feeds: Vec<PanelFeed> = Vec::new();
     for spec in catalogue().entries() {
         let feeds_owner = run
             .checks
             .iter()
             .find(|c| c.id == spec.id)
-            .is_some_and(|c| c.evidence.iter().any(|bid| bid.module() == owner));
+            .is_some_and(|c| {
+                c.evidence.iter().any(|bid| match &compact {
+                    Some(view) => view.sources.contains(bid),
+                    None => bid.module() == owner,
+                })
+            });
         if feeds_owner {
             feeds.push(PanelFeed {
                 code: line_code(&spec.id),
@@ -409,6 +411,7 @@ pub fn panel(run: &Run, protocol: Protocol, domain: &str, entry_id: Option<&str>
             .filter(|b| b.id.module() == owner)
             .map(block_view)
             .collect(),
+        compact,
         feeds,
         all_href: entry_id.map(|id| href(id, protocol, None)),
         explore: {
