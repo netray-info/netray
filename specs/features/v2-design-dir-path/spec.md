@@ -1,7 +1,8 @@
 # Spec: v2-design-dir-path
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-20
+Finished: 2026-10-20
 
 ## Goal
 
@@ -38,7 +39,7 @@ export, boards, `manifest.json`) moved from the netray-ops checkout
 
 ## Phase 1 — Default design directory in netray.info
 
-Requirements 1–3. `tests/repo/test_design_rules.sh` gains the checks; the justfile and the rules
+Requirements 1–3. The new `tests/repo/test_design_dir.sh` holds the checks; the justfile and the rules
 file change.
 
 ### Test Scenarios
@@ -63,6 +64,7 @@ check, recorded in report.md).
   features 0–7 (operator, 2026-10-19).
 - 2026-10-20: Finished features' documents keep the old path (history, not instructions);
   implementer under the operator's autonomy mandate, 2026-10-19.
+- 2026-10-20: Distil at finish: no entries written; the one lesson (a repo check scoped to a recipe body misses its header comment) was repaired in phase and fits no rule or check beyond this test. Implementer under the operator's autonomy mandate, 2026-10-19.
 
 ## Open decisions
 
