@@ -57,7 +57,11 @@ fn status(outcome: &SectionOutcome, id: &str) -> Status {
         panic!("not measured: {outcome:?}");
     };
     let id = CheckId::parse(id).unwrap();
-    checks.iter().find(|c| c.id == id).unwrap_or_else(|| panic!("no check {id}")).status
+    checks
+        .iter()
+        .find(|c| c.id == id)
+        .unwrap_or_else(|| panic!("no check {id}"))
+        .status
 }
 
 async fn run(domain: &str, blocks: &[Block]) -> SectionOutcome {
@@ -77,18 +81,35 @@ async fn measured_with_all_23_checks() {
 async fn expiry_window_follows_days_remaining() {
     let (domain, mut blocks) = load();
     set_leaf(&mut blocks, None, "days_remaining", Value::Int(10));
-    assert_eq!(status(&run(&domain, &blocks).await, "tls.expiry_window"), Status::Warn);
+    assert_eq!(
+        status(&run(&domain, &blocks).await, "tls.expiry_window"),
+        Status::Warn
+    );
     set_leaf(&mut blocks, None, "days_remaining", Value::Int(68));
-    assert_eq!(status(&run(&domain, &blocks).await, "tls.expiry_window"), Status::Pass);
+    assert_eq!(
+        status(&run(&domain, &blocks).await, "tls.expiry_window"),
+        Status::Pass
+    );
 }
 
 #[tokio::test]
 async fn differing_leaf_fingerprints_break_consistency() {
     let (domain, mut blocks) = load();
-    assert_eq!(status(&run(&domain, &blocks).await, "tls.consistency"), Status::Pass);
+    assert_eq!(
+        status(&run(&domain, &blocks).await, "tls.consistency"),
+        Status::Pass
+    );
     let other = "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99";
-    set_leaf(&mut blocks, Some("2001:db8::11"), "fingerprint_sha256", Value::Text(other.into()));
-    assert_ne!(status(&run(&domain, &blocks).await, "tls.consistency"), Status::Pass);
+    set_leaf(
+        &mut blocks,
+        Some("2001:db8::11"),
+        "fingerprint_sha256",
+        Value::Text(other.into()),
+    );
+    assert_ne!(
+        status(&run(&domain, &blocks).await, "tls.consistency"),
+        Status::Pass
+    );
 }
 
 #[tokio::test]
@@ -104,21 +125,36 @@ async fn self_signed_end_is_trusted_and_foreign_sans_fail_hostname() {
             items[0].push(("sans".into(), Value::Text("other.example.net".into())));
         }
     }
-    assert_eq!(status(&run(&domain, &blocks).await, "tls.hostname_match"), Status::Fail);
+    assert_eq!(
+        status(&run(&domain, &blocks).await, "tls.hostname_match"),
+        Status::Fail
+    );
 }
 
 #[tokio::test]
 async fn expired_key_reads_the_run_time_not_the_wall_clock() {
     let (domain, mut blocks) = load();
-    set_leaf(&mut blocks, None, "not_before", Value::Time("2019-10-01T00:00:00Z".into()));
-    set_leaf(&mut blocks, None, "not_after", Value::Time("2020-01-01T00:00:00Z".into()));
+    set_leaf(
+        &mut blocks,
+        None,
+        "not_before",
+        Value::Time("2019-10-01T00:00:00Z".into()),
+    );
+    set_leaf(
+        &mut blocks,
+        None,
+        "not_after",
+        Value::Time("2020-01-01T00:00:00Z".into()),
+    );
     set_leaf(&mut blocks, None, "days_remaining", Value::Int(30));
     let SectionOutcome::Measured { evidence, .. } = run(&domain, &blocks).await else {
         panic!("not measured");
     };
     let mut seen = 0;
     for b in evidence.iter().filter(|b| is_chain(b)) {
-        let Shape::Chain(items) = &b.shape else { panic!("chain shape") };
+        let Shape::Chain(items) = &b.shape else {
+            panic!("chain shape")
+        };
         for item in items {
             for (k, v) in item.iter().filter(|(k, _)| k == "expired") {
                 assert_eq!(v, &Value::Bool(false), "{} {k}", b.id);
@@ -137,9 +173,14 @@ async fn rebuild_is_a_fixpoint() {
         panic!("not measured");
     };
     let mut again: Vec<Block> = evidence.clone();
-    again.extend(blocks.iter().filter(|b| {
-        let id = b.id.to_string();
-        id == "dns.caa" || id == "dns.https"
-    }).cloned());
+    again.extend(
+        blocks
+            .iter()
+            .filter(|b| {
+                let id = b.id.to_string();
+                id == "dns.caa" || id == "dns.https"
+            })
+            .cloned(),
+    );
     assert_eq!(run(&domain, &again).await, first);
 }

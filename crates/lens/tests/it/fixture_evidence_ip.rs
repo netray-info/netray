@@ -7,9 +7,9 @@
 use std::path::PathBuf;
 
 use netray_engine::SectionOutcome;
+use netray_model::Status;
 use netray_model::evidence::{Block, Shape, Value};
 use netray_model::run::Run;
-use netray_model::Status;
 use serde::Deserialize;
 
 const DOMAIN: &str = "new.example.com";
@@ -72,7 +72,9 @@ async fn ip_from_evidence_counts_checked_addresses_against_the_records() {
     }
     let (checks, _) = measured(netray_ip::testing::from_evidence(DOMAIN, &blocks).await);
     assert!(
-        checks[0].findings.contains(&"checked 4 of 5 addresses".to_string()),
+        checks[0]
+            .findings
+            .contains(&"checked 4 of 5 addresses".to_string()),
         "{:?}",
         checks[0].findings
     );
@@ -111,7 +113,10 @@ async fn ip_from_evidence_is_a_fixpoint() {
         SectionOutcome::Measured { evidence, .. } => evidence.clone(),
         other => panic!("expected Measured, got {other:?}"),
     };
-    again.extend(base.into_iter().filter(|b| b.id.to_string() != "ip.addresses"));
+    again.extend(
+        base.into_iter()
+            .filter(|b| b.id.to_string() != "ip.addresses"),
+    );
 
     let second = netray_ip::testing::from_evidence(DOMAIN, &again).await;
     assert_eq!(first, second);

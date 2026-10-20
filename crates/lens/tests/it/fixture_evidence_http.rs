@@ -122,10 +122,7 @@ async fn http_from_evidence_x_frame_options_follows_the_headers_table() {
 
     let mut with = base_blocks();
     set_header(&mut with, "x-frame-options", Some("DENY"));
-    assert_eq!(
-        status_of(with, "http.x_frame_options").await,
-        Status::Pass
-    );
+    assert_eq!(status_of(with, "http.x_frame_options").await, Status::Pass);
 }
 
 #[tokio::test]
@@ -163,7 +160,10 @@ async fn http_from_evidence_hsts_reads_the_header_and_emits_max_age() {
         Some("max-age=31536000"),
     );
     let (checks, evidence) = measured(outcome(blocks).await);
-    let hsts = checks.iter().find(|c| c.id.to_string() == "http.hsts").unwrap();
+    let hsts = checks
+        .iter()
+        .find(|c| c.id.to_string() == "http.hsts")
+        .unwrap();
     assert_eq!(hsts.status, Status::Pass);
 
     let block = evidence
