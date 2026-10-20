@@ -186,6 +186,7 @@ mod polish_compact_http;
 mod polish_compact_review;
 mod polish_compact_styles;
 mod polish_compact_tls;
+mod polish_hero;
 mod result_branch_review;
 mod result_card_plate;
 mod result_card_plate_fixed;
