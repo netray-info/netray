@@ -733,9 +733,22 @@ component!(
     QueryInputView,
     "{% import \"components/query_input.html\" as c %}{% call c::query_input(view) %}{% endcall %}"
 );
-component!(
-    facts_grid,
-    FactsGridTemplate,
-    FactsGridView,
-    "{% import \"components/facts_grid.html\" as c %}{% call c::facts_grid(view) %}{% endcall %}"
-);
+#[derive(Template)]
+#[template(
+    source = "{% import \"components/facts_grid.html\" as c %}{% call c::facts_grid(view, trails) %}{% endcall %}",
+    ext = "html"
+)]
+struct FactsGridTemplate<'a> {
+    view: &'a FactsGridView,
+    trails: &'a [String],
+}
+
+/// Renders the `facts_grid` component.
+pub fn facts_grid(view: &FactsGridView) -> askama::Result<String> {
+    facts_grid_with(view, &[])
+}
+
+/// Renders the `facts_grid` component with `trails[i]`, raw markup, after the values of cell `i`.
+pub fn facts_grid_with(view: &FactsGridView, trails: &[String]) -> askama::Result<String> {
+    FactsGridTemplate { view, trails }.render()
+}

@@ -101,7 +101,8 @@ and canvas rows 9.50, 9.55, 9.56, 9.57, 9.58 (summaries).
    whole port at `tls.addresses` (or `tls.addresses@<port>`), and every block it renders there
    answers the seam with an empty fragment, so it appears once. Whether a block is taken is one
    pure function of the sibling blocks, used by both. The fragment carries an anchor
-   `id="ev-<block id>"` for every block it renders. A block the port view does not take (TLSA,
+   `id="ev-<block id>"` for every block it renders; its feeds line is the addresses block's (the
+   check rows keep linking to the taken blocks' anchors). A block the port view does not take (TLSA,
    CAA, an older stored block with an unknown key) renders as before. `evidence.rs` still names
    no module, block or key. SDD §6.1 amended.
 2. **Nothing lost.** The port view takes a block only when it renders every value of it, read as
@@ -110,8 +111,8 @@ and canvas rows 9.50, 9.55, 9.56, 9.57, 9.58 (summaries).
    A test feeds a port of two addresses with every registered key and asserts each value's
    display text appears.
 3. **Distinct values.** Where one cell shows a fact several addresses report (handshake facts,
-   OCSP, SCTs), equal values show once; differing values show each value followed by its
-   addresses in parentheses.
+   OCSP, SCTs), equal values held by every address show once; otherwise (values differ, or some
+   addresses do not hold the fact) each value is followed by its addresses in parentheses.
 
 ### Addresses
 
@@ -121,8 +122,8 @@ and canvas rows 9.50, 9.55, 9.56, 9.57, 9.58 (summaries).
    status colours; with no checks yet, no bars), Protocol (`version`), Cipher (`cipher_suite`),
    Leaf (`SHA256 ` and the first two and last byte of the leaf's fingerprint in lower case with an
    ellipsis, the full value in a `title`) followed by "same" in the pass tone when the leaf equals
-   the first address's leaf, else "differs" in the warn tone; the first row shows "same" only when
-   another row exists. A row whose outcome is not `ok` shows the outcome and message across the
+   the port's first leaf, else "differs" in the warn tone; the markers show only when at least two
+   rows hold a leaf. A row whose outcome is not `ok` shows the outcome and message across the
    remaining columns. Under the table a muted note: "Port <n> · handshake <d>" with the display
    duration per address (requirement 3). (9.55, 3.21)
 
@@ -131,7 +132,9 @@ and canvas rows 9.50, 9.55, 9.56, 9.57, 9.58 (summaries).
 5. **One section per distinct chain.** A section "Certificate" per distinct served chain of the
    port, in address order; with more than one, each heading reads "Certificate · <addresses>".
 6. **Validity bar.** An SVG bar (viewBox width 1000, height 10) whose geometry comes from one pure
-   Rust function over not_before, not_after and now: the elapsed part in the pass tone, the last
+   Rust function over not_before, not_after and now, where now is the run's moment
+   (not_after minus the stored `days_remaining`, so a stored run reads as measured; the wall clock
+   only when `days_remaining` is absent): the elapsed part in the pass tone, the last
    `EXPIRY_WARN_DAYS` days as the warn zone, a 3 px today marker; labels (mono 12 px muted) "not
    before <date>" left, "today · <n> days left" centred, "not after <date>" right; the caption
    (mono 11 px) "the last <n> days turn the expiry line amber". `EXPIRY_WARN_DAYS` is one public
@@ -151,11 +154,14 @@ and canvas rows 9.50, 9.55, 9.56, 9.57, 9.58 (summaries).
    <date> · <reason>" fail tone, "live: unknown" warn tone; without the key, no chip (Rule M).
    (3.24, 3.25)
 9. **Chain pills and crt.sh.** A row "Chain": one pill per served certificate in served order,
-   naming its subject CN (else the subject), arrows between; when the last served certificate is
-   not self-signed, a dashed pill naming its issuer's CN and "from the trust store". After the
-   pills, `tls.chain_trusted`: on pass "trusted by <TRUST_STORE>" (pass tone), where
-   `TRUST_STORE` is one netray-tls constant naming the root set the check uses; on warn or fail the
-   check's first finding in its tone; nothing when unknown. Each served pill links "crt.sh ↗" to
+   naming its subject CN (else the subject), arrows between; when `tls.chain_trusted` passes and
+   the last served certificate is known not to be self-signed (`self_signed` false, an issuer),
+   a dashed pill naming its issuer's CN and "from the trust store". After the pills, with one
+   distinct chain on the port, `tls.chain_trusted`: on pass "trusted by <TRUST_STORE>" (pass
+   tone), where `TRUST_STORE` is one netray-tls constant naming the root set the check uses; on
+   warn or fail the check's catalogue finding in its tone (a view holds statuses, not findings;
+   the check list carries the run's finding); nothing when unknown. With several distinct chains
+   the port-wide verdict is not printed under each. Each served pill links "crt.sh ↗" to
    `https://crt.sh/?q=<fingerprint_sha256 without colons>`. The non-leaf certificates' facts
    (requirement 7's keys) sit in a `details` "Chain certificates" under the row. (3.14, 3.19)
 
@@ -375,6 +381,12 @@ GIVEN the TLS inspector at 390 px WHEN measured THEN the document is not wider t
   (drafting agent, 2026-10-20).
 - The live OCSP chip's tone is one fixed map; an unanswered responder shows nothing (Rule M)
   (drafting agent, 2026-10-20).
+- Phase 1 review: the validity bar reads the run's moment from `days_remaining`, so a stored run
+  never shows an expiry the run did not measure; the trust text and the inferred root pill follow
+  `chain_trusted` and appear only where they cannot contradict it (one distinct chain; a passing
+  check); a fact some addresses lack is named per address (Rule M); "same"/"differs" need two
+  leaves; the port view's feeds line is the addresses block's (implementer under the operator's
+  autonomy mandate, 2026-10-21).
 - The design check's live TLS board needs network: a binary built in a worktree gets none here,
   so `netray_bin` honours `NETRAY_BIN`, and the gate runs with this branch's build copied to the
   main checkout's target path (backed up and restored) (implementer under the operator's autonomy

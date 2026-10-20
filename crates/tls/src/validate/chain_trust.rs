@@ -48,6 +48,9 @@ pub fn validate_chain(
     }
 }
 
+/// The root set `chain_trusted` verifies against: the webpki-roots copy of Mozilla's roots.
+pub const TRUST_STORE: &str = "the Mozilla root program";
+
 /// Verify chain trust against the root store. The hostname plays no part in it.
 /// Returns `(trusted, reason)` where reason captures the error message on failure.
 fn verify_chain_trust(

@@ -1043,6 +1043,176 @@ main td {
   color: var(--color-muted);
   font-size: var(--font-size-caption);
 }
+/* The TLS port view (v2-tls-ui): board G's addresses table and certificate section. */
+.protocol-view__anchor {
+  display: block;
+}
+.tls-addresses__scroll {
+  min-width: 0;
+  overflow-x: auto;
+}
+.tls-addresses {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--color-ink);
+  font-size: var(--font-size-text);
+}
+.tls-addresses th {
+  padding: 12px 16px;
+  color: var(--color-muted);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-medium);
+  text-align: left;
+  white-space: nowrap;
+}
+.tls-addresses td {
+  padding: 12px 16px;
+  border-top: var(--line-hair) solid var(--color-line);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.tls-addresses__address {
+  font-weight: var(--font-weight-bold);
+}
+.tls-addresses td.tls-addresses__error {
+  color: var(--status-fail-text);
+  white-space: normal;
+}
+.tls-addresses__outcome {
+  font-weight: var(--font-weight-bold);
+}
+.tls-addresses__leaf {
+  margin-inline-start: var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-label);
+}
+.tls-addresses__leaf[data-tone="pass"] { color: var(--status-pass-text); }
+.tls-addresses__leaf[data-tone="warn"] { color: var(--status-warn-text); }
+.tls-band {
+  display: block;
+  width: 96px;
+  height: 22px;
+}
+.tls-band rect { fill: var(--status-untested-mark); }
+.tls-band rect[data-tone="pass"] { fill: var(--status-pass-mark); }
+.tls-band rect[data-tone="warn"] { fill: var(--status-warn-mark); }
+.tls-band rect[data-tone="fail"] { fill: var(--status-fail-mark); }
+.tls-band rect[data-tone="fix"] { fill: var(--status-fix-mark); }
+.tls-port__subhead,
+.tls-chain__cert {
+  margin: var(--space-4) 0 var(--space-2);
+  color: var(--color-muted);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-medium);
+}
+.tls-validity {
+  margin-bottom: var(--space-4);
+}
+.tls-validity__labels {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+}
+.tls-validity__bar {
+  display: block;
+  width: 100%;
+  height: 10px;
+}
+.tls-validity__track { fill: var(--color-line); }
+.tls-validity__elapsed { fill: var(--status-pass-mark); }
+.tls-validity__warn { fill: var(--status-warn-mark); }
+.tls-validity[data-state="expired"] .tls-validity__track,
+.tls-validity[data-state="expired"] .tls-validity__elapsed,
+.tls-validity[data-state="expired"] .tls-validity__warn { fill: var(--status-fail-mark); }
+.tls-validity__marker {
+  stroke: var(--color-ink);
+  stroke-width: var(--line-marker);
+  vector-effect: non-scaling-stroke;
+}
+.tls-validity__caption {
+  margin: var(--space-2) 0 0;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+.tls-chip {
+  display: inline-block;
+  margin-inline-start: var(--space-1);
+  padding: 0 var(--space-1);
+  border: var(--line-hair) solid currentcolor;
+  border-radius: var(--radius-max);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+}
+.tls-chip[data-tone="pass"] { color: var(--status-pass-text); }
+.tls-chip[data-tone="warn"] { color: var(--status-warn-text); }
+.tls-chip[data-tone="fail"] { color: var(--status-fail-text); }
+.tls-chain__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-top: var(--space-4);
+}
+.tls-chain__label {
+  color: var(--color-muted);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-label);
+}
+.tls-chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tls-chain__pill {
+  padding: 6px 12px;
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+}
+.tls-chain__pill[data-inferred] {
+  border-style: dashed;
+  color: var(--color-muted);
+}
+.tls-chain__arrow {
+  color: var(--color-muted);
+}
+.tls-chain__crtsh,
+.tls-chain__from {
+  margin-inline-start: var(--space-1);
+  color: var(--color-muted);
+  font-size: var(--font-size-label);
+}
+.tls-chain__trust {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-label);
+}
+.tls-chain__trust[data-tone="pass"] { color: var(--status-pass-text); }
+.tls-chain__trust[data-tone="warn"] { color: var(--status-warn-text); }
+.tls-chain__trust[data-tone="fail"] { color: var(--status-fail-text); }
+.tls-chain__more {
+  margin-top: var(--space-3);
+}
+.tls-chain__more > summary {
+  color: var(--color-muted);
+  font-size: var(--font-size-label);
+  cursor: pointer;
+}
 .csp-view__mode {
   margin: 0;
   color: var(--color-ink);

@@ -1033,7 +1033,7 @@ fn part_html(
             let mut html = String::new();
             for block in blocks {
                 let feeds = block_feeds(evidence, &block.id);
-                let slot = slot(block, &decorate, &statuses, &feeds);
+                let slot = slot(block, &decorate, &statuses, &feeds, blocks);
                 match slot.view {
                     Some(view) => html.push_str(&view),
                     None => html.push_str(&components::evidence_block(&slot.block).ok()?),
@@ -1451,7 +1451,7 @@ fn stream_job(
                             let Some(part @ Ok(blocks)) = part else {
                                 continue;
                             };
-                            if blocks.iter().any(views::claims)
+                            if blocks.iter().any(|b| views::claims(b, blocks))
                                 && let Some(event) =
                                     part_event(n, &run.labels[n], part, &run.badges, checks)
                             {

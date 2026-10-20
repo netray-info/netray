@@ -410,3 +410,52 @@ pub fn layout(
         runs,
     })
 }
+
+/// One bar of a mini band: `x` (its left edge) and `width` in px of the container, `height` in
+/// (0, 1] of the band's height.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MiniBar {
+    pub x: f64,
+    pub width: f64,
+    pub height: f64,
+    pub tone: LineTone,
+}
+
+/// The bars of `protocol`'s lines in catalogue order, from the slim band's layout in a container
+/// `width` px wide; `None` when no check of the protocol has a status.
+pub fn mini_band(
+    statuses: &[(CheckId, Status)],
+    protocol: Protocol,
+    width: u32,
+) -> Option<Vec<MiniBar>> {
+    let lines = netray_engine::catalogue::catalogue().for_protocol(protocol);
+    let statuses: BTreeMap<CheckId, Status> = statuses
+        .iter()
+        .filter(|(id, _)| lines.entries().iter().any(|spec| spec.id == *id))
+        .cloned()
+        .collect();
+    if statuses.is_empty() {
+        return None;
+    }
+    let input = RunInput {
+        statuses,
+        sections: BTreeMap::new(),
+        profile: netray_engine::profile::Profiles::current(),
+    };
+    let l = layout(&input, &[], &lines, width).ok()?;
+    let run = l.runs.first()?;
+    let scale = f64::from(width) / l.plate_width;
+    let bar = l.pitch / 2.0 * scale;
+    Some(
+        l.lines
+            .iter()
+            .zip(run.heights.iter().zip(&run.tones))
+            .map(|(line, (height, tone))| MiniBar {
+                x: line.x * scale - bar / 2.0,
+                width: bar,
+                height: *height,
+                tone: *tone,
+            })
+            .collect(),
+    )
+}

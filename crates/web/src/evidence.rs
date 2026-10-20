@@ -92,6 +92,27 @@ fn display_duration(ms: u64) -> String {
 
 /// `YYYY-MM-DD HH:MM UTC` of an RFC 3339 time, its offset applied.
 fn display_time(t: &str) -> Option<String> {
+    let secs = unix_time(t)?;
+    // Back to the civil date in UTC (the inverse algorithm), valid before 1970 too.
+    let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    Some(format!(
+        "{year:04}-{month:02}-{day:02} {:02}:{:02} UTC",
+        rem / 3_600,
+        rem % 3_600 / 60
+    ))
+}
+
+/// The Unix seconds of an RFC 3339 time, to the minute, its offset applied.
+pub(crate) fn unix_time(t: &str) -> Option<i64> {
     let num = |range: std::ops::Range<usize>| t.get(range)?.parse::<i64>().ok();
     let (year, month, day) = (num(0..4)?, num(5..7)?, num(8..10)?);
     let (hour, minute) = (num(11..13)?, num(14..16)?);
@@ -119,23 +140,7 @@ fn display_time(t: &str) -> Option<String> {
     let doy = (153 * mp + 2) / 5 + day - 1;
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
     let days = era * 146_097 + doe - 719_468;
-    let secs = days * 86_400 + hour * 3_600 + minute * 60 - offset;
-    // Back to the civil date in UTC (the inverse algorithm), valid before 1970 too.
-    let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = yoe + era * 400 + i64::from(month <= 2);
-    Some(format!(
-        "{year:04}-{month:02}-{day:02} {:02}:{:02} UTC",
-        rem / 3_600,
-        rem % 3_600 / 60
-    ))
+    Some(days * 86_400 + hour * 3_600 + minute * 60 - offset)
 }
 
 /// The key a repeated key `<key>#<n>` (n decimal digits) repeats; `None` for any other key.
@@ -307,12 +312,13 @@ impl std::ops::Deref for BlockSlot {
 }
 
 /// The slot of `block`: its generic view, and the protocol view asked with the run's
-/// `statuses` and the checks the block `feeds`.
+/// `statuses`, the checks the block `feeds` and the `siblings` shown with it.
 pub(crate) fn slot(
     block: &Block,
     decorate: Decorate<'_>,
     statuses: &[(CheckId, Status)],
     feeds: &[String],
+    siblings: &[Block],
 ) -> BlockSlot {
     let ctx = crate::pages::views::ViewContext {
         statuses,
@@ -321,7 +327,7 @@ pub(crate) fn slot(
     };
     BlockSlot {
         block: block_view_with(block, decorate),
-        view: crate::pages::views::render(block, &ctx),
+        view: crate::pages::views::render_with(block, &ctx, siblings),
     }
 }
 
@@ -347,6 +353,15 @@ fn run_evidence<'a>(run: &'a Run) -> impl Fn(&CheckId) -> Option<&'a [BlockId]> 
             .find(|c| &c.id == id)
             .map(|c| c.evidence.as_slice())
     }
+}
+
+/// The blocks of module `owner` in the run, in block order.
+fn own_blocks(run: &Run, owner: &str) -> Vec<Block> {
+    run.blocks
+        .iter()
+        .filter(|b| b.id.module() == owner)
+        .cloned()
+        .collect()
 }
 
 fn run_statuses(run: &Run) -> Vec<(CheckId, Status)> {
@@ -573,13 +588,12 @@ fn build_section(
 
     let decorate = crate::links::decorate(&[]);
     let statuses = run_statuses(run);
-    let blocks = run
-        .blocks
+    let own = own_blocks(run, owner);
+    let blocks = own
         .iter()
-        .filter(|b| b.id.module() == owner)
         .map(|b| {
             let feeds = block_feeds(run_evidence(run), &b.id);
-            let mut slot = slot(b, &decorate, &statuses, &feeds);
+            let mut slot = slot(b, &decorate, &statuses, &feeds, &own);
             slot.block.feeds = feeds;
             slot
         })
@@ -661,17 +675,17 @@ pub fn panel(run: &Run, protocol: Protocol, domain: &str, entry_id: Option<&str>
         });
     let decorate = crate::links::decorate(&[]);
     let statuses = run_statuses(run);
+    let own = own_blocks(run, owner);
     PanelView {
-        blocks: run
-            .blocks
+        blocks: own
             .iter()
-            .filter(|b| b.id.module() == owner)
             .map(|b| {
                 slot(
                     b,
                     &decorate,
                     &statuses,
                     &block_feeds(run_evidence(run), &b.id),
+                    &own,
                 )
             })
             .collect(),

@@ -7,6 +7,7 @@ mod email;
 mod http;
 mod ip;
 mod tls;
+pub mod validity;
 
 use askama::Template;
 use netray_model::evidence::{Block, Fields, Node, Shape, Value};
@@ -25,23 +26,30 @@ pub struct ViewContext<'a> {
 
 /// The view fragment of `block` when a protocol view claims it.
 pub fn render(block: &Block, ctx: &ViewContext<'_>) -> Option<String> {
+    render_with(block, ctx, &[])
+}
+
+/// The view fragment of `block` shown with `siblings` (the block included, in block order); an
+/// empty fragment for a block another block's view renders.
+pub fn render_with(block: &Block, ctx: &ViewContext<'_>, siblings: &[Block]) -> Option<String> {
     http::render(block, ctx)
         .or_else(|| dns::render(block, ctx))
-        .or_else(|| tls::render(block, ctx))
+        .or_else(|| tls::render(block, ctx, siblings))
         .or_else(|| email::render(block, ctx))
         .or_else(|| ip::render(block, ctx))
 }
 
-/// Whether a protocol view claims `block`.
-pub(crate) fn claims(block: &Block) -> bool {
+/// Whether a protocol view claims `block` shown with `siblings`.
+pub(crate) fn claims(block: &Block, siblings: &[Block]) -> bool {
     let decorate = |_: &_, _: &str, _: &Value| None;
-    render(
+    render_with(
         block,
         &ViewContext {
             statuses: &[],
             decorate: &decorate,
             feeds: &[],
         },
+        siblings,
     )
     .is_some()
 }
