@@ -261,8 +261,10 @@ GIVEN checkMeta.ts and the catalogue WHEN `test_checkmeta_catalogue.sh` runs THE
   operator decided (implementer under the operator's autonomy mandate, 2026-10-19).
 - Grade change: every domain's grade may change once with v4. The first v4 run of each domain
   is a new history entry (the fingerprint includes the profile version); the diff shows the three
-  checks as "added by release" and splits the grade change into the profile's effect (the
-  predecessor re-scored under v4) and the domain's (SDD §4.3). Stated in SDD §2 and
+  checks as "added by release" (SDD §4.3). Amended after the final review: the grade split cannot
+  attribute them to the profile, because the predecessor never measured them and re-scores under
+  v4 to its v3 grade; their letter change shows on the domain step beside the added-by-release
+  rows. Stated in SDD §2 and
   `CHANGELOG.md` (implementer under the operator's autonomy mandate, 2026-10-19).
 
 - Amendment in Phase 1 (review): only a fatal handshake_failure, protocol_version or
