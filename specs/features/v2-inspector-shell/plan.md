@@ -136,3 +136,24 @@ G2: `islands/src/shell.ts` — unhide and open/close through the delegated click
 back to "?" on `close`; one document keydown listener per mount (guarded by `isConnected`,
 ignoring text fields): `/`, Ctrl/Meta+L, `r`, `j`/`k` over check rows and evidence blocks, Enter on
 a check row to its guide, `h`/`l` over the tabs, `?`, Esc.
+
+## Phase 5 — Export
+
+### Groups
+
+G1 (server): C1, C3, C5, C6, C9 and the server halves of C4, C7, C8 · G2 (island and CSS): C2 and
+the island halves of C4, C7, C8.
+
+### Plan
+
+G1: `crates/web/src/export.rs` (new, pure): `ExportInput {target, title, band, blocks}`,
+`markdown`, `csv`, `json`, `slug` — Phase 8 reuses them for stored entries; `lib.rs` registers it.
+`partials/inspect_export.html` (new): the slot with hidden buttons, disabled without exports, and
+the three templates. `partials/inspect_start.html`: export slot after the share slot.
+`src/pages/inspect.rs`: `ExportFragment`, `export_html`; the start fragment carries the disabled
+slot; `stream_job` sends share (if any), then always `inspect-export`, then `end`, blocks in part
+order; `finished_html`/`shared_html` carry the enabled slot with the live title, so a shared page's
+templates equal the live run's.
+
+G2: `islands/src/shell.ts`: unhide export buttons; `[data-export-action]` copies Markdown or
+downloads CSV/JSON as a named Blob, status announced. `static/inspector_shell.css`: export rules.

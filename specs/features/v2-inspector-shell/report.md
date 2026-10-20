@@ -219,3 +219,57 @@ closes and returns focus (`hasAttribute("open")`, the Close button no longer sub
 a closed help is `display: none` where the UA lacks `<dialog>`; Ctrl+Shift+L is left to the
 browser; checkboxes and radios no longer swallow shortcuts; Ctrl+L does nothing while the help is
 open.
+
+## Phase 5 — Export
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R19 Export data: the final fragment carries Markdown, CSV and JSON templates rendered by the server from the streamed parts and band; a shared run page too; no re-run | green | tests/it/shell_export.rs |
+| C2 | R20 Export controls: Copy Markdown, CSV and JSON downloads named netray-tool-slug, disabled until the exports exist, completion announced | green | islands/test/shell-export.test.ts |
+| C3 | GIVEN a finished HTTP run THEN the final fragment holds three templates and no further request is made | green | tests/it/shell_export.rs |
+| C4 | GIVEN that run WHEN Copy Markdown is pressed THEN the clipboard holds the run title, a check table and a table per block | green | tests/it/shell_export.rs, islands/test/shell-export.test.ts |
+| C5 | GIVEN a CSV export THEN header section,item,field,value and every check and block value once | green | tests/it/shell_export.rs |
+| C6 | GIVEN a JSON export THEN target, checks and blocks, each block a netray_model Block | green | tests/it/shell_export.rs |
+| C7 | GIVEN a run in progress THEN the controls are disabled | green | tests/it/shell_export.rs, islands/test/shell-export.test.ts |
+| C8 | GIVEN a TLS run of example.com:443 THEN the JSON file is netray-tls-example.com-443.json | green | tests/it/shell_export.rs, islands/test/shell-export.test.ts |
+| C9 | GIVEN a shared run page THEN it holds the same three templates as the live run's final fragment | green | tests/it/shell_export.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 server | 3 | sonnet, one test defect fixed by the orchestrator (ADLC-Test-Change) | 70668 | 383 |
+| G2 island | 1 | sonnet | 33829 | 34 |
+| review fixes (shell_review_p5) | 1 | orchestrator | 0 | 0 |
+
+### Behavioural verification
+
+Local lens, `curl -s -X POST --data-urlencode "url=https://1.1.1.1/" http://127.0.0.1:18931/inspect/http/run`:
+fragments `inspect-result`, `inspector-tabs`, `inspect-part-0`, `inspect-band`, `inspect-share`,
+`inspect-export`; the export slot's `data-filename="netray-http-https-1.1.1.1"`; its Markdown
+template (unescaped) begins:
+
+```
+# https://1.1.1.1/
+
+LIVE · 2026-10-20 12:38 UTC · NOT RECORDED
+
+## Checks
+
+| Code | Check | Status | Finding | Fix |
+|---|---|---|---|---|
+| HTTP·34 | HTTPS redirect | pass |  |  |
+| HTTP·35 | HSTS | fail | No HSTS header found | Send Strict-Transport-Security with max-age=31536000 on all HTTPS responses. |
+```
+
+### Review
+
+Reader: 2 blockers, fixed (`tests/it/shell_review_p5.rs`): Markdown left `*`, `\`, `<`, backticks
+unescaped (a CSP's wildcards rendered as emphasis); a failed or timed-out part or band vanished
+from the exports (Rule M) — now a "Not measured" section, a CSV `error` row and a JSON `errors`
+entry. Amendments folded into requirement 19: the `errors` field; a leading `'` for CSV values a
+spreadsheet would read as formulas. Deferred, fixed anyway: "Copied Markdown" only after the write
+succeeds. Deferred: per-port headings in multi-port TLS Markdown (TLS depth feature). Nit: CSV CRLF
+becomes LF through the template's HTML parsing; accepted.

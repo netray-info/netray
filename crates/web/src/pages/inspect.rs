@@ -39,6 +39,7 @@ use crate::client::client_ip;
 use crate::components::{self, QueryInputView, RunLineView, SpectrumView};
 use crate::entries::view::grade_letter;
 use crate::evidence::{EvidenceRow, block_view, live_rows, live_run_title, shared_run_title};
+use crate::export::{self, ExportInput};
 use crate::pages::result::views::line_code;
 use crate::spectrum::{RunInput, layout};
 use crate::stream::{end, fragment};
@@ -51,6 +52,7 @@ pub use shared::SharedRuns;
 const RESULT_ID: &str = "inspect-result";
 const BAND_ID: &str = "inspect-band";
 const SHARE_ID: &str = "inspect-share";
+const EXPORT_ID: &str = "inspect-export";
 const EXPIRED: &str =
     "This shared result has expired or never existed; results are kept for one hour.";
 /// The part text of an API result that holds no block (a check that timed out or was not
@@ -505,6 +507,7 @@ struct StartFragment {
     parts: Vec<(usize, String, Option<String>)>,
     band: BandSlot,
     share: String,
+    export: String,
 }
 
 /// The band region of the start fragment: none, a placeholder the stream fills, or rendered.
@@ -519,6 +522,13 @@ enum BandSlot {
 struct ShareFragment {
     tool: &'static str,
     key: Option<String>,
+}
+
+#[derive(Template)]
+#[template(path = "partials/inspect_export.html")]
+struct ExportFragment {
+    filename: String,
+    exports: Option<(String, String, String)>,
 }
 
 #[derive(Template)]
@@ -693,14 +703,27 @@ async fn shared_result(deps: &InspectDeps, tool: Tool, key: &str) -> Shared {
     .render()
     .ok();
     let html = band.and_then(|band| {
+        let title = shared_run_title(None);
+        let export = export_html(
+            Tool::Dns,
+            &cached.query,
+            &title,
+            None,
+            blocks.as_ref().map_or(&[][..], Vec::as_slice),
+            &export_errors(
+                std::iter::once((cached.mode.as_str(), Some(&blocks))),
+                None::<&Result<(), String>>,
+            ),
+            true,
+        )?;
         finished_html(
-            shared_run_title(None),
+            title,
             cached.query.clone(),
             backlink(Tool::Dns, &cached.query),
             None,
             vec![(cached.mode.clone(), part_html(0, &cached.mode, &blocks))],
             BandSlot::Done(band),
-            share_html(Tool::Dns, Some(key.to_string()))?,
+            (share_html(Tool::Dns, Some(key.to_string()))?, export),
         )
     });
     match html {
@@ -925,6 +948,7 @@ struct Run {
     link: Option<(String, String)>,
     grade: Option<&'static str>,
     started: i64,
+    exported: bool,
     ended: bool,
 }
 
@@ -1009,6 +1033,58 @@ fn share_html(tool: Tool, key: Option<String>) -> Option<String> {
     .ok()
 }
 
+/// The export slot: disabled while the run streams, with the three exports once it is `ready`.
+fn export_html(
+    tool: Tool,
+    target: &str,
+    title: &RunLineView,
+    band: Option<(Protocol, &[CheckResult])>,
+    blocks: &[Block],
+    errors: &[(String, String)],
+    ready: bool,
+) -> Option<String> {
+    let title: Vec<String> = title.parts.iter().map(|p| p.to_uppercase()).collect();
+    let input = ExportInput {
+        target,
+        title: &title,
+        band,
+        blocks,
+        errors,
+    };
+    let exports = ready.then(|| {
+        (
+            export::markdown(&input),
+            export::csv(&input),
+            export::json(&input),
+        )
+    });
+    (ExportFragment {
+        filename: format!("netray-{}-{}", tool.as_str(), export::slug(target)),
+        exports,
+    })
+    .render()
+    .ok()
+}
+
+/// The sections of a run that ended without a result, for the exports (Rule M): a part with its
+/// error text, or "timed out" when it never answered, and the band as "checks".
+fn export_errors<'a, T: 'a, B: 'a>(
+    parts: impl Iterator<Item = (&'a str, Option<&'a Result<T, String>>)>,
+    band: Option<&'a Result<B, String>>,
+) -> Vec<(String, String)> {
+    let mut errors: Vec<(String, String)> = parts
+        .filter_map(|(label, result)| match result {
+            Some(Ok(_)) => None,
+            Some(Err(e)) => Some((label.to_string(), e.clone())),
+            None => Some((label.to_string(), "timed out".to_string())),
+        })
+        .collect();
+    if let Some(Err(e)) = band {
+        errors.push(("checks".to_string(), e.clone()));
+    }
+    errors
+}
+
 /// A finished run's result region, in the markup the stream leaves behind.
 fn finished_html(
     title: RunLineView,
@@ -1017,7 +1093,7 @@ fn finished_html(
     grade: Option<&'static str>,
     parts: Vec<(String, Option<String>)>,
     band: BandSlot,
-    share: String,
+    (share, export): (String, String),
 ) -> Option<String> {
     let mut rendered = Vec::with_capacity(parts.len());
     for (n, (label, html)) in parts.into_iter().enumerate() {
@@ -1031,6 +1107,7 @@ fn finished_html(
         parts: rendered,
         band,
         share,
+        export,
     }
     .render()
     .ok()
@@ -1055,6 +1132,20 @@ fn shared_html(run: &SharedRun, key: &str) -> Option<String> {
         .enumerate()
         .map(|(n, (label, result))| (label.clone(), part_html(n, label, result)))
         .collect();
+    let export = export_html(
+        run.tool,
+        &run.target,
+        &live_run_title(run.started),
+        run.band
+            .as_ref()
+            .and_then(|(p, r)| r.as_ref().ok().map(|c| (*p, c.as_slice()))),
+        &blocks,
+        &export_errors(
+            run.parts.iter().map(|(label, r)| (label.as_str(), Some(r))),
+            run.band.as_ref().map(|(_, r)| r),
+        ),
+        true,
+    )?;
     finished_html(
         shared_run_title(Some(run.started)),
         run.target.clone(),
@@ -1062,7 +1153,7 @@ fn shared_html(run: &SharedRun, key: &str) -> Option<String> {
         run.grade,
         parts,
         band,
-        share_html(run.tool, Some(key.to_string()))?,
+        (share_html(run.tool, Some(key.to_string()))?, export),
     )
 }
 
@@ -1190,6 +1281,15 @@ fn stream_job(
             BandSlot::Absent
         },
         share: share_html(head.tool, None)?,
+        export: export_html(
+            head.tool,
+            &head.target,
+            &live_run_title(now),
+            None,
+            &[],
+            &[],
+            false,
+        )?,
     }
     .render()
     .ok()?;
@@ -1226,6 +1326,7 @@ fn stream_job(
         link: head.link,
         grade: head.grade,
         started: now,
+        exported: false,
         ended: false,
     };
     let events = futures::stream::unfold(run, |mut run| async move {
@@ -1248,13 +1349,46 @@ fn stream_job(
                     run.band_out = Some((protocol, result));
                     continue;
                 }
-                if let Some(key) = run.share_key.take() {
-                    let finished = run.finished();
-                    run.shared.insert(key.clone(), finished).await;
-                    if let Some(html) = share_html(run.tool, Some(key)) {
-                        run.queue.push_back(fragment(SHARE_ID, &html));
-                        continue;
+                if !run.exported {
+                    run.exported = true;
+                    let blocks: Vec<Block> = run
+                        .results
+                        .iter()
+                        .filter_map(|r| r.as_ref().and_then(|r| r.as_ref().ok()))
+                        .flatten()
+                        .cloned()
+                        .collect();
+                    let band = run
+                        .band_out
+                        .as_ref()
+                        .and_then(|(p, r)| r.as_ref().ok().map(|c| (*p, c.as_slice())));
+                    let export = export_html(
+                        run.tool,
+                        &run.target,
+                        &live_run_title(run.started),
+                        band,
+                        &blocks,
+                        &export_errors(
+                            run.labels
+                                .iter()
+                                .zip(&run.results)
+                                .map(|(label, r)| (label.as_str(), r.as_ref())),
+                            run.band_out.as_ref().map(|(_, r)| r),
+                        ),
+                        true,
+                    );
+                    if let Some(key) = run.share_key.take() {
+                        let finished = run.finished();
+                        run.shared.insert(key.clone(), finished).await;
+                        if let Some(html) = share_html(run.tool, Some(key)) {
+                            run.queue.push_back(fragment(SHARE_ID, &html));
+                        }
                     }
+                    run.queue.push_back(fragment(
+                        EXPORT_ID,
+                        export.as_deref().unwrap_or("render failed"),
+                    ));
+                    continue;
                 }
                 run.ended = true;
                 return Some((Ok(end()), run));

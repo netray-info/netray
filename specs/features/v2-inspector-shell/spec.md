@@ -253,8 +253,10 @@ Each requirement names the inventory rows or board rows it closes.
     `<template>` elements the server rendered from the parts and band it streamed: Markdown (the
     run title, the check list as a table of code, check, status, finding, fix, and each evidence
     block as a table or list), CSV (long format, columns `section,item,field,value`, one row per
-    check field and per block value) and JSON (`{target, checks, blocks}` in netray-model's
-    serialisation, the shapes `/api/v1` uses). A shared run's page carries the same exports. No
+    check field and per block value; a value a spreadsheet would read as a formula starts with `'`) and JSON (`{target, checks, blocks, errors}` in netray-model's
+    serialisation, the shapes `/api/v1` uses). A shared run's page carries the same exports. A part or band that ended without a result is in every export with its
+    reason (Rule M: a Markdown section "Not measured: <reason>", a CSV row `<section>,,error,<reason>`, a
+    JSON `errors` entry). Markdown escapes every character a renderer would read as markup. No
     export re-runs the job. (2.40, 2.41, 2.42, 3.35, 4.9, 4.10)
 20. **Export controls.** Beside "Copy link": "Copy Markdown" (to the clipboard), "CSV" and "JSON"
     (downloads named `netray-<tool>-<target slug>.csv` and `.json`); the controls are disabled until
@@ -560,6 +562,12 @@ GIVEN the screenshots WHEN read beside board G THEN every finding is a `report.m
   evidence."; its errors and warnings are not replayed (the shared inspector run keeps them).
   The cache drops the least recently used run, as `DnsResultCache` does (implementer under the
   operator's autonomy mandate, 2026-10-20).
+- Phase 5 review: failed parts and a failed band are in every export with their reason; the JSON
+  export gains `errors`; Markdown backslash-escapes markup characters; a CSV value that would start a
+  formula gets a leading `'` (OWASP CSV injection); "Copied Markdown" is announced only after the
+  write succeeded. Deferred: Markdown headings of a multi-port TLS run do not name the port (the
+  TLS depth feature owns per-port views) (implementer under the operator's autonomy mandate,
+  2026-10-20).
 - The Inspectors menu and the full footer of canvas v43 belong to the site-navigation feature
   (theme J); a reader's finding on G's chevron or footer is answered by this non-goal
   (implementer under the operator's autonomy mandate, 2026-10-20).

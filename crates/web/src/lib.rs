@@ -13,6 +13,7 @@ pub mod contrast;
 pub mod entries;
 pub mod evidence;
 pub mod explore;
+pub mod export;
 pub mod gate;
 pub mod grade_legend;
 pub mod pages;
