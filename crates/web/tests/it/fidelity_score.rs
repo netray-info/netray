@@ -26,7 +26,8 @@ use tracing_subscriber::fmt::MakeWriter;
 const DOMAIN: &str = "example.com";
 
 /// dns.ns is weighted 3 and warns (half), the other nine dns checks (weights 5,5,5,5,2,2,3,2,3 = 32)
-/// pass: 33.5 of 35 earned, 95.71 %, shown as 96.
+/// pass: 33.5 of 35 earned, 95.71 %, shown as 95 (rounded down: a score never reaches the next
+/// grade threshold under a lower letter).
 const DNS_PASS: [&str; 9] = [
     "dns.dnssec",
     "dns.caa",
@@ -196,7 +197,7 @@ async fn c5_c14_a_stored_complete_entry_shows_score_and_descriptor_under_the_let
     let probe = run(Grade::A, true);
     let scored = score_run(&probe, profile);
     assert!(scored.complete);
-    assert_eq!(scored.overall_percentage.round(), 96.0, "{scored:?}");
+    assert_eq!(scored.overall_percentage.floor(), 95.0, "{scored:?}");
     let letter = match scored.grade {
         Grade::APlus => "A+",
         Grade::A => "A",
@@ -226,7 +227,7 @@ async fn c5_c14_a_stored_complete_entry_shows_score_and_descriptor_under_the_let
             .unwrap_or_else(|| panic!("{needle} missing in {body}"))
     };
     let l = at(&format!(r#"grade__letter">{letter}<"#));
-    let s = at(r#"<span class="grade__score">score <strong>96</strong> / 100</span>"#);
+    let s = at(r#"<span class="grade__score">score <strong>95</strong> / 100</span>"#);
     let d = at(&format!(r#"<span class="grade__descriptor">{text}</span>"#));
     assert!(l < s && s < d, "{l} {s} {d}");
 }

@@ -315,6 +315,19 @@ pub struct PanelView {
     pub reason: Option<String>,
 }
 
+impl PanelView {
+    /// Whether a block renders as a table, the only shape the phone's swipe note is for.
+    pub fn has_table(&self) -> bool {
+        self.blocks.iter().any(|b| {
+            matches!(
+                b.shape,
+                crate::components::EvidenceShape::Table { .. }
+                    | crate::components::EvidenceShape::Records(_)
+            )
+        })
+    }
+}
+
 /// The tab panel of `protocol` over `run`: its blocks, the lines they feed, the link to the
 /// entry's view (`entry_id` of a stored entry) and the explore-live link of `domain`.
 pub fn panel(run: &Run, protocol: Protocol, domain: &str, entry_id: Option<&str>) -> PanelView {

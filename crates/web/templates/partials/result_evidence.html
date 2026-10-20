@@ -4,7 +4,7 @@
 {% if let Some(reason) = panel.reason %}<p class="evidence-tabs__reason">{{ reason }}</p>{% endif %}
 {% for block in panel.blocks %}{% call evidence_block::evidence_block(block) %}{% endcall %}
 {% endfor %}
-{% if !panel.blocks.is_empty() %}<p class="evidence-tabs__swipe">← swipe the table</p>{% endif %}
+{% if panel.has_table() %}<p class="evidence-tabs__swipe">← swipe the table</p>{% endif %}
 <div class="evidence-tabs__links">
 {% if !panel.feeds.is_empty() %}<p class="evidence-tabs__feeds">Feeds lines: {% for feed in panel.feeds %}{% if !loop.first %} · {% endif %}{% if let Some(code) = feed.code %}<code>{{ code }}</code> {% endif %}{{ feed.short }}{% endfor %}</p>{% endif %}
 {% if let Some(href) = panel.all_href %}<a class="evidence-tabs__all" href="{{ href }}">All evidence →</a>{% endif %}

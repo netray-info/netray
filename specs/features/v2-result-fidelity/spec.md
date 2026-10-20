@@ -107,7 +107,7 @@ value" means the value the gate measures on the named boards; the inventory row 
    grade, in the warn or fail colour otherwise, as the board's palette maps grades. (9.7, 9.8;
    boards 13–16)
 5. **Score line.** Under the letter, mono 13 px: "score <n> / 100", `<n>` the run's overall
-   percentage from `score_run` under the entry's profile version, rounded half up, with `<n>` in
+   percentage from `score_run` under the entry's profile version, rounded down, with `<n>` in
    ink at weight 700 (the board's `<strong>`). Under it, mono 11 px muted, the grade's descriptor and meaning as V1's grade
    legend words them (`crates/lens/frontend/src/lib/gradeLegend.ts`: A+ "excellent, ahead of most
    domains" through F "critical, fix today"), held once in `netray-web` so the grade legend of the
@@ -181,7 +181,8 @@ value" means the value the gate measures on the named boards; the inventory row 
     newest on top, up to 24 entries (§5.6), 5 px per row (6 px at phone width); pass a hairline in
     #3a9a66 light (the dark board's pass hairline in dark), warn and fail a 3 px block in their
     colour, not tested and not applicable the muted mark. Right of the trace, mono 11 px muted, the
-    newest and oldest dates ("10-08", "07-12") at its top and bottom edges. The horizontal
+    newest and oldest dates ("10-08", "07-12") at its top and bottom edges (desktop; board M draws
+    none, its stepper names the run). The horizontal
     waterfall rows go. (9.44; boards 25/26, 27/28; board F accepted per the Decision log)
 21. **Caption and hint.** Under the trace, mono 11 px: left "Each line carries its trace: <n> runs,
     newest on top." in muted, right "hover a run to replay the spectrum · tap to pin"; while a run
@@ -532,6 +533,8 @@ GIVEN the side-by-side images WHEN a reader compares them THEN every finding is 
 - Phase 7: `#result-share` becomes a `div` (a dialog cannot sit in a `p`); one canonical origin const feeds the canonical link and every snippet; the badge style query is lens's `style=for-the-badge`. Review: the previews load only when the dialog opens (a badge request on a stale head starts a run in lens), and a share dialog replaced by the stream hands focus to the new Share link (implementer under the operator's autonomy mandate, 2026-10-20).
 
 - Phase 8 visual reading: line labels set at line-height 1; no trace and no replay gutter for a single run (board FFirst), the figure then full width; the first-run ghost row drawn as board FFirst's waterfall row; the stepper greys the step that leads nowhere; the phone hides the feeds line and "· checks that pass" (board M); phone table cells do not wrap (implementer under the operator's autonomy mandate, 2026-10-20).
+
+- Final review: the score rounds down (rounding half up showed "90" under a B at 89.7, against requirement 5's no-contradiction rule); the hard-fail sentence carries the 3 px fail bar; the phone trace has no edge dates (board M); the swipe note appears only in a panel holding a table; an unstored or unrecorded run of a domain without history heads its diff box "This run" (implementer under the operator's autonomy mandate, 2026-10-20).
 
 ### Proposals for the operator
 

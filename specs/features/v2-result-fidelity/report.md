@@ -408,7 +408,7 @@ dialog open after Esc: false focus on share: share
 | V11 | visual reading: M hint touches the stepper | green | visual reading (fixed: 10 px) |
 | V12 | visual reading: M item links on their own line | green | visual reading (fixed: inline after the meta) |
 | V13 | visual reading: M addresses table rows of uneven height | green | visual reading (fixed: phone table cells do not wrap; the table scrolls) |
-| V14 | visual reading: M key-value values wrap mid-token, swipe note far from the table | green | visual reading (proposal for the operator: evidence tab content) |
+| V14 | visual reading: M key-value values wrap mid-token, swipe note far from the table | green | visual reading (swipe note now only in panels holding a table, fixed in the final review; the key-value blocks belong to the proposal for the operator: evidence tab content) |
 | V15 | visual reading: M extra feeds line | green | visual reading (fixed: hidden at phone width, as board M) |
 | V16 | visual reading: M extra "· checks that pass" | green | visual reading (fixed: hidden at phone width, as board M) |
 

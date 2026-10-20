@@ -301,6 +301,10 @@ main td {
   color: var(--status-fail-text);
   font-weight: var(--font-weight-strong);
 }
+.hard-fail__sentence {
+  padding-inline-start: var(--space-3);
+  border-inline-start: var(--line-warn) solid var(--status-fail-mark);
+}
 .hard-fail__without {
   color: var(--color-muted);
   font-weight: var(--font-weight-regular);
