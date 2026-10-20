@@ -656,3 +656,55 @@ mod probe_permits {
         assert_eq!(probes.tls1_0.detail, "timed out");
     }
 }
+
+// specs/features/v2-tls-probe-close Phase 3 review: a backend that honours the time left returns
+// its answers at the deadline; they are kept, never replaced by "timed out".
+mod probe_deadline_keeps_answers {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    use netray_tls::tls::probe::{ProbeOutcome, ProtocolProbes, Verdict};
+    use tokio::sync::Semaphore;
+
+    fn accepted() -> ProbeOutcome {
+        ProbeOutcome {
+            verdict: Verdict::Accepted,
+            version: Some("TLSv1.0".into()),
+            cipher_suite: None,
+            detail: "server_hello TLSv1.0".into(),
+        }
+    }
+
+    #[tokio::test]
+    async fn answers_returned_at_the_time_left_are_kept() {
+        let canned = ProtocolProbes {
+            ssl3: accepted(),
+            tls1_0: accepted(),
+            tls1_1: accepted(),
+            tls1_2: accepted(),
+            tls1_3: accepted(),
+            suites_insecure: accepted(),
+            suites_cbc: accepted(),
+            suites_static_rsa: accepted(),
+        };
+        let stub = Arc::new(
+            StubTlsBackend::new()
+                .with_probes(canned.clone())
+                .with_probe_delay(Duration::from_secs(10))
+                .honouring_probe_timeout(),
+        );
+        let mut state = stub_state(stub);
+        let mut config = stub_config();
+        config.limits.handshake_timeout_secs = 1;
+        state.config.store(Arc::new(config));
+        state.probe_semaphore = Arc::new(Semaphore::new(1));
+        let start = Instant::now();
+        let resp = state
+            .inspector()
+            .inspect(&req("example.com", 443), caller(), &limits(), "rid".into())
+            .await
+            .expect("inspection answers");
+        assert!(start.elapsed() < Duration::from_millis(1800));
+        assert_eq!(resp.ports[0].ips[0].probes, Some(canned));
+    }
+}
