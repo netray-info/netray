@@ -10,6 +10,8 @@ mod facts_blocks;
 mod facts_definite;
 mod history_volatile;
 mod integration;
+mod job_page_blocks;
+mod job_page_blocks_human;
 mod job_summary;
 mod lint_results_table;
 mod lookup_errors_unmeasured;
