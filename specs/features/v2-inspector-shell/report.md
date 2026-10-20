@@ -118,3 +118,62 @@ links to blocks on the page and the DNS job's band carries no evidence links
 a one-line band; band line names wrap between words and the band scrolls inside its column.
 Deferred: the email band's caption says MAIL (the line-code tag) while the plate says EMAIL;
 Phase 7 settles it with the email inspector.
+
+## Phase 3 — URL, sharing, history and autocomplete
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R11 URL follows the query: pushState on submit, back and forward restore and re-run, a prefilled URL runs | green | islands/test/shell-url.test.ts |
+| C2 | R12 Share link: the final fragment carries the key, the address bar becomes /inspect/tool?r=key, Copy link copies it or opens the share sheet | green | islands/test/shell-url.test.ts, tests/it/shell_shared.rs |
+| C3 | R13 Shared runs: one keyed cache, one hour, 1000 runs, server-rendered ?r= page, 404 notice, DNS reuses the API cache, privacy line | green | tests/it/shell_shared.rs |
+| C4 | R14 The caller's own address is never shared | green | tests/it/shell_shared_dns.rs |
+| C5 | R15 Query history: 20 distinct per inspector, list on focus, keys, clear, storage failures tolerated | green | islands/test/shell-history.test.ts |
+| C6 | R16 Autocomplete hook with the DNS provider from the DNS crate's tables | green | islands/test/shell-history.test.ts, tests/it/shell_suggest.rs |
+| C7 | GIVEN the TLS page WHEN example.com:443 is submitted THEN the address bar reads /inspect/tls?h=example.com%3A443 and a state was pushed | green | islands/test/shell-url.test.ts |
+| C8 | GIVEN two submitted queries WHEN back is used THEN the input holds the first query and its run starts | green | islands/test/shell-url.test.ts |
+| C9 | GIVEN a finished HTTP run THEN the final fragment carries a 12-hex key and ?r=key renders the same run without a job | green | tests/it/shell_shared.rs |
+| C10 | GIVEN a shared run page without JS THEN its run title starts SHARED and its blocks are present | green | tests/it/shell_shared.rs |
+| C11 | GIVEN a finished run with key K WHEN Copy link is pressed THEN the clipboard holds /inspect/tool?r=K | green | islands/test/shell-url.test.ts |
+| C12 | GIVEN ?r= unknown, malformed or of another tool THEN 404 with the idle shell and the expiry notice | green | tests/it/shell_shared.rs |
+| C13 | GIVEN a run older than one hour WHEN its key is requested THEN 404 | green | tests/it/shell_shared.rs |
+| C14 | GIVEN a finished DNS inspector run with key K THEN GET /api/v1/dns/results/K answers 200 with its mode and query | green | tests/it/shell_shared_dns.rs |
+| C15 | GIVEN a key an API DNS job stored THEN /inspect/dns?r=key renders its blocks and the band text | green | tests/it/shell_shared_dns.rs |
+| C16 | GIVEN an IP run with empty input THEN no key and no cached run; GIVEN ip=192.0.2.24 THEN a key | green | tests/it/shell_shared_dns.rs |
+| C17 | GIVEN a shareable run WHEN it ends THEN the history store is unchanged | green | tests/it/shell_shared.rs |
+| C18 | GIVEN 21 distinct submitted queries THEN the history list holds the newest 20, newest first, distinct | green | islands/test/shell-history.test.ts |
+| C19 | GIVEN storage that throws WHEN a query is submitted THEN the run starts and no error escapes | green | islands/test/shell-history.test.ts |
+| C20 | GIVEN DNS input example.com @cl THEN the provider suggests @cloudflare and Tab completes it | green | islands/test/shell-history.test.ts |
+| C21 | GIVEN the TLS page THEN no provider is registered and no suggestion list shows | green | islands/test/shell-history.test.ts, tests/it/shell_suggest.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 server | 2 | opus | 133996 | 656 |
+| G2 island | 1 | sonnet | 47657 | 74 |
+| review fixes (shell_review_p3) | 1 | orchestrator | 0 | 0 |
+
+### Behavioural verification
+
+Local lens:
+
+```
+$ curl -s -X POST --data-urlencode "url=https://1.1.1.1/" http://127.0.0.1:18931/inspect/http/run   -> share fragment data-share-key="a788285f4898"
+$ curl -s -w "%{http_code}" "http://127.0.0.1:18931/inspect/http?r=a788285f4898"
+200   (no data-stream-autostart; run title parts: shared · 2026-10-20 11:05 UTC · not recorded; h1 https://1.1.1.1/)
+$ curl -s -w "%{http_code}" "http://127.0.0.1:18931/inspect/tls?r=a788285f4898"
+404
+$ curl -s -X POST -d "ip=" http://127.0.0.1:18931/inspect/ip/run | grep -c data-share-key
+0
+```
+
+### Review
+
+Reader: 2 blockers in the island's popstate (an in-page evidence link re-ran the query or
+reloaded; back to the idle entry submitted an empty query), fixed: the shell tracks the path and
+query it set and ignores a popstate that keeps them, and loads an entry without a query from the
+server. Amendments folded in: suggestions start unselected (Enter submits, Tab completes); an API
+DNS result without blocks shows a reason (Rule M); LRU wording in requirement 13 and the SDD.
+Tests: `tests/it/shell_review_p3.rs`, `islands/test/shell-review-p3.test.ts`.

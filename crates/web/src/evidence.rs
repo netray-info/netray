@@ -127,6 +127,14 @@ pub fn live_run_title(now: i64) -> RunLineView {
     }
 }
 
+/// The run title of a shared inspector run started at `started` (Unix seconds), when known.
+pub fn shared_run_title(started: Option<i64>) -> RunLineView {
+    let mut parts = vec!["shared".to_string()];
+    parts.extend(started.map(|t| format!("{} UTC", crate::pages::result::views::utc_minute(t))));
+    parts.push("not recorded".to_string());
+    RunLineView { parts }
+}
+
 /// The entry-view URL of a protocol, with the anchor of a block when one is given.
 pub fn href(entry_id: &str, protocol: Protocol, block: Option<&BlockId>) -> String {
     match block {

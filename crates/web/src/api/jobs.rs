@@ -8,8 +8,9 @@ use futures::FutureExt;
 use futures::future::BoxFuture;
 use netray_dns::parser::ParsedQuery;
 use netray_dns::{
-    DnsAuthCompareResult, DnsCompareResult, DnsDnssecResult, DnsErrorEvent, DnsJob, DnsJobEvent,
-    DnsQueryResult, DnsRefusal, DnsTraceResult, DnssecRequest, TraceRequest, blocks,
+    DnsAuthCompareResult, DnsCachedResult, DnsCompareResult, DnsDnssecResult, DnsErrorEvent,
+    DnsJob, DnsJobEvent, DnsQueryResult, DnsRefusal, DnsResultCache, DnsTraceResult, DnssecRequest,
+    TraceRequest, blocks,
 };
 use netray_engine::{Domain, Facts, Module, RunContext, SectionOutcome};
 use netray_model::evidence::Block;
@@ -22,7 +23,10 @@ use super::error::V1Error;
 use super::inspectors::{HTTP_OFF, TLS_OFF};
 use super::ip::charge;
 use super::state::ApiState;
-use crate::pages::{InspectorJobs, Job, JobPart, JobRequest, Refusal, Tool, registrable_domain};
+use crate::pages::{
+    CachedDns, DnsResults, InspectorJobs, Job, JobPart, JobRequest, Refusal, Tool,
+    registrable_domain,
+};
 
 const NO_STARTTLS: &str = "STARTTLS for IMAP and FTP is not supported";
 const IP_OFF: &str = "IP lookups are unavailable";
@@ -200,11 +204,13 @@ const UNFINISHED: &str = "the job ended before it finished";
 
 /// A part that awaits its started job, collects it and maps the result to blocks. A job with
 /// no block, or no answer that failed or did not finish, is the part's error, never an empty
-/// part; a job that answered and failed shows its blocks and its errors (Rule M).
+/// part; a job that answered and failed shows its blocks and its errors (Rule M). A finished
+/// job is stored in the result cache under the share key, when the run has one.
 fn dns_part<E: DnsJobEvent>(
     label: &str,
     started: tokio::sync::oneshot::Receiver<DnsJob<E>>,
     to_blocks: fn(&E::Collected) -> Vec<Block>,
+    store: Option<(DnsResultCache, String, String)>,
 ) -> JobPart
 where
     E::Collected: Ended,
@@ -214,6 +220,18 @@ where
         output: Box::pin(async move {
             let job = started.await.map_err(|_| "not started".to_string())?;
             let collected = job.collect().await;
+            if let Some((cache, key, query)) = store
+                && collected.ended().2
+            {
+                cache
+                    .insert(DnsCachedResult {
+                        key,
+                        mode: E::MODE.to_owned(),
+                        query,
+                        result: collected.clone().into(),
+                    })
+                    .await;
+            }
             let mut blocks = to_blocks(&collected);
             let (empty, errors, done) = collected.ended();
             if blocks.is_empty() || (empty && (!errors.is_empty() || !done)) {
@@ -533,35 +551,39 @@ impl InspectJobs {
             .map(str::to_ascii_lowercase)
             .collect();
         let flagged = |name: &str| flags.iter().any(|f| f == name);
+        let store = req
+            .share_key
+            .clone()
+            .map(|key| (self.state.dns_results().clone(), key, req.input.clone()));
 
         let (part, start) = if flagged("trace") {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("trace", rx, blocks::trace_blocks),
+                dns_part("trace", rx, blocks::trace_blocks, store),
                 DnsStart::Trace(tx),
             )
         } else if parsed.dnssec || flagged("dnssec") {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("dnssec", rx, blocks::dnssec_blocks),
+                dns_part("dnssec", rx, blocks::dnssec_blocks, store),
                 DnsStart::Dnssec(tx),
             )
         } else if flagged("compare") {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("compare", rx, blocks::compare_blocks),
+                dns_part("compare", rx, blocks::compare_blocks, store),
                 DnsStart::Compare(tx),
             )
         } else if flagged("auth") {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("authcompare", rx, blocks::authcompare_blocks),
+                dns_part("authcompare", rx, blocks::authcompare_blocks, store),
                 DnsStart::AuthCompare(tx),
             )
         } else {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("query", rx, blocks::query_blocks),
+                dns_part("query", rx, blocks::query_blocks, store),
                 DnsStart::Query(tx),
             )
         };
@@ -611,6 +633,55 @@ impl InspectJobs {
         Ok(Job::new(vec![part])
             .with_band(Protocol::Dns, band)
             .with_gate(Box::pin(gate)))
+    }
+}
+
+impl InspectJobs {
+    /// A fresh key for a run's share link, in the DNS result cache's key shape.
+    pub(crate) fn share_key() -> String {
+        DnsResultCache::fresh_key()
+    }
+
+    pub(crate) fn is_share_key(key: &str) -> bool {
+        netray_dns::is_key(key)
+    }
+
+    /// The DNS shell's autocomplete tables, each space-separated: the record types, the flags
+    /// with their `+`, the provider and group names.
+    pub(crate) fn dns_tables() -> (String, String, String) {
+        let types = netray_dns::record_types()
+            .record_types
+            .into_iter()
+            .map(|t| t.name)
+            .collect::<Vec<_>>()
+            .join(" ");
+        let flags = netray_dns::parser::FLAGS
+            .iter()
+            .map(|f| format!("+{f}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let catalogue = netray_dns::server_catalogue();
+        let servers = catalogue
+            .providers
+            .iter()
+            .map(|p| p.name().to_string())
+            .chain(catalogue.groups.into_iter().map(|g| g.name))
+            .collect::<Vec<_>>()
+            .join(" ");
+        (types, flags, servers)
+    }
+}
+
+impl DnsResults for DnsResultCache {
+    fn result<'a>(&'a self, key: &'a str) -> BoxFuture<'a, Option<CachedDns>> {
+        Box::pin(async move {
+            let cached = self.get(key).await?;
+            Some(CachedDns {
+                blocks: cached.result.blocks(),
+                query: cached.query,
+                mode: cached.mode,
+            })
+        })
     }
 }
 

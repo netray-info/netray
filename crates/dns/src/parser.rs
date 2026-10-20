@@ -360,6 +360,21 @@ fn parse_ipv4_with_port(s: &str) -> Option<ServerSpec> {
     Some(ServerSpec::Ip { addr, port })
 }
 
+/// The flags a query takes, without their `+`.
+pub const FLAGS: &[&str] = &[
+    "udp",
+    "tcp",
+    "tls",
+    "https",
+    "dnssec",
+    "short",
+    "norecurse",
+    "check",
+    "trace",
+    "compare",
+    "auth",
+];
+
 /// Parse a flag name after stripping the `+` prefix.
 fn parse_flag(
     name: &str,
@@ -369,7 +384,14 @@ fn parse_flag(
     recursive: &mut bool,
     warnings: &mut Vec<String>,
 ) {
-    match name.to_ascii_lowercase().as_str() {
+    let flag = name.to_ascii_lowercase();
+    if !FLAGS.contains(&flag.as_str()) {
+        warnings.push(format!("unrecognized flag: +{name}"));
+        return;
+    }
+    // +check, +trace, +compare and +auth are routing hints: the backend routes them via
+    // dedicated endpoints, not via query-string flags.
+    match flag.as_str() {
         "udp" => *transport = Some(Transport::Udp),
         "tcp" => *transport = Some(Transport::Tcp),
         "tls" => *transport = Some(Transport::Tls),
@@ -377,12 +399,7 @@ fn parse_flag(
         "dnssec" => *dnssec = true,
         "short" => *short = true,
         "norecurse" => *recursive = false,
-        // +check and +trace are routing hints for the frontend; the backend
-        // routes them via dedicated endpoints, not via query-string flags.
-        "check" | "trace" | "compare" | "auth" => {}
-        _ => {
-            warnings.push(format!("unrecognized flag: +{name}"));
-        }
+        _ => {}
     }
 }
 

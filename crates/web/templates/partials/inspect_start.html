@@ -3,8 +3,9 @@
 <div class="inspector-run__head">
 {% call rl::run_title(title) %}{% endcall %}
 {% if let Some((href, domain)) = link %}<a class="inspector-backlink" href="{{ href }}">{% if let Some(g) = grade %}<span class="inspector-backlink__grade">{{ g }}</span> {% endif %}Back to the result of {{ domain }} →</a>
-{% endif %}</div>
+{% endif %}{{ share|safe }}</div>
 <h1 class="inspector-run__target">{{ target }}</h1>
-{% if band %}<div id="inspect-band"></div>
-{% endif %}{% for (n, label) in parts %}<section class="inspector-section" id="inspect-part-{{ n }}"><h2>{{ label }}</h2><p>pending</p></section>
-{% endfor %}</div>
+{% match band %}{% when BandSlot::Pending %}<div id="inspect-band"></div>
+{% when BandSlot::Done(html) %}{{ html|safe }}
+{% when BandSlot::Absent %}{% endmatch %}{% for (n, label, html) in parts %}{% if let Some(html) = html %}{{ html|safe }}{% else %}<section class="inspector-section" id="inspect-part-{{ n }}"><h2>{{ label }}</h2><p>pending</p></section>
+{% endif %}{% endfor %}</div>

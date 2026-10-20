@@ -72,3 +72,47 @@ macro and the block-link loop. `static/inspector_shell.css` — band line and ch
 Heading wording: "<n> lines need attention" ("1 line needs attention") with "<f> fail · <w> warn";
 "All <n> lines pass" when every line passes; "No line needs attention" with "<k> not measured"
 when nothing warns or fails but some lines are unmeasured, not applicable or not tested.
+
+## Phase 3 — URL, sharing, history and autocomplete
+
+### Groups
+
+G1 (server): C3, C4, C9, C10, C12, C13, C14, C15, C16, C17 and the server halves of C2, C6, C21 ·
+G2 (island, `shell.ts` only): C1, C2, C5, C6, C7, C8, C11, C18, C19, C20, C21. G1 first.
+
+### Plan
+
+G1:
+1. `crates/dns/src/parser.rs`: `pub const FLAGS` (udp tcp tls https dnssec short norecurse check
+   trace compare auth); `parse_flag` warns for a name outside it.
+2. `crates/dns/src/api/meta.rs`: `ServerInfo::name()`.
+3. `crates/dns/src/jobs/results.rs`: `DnsCachedJob::blocks()` over `blocks::*_blocks`.
+4. `crates/web/Cargo.toml`: `moka` (workspace, `future`).
+5. `crates/web/src/pages/inspect/shared.rs` (new submodule): `SharedRuns` (moka, 1 000 entries,
+   1 h, LRU; `with_ttl` for tests) of `SharedRun` data (tool, input, target, start, link, grade,
+   parts, band).
+6. `crates/web/src/evidence.rs`: `shared_run_title(Option<i64>)`.
+7. `templates/partials/inspect_share.html` (new): the share slot with `data-share-key`/`-url`.
+8. `templates/partials/inspect_start.html`: share slot in the head; band slot `Pending`/`Done`;
+   parts pending or rendered, so one template renders the live start and the finished run.
+9. `components/query_input.html`: the card box is a `div`; input gets the listbox ARIA; empty
+   `ul#inspector-suggest`.
+10. `components/inspector_shell.html`: `data-suggest*` on the root for DNS; a server-rendered result
+    or the idle region with an optional notice.
+11. `src/pages/inspect.rs`: `JobRequest::share_key`; `InspectDeps` holds `SharedRuns` and an optional
+    `DnsResultCache` (`with_shared_runs`, `with_dns_results`); `suggest(tool)`; renderers factored
+    (`part_html`, `band_region_html`, `finished_html`, `shared_html`); `show` serves `?r=` (shared
+    run, DNS fallback, 404 notice); `run` picks the key (none for the caller's own address);
+    `stream_job` stores the finished run and sends the share fragment before `end`.
+12. `src/pages/mod.rs`: re-export `SharedRuns`.
+13. `src/api/jobs.rs`: `dns_part` stores the finished collected job in `DnsResultCache` under the
+    share key.
+14. `static/inspector_shell.css`: share, suggest list, options, notice.
+15. `templates/pages/privacy.html`: the one-hour sharing paragraph.
+16. `crates/lens/src/lib.rs`: `.with_dns_results(api_state.dns_results().clone())`.
+17. `specs/sdd/v2.md`: §6.2 sharing bullet, §7.3 `?r=` row, §4.7 privacy sentence.
+
+G2: `crates/web/islands/src/shell.ts`: pushState on submit, popstate restore and re-run (a
+`restoring` flag), replaceState to the share URL on stream end, copy link (clipboard or share sheet
+on a coarse pointer), history in `localStorage` (20, distinct, newest first, try/catch), the
+listbox with keys, and the DNS autocomplete over the root's `data-suggest*` lists.

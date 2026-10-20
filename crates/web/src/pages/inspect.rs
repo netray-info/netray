@@ -34,16 +34,29 @@ use url::{Host, Url};
 use super::errors::LOCATION_SET;
 use super::headers::secure;
 use super::{Frame, not_found, page, server_error};
+use crate::api::InspectJobs;
 use crate::client::client_ip;
 use crate::components::{self, QueryInputView, RunLineView, SpectrumView};
 use crate::entries::view::grade_letter;
-use crate::evidence::{EvidenceRow, block_view, live_rows, live_run_title};
+use crate::evidence::{EvidenceRow, block_view, live_rows, live_run_title, shared_run_title};
 use crate::pages::result::views::line_code;
 use crate::spectrum::{RunInput, layout};
 use crate::stream::{end, fragment};
 
+mod shared;
+
+use shared::SharedRun;
+pub use shared::SharedRuns;
+
 const RESULT_ID: &str = "inspect-result";
 const BAND_ID: &str = "inspect-band";
+const SHARE_ID: &str = "inspect-share";
+const EXPIRED: &str =
+    "This shared result has expired or never existed; results are kept for one hour.";
+/// The part text of an API result that holds no block (a check that timed out or was not
+/// applicable).
+const NO_API_EVIDENCE: &str = "This API result holds no evidence.";
+const NO_API_BAND: &str = "The band is not part of an API result.";
 const TABS_ID: &str = "inspector-tabs";
 const BAND_WIDTH: u32 = 432;
 /// The longest the run route waits for the back link's grade before it starts the job.
@@ -246,6 +259,8 @@ pub struct JobRequest {
     pub client: IpAddr,
     /// The route's deadline for this job (`[inspect.<tool>] deadline_ms` from the request).
     pub deadline: std::time::Instant,
+    /// The key the finished run is shared under; `None` for the caller's own address.
+    pub share_key: Option<String>,
 }
 
 /// One part of a job, streamed as it finishes.
@@ -311,6 +326,21 @@ pub struct InspectDeps {
     extractor: Arc<IpExtractor>,
     slots: [Arc<Semaphore>; 4],
     history: Option<Arc<netray_store::HistoryStore>>,
+    shared: SharedRuns,
+    dns_results: Option<Arc<dyn DnsResults>>,
+}
+
+/// A DNS result the API's cache holds under a key, as the shell renders it.
+pub struct CachedDns {
+    pub query: String,
+    pub mode: String,
+    pub blocks: Vec<Block>,
+}
+
+/// The API's DNS result cache, as the shell reads it: a key only it holds opens in the DNS
+/// inspector.
+pub trait DnsResults: Send + Sync + 'static {
+    fn result<'a>(&'a self, key: &'a str) -> BoxFuture<'a, Option<CachedDns>>;
 }
 
 impl InspectDeps {
@@ -324,6 +354,8 @@ impl InspectDeps {
             extractor: Arc::new(IpExtractor::new(&[])),
             slots,
             history: None,
+            shared: SharedRuns::new(),
+            dns_results: None,
         }
     }
 
@@ -335,6 +367,18 @@ impl InspectDeps {
     /// The store the run route reads the latest grade from for the back link; it never writes.
     pub fn with_history(mut self, history: Option<Arc<netray_store::HistoryStore>>) -> Self {
         self.history = history;
+        self
+    }
+
+    /// Replaces the cache of shared runs.
+    pub fn with_shared_runs(mut self, shared: SharedRuns) -> Self {
+        self.shared = shared;
+        self
+    }
+
+    /// The API's DNS result cache: a key only it holds opens in the DNS inspector.
+    pub fn with_dns_results(mut self, dns_results: impl DnsResults) -> Self {
+        self.dns_results = Some(Arc::new(dns_results));
         self
     }
 }
@@ -361,6 +405,17 @@ struct ShellView {
     tabs: String,
     examples: Vec<ExampleView>,
     slot: Option<String>,
+    result: Option<String>,
+    notice: Option<&'static str>,
+    suggest: Option<SuggestView>,
+}
+
+/// The autocomplete tables of the DNS shell, each a space-separated list.
+struct SuggestView {
+    name: &'static str,
+    types: String,
+    flags: String,
+    servers: String,
 }
 
 #[derive(Template)]
@@ -387,8 +442,23 @@ struct StartFragment {
     target: String,
     link: Option<(String, String)>,
     grade: Option<&'static str>,
-    parts: Vec<(usize, String)>,
-    band: bool,
+    parts: Vec<(usize, String, Option<String>)>,
+    band: BandSlot,
+    share: String,
+}
+
+/// The band region of the start fragment: none, a placeholder the stream fills, or rendered.
+enum BandSlot {
+    Absent,
+    Pending,
+    Done(String),
+}
+
+#[derive(Template)]
+#[template(path = "partials/inspect_share.html")]
+struct ShareFragment {
+    tool: &'static str,
+    key: Option<String>,
 }
 
 #[derive(Template)]
@@ -435,14 +505,40 @@ pub fn inspect_router(deps: InspectDeps) -> Router {
         ))
 }
 
-async fn show(tool: Result<Path<String>, PathRejection>, uri: Uri) -> Response {
+/// What a share key opens.
+enum Shared {
+    Found { input: String, html: String },
+    Missing,
+    Broken,
+}
+
+async fn show(
+    State(deps): State<InspectDeps>,
+    tool: Result<Path<String>, PathRejection>,
+    uri: Uri,
+) -> Response {
     let Some(tool) = tool.ok().and_then(|Path(name)| Tool::parse(&name)) else {
         return not_found().await;
     };
-    let prefill = Query::<HashMap<String, String>>::try_from_uri(&uri)
-        .ok()
-        .and_then(|Query(mut q)| q.remove(tool.field()))
-        .filter(|v| !v.is_empty());
+    let mut query = Query::<HashMap<String, String>>::try_from_uri(&uri)
+        .map(|Query(q)| q)
+        .unwrap_or_default();
+    let mut prefill = query.remove(tool.field()).filter(|v| !v.is_empty());
+    let (mut status, mut result, mut notice) = (StatusCode::OK, None, None);
+    if let Some(key) = query.remove("r") {
+        match shared_result(&deps, tool, &key).await {
+            Shared::Found { input, html } => {
+                prefill = Some(input).filter(|v| !v.is_empty());
+                result = Some(html);
+            }
+            Shared::Missing => {
+                status = StatusCode::NOT_FOUND;
+                prefill = None;
+                notice = Some(EXPIRED);
+            }
+            Shared::Broken => return server_error(),
+        }
+    }
     let name = tool.as_str();
     let slot = match tool {
         Tool::Dns => (DnsBuilder).render().ok(),
@@ -468,7 +564,7 @@ async fn show(tool: Result<Path<String>, PathRejection>, uri: Uri) -> Response {
             submit: "Inspect".to_string(),
         },
         stream_url: format!("/inspect/{name}/run"),
-        autostart: prefill.is_some(),
+        autostart: prefill.is_some() && result.is_none(),
         tabs,
         examples: tool
             .examples()
@@ -483,9 +579,12 @@ async fn show(tool: Result<Path<String>, PathRejection>, uri: Uri) -> Response {
             })
             .collect(),
         slot,
+        result,
+        notice,
+        suggest: suggest(tool),
     };
     page(
-        StatusCode::OK,
+        status,
         "no-cache",
         &InspectorPage {
             frame: Frame::new(
@@ -496,6 +595,73 @@ async fn show(tool: Result<Path<String>, PathRejection>, uri: Uri) -> Response {
             shell,
         },
     )
+}
+
+/// The run a share key names: a stored run of this tool, or for DNS a result of the API's cache.
+async fn shared_result(deps: &InspectDeps, tool: Tool, key: &str) -> Shared {
+    if !InspectJobs::is_share_key(key) {
+        return Shared::Missing;
+    }
+    if let Some(run) = deps.shared.get(key).await.filter(|run| run.tool == tool) {
+        return match shared_html(&run, key) {
+            Some(html) => Shared::Found {
+                input: run.input.clone(),
+                html,
+            },
+            None => Shared::Broken,
+        };
+    }
+    let cached = match (tool, &deps.dns_results) {
+        (Tool::Dns, Some(cache)) => cache.result(key).await,
+        _ => None,
+    };
+    let Some(cached) = cached else {
+        return Shared::Missing;
+    };
+    // Rule M: a part is never empty; an API result without a block says so.
+    let blocks = if cached.blocks.is_empty() {
+        Err(NO_API_EVIDENCE.to_string())
+    } else {
+        Ok(cached.blocks)
+    };
+    let band = (BandFragment {
+        band: None,
+        text: NO_API_BAND.to_string(),
+    })
+    .render()
+    .ok();
+    let html = band.and_then(|band| {
+        finished_html(
+            shared_run_title(None),
+            cached.query.clone(),
+            backlink(Tool::Dns, &cached.query),
+            None,
+            vec![(cached.mode.clone(), part_html(0, &cached.mode, &blocks))],
+            BandSlot::Done(band),
+            share_html(Tool::Dns, Some(key.to_string()))?,
+        )
+    });
+    match html {
+        Some(html) => Shared::Found {
+            input: cached.query,
+            html,
+        },
+        None => Shared::Broken,
+    }
+}
+
+/// The autocomplete tables: the DNS crate's own record types, flags and server names.
+fn suggest(tool: Tool) -> Option<SuggestView> {
+    if tool != Tool::Dns {
+        return None;
+    }
+    let (types, flags, servers) = InspectJobs::dns_tables();
+    Some(SuggestView {
+        name: "dns",
+        types,
+        flags,
+        servers,
+    })
 }
 
 /// The five tabs; the target of `input` rides along where the other inspector takes it.
@@ -605,6 +771,7 @@ async fn run(
     if let Err(retry_after) = deps.jobs.admit(tool, client, &input) {
         return too_many_requests(tool, retry_after);
     }
+    let share_key = (!(tool == Tool::Ip && input.trim().is_empty())).then(InspectJobs::share_key);
     let deadline = Instant::now() + Duration::from_millis(deps.config.limits(tool).deadline_ms);
     let link = backlink(tool, &input);
     let grade = match (&deps.history, &link) {
@@ -631,11 +798,13 @@ async fn run(
     }
     .render()
     .ok();
+    let posted = input.clone();
     let mut job = match deps.jobs.start(JobRequest {
         tool,
         input,
         client,
         deadline: deadline.into_std(),
+        share_key: share_key.clone(),
     }) {
         Ok(job) => job,
         Err(message) => return notice(tool, StatusCode::OK, message),
@@ -653,13 +822,17 @@ async fn run(
     match stream_job(
         job,
         StartHead {
+            tool,
+            input: posted,
             target,
             link,
             grade,
             tabs,
+            share_key,
         },
         permit,
         deadline,
+        deps.shared.clone(),
     ) {
         Some(events) => (StatusCode::OK, Sse::new(events)).into_response(),
         None => server_error(),
@@ -667,6 +840,9 @@ async fn run(
 }
 
 type PartOutput = (usize, Result<Vec<Block>, String>);
+
+type PartResult = Result<Vec<Block>, String>;
+type BandResult = Result<Vec<CheckResult>, String>;
 
 struct Run {
     _permit: OwnedSemaphorePermit,
@@ -677,43 +853,155 @@ struct Run {
     deadline: Instant,
     blocks: Vec<Block>,
     band: Option<(Protocol, BandChecks)>,
+    results: Vec<Option<PartResult>>,
+    band_out: Option<(Protocol, BandResult)>,
+    shared: SharedRuns,
+    share_key: Option<String>,
+    tool: Tool,
+    input: String,
+    target: String,
+    link: Option<(String, String)>,
+    grade: Option<&'static str>,
+    started: i64,
     ended: bool,
 }
 
-fn part_event(n: usize, label: &str, result: Result<Vec<Block>, String>) -> Option<Event> {
+impl Run {
+    /// The finished run as data, for its share key.
+    fn finished(&mut self) -> SharedRun {
+        let parts = self
+            .labels
+            .iter()
+            .cloned()
+            .zip(
+                self.results
+                    .iter_mut()
+                    .map(|r| r.take().unwrap_or_else(|| Err("timed out".to_string()))),
+            )
+            .collect();
+        SharedRun {
+            tool: self.tool,
+            input: std::mem::take(&mut self.input),
+            target: self.target.clone(),
+            started: self.started,
+            link: self.link.clone(),
+            grade: self.grade,
+            parts,
+            band: self.band_out.take(),
+        }
+    }
+}
+
+/// A part's section: its blocks or its error text.
+fn part_html(n: usize, label: &str, result: &PartResult) -> Option<String> {
     let (html, text) = match result {
         Ok(blocks) => {
             let mut html = String::new();
-            for block in &blocks {
+            for block in blocks {
                 html.push_str(&components::evidence_block(&block_view(block)).ok()?);
             }
             (Some(html), String::new())
         }
-        Err(text) => (None, text),
+        Err(text) => (None, text.clone()),
     };
     let label = label.to_string();
-    let html = (PartFragment {
+    (PartFragment {
         n,
         label,
         html,
         text,
     })
     .render()
-    .ok()?;
+    .ok()
+}
+
+fn part_event(n: usize, label: &str, result: &PartResult) -> Option<Event> {
+    let html = part_html(n, label, result)?;
     Some(fragment(&format!("inspect-part-{n}"), &html))
 }
 
-fn band_event(
-    protocol: Protocol,
-    blocks: &[Block],
-    result: Result<Vec<CheckResult>, String>,
-) -> Option<Event> {
-    let (band, text) = match result.and_then(|checks| band_view(protocol, &checks, blocks)) {
+/// The band region: the plate and the check list, or the error text.
+fn band_region_html(protocol: Protocol, blocks: &[Block], result: &BandResult) -> Option<String> {
+    let (band, text) = match result
+        .as_ref()
+        .map_err(Clone::clone)
+        .and_then(|checks| band_view(protocol, checks, blocks))
+    {
         Ok(band) => (Some(band), String::new()),
         Err(text) => (None, text),
     };
-    let html = (BandFragment { band, text }).render().ok()?;
+    (BandFragment { band, text }).render().ok()
+}
+
+fn band_event(protocol: Protocol, blocks: &[Block], result: &BandResult) -> Option<Event> {
+    let html = band_region_html(protocol, blocks, result)?;
     Some(fragment(BAND_ID, &html))
+}
+
+fn share_html(tool: Tool, key: Option<String>) -> Option<String> {
+    (ShareFragment {
+        tool: tool.as_str(),
+        key,
+    })
+    .render()
+    .ok()
+}
+
+/// A finished run's result region, in the markup the stream leaves behind.
+fn finished_html(
+    title: RunLineView,
+    target: String,
+    link: Option<(String, String)>,
+    grade: Option<&'static str>,
+    parts: Vec<(String, Option<String>)>,
+    band: BandSlot,
+    share: String,
+) -> Option<String> {
+    let mut rendered = Vec::with_capacity(parts.len());
+    for (n, (label, html)) in parts.into_iter().enumerate() {
+        rendered.push((n, label, Some(html?)));
+    }
+    StartFragment {
+        title,
+        target,
+        link,
+        grade,
+        parts: rendered,
+        band,
+        share,
+    }
+    .render()
+    .ok()
+}
+
+/// A stored run's result region.
+fn shared_html(run: &SharedRun, key: &str) -> Option<String> {
+    let blocks: Vec<Block> = run
+        .parts
+        .iter()
+        .filter_map(|(_, r)| r.as_ref().ok())
+        .flatten()
+        .cloned()
+        .collect();
+    let band = match &run.band {
+        Some((protocol, result)) => BandSlot::Done(band_region_html(*protocol, &blocks, result)?),
+        None => BandSlot::Absent,
+    };
+    let parts = run
+        .parts
+        .iter()
+        .enumerate()
+        .map(|(n, (label, result))| (label.clone(), part_html(n, label, result)))
+        .collect();
+    finished_html(
+        shared_run_title(Some(run.started)),
+        run.target.clone(),
+        run.link.clone(),
+        run.grade,
+        parts,
+        band,
+        share_html(run.tool, Some(key.to_string()))?,
+    )
 }
 
 fn band_view(
@@ -795,10 +1083,13 @@ fn band_html(protocol: Protocol, checks: &[CheckResult]) -> Result<String, Strin
 
 /// What the start fragment's head shows: the target, the back link and the stored grade.
 struct StartHead {
+    tool: Tool,
+    input: String,
     target: String,
     link: Option<(String, String)>,
     grade: Option<&'static str>,
     tabs: Option<String>,
+    share_key: Option<String>,
 }
 
 /// The letter of a stored grade; `None` for a grade that is not a letter.
@@ -814,6 +1105,7 @@ fn stream_job(
     head: StartHead,
     permit: OwnedSemaphorePermit,
     deadline: Instant,
+    shared: SharedRuns,
 ) -> Option<Events> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -821,16 +1113,21 @@ fn stream_job(
     let labels: Vec<String> = job.parts.iter().map(|part| part.label.clone()).collect();
     let start = StartFragment {
         title: live_run_title(now),
-        target: head.target,
-        link: head.link,
+        target: head.target.clone(),
+        link: head.link.clone(),
         grade: head.grade,
         parts: job
             .parts
             .iter()
             .enumerate()
-            .map(|(n, part)| (n, part.label.clone()))
+            .map(|(n, part)| (n, part.label.clone(), None))
             .collect(),
-        band: job.band.is_some(),
+        band: if job.band.is_some() {
+            BandSlot::Pending
+        } else {
+            BandSlot::Absent
+        },
+        share: share_html(head.tool, None)?,
     }
     .render()
     .ok()?;
@@ -853,10 +1150,20 @@ fn stream_job(
         .into_iter()
         .flatten()
         .collect(),
+        results: (0..labels.len()).map(|_| None).collect(),
         labels,
         deadline,
         blocks: Vec::new(),
         band: job.band,
+        band_out: None,
+        shared,
+        share_key: head.share_key,
+        tool: head.tool,
+        input: head.input,
+        target: head.target,
+        link: head.link,
+        grade: head.grade,
+        started: now,
         ended: false,
     };
     let events = futures::stream::unfold(run, |mut run| async move {
@@ -873,10 +1180,19 @@ fn stream_job(
                         .await
                         .unwrap_or_else(|_| Err("timed out".to_string()));
                     run.queue.push_back(
-                        band_event(protocol, &run.blocks, result)
+                        band_event(protocol, &run.blocks, &result)
                             .unwrap_or_else(|| fragment(BAND_ID, "render failed")),
                     );
+                    run.band_out = Some((protocol, result));
                     continue;
+                }
+                if let Some(key) = run.share_key.take() {
+                    let finished = run.finished();
+                    run.shared.insert(key.clone(), finished).await;
+                    if let Some(html) = share_html(run.tool, Some(key)) {
+                        run.queue.push_back(fragment(SHARE_ID, &html));
+                        continue;
+                    }
                 }
                 run.ended = true;
                 return Some((Ok(end()), run));
@@ -887,8 +1203,9 @@ fn stream_job(
                     if let Ok(blocks) = &result {
                         run.blocks.extend(blocks.iter().cloned());
                     }
-                    let event = part_event(n, &run.labels[n], result)
+                    let event = part_event(n, &run.labels[n], &result)
                         .unwrap_or_else(|| fragment(&format!("inspect-part-{n}"), "render failed"));
+                    run.results[n] = Some(result);
                     return Some((Ok(event), run));
                 }
                 Ok(None) => run.pending.clear(),
@@ -897,7 +1214,7 @@ fn stream_job(
                     let late: Vec<usize> = std::mem::take(&mut run.waiting).into_iter().collect();
                     for n in late {
                         let timed_out = Err("timed out".to_string());
-                        if let Some(event) = part_event(n, &run.labels[n], timed_out) {
+                        if let Some(event) = part_event(n, &run.labels[n], &timed_out) {
                             run.queue.push_back(event);
                         }
                     }

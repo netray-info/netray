@@ -189,7 +189,9 @@ Each requirement names the inventory rows or board rows it closes.
 ### Input workflow and sharing
 
 11. **URL follows the query.** On submit the shell writes `?<field>=<value>` into the address bar
-    with `history.pushState`; back and forward restore the input and re-run that query; loading a
+    with `history.pushState`; back and forward restore the input and re-run that query (an entry
+    without a query, the idle page or a shared run, is loaded from the server; a change of the
+    fragment alone, such as an evidence link, restores nothing); loading a
     prefilled URL runs it (v2-inspectors requirement 9's autostart). (2.35, 4.7)
 12. **Share link.** When a shareable run ends, its final fragment carries the run's share key and
     the shell replaces the address bar's URL with `/inspect/<tool>?r=<key>` (the query stays in the
@@ -201,7 +203,7 @@ Each requirement names the inventory rows or board rows it closes.
     target heading, start time, each part's label and blocks or error text, and the band's
     protocol and checks or error text. Keys are 12 lowercase hex characters of random bits
     (`netray_dns::DnsResultCache::fresh_key`'s scheme); the cache holds at most 1 000 runs and
-    drops the oldest first. `GET /inspect/<tool>?r=<key>` renders the stored run server-side in
+    drops the least recently used first. `GET /inspect/<tool>?r=<key>` renders the stored run server-side in
     the same order and markup as a live run (run title "SHARED · <start time> UTC · NOT
     RECORDED"), with the form prefilled and no autostart, so it works without JavaScript and
     re-runs nothing. A key of the wrong shape, an unknown or expired key, or a key of another tool
@@ -550,6 +552,11 @@ GIVEN the screenshots WHEN read beside board G THEN every finding is a `report.m
   bounded by 500 ms (and the run's deadline) and a store error is logged and read as no entry; a modified click
   on an example chip stays a link (implementer under the operator's autonomy mandate,
   2026-10-20).
+- Phase 3 review: suggestions open with nothing selected, so Enter submits the typed query and Tab
+  takes the first suggestion; an API DNS result without a block shows "This API result holds no
+  evidence."; its errors and warnings are not replayed (the shared inspector run keeps them).
+  The cache drops the least recently used run, as `DnsResultCache` does (implementer under the
+  operator's autonomy mandate, 2026-10-20).
 - The Inspectors menu and the full footer of canvas v43 belong to the site-navigation feature
   (theme J); a reader's finding on G's chevron or footer is answered by this non-goal
   (implementer under the operator's autonomy mandate, 2026-10-20).

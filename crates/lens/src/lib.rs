@@ -303,7 +303,8 @@ pub fn app(state: state::AppState) -> Router {
             config.inspect.clone(),
         )
         .with_ip_extractor(state.ip_extractor.clone())
-        .with_history(state.history_store.clone()),
+        .with_history(state.history_store.clone())
+        .with_dns_results(api_state.dns_results().clone()),
     );
 
     let api_routes = if config.api.enabled {
