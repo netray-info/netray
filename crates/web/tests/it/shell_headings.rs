@@ -193,11 +193,31 @@ async fn c7_c20_sections_are_cards_with_h2_and_the_idle_h1_is_hidden_and_named()
             result.replace_range(open..end, html);
         }
     }
-    let after = page.replacen(
-        r#"<div id="inspect-result"><h1 class="visually-hidden">TLS inspector</h1></div>"#,
-        &result,
-        1,
-    );
+    // The idle region: from its opening tag to the matching `</div>` (it holds the hidden h1 and,
+    // since the phase 1 review, the example chips).
+    let region = |page: &str| -> Option<(usize, usize)> {
+        let open = page
+            .find(r#"<div id="inspect-result"><h1 class="visually-hidden">TLS inspector</h1>"#)?;
+        let mut depth = 0usize;
+        let mut i = open;
+        while i < page.len() {
+            let rest = &page[i..];
+            if rest.starts_with("<div") {
+                depth += 1;
+            } else if rest.starts_with("</div>") {
+                depth -= 1;
+                if depth == 0 {
+                    return Some((open, i + "</div>".len()));
+                }
+            }
+            i += rest.chars().next().map_or(1, char::len_utf8);
+        }
+        None
+    };
+    let mut after = page.clone();
+    if let Some((from, to)) = region(&page) {
+        after.replace_range(from..to, &result);
+    }
     assert_ne!(after, page, "idle result region not found");
     let hs = headings(&after);
     assert_eq!(hs.iter().filter(|h| h.0 == 1).count(), 1, "{hs:?}");

@@ -92,14 +92,16 @@ async fn c4_query_form_is_a_card_with_label_clear_button_and_inspect_submit() {
 }
 
 #[tokio::test]
-async fn c4_clear_button_is_shown_when_the_page_is_prefilled() {
+async fn c4_clear_button_is_server_hidden_and_the_page_is_prefilled() {
     let bare = get("/inspect/tls").await;
     let filled = get("/inspect/tls?h=example.com").await;
 
     let hidden = tag_with(&bare, "query-input__clear").expect("clear on bare page");
     let shown = tag_with(&filled, "query-input__clear").expect("clear on prefilled page");
+    // The server renders the button hidden on both pages: it needs JavaScript, and the island
+    // shows it at mount when the input holds text (phase 1 review, requirements 4 and 26).
     assert!(hidden.contains("hidden"), "{hidden}");
-    assert!(!shown.contains("hidden"), "{shown}");
+    assert!(shown.contains("hidden"), "{shown}");
     assert!(filled.contains("value=\"example.com\""), "{filled}");
 }
 
