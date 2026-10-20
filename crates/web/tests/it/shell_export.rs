@@ -385,7 +385,10 @@ async fn c7_start_fragment_buttons_are_disabled_and_the_final_export_buttons_are
         .iter()
         .find(|e| e.2.contains("id=\"inspect-export\""))
         .unwrap_or_else(|| panic!("no export slot in {events:?}"));
-    let start_buttons = button_tags(&start.2);
+    // Only the export slot's own buttons: the run head also holds the share slot's button.
+    let slot = &start.2[start.2.find("id=\"inspect-export\"").unwrap()..];
+    let slot = &slot[..slot.find("</div>").unwrap_or(slot.len())];
+    let start_buttons = button_tags(slot);
     assert_eq!(start_buttons.len(), 3, "{}", start.2);
     assert!(
         start_buttons.iter().all(|b| b.contains("disabled")),
