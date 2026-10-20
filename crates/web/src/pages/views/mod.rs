@@ -9,7 +9,7 @@ mod ip;
 mod tls;
 
 use askama::Template;
-use netray_model::evidence::{Block, Fields, Shape, Value};
+use netray_model::evidence::{Block, Fields, Node, Shape, Value};
 use netray_model::{CheckId, Status};
 
 use crate::components::{Cell, Tone};
@@ -51,6 +51,25 @@ fn claim<'b>(block: &'b Block, known: &[&str]) -> Option<&'b Fields> {
     match &block.shape {
         Shape::Fields(pairs) if pairs.iter().all(|(k, _)| known.contains(&k.as_str())) => {
             Some(pairs)
+        }
+        _ => None,
+    }
+}
+
+/// The root of a tree block whose root keys are all in `root` and whose children are leaves
+/// with every key in `child`.
+fn claim_tree<'b>(block: &'b Block, root: &[&str], child: &[&str]) -> Option<&'b Node> {
+    let known =
+        |fields: &Fields, keys: &[&str]| fields.iter().all(|(k, _)| keys.contains(&k.as_str()));
+    match &block.shape {
+        Shape::Tree(node)
+            if known(&node.fields, root)
+                && node
+                    .children
+                    .iter()
+                    .all(|c| c.children.is_empty() && known(&c.fields, child)) =>
+        {
+            Some(node)
         }
         _ => None,
     }

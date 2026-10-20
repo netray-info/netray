@@ -58,3 +58,55 @@ Local lens from this worktree, history seeded from `tests/acceptance/fixtures/hi
 ```
 
 The generic blocks on the same page read `<dt>redirects_to_https</dt><dd>yes` (was `true`).
+
+## Phase 2 — CSP, HSTS and server views
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R8 CSP view: mode, count, root issues, directive table with sources and toned issues, scroll container | green | crates/web/tests/it/views_http_csp.rs |
+| C2 | R9 HSTS view: units, not parsed, yes/no, tone from the http.hsts check | already_implemented | crates/web/tests/it/views_http_hsts.rs |
+| C3 | R10 server view: facts grid with links, Inspection took line, no tone; response_ms not claimed | green | crates/web/tests/it/views_http_server.rs |
+| C4 | R15 views need no JavaScript and add no island | already_implemented | crates/web/tests/it/views_frame_style.rs |
+| C5 | S enforced CSP reads Enforced, 2 issues, the base-uri root issue, rows in order, script-src sources and issue | green | crates/web/tests/it/views_http_csp.rs |
+| C6 | S report-only reads Report-Only with data-tone warn and the sentence | green | crates/web/tests/it/views_http_csp.rs |
+| C7 | S a 4 kB policy: each source its own element, the table in a horizontal scroll container | green | crates/web/tests/it/views_http_csp.rs |
+| C8 | S no CSP header: no CSP view | already_implemented | crates/web/tests/it/views_http_csp.rs |
+| C9 | S max-age 31536000 with includeSubDomains and a passing check reads 1 year, yes, no, all pass | already_implemented | crates/web/tests/it/views_http_hsts.rs |
+| C10 | S http.hsts without max_age reads not parsed | already_implemented | crates/web/tests/it/views_http_hsts.rs |
+| C11 | S http.server with inspection_ms 1234 shows URL, status, version and Inspection took 1.2 s | green | crates/web/tests/it/views_http_server.rs |
+| C12 | S the server view's address keeps the shell's link | green | crates/web/tests/it/views_http_server.rs |
+| C13 | S nothing lost for CSP, HSTS and server fixtures | green | crates/web/tests/it/views_nothing_lost.rs |
+| C14 | Phase 1 review deferral: the view title is G's section heading (20 px, 650, -0.01em) above the card | green | crates/web/tests/it/views_frame_style.rs |
+
+C2, C9, C10 passed on the baseline (the HSTS view came with Phase 1); C4 and C8 hold because no
+view ships a script and no CSP block means no view.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 1 | opus, then three test expectations corrected by the orchestrator | 77901 | 253 |
+
+The three corrected expectations (ADLC-Test-Change): the title's font size is the token
+`var(--font-size-h2)` (the CSS gate refuses literal sizes); askama 0.16 escapes `'` as `&#39;`
+and `&<>"` as numeric entities, so `views_http_csp.rs` and `views_nothing_lost.rs` expect that form.
+
+### Review
+
+No findings (reviewer: CSP, server, HSTS, frame and stylesheet traced against the backend blocks).
+
+### Behavioural verification
+
+Local lens from this worktree, seeded history; `curl -s http://127.0.0.1:18431/r/<first shop.example.com entry>/http`:
+
+```
+<section class="protocol-view" id="ev-http.server" data-block="http.server"><h3 class="protocol-view__title">Server</h3>
+<div class="protocol-view__card">
+<div class="facts-grid"><div class="facts-grid__cell"><span class="facts-grid__label">Final URL</span><span class="facts-grid__value">https://shop.example.com/</span></div>…<div class="facts-grid__cell"><span class="facts-grid__label">Address</span><span class="facts-grid__value"><a class="evidence-value__link" href="/inspect/ip?ip=198.51.100.10">198.51.100.10</a></span></div>…</div>
+<p class="protocol-view__note">Inspection took 289 ms</p></div>
+</section>
+```
+
+The fixtures hold no `http.csp` block; the CSP view is pinned by `views_http_csp.rs`.

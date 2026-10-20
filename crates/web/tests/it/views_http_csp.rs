@@ -99,7 +99,7 @@ fn c5_enforced_policy_shows_mode_count_root_issues_and_directive_rows() {
         "{row}"
     );
     assert!(
-        row.contains(r#"<li data-tone="warn">script-src contains 'unsafe-inline'</li>"#),
+        row.contains(r#"<li data-tone="warn">script-src contains &#39;unsafe-inline&#39;</li>"#),
         "{row}"
     );
 }

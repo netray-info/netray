@@ -53,3 +53,25 @@ G2
 12. SDD §6.1 amended for protocol views.
 13. `islands/src/shell.ts` j/k navigation selects `.protocol-view` beside `.evidence-block`, so a
     claimed block stays reachable (one selector, logged in the Decision log).
+
+## Phase 2 — CSP, HSTS and server views
+
+### Groups
+
+G1: C1–C14 (one group: every criterion touches `pages/views/http.rs`, `partials/protocol_view.html`
+or `pages.css`). C2, C4, C9, C10 already pass (the HSTS view of Phase 1).
+
+### Plan
+
+1. `templates/partials/protocol_view.html`: the h3 title, then `<div class="protocol-view__card">`
+   holding the body, then the feeds line.
+2. `static/pages.css`: `.protocol-view` loses its border, padding and background; `__title` 20 px,
+   650, -0.01em (board G's section h2); `__card` surface, hair border, radius, padding 18 px,
+   `overflow-x: auto`; `__note` muted; `csp-view__*` (mode, tone, count, issues, scroll with
+   `overflow-x: auto`, table, directive mono 600, sources mono wrapping between spans,
+   directive issues in the status text tones).
+3. `pages/views/http.rs`: `csp` (Tree claim on root and child keys, markup per the Phase 2
+   contract, tone from `http.csp`, warn when unknown) through a small askama template
+   `templates/partials/csp_view.html`; `server` (Fields claim on the eight keys, facts grid with
+   labels, `protocol-view__note` "Inspection took <display duration>", no tone).
+4. `pages/views/mod.rs`: a tree claim helper if needed beside `claim`.

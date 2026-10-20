@@ -17,11 +17,12 @@ struct Row {
 
 /// askama's escaping of a text value.
 fn escaped(text: &str) -> String {
-    text.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#x27;")
+    // askama 0.16's HTML escaping.
+    text.replace('&', "&#38;")
+        .replace('<', "&#60;")
+        .replace('>', "&#62;")
+        .replace('"', "&#34;")
+        .replace('\'', "&#39;")
 }
 
 impl Row {

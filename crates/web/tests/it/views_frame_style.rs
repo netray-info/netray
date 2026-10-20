@@ -55,7 +55,11 @@ fn hsts_fragment() -> String {
 fn c14_title_is_the_section_heading_above_a_bordered_card() {
     let css = css();
     let title = rule(&css, ".protocol-view__title");
-    assert!(declares(&title, "font-size", "20px"), "{title}");
+    // The gate refuses a literal font size: the token is 20 px in tokens.json.
+    assert!(
+        declares(&title, "font-size", "var(--font-size-h2)"),
+        "{title}"
+    );
     assert!(declares(&title, "font-weight", "650"), "{title}");
     assert!(declares(&title, "letter-spacing", "-0.01em"), "{title}");
 
