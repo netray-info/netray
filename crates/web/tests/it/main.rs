@@ -114,6 +114,7 @@ mod fidelity_review_p3;
 mod fidelity_review_p4;
 mod fidelity_review_p5;
 mod fidelity_review_p6;
+mod fidelity_review_p7;
 mod fidelity_run_title;
 mod fidelity_score;
 mod fidelity_share;
