@@ -281,3 +281,110 @@ mod cost_limit {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// specs/features/v2-tls-versions-coop Phase 2: probes in the inspection (C1/R4, C4, C8, C10)
+// ---------------------------------------------------------------------------
+
+mod probes_phase2 {
+    use super::*;
+    use netray_tls::tls::probe::{ProbeOutcome, ProtocolProbes, Verdict};
+
+    fn outcome(verdict: Verdict, detail: &str) -> ProbeOutcome {
+        ProbeOutcome {
+            verdict,
+            version: None,
+            cipher_suite: None,
+            detail: detail.to_string(),
+        }
+    }
+
+    fn canned() -> ProtocolProbes {
+        ProtocolProbes {
+            ssl3: outcome(Verdict::Refused, "handshake_failure alert"),
+            tls1_0: outcome(Verdict::Accepted, "ServerHello TLSv1.0"),
+            tls1_1: outcome(Verdict::Refused, "protocol_version alert"),
+            tls1_2: outcome(Verdict::Accepted, "ServerHello TLSv1.2"),
+            tls1_3: outcome(Verdict::Accepted, "ServerHello TLSv1.3"),
+            suites_insecure: outcome(Verdict::Refused, "handshake_failure alert"),
+            suites_cbc: outcome(Verdict::Refused, "handshake_failure alert"),
+            suites_static_rsa: outcome(Verdict::Refused, "handshake_failure alert"),
+        }
+    }
+
+    fn two_addresses() -> (IpAddr, IpAddr) {
+        (ip("93.184.215.14"), ip("93.184.215.15"))
+    }
+
+    fn block_ids(resp: &netray_tls::routes::InspectResponse) -> Vec<String> {
+        match translate(resp) {
+            SectionOutcome::Measured { evidence, .. } => {
+                let evidence: Vec<Block> = evidence;
+                evidence.iter().map(|b| b.id.to_string()).collect()
+            }
+            other => panic!("expected Measured, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn c1_c10_probe_runs_once_for_the_address_whose_handshake_succeeded() {
+        let (good, bad) = two_addresses();
+        let stub = Arc::new(
+            StubTlsBackend::new()
+                .with_host("example.com", vec![good, bad])
+                .with_failed_handshake(bad)
+                .with_probes(canned()),
+        );
+        let inspector = stub_state(stub.clone()).inspector();
+        let resp = inspector
+            .inspect(&req("example.com", 443), caller(), &limits(), "rid".into())
+            .await
+            .expect("inspection answers");
+        let ips = &resp.ports[0].ips;
+        let good_res = ips.iter().find(|r| r.ip == good.to_string()).unwrap();
+        let bad_res = ips.iter().find(|r| r.ip == bad.to_string()).unwrap();
+        assert!(
+            bad_res.error.is_some(),
+            "the failed address carries its error"
+        );
+        let version = good_res
+            .tls
+            .as_ref()
+            .expect("tls on success")
+            .version
+            .clone();
+        assert_eq!(stub.probe_calls(), vec![(good, 443, version)]);
+        assert_eq!(good_res.probes, Some(canned()));
+        assert_eq!(bad_res.probes, None);
+
+        let ids = block_ids(&resp);
+        assert!(
+            ids.iter().any(|id| id.starts_with("tls.probes@")),
+            "no tls.probes block in {ids:?}"
+        );
+        assert!(
+            ids.iter().any(|id| id == "tls.protocols"),
+            "no tls.protocols block in {ids:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn c8_without_canned_probes_no_probe_block_is_translated() {
+        let (good, other) = two_addresses();
+        let stub = Arc::new(StubTlsBackend::new().with_host("example.com", vec![good, other]));
+        let inspector = stub_state(stub.clone()).inspector();
+        let resp = inspector
+            .inspect(&req("example.com", 443), caller(), &limits(), "rid".into())
+            .await
+            .expect("inspection answers");
+        assert_eq!(resp.ports[0].ips.len(), 2);
+        assert!(resp.ports[0].ips.iter().all(|r| r.probes.is_none()));
+        assert_eq!(stub.probe_calls().len(), 2, "the probe is still asked");
+        let ids = block_ids(&resp);
+        assert!(
+            !ids.iter()
+                .any(|id| id.starts_with("tls.probes") || id.starts_with("tls.protocols")),
+            "probe blocks in {ids:?}"
+        );
+    }
+}

@@ -11,7 +11,8 @@
 // Worst measured status, verified against src/inspect/*.rs and src/quality/checks.rs:
 //   https_redirect, hsts, cors, csp  Fail (csp: an enforced policy with a `[fail]` issue, csp.rs:37;
 //                                    the missing-header case alone is Warn, csp.rs:22)
-//   every other check                Warn (no Fail branch)
+//   every other check                Warn (no Fail branch; coop: security.rs `coop`, judged from
+//                                    `security.coop`, not from a quality check)
 //
 // Exceptions (ids without a row): none.
 
@@ -64,6 +65,12 @@ fn cors_timeout(v: &mut Value) {
     set_quality(v, "cors", "pass", "No CORS headers");
 }
 
+fn coop_unsafe_none(v: &mut Value) {
+    v["security"]["coop"] = json!({
+        "status": "warn", "value": "unsafe-none", "message": "Permissive policy: unsafe-none"
+    });
+}
+
 fn port80_no_redirect(v: &mut Value) {
     v["http_upgrade"] = json!({
         "redirects_to_https": false, "same_host": true, "message": "",
@@ -111,6 +118,12 @@ fn table() -> Vec<Row> {
         ),
         quality_row!("referrer_policy", "warn", Status::Warn, https_timeout),
         quality_row!("permissions_policy", "warn", Status::Warn, https_timeout),
+        Row {
+            id: "coop",
+            worst: Status::Warn,
+            mutate_worst: coop_unsafe_none,
+            mutate_unmeasured: https_timeout,
+        },
         quality_row!("deprecated_headers", "warn", Status::Warn, https_timeout),
         quality_row!("info_leakage", "warn", Status::Warn, https_timeout),
         quality_row!("caching", "warn", Status::Warn, https_timeout),

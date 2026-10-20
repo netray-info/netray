@@ -6,6 +6,7 @@ mod caching_evidence;
 mod cdn_isolation_evidence;
 mod contract_golden;
 mod contract_status;
+mod coop_check;
 mod cors_probe;
 mod csp_evidence;
 mod csp_structured_issues;

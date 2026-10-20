@@ -42,7 +42,7 @@ cells = [
 
 [[tables.groups.rows]]
 label = "TLS checks"
-checks = ["tls.not_expired", "tls.chain_complete", "tls.tls_version", "tls.aead_cipher", "http.hsts"]
+checks = ["tls.not_expired", "tls.chain_complete", "tls.tls_version", "tls.legacy_versions", "tls.aead_cipher", "http.hsts"]
 depth = "partial"
 cells = [
   { symbol = "✓", note = "Deep TLS analysis; cipher enumeration, protocol downgrades, certificate monitoring." },
@@ -52,7 +52,7 @@ cells = [
 
 [[tables.groups.rows]]
 label = "HTTP header checks"
-checks = ["http.csp", "http.hsts", "http.x_frame_options", "http.x_content_type_options", "http.referrer_policy", "http.permissions_policy"]
+checks = ["http.csp", "http.hsts", "http.x_frame_options", "http.x_content_type_options", "http.referrer_policy", "http.permissions_policy", "http.coop"]
 depth = "full"
 cells = [
   { symbol = "✓", note = "Security headers included; graded alongside TLS and certificate results." },
@@ -228,7 +228,8 @@ cells = [
 
 [[tables.groups.rows]]
 label = "Protocol versions (deprecated detection)"
-checks = []
+checks = ["tls.legacy_versions", "tls.tls_version"]
+depth = "partial"
 cells = [
   { symbol = "✓", note = "Tests all versions including SSLv2/v3; grades down for deprecated protocols." },
   { symbol = "—", note = "Reference endpoints for TLS 1.0 and 1.1 — useful for browser testing." },
@@ -236,7 +237,7 @@ cells = [
 
 [[tables.groups.rows]]
 label = "Cipher suites"
-checks = ["tls.aead_cipher", "tls.forward_secrecy"]
+checks = ["tls.aead_cipher", "tls.forward_secrecy", "tls.weak_suites"]
 depth = "partial"
 cells = [
   { symbol = "✓", note = "Full enumeration with per-cipher grade, forward secrecy flags, and downgrade attack tests (POODLE, BEAST, RC4)." },

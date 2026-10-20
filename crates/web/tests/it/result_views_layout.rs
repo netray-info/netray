@@ -75,7 +75,7 @@ fn c6_layout_input_unknown_profile_is_none_and_known_feeds_layout() {
 
     let input = layout_input(&stored_run(3)).expect("profile 3 is known");
     let l = layout(&input, &[], catalogue(), 1104).expect("layout");
-    assert_eq!(l.lines.len(), 54);
+    assert_eq!(l.lines.len(), 57);
     assert_eq!(l.runs.len(), 1);
     assert_eq!(
         l.runs[0].sections[&Protocol::Tls],

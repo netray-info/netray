@@ -70,7 +70,7 @@ fn a_fixed_check_is_drawn_as_a_hollow_5px_outline_with_a_ring() {
     );
 
     // Every catalogue id is exactly one plate__line.
-    assert_eq!(svg.matches("class=\"plate__line\"").count(), 54);
+    assert_eq!(svg.matches("class=\"plate__line\"").count(), 57);
     for e in catalogue().entries() {
         let needle = format!("class=\"plate__line\" data-code=\"{}\"", e.id);
         assert_eq!(svg.matches(&needle).count(), 1, "{}", e.id);

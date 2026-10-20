@@ -11,6 +11,7 @@ use sha2::{Digest, Sha256};
 use netray_model::{CheckId, Grade, Protocol};
 
 const V3: &str = include_str!("../profiles/v3.toml");
+const V4: &str = include_str!("../profiles/v4.toml");
 const LOCK: &str = include_str!("../profiles/lock.toml");
 
 /// Why a profile or its lock entry is refused.
@@ -161,7 +162,12 @@ pub struct Profiles;
 impl Profiles {
     fn all() -> &'static [Profile] {
         static ALL: OnceLock<Vec<Profile>> = OnceLock::new();
-        ALL.get_or_init(|| vec![Profile::from_toml(V3).expect("embedded v3.toml parses")])
+        ALL.get_or_init(|| {
+            vec![
+                Profile::from_toml(V3).expect("embedded v3.toml parses"),
+                Profile::from_toml(V4).expect("embedded v4.toml parses"),
+            ]
+        })
     }
 
     pub fn get(version: u32) -> Option<&'static Profile> {
@@ -172,8 +178,12 @@ impl Profiles {
         Self::all().iter().map(|p| p.version).collect()
     }
 
+    /// The highest embedded version.
     pub fn current() -> &'static Profile {
-        Self::get(3).expect("profile v3 is embedded")
+        Self::all()
+            .iter()
+            .max_by_key(|p| p.version)
+            .expect("a profile is embedded")
     }
 }
 

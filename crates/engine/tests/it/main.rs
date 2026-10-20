@@ -12,6 +12,7 @@ mod history;
 mod history_fixtures;
 mod no_address_sections;
 mod profile;
+mod profile_v4;
 mod registry;
 mod run;
 mod schema_derives;

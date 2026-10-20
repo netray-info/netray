@@ -12,7 +12,8 @@ use crate::error::AppError;
 use crate::module::{tls_checks, translate};
 use crate::routes::InspectResponse;
 use crate::state::AppState;
-use crate::tls::IpInspectionResult;
+use crate::tls::probe::ProtocolProbes;
+use crate::tls::{InspectionError, IpInspectionResult};
 
 const INSPECT_FIXTURE: &str =
     include_str!("../../../tests/fixtures/contracts/tlsight-inspect.json");
@@ -51,6 +52,9 @@ pub fn golden_module(contract_json: &str) -> Box<dyn Module> {
 pub struct StubTlsBackend {
     hosts: HashMap<String, Vec<IpAddr>>,
     calls: Mutex<Vec<(IpAddr, u16, Option<String>)>>,
+    probes: Option<ProtocolProbes>,
+    failed: Vec<IpAddr>,
+    probe_calls: Mutex<Vec<(IpAddr, u16, String)>>,
 }
 
 impl Default for StubTlsBackend {
@@ -64,6 +68,9 @@ impl StubTlsBackend {
         Self {
             hosts: HashMap::new(),
             calls: Mutex::new(Vec::new()),
+            probes: None,
+            failed: Vec::new(),
+            probe_calls: Mutex::new(Vec::new()),
         }
     }
 
@@ -71,6 +78,23 @@ impl StubTlsBackend {
     pub fn with_host(mut self, name: &str, ips: Vec<IpAddr>) -> Self {
         self.hosts.insert(name.to_string(), ips);
         self
+    }
+
+    /// Every probe answers `probes`.
+    pub fn with_probes(mut self, probes: ProtocolProbes) -> Self {
+        self.probes = Some(probes);
+        self
+    }
+
+    /// The handshake with `ip` fails with `HANDSHAKE_FAILED`.
+    pub fn with_failed_handshake(mut self, ip: IpAddr) -> Self {
+        self.failed.push(ip);
+        self
+    }
+
+    /// The probes so far: address, port, negotiated version.
+    pub fn probe_calls(&self) -> Vec<(IpAddr, u16, String)> {
+        self.probe_calls.lock().expect("probe calls lock").clone()
     }
 
     /// The handshakes so far: address, port, SNI.
@@ -104,6 +128,23 @@ impl TlsBackend for StubTlsBackend {
                 .lock()
                 .expect("calls lock")
                 .push((ip, port, sni.map(str::to_string)));
+            if self.failed.contains(&ip) {
+                return IpInspectionResult {
+                    ip: ip.to_string(),
+                    ip_version: if ip.is_ipv4() { "v4" } else { "v6" }.to_string(),
+                    tls: None,
+                    chain: None,
+                    validation: None,
+                    ct: None,
+                    enrichment: None,
+                    raw_certs: None,
+                    probes: None,
+                    error: Some(InspectionError {
+                        code: "HANDSHAKE_FAILED".into(),
+                        message: "connection refused".into(),
+                    }),
+                };
+            }
             let doc: serde_json::Value =
                 serde_json::from_str(INSPECT_FIXTURE).expect("fixture is JSON");
             let mut result: IpInspectionResult =
@@ -120,6 +161,24 @@ impl TlsBackend for StubTlsBackend {
             result.enrichment = None;
             result.raw_certs = None;
             result
+        })
+    }
+
+    fn probe<'a>(
+        &'a self,
+        ip: IpAddr,
+        port: u16,
+        _sni: Option<&'a str>,
+        negotiated: &'a str,
+        _timeout: Duration,
+    ) -> BoxFuture<'a, Option<ProtocolProbes>> {
+        Box::pin(async move {
+            self.probe_calls.lock().expect("probe calls lock").push((
+                ip,
+                port,
+                negotiated.to_string(),
+            ));
+            self.probes.clone()
         })
     }
 }

@@ -3,7 +3,7 @@
 # netray-model and netray-engine and on no lens or history package (read from
 # `cargo metadata`, never the TOML text; v2-entries admits netray-store, SDD 3.1); `pub fn layout` in crates/web/src/spectrum.rs names no
 # entry, run, history, store or lens type; SDD 3.9, 5.4, 8.1 and the V4.4 row carry the amended
-# wording; the tokens.json linePitchMin description carries the 54-check arithmetic. A self-test
+# wording; the tokens.json linePitchMin description carries the 57-check arithmetic. A self-test
 # runs the same checks on scratch input it must refuse.
 set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 1
@@ -79,7 +79,7 @@ try:
     d = json.load(open(sys.argv[1]))["spectrum"]["linePitchMin"]["$description"]
 except Exception as e:
     print("tokens.json spectrum.linePitchMin $description unreadable: %s" % e); sys.exit(0)
-for w in ("54 checks", "6.6"):
+for w in ("57 checks", "6.3"):
     if w not in d: print("linePitchMin $description does not contain " + repr(w))
 if "41 checks" in d: print("linePitchMin $description still says 41 checks")
 ' "$1"
@@ -139,10 +139,10 @@ bad s_v44 's/og.png/card/' "does not name og.png"
 bad s_v44b 's/v2-inspectors/x/' "does not name v2-inspectors"
 
 tok() { printf '{"spectrum":{"linePitchMin":{"$description":"%s"}}}' "$1" > "$tmp/tok.json"; tokens_problems "$tmp/tok.json"; }
-[ -z "$(tok '54 checks at 390 px give 6.6 px')" ] || fail "self-test: good tokens reported '$(tok '54 checks at 390 px give 6.6 px')'"
+[ -z "$(tok '57 checks at 390 px give 6.3 px')" ] || fail "self-test: good tokens reported '$(tok '57 checks at 390 px give 6.3 px')'"
 expect "$(tok '41 checks give 8.7 px')" "still says 41 checks" "old tokens"
-expect "$(tok '41 checks give 8.7 px')" "'54 checks'" "old tokens"
-expect "$(tok '54 checks give 8 px')" "'6.6'" "no 6.6"
+expect "$(tok '41 checks give 8.7 px')" "'57 checks'" "old tokens"
+expect "$(tok '57 checks give 8 px')" "'6.3'" "no 6.3"
 
 # --- the real tree
 if json=$(cargo metadata --format-version 1 --no-deps --offline); then

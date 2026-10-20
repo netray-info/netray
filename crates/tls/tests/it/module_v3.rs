@@ -1,4 +1,4 @@
-// V2 catalogue, Phase 3, requirement 3(d) and criterion C5: the TLS translation emits all 21
+// V2 catalogue, Phase 3, requirement 3(d) and criterion C5: the TLS translation emits all 23
 // `tls.*` catalogue IDs in every run, measures per address and reports the worst of the addresses
 // that completed a handshake. Fixtures derive from the tlsight golden; the per-port `quality`
 // block is dropped so the translation must work from the per-address results.
@@ -14,7 +14,7 @@ use serde_json::{Value, json};
 const VALID: &str = "192.0.2.10";
 const OTHER: &str = "192.0.2.11";
 
-const IDS: [&str; 21] = [
+const IDS: [&str; 23] = [
     "tls_reachable",
     "chain_trusted",
     "not_expired",
@@ -29,6 +29,8 @@ const IDS: [&str; 21] = [
     "tls_version",
     "forward_secrecy",
     "aead_cipher",
+    "legacy_versions",
+    "weak_suites",
     "ct_logged",
     "ocsp_stapled",
     "caa_compliant",
@@ -92,14 +94,14 @@ fn check<'a>(checks: &'a [CheckResult], name: &str) -> &'a CheckResult {
 }
 
 fn assert_all_ids_once(checks: &[CheckResult]) {
-    assert_eq!(checks.len(), 21, "21 checks");
+    assert_eq!(checks.len(), 23, "23 checks");
     for name in IDS {
         check(checks, name);
     }
 }
 
 #[test]
-fn every_run_emits_all_21_ids_once() {
+fn every_run_emits_all_23_ids_once() {
     for ips in [
         vec![valid_ip(VALID)],
         vec![valid_ip(VALID), expired_ip(OTHER)],
@@ -143,7 +145,7 @@ fn one_handshake_and_one_failed_address_is_reachable_and_measured_on_the_reachab
 }
 
 #[test]
-fn no_handshake_fails_reachable_and_marks_the_other_20_not_applicable() {
+fn no_handshake_fails_reachable_and_marks_the_other_22_not_applicable() {
     let checks = translated(vec![failed_ip(VALID), failed_ip(OTHER)]);
     assert_all_ids_once(&checks);
     assert_eq!(check(&checks, "tls_reachable").status, Status::Fail);
@@ -174,7 +176,7 @@ fn one_address_makes_consistency_checks_not_applicable() {
 }
 
 #[tokio::test]
-async fn module_declares_all_21_ids_and_wants_facts() {
+async fn module_declares_all_23_ids_and_wants_facts() {
     let cfg: ModuleConfig = toml::from_str("[limits]\nmax_ports = 3").unwrap();
     let module = TlsModule::new(cfg).await.expect("module builds");
     let ids: Vec<String> = module.checks().iter().map(|i| i.to_string()).collect();

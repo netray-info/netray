@@ -1,5 +1,5 @@
 // V2 unmeasured, spec requirements 8 and 9, Phase 3 criteria C5-C11: `tls.tls_reachable` and the
-// 20 other TLS checks when addresses time out, refuse, or cannot be tested from here.
+// 22 other TLS checks when addresses time out, refuse, or cannot be tested from here.
 // A timeout carries the error code `HANDSHAKE_TIMEOUT` (message "handshake timed out"); a refusal
 // stays `HANDSHAKE_FAILED`; an unusable source address stays `NOT_TESTED_FROM_HERE`.
 
@@ -23,9 +23,9 @@ enum Addr {
 }
 
 enum Rest {
-    /// The other 20 checks all carry this status.
+    /// The other 22 checks all carry this status.
     All(Status),
-    /// The other 20 are NotApplicable with the finding "no TLS handshake".
+    /// The other 22 are NotApplicable with the finding "no TLS handshake".
     NoHandshake,
     /// Not asserted: measured on the valid address, or unspecified by the criterion.
     Unchecked,
@@ -168,8 +168,8 @@ fn tls_reachable_by_address_outcome() {
         }
         if !matches!(rest, Rest::Unchecked) {
             let n = checks.len() - 1;
-            if n != 20 {
-                failures.push(format!("{name}: {n} other checks, want 20"));
+            if n != 22 {
+                failures.push(format!("{name}: {n} other checks, want 22"));
             }
         }
     }

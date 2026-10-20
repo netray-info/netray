@@ -82,7 +82,7 @@ async fn every_module_emits_exactly_its_protocols_catalogue_ids_and_no_id_has_tw
     let all: BTreeSet<&CheckId> = union.iter().collect();
     assert_eq!(all.len(), union.len(), "an ID has two emitters: {union:?}");
     let catalogue_ids: BTreeSet<&CheckId> = catalogue().entries().iter().map(|s| &s.id).collect();
-    assert_eq!(catalogue_ids.len(), 54, "the catalogue has 54 checks");
+    assert_eq!(catalogue_ids.len(), 57, "the catalogue has 57 checks");
     assert_eq!(
         all, catalogue_ids,
         "the union of emitted IDs is the whole catalogue"
