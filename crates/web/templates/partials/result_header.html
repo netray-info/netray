@@ -11,6 +11,7 @@
 {%- if let Some(selectors) = dkim_selectors %}
 <input type="hidden" name="dkim_selectors" value="{{ selectors }}">{% endif %}
 </form>
+{% include "partials/help_button.html" %}
 {{ share|safe }}
 </div>
 </header>

@@ -2,10 +2,14 @@
 
 {% block main %}
 {% if let Some(section) = section %}
+<div class="evidence-view" data-island="page">
 <h1>{{ domain }} · {{ protocol }}</h1>
+<div class="evidence-view__tools">{% include "partials/help_button.html" %}{% if let Some(x) = export %}{{ x|safe }}{% endif %}</div>
 {{ section|safe }}
 {% for link in links %}<p><a class="evidence-view__explore" href="{{ link.href }}">{{ link.label }}</a></p>
 {% endfor %}
+{% include "partials/page_help.html" %}
+</div>
 {% else %}
 <h1>No entry for {{ domain }}</h1>
 <p>Nothing has been recorded for this domain yet. <a href="{{ home_href }}">Check {{ domain }}</a>.</p>

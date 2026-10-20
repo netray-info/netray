@@ -135,6 +135,70 @@ impl Frame {
     }
 }
 
+#[derive(Template)]
+#[template(path = "partials/inspect_export.html")]
+struct ExportFragment {
+    filename: String,
+    exports: Option<(String, String, String)>,
+}
+
+/// The export slot named `filename`: disabled without `exports` (Markdown, CSV, JSON).
+pub(crate) fn export_slot(
+    filename: String,
+    exports: Option<(String, String, String)>,
+) -> Option<String> {
+    let exports = exports.map(|(m, c, j)| (html_text(&m), html_text(&c), html_text(&j)));
+    (ExportFragment { filename, exports }).render().ok()
+}
+
+/// `s` as HTML text, quotes as named references.
+fn html_text(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&#39;"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+/// What the help dialog of the result page and the evidence views says.
+pub(crate) struct PageHelp {
+    pub title: &'static str,
+    pub what: &'static str,
+    /// The shortcut rows: the keys of a row and what they do on the page.
+    pub keys: &'static [(&'static [&'static str], &'static str)],
+}
+
+impl PageHelp {
+    pub(crate) const RESULT: PageHelp = PageHelp {
+        title: "Result page",
+        what: "The grade, the spectrum, the open issues and the evidence of the latest run of this domain. Copy or download the stored run from the Evidence section.",
+        keys: &[
+            (&["r"], "Check again"),
+            (&["j", "k"], "Next or previous open issue"),
+            (&["?"], "Open this help"),
+            (&["Esc"], "Close this help"),
+        ],
+    };
+
+    pub(crate) const EVIDENCE: PageHelp = PageHelp {
+        title: "Evidence view",
+        what: "The checks of one protocol in a stored run and the evidence they read. Copy or download this protocol's checks and evidence.",
+        keys: &[
+            (&["r"], "Check again, where the page offers it"),
+            (&["j", "k"], "Next or previous check"),
+            (&["?"], "Open this help"),
+            (&["Esc"], "Close this help"),
+        ],
+    };
+}
+
 /// Renders a page template into a secured HTML response; a render error is the 500 page.
 pub(crate) fn page<T: Template>(
     status: StatusCode,

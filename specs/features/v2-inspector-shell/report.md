@@ -350,3 +350,53 @@ host while the job read `example.com` plus a selector; a leading separator gave 
 One `email_input` now serves both (domain mapped with UTS #46, which also answers the IDN
 amendment). Nits fixed: email deadline 35 s past the inspection's 30 s cap; SDD dates and the
 "four inspectors" and subdomain sentences. Nit kept: full shared slots answer the notice with 200.
+
+## Phase 8 — Result page and evidence views
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R25 Help dialog, keyboard shortcuts and export controls on the result page and every evidence view; the result page's ? button in its header actions | green | tests/it/shell_pages.rs, islands/test/page-keys.test.ts |
+| C2 | GIVEN /example.com with a stored entry WHEN ? is pressed THEN the help dialog opens with the page's help and the shortcut table | green | tests/it/shell_pages.rs, islands/test/page-keys.test.ts |
+| C3 | GIVEN /example.com WHEN Copy Markdown is pressed THEN the clipboard holds the grade, score, open issues and a check table | green | tests/it/shell_pages.rs, islands/test/page-keys.test.ts |
+| C4 | GIVEN /example.com/email WHEN JSON is downloaded THEN it equals the body of /api/v1/entries/id for the shown entry | green | tests/it/shell_pages.rs |
+| C5 | GIVEN the idle page WHEN / is pressed THEN the domain input has focus | green | tests/it/shell_pages.rs, islands/test/page-keys.test.ts |
+| C6 | GIVEN /example.com WHEN r is pressed THEN the re-check form submits | green | islands/test/page-keys.test.ts |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| lane S (Rust, templates) | 3 | opus; fixture goldens regenerated and one island-test entity fixed by the orchestrator (ADLC-Test-Change) | 86750 | 410 |
+| lane I (islands) | 1 | sonnet | 41672 | 42 |
+| review fixes | 1 | opus | 65269 | 210 |
+
+### Behavioural verification
+
+Local lens on the seeded acceptance history (`tests/acceptance/fixtures/history`):
+`GET /shop.example.com` carries `data-island="page"`, the hidden "?" button in the header actions
+and `#inspect-export` (`data-filename="netray-shop.example.com-lVREA3QK"`). Its Markdown template
+begins
+
+```
+# shop.example.com
+
+Grade A · score 91 / 100
+
+## Open issues
+
+- WARN `dns.caa` CAA records: No CAA records found: …
+```
+
+and its JSON template parses equal to `GET /api/v1/entries/lVREA3QK` ("json equals API: True").
+
+### Review
+
+Reader: 2 blockers, fixed (tests in `tests/it/shell_pages.rs`, `result_run_equal.rs`,
+`result_run_stream.rs`, `islands/test/page-keys.test.ts`): the Markdown printed a score the page
+holds back (now the page's own shown score); the island removed the export on the first fragment
+and nothing restored it (now a finished run streams `inspect-export` after `passed`, equal to the
+page's element; a fresh-head visit answered from the store sends none). Amendments: a refused run
+no longer drops the export; an unknown-profile entry gets its export ("Grade X"); `/` is left to the
+browser where no domain input exists, and the help lists it only there.

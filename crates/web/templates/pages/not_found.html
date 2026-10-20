@@ -1,8 +1,10 @@
 {% extends "base.html" %}
 {% import "components/query_input.html" as c %}
 {% block main %}
+<div data-island="page">
 <h1>Nothing here</h1>
 {% call c::query_input(query) %}{% endcall %}
+</div>
 {% if let Some(reason) = reason %}<p>{{ reason }}</p>{% endif %}
 {% if invalid %}
 <p>

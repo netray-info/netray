@@ -1,3 +1,5 @@
+import { closeHelp, exportClick, focusHelpOpenerOnClose, helpIsOpen, isTextTarget, openHelp, unhide } from "./controls";
+
 const HISTORY_MAX = 20;
 
 export function shell(el: HTMLElement): void {
@@ -176,14 +178,8 @@ export function shell(el: HTMLElement): void {
 
   const shareUrl = (): string | undefined =>
     el.querySelector<HTMLElement>("#inspect-share[data-share-url]")?.dataset.shareUrl;
-  const unhide = (): void =>
-    el
-      .querySelectorAll<HTMLElement>(
-        ".inspector-share__copy, .inspector-help__open, .inspector-export button",
-      )
-      .forEach((b) => (b.hidden = false));
-  unhide();
-  el.addEventListener("netray:stream-fragment", unhide);
+  unhide(el);
+  el.addEventListener("netray:stream-fragment", () => unhide(el));
   el.addEventListener("netray:stream-end", () => {
     const u = shareUrl();
     if (u) {
@@ -192,25 +188,7 @@ export function shell(el: HTMLElement): void {
     }
   });
 
-  const dialog = el.querySelector<HTMLDialogElement>("dialog.inspector-help");
-  // `hasAttribute`, not `.open`: a browser without HTMLDialogElement only has the attribute.
-  const isOpen = (): boolean => !!dialog?.hasAttribute("open");
-  const openHelp = (): void => {
-    if (!dialog || isOpen()) return;
-    if (typeof dialog.showModal === "function") dialog.showModal();
-    else dialog.setAttribute("open", "");
-  };
-  const closeHelp = (): void => {
-    if (!dialog || !isOpen()) return;
-    if (typeof dialog.close === "function") dialog.close();
-    else {
-      dialog.removeAttribute("open");
-      dialog.dispatchEvent(new Event("close"));
-    }
-  };
-  dialog?.addEventListener("close", () =>
-    el.querySelector<HTMLElement>(".inspector-help__open")?.focus(),
-  );
+  focusHelpOpenerOnClose(el);
 
   const step = (dir: number): void => {
     const rows = [...document.querySelectorAll<HTMLElement>("#inspect-result .check-row, #inspect-result .evidence-block")];
@@ -231,11 +209,8 @@ export function shell(el: HTMLElement): void {
   document.addEventListener("keydown", (ev) => {
     if (!el.isConnected) return;
     const target = ev.target as HTMLElement | null;
-    // Text fields keep their keys; checkboxes, radios and buttons do not.
-    const text =
-      'input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]), textarea, select, [contenteditable]';
-    if (target?.closest(text)) return;
-    if (isOpen() && ev.key !== "Escape") return;
+    if (isTextTarget(target)) return;
+    if (helpIsOpen(el) && ev.key !== "Escape") return;
     if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && ev.key.toLowerCase() === "l") {
       ev.preventDefault();
       input.focus();
@@ -244,7 +219,7 @@ export function shell(el: HTMLElement): void {
     }
     if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
     if (ev.key === "Escape") {
-      if (isOpen()) closeHelp();
+      if (helpIsOpen(el)) closeHelp(el);
       else close();
       return;
     }
@@ -280,17 +255,17 @@ export function shell(el: HTMLElement): void {
         tab(1);
         break;
       case "?":
-        openHelp();
+        openHelp(el);
         break;
     }
   });
 
   el.addEventListener("click", (ev) => {
     const target = ev.target as Element | null;
-    if (target?.closest(".inspector-help__open")) return openHelp();
+    if (target?.closest(".inspector-help__open")) return openHelp(el);
     if (target?.closest(".inspector-help__close")) {
       ev.preventDefault();
-      return closeHelp();
+      return closeHelp(el);
     }
     if (target?.closest(".inspector-share__copy")) {
       const u = shareUrl();
@@ -307,40 +282,7 @@ export function shell(el: HTMLElement): void {
       return;
     }
     const exporter = target?.closest<HTMLButtonElement>("button[data-export-action]");
-    if (exporter && el.contains(exporter)) {
-      if (exporter.disabled) return;
-      const kind = exporter.dataset.exportAction ?? "";
-      const box = exporter.closest<HTMLElement>(".inspector-export");
-      const tpl = el.querySelector<HTMLTemplateElement>(`#inspect-export template[data-export="${kind}"]`);
-      const text = tpl?.content.textContent;
-      const note = box?.querySelector<HTMLElement>(".inspector-export__status");
-      if (text == null) return;
-      if (kind === "markdown") {
-        // Announce only what happened: the write may be refused or the clipboard absent.
-        const done = (msg: string) => () => {
-          if (note) note.textContent = msg;
-        };
-        try {
-          if (!navigator.clipboard) throw new Error("no clipboard");
-          navigator.clipboard
-            .writeText(text)
-            .then(done("Copied Markdown"), done("Copy failed"));
-        } catch {
-          done("Copy failed")();
-        }
-        return;
-      }
-      const url = URL.createObjectURL(new Blob([text], { type: kind === "csv" ? "text/csv" : "application/json" }));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = (box?.dataset.filename ?? "netray") + "." + kind;
-      document.body.append(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      if (note) note.textContent = kind === "csv" ? "Downloaded CSV" : "Downloaded JSON";
-      return;
-    }
+    if (exporter) return exportClick(el, exporter);
     const chip = target?.closest<HTMLElement>("a.inspector-examples__chip[data-example]");
     if (!chip || !el.contains(chip)) return;
     if (ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;

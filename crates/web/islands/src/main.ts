@@ -1,6 +1,7 @@
 import { countdown } from "./countdown";
 import { dns } from "./dns";
 import { issues } from "./issues";
+import { page } from "./page";
 import { recent } from "./recent";
 import { share } from "./share";
 import { shell } from "./shell";
@@ -36,6 +37,7 @@ register("stream", (el) => stream(el as HTMLFormElement, mount));
 register("countdown", countdown);
 register("dns", dns);
 register("issues", issues);
+register("page", page);
 register("recent", recent);
 register("share", share);
 register("shell", shell);

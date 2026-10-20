@@ -198,3 +198,25 @@ token; `target_address` none. `src/api/email.rs`: `EMAIL_OFF` visible to jobs. `
 on spaces and commas), a rate-limit refusal as a gate (429), other refusals as the notice, the
 collected events through `translate` as one part and the Email band; admit passes (the inspection
 charges). `crates/lens/lens.example.toml`: `[inspect.email]`. `specs/sdd/v2.md`: S3, §6.2, the API row.
+
+## Phase 8 — Result page and evidence views
+
+### Groups
+
+G1: C1–C6, built in two lanes on disjoint files: lane S (Rust and templates) and lane I (islands).
+
+### Plan
+
+Lane S: `api/reads.rs` `entry_json(entry)` (the body `GET /entries/{id}` answers, one
+serialisation); `export.rs` multi-protocol check rows, `checks_of(run)`, `entry_markdown(domain,
+grade, score, checks)`; `pages/inspect.rs` adapts to the multi-protocol input; `pages/mod.rs`
+`export_slot` and `PageHelp`; partials `help_button.html`, `page_help.html`; `result_header.html`
+gains the "?" button; `pages/result/mod.rs` renders the help and the stored entry's export
+(`run.rs`: none for an unrecorded run); `pages/result.html` wraps `#result` in a `page` island
+element, the export slot after the Evidence section head; `pages/evidence.rs` and `evidence.html`
+the tools row, help and protocol-scoped export; `idle.html` and `not_found.html` the `page` island
+around the domain form; CSS for the tools row and a standalone help button.
+
+Lane I: `islands/src/controls.ts` (help, export and unhide lifted from `shell.ts`), `shell.ts` uses
+it, `page.ts` the page island (`/`, `r`, `j`/`k`, `?`, Esc; drops a stale export when a run starts),
+`main.ts` registers it.

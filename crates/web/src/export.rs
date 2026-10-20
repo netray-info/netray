@@ -4,9 +4,11 @@
 
 use netray_engine::catalogue::{CheckSpec, catalogue};
 use netray_model::evidence::{Block, Node, Shape};
-use netray_model::{CheckResult, Protocol, Status};
+use netray_model::run::{Run, SectionKind};
+use netray_model::{CheckResult, Grade, Protocol, Status};
 use serde_json::json;
 
+use crate::entries::view::grade_letter;
 use crate::evidence::format_value;
 use crate::pages::result::views::line_code;
 
@@ -14,7 +16,7 @@ use crate::pages::result::views::line_code;
 pub struct ExportInput<'a> {
     pub target: &'a str,
     pub title: &'a [String],
-    pub band: Option<(Protocol, &'a [CheckResult])>,
+    pub band: Option<(&'a [Protocol], &'a [CheckResult])>,
     pub blocks: &'a [Block],
     /// Parts or the band that ended without a result: (section, reason). Rule M: a failure is in
     /// every export with its reason, never an empty answer.
@@ -55,13 +57,14 @@ struct CheckRow {
     fix: String,
 }
 
-fn check_rows(band: Option<(Protocol, &[CheckResult])>) -> Vec<CheckRow> {
-    let Some((protocol, checks)) = band else {
+fn check_rows(band: Option<(&[Protocol], &[CheckResult])>) -> Vec<CheckRow> {
+    let Some((protocols, checks)) = band else {
         return Vec::new();
     };
-    let cat = catalogue().for_protocol(protocol);
-    cat.entries()
+    catalogue()
+        .entries()
         .iter()
+        .filter(|spec| protocols.contains(&spec.protocol))
         .map(|spec: &CheckSpec| {
             let result = checks.iter().find(|c| c.id == spec.id);
             let status = result.map_or(Status::NotTested, |r| r.status);
@@ -83,6 +86,36 @@ fn check_rows(band: Option<(Protocol, &[CheckResult])>) -> Vec<CheckRow> {
                     String::new()
                 },
             }
+        })
+        .collect()
+}
+
+/// The checks of a stored run as results.
+pub fn checks_of(run: &Run) -> Vec<CheckResult> {
+    run.checks
+        .iter()
+        .map(|c| CheckResult {
+            id: c.id.clone(),
+            status: c.status,
+            findings: c.findings.clone(),
+            evidence: c.evidence.clone(),
+        })
+        .collect()
+}
+
+/// The sections of `protocols` a stored run ended without a result: (protocol, reason).
+pub fn section_errors(run: &Run, protocols: &[Protocol]) -> Vec<(String, String)> {
+    run.sections
+        .iter()
+        .filter(|s| protocols.contains(&s.protocol))
+        .filter_map(|s| {
+            let fallback = match s.outcome {
+                SectionKind::Measured | SectionKind::NotApplicable => return None,
+                SectionKind::Incomplete => "incomplete",
+                SectionKind::TimedOut => "timed out",
+            };
+            let reason = s.reason.clone().unwrap_or_else(|| fallback.to_string());
+            Some((s.protocol.as_str().to_string(), reason))
         })
         .collect()
 }
@@ -140,6 +173,58 @@ fn md_fields(fields: &[(String, netray_model::evidence::Value)]) -> String {
 
 fn md_list(items: impl Iterator<Item = String>) -> String {
     items.map(|i| format!("- {}\n", md_escape(&i))).collect()
+}
+
+/// The Markdown of a stored entry on its result page: the grade, the score when the page shows
+/// one, the open issues and every catalogue check.
+pub fn entry_markdown(
+    domain: &str,
+    grade: Grade,
+    score: Option<u8>,
+    checks: &[CheckResult],
+) -> String {
+    let protocols: Vec<Protocol> = catalogue().entries().iter().map(|e| e.protocol).collect();
+    let rows = check_rows(Some((&protocols, checks)));
+    let score = score.map_or_else(String::new, |n| format!(" · score {n} / 100"));
+    let mut out = format!(
+        "# {}\n\nGrade {}{score}\n\n## Open issues\n\n",
+        md_escape(domain),
+        grade_letter(grade)
+    );
+    let issues: Vec<&CheckRow> = rows
+        .iter()
+        .filter(|r| matches!(r.status, "warn" | "fail"))
+        .collect();
+    if issues.is_empty() {
+        out.push_str("None\n");
+    }
+    for r in issues {
+        out.push_str(&format!(
+            "- {} `{}` {}: {}\n",
+            r.status.to_uppercase(),
+            r.id,
+            md_escape(&r.title),
+            md_escape(&r.finding)
+        ));
+    }
+    out.push_str("\n## Checks\n\n");
+    out.push_str(&md_table(
+        &["Code", "Check", "Status", "Finding", "Fix"],
+        &[],
+    ));
+    for r in &rows {
+        let cells: Vec<String> = [
+            r.title.as_str(),
+            r.status,
+            r.finding.as_str(),
+            r.fix.as_str(),
+        ]
+        .iter()
+        .map(|c| md_cell(c))
+        .collect();
+        out.push_str(&format!("| `{}` | {} |\n", r.id, cells.join(" | ")));
+    }
+    out
 }
 
 pub fn markdown(input: &ExportInput<'_>) -> String {
@@ -235,7 +320,7 @@ fn csv_field(s: &str) -> String {
 fn csv_row(out: &mut String, cells: [&str; 4]) {
     let cells: Vec<String> = cells.iter().map(|c| csv_field(c)).collect();
     out.push_str(&cells.join(","));
-    out.push_str("\r\n");
+    out.push('\n');
 }
 
 pub fn csv(input: &ExportInput<'_>) -> String {

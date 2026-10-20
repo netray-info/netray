@@ -307,7 +307,9 @@ Each requirement names the inventory rows or board rows it closes.
     the shown entry, rendered by the server from the stored run; JSON is the entry as
     `/api/v1/entries/<id>` serves it) mount on the result page `/<domain>` and on every evidence view
     `/<domain>/<protocol>` and `/r/<id>/<protocol>`. The result page's "?" button sits in its header
-    actions. (1.11, 1.20, 1.21, 7.64, 5.20, 5.27, 5.28)
+    actions; its export controls sit under the Evidence heading and a finished run streams the
+    export of the entry it recorded. The Markdown's grade line says what the page shows (the score
+    only where the page shows one). (1.11, 1.20, 1.21, 7.64, 5.20, 5.27, 5.28)
 
 ### Constraints and acceptance
 
@@ -588,6 +590,11 @@ GIVEN the screenshots WHEN read beside board G THEN every finding is a `report.m
   mapped with UTS #46, selectors split on spaces and commas); the email deadline is 35 s, past the
   inspection's own 30 s cap. Nit kept: full shared email slots answer the notice with 200, as a
   refused input does (implementer under the operator's autonomy mandate, 2026-10-20).
+- Phase 8: the result page and the evidence views reuse the inspector's help and export markup and
+  island code (`controls.ts`), so one behaviour serves both; `/` acts only where a domain input
+  exists (idle and not-found pages). Review fixes: the grade line follows the page's shown score;
+  the export is streamed with the run instead of dropped (implementer under the operator's
+  autonomy mandate, 2026-10-20).
 - The Inspectors menu and the full footer of canvas v43 belong to the site-navigation feature
   (theme J); a reader's finding on G's chevron or footer is answered by this non-goal
   (implementer under the operator's autonomy mandate, 2026-10-20).

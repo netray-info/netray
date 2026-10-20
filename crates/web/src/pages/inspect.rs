@@ -556,13 +556,6 @@ struct ShareFragment {
 }
 
 #[derive(Template)]
-#[template(path = "partials/inspect_export.html")]
-struct ExportFragment {
-    filename: String,
-    exports: Option<(String, String, String)>,
-}
-
-#[derive(Template)]
 #[template(path = "partials/inspect_part.html")]
 struct PartFragment {
     n: usize,
@@ -1095,10 +1088,11 @@ fn export_html(
     ready: bool,
 ) -> Option<String> {
     let title: Vec<String> = title.parts.iter().map(|p| p.to_uppercase()).collect();
+    let band = band.map(|(p, c)| ([p], c));
     let input = ExportInput {
         target,
         title: &title,
-        band,
+        band: band.as_ref().map(|(p, c)| (&p[..], *c)),
         blocks,
         errors,
     };
@@ -1109,12 +1103,10 @@ fn export_html(
             export::json(&input),
         )
     });
-    (ExportFragment {
-        filename: format!("netray-{}-{}", tool.as_str(), export::slug(target)),
+    super::export_slot(
+        format!("netray-{}-{}", tool.as_str(), export::slug(target)),
         exports,
-    })
-    .render()
-    .ok()
+    )
 }
 
 /// The sections of a run that ended without a result, for the exports (Rule M): a part with its
