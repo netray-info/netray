@@ -42,6 +42,17 @@ impl DnsCachedJob {
             Self::Check(c) => c.blocks.clone(),
         }
     }
+
+    /// The blocks the inspector page shows: for a query, compare or authcompare result they
+    /// lead with `dns.answers` and `dns.servers`; every other result's are `blocks()`.
+    pub fn page_blocks(&self) -> Vec<Block> {
+        match self {
+            Self::Query(r) => super::blocks::query_page_blocks(r),
+            Self::Compare(r) => super::blocks::compare_page_blocks(r),
+            Self::AuthCompare(r) => super::blocks::authcompare_page_blocks(r),
+            _ => self.blocks(),
+        }
+    }
 }
 
 /// One check of the section; findings and evidence are always present, empty or not.

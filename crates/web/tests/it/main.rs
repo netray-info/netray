@@ -53,6 +53,7 @@ mod dns_view_negative;
 mod dns_view_part;
 mod dns_view_readable;
 mod dns_view_results;
+mod dns_view_review;
 mod dns_view_summary;
 mod drawing_rules;
 mod entries_diff;

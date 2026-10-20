@@ -8,9 +8,9 @@ use futures::FutureExt;
 use futures::future::BoxFuture;
 use netray_dns::parser::ParsedQuery;
 use netray_dns::{
-    DnsAuthCompareResult, DnsCachedResult, DnsCompareResult, DnsDnssecResult, DnsErrorEvent,
-    DnsJob, DnsJobEvent, DnsQueryResult, DnsRefusal, DnsResultCache, DnsTraceResult, DnssecRequest,
-    TraceRequest, blocks,
+    DnsAuthCompareResult, DnsCachedJob, DnsCachedResult, DnsCompareResult, DnsDnssecResult,
+    DnsErrorEvent, DnsJob, DnsJobEvent, DnsQueryResult, DnsRefusal, DnsResultCache, DnsTraceResult,
+    DnssecRequest, TraceRequest, blocks,
 };
 use netray_email::{EmailInspectRequest, EmailRefusal};
 use netray_engine::{Domain, Facts, Module, RunContext, SectionOutcome};
@@ -626,19 +626,19 @@ impl InspectJobs {
         } else if flagged("compare") {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("compare", rx, blocks::compare_blocks, store),
+                dns_part("compare", rx, blocks::compare_page_blocks, store),
                 DnsStart::Compare(tx),
             )
         } else if flagged("auth") {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("authcompare", rx, blocks::authcompare_blocks, store),
+                dns_part("authcompare", rx, blocks::authcompare_page_blocks, store),
                 DnsStart::AuthCompare(tx),
             )
         } else {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("query", rx, blocks::query_blocks, store),
+                dns_part("query", rx, blocks::query_page_blocks, store),
                 DnsStart::Query(tx),
             )
         };
@@ -731,8 +731,23 @@ impl DnsResults for DnsResultCache {
     fn result<'a>(&'a self, key: &'a str) -> BoxFuture<'a, Option<CachedDns>> {
         Box::pin(async move {
             let cached = self.get(key).await?;
+            // The errors and warnings the live part adds, so a replayed failure stays visible
+            // (Rule M).
+            let mut blocks = cached.result.page_blocks();
+            let (errors, warnings): (&[DnsErrorEvent], &[String]) = match &cached.result {
+                DnsCachedJob::Query(r) => (&r.errors, r.warnings()),
+                DnsCachedJob::Compare(r) => (&r.errors, r.warnings()),
+                DnsCachedJob::AuthCompare(r) => (&r.errors, r.warnings()),
+                DnsCachedJob::Trace(r) => (&r.errors, &[]),
+                DnsCachedJob::Dnssec(r) => (&r.errors, &[]),
+                DnsCachedJob::Check(_) => (&[], &[]),
+            };
+            if !blocks.is_empty() {
+                blocks.extend(errors_block(errors));
+                blocks.extend(warnings_block(warnings));
+            }
             Some(CachedDns {
-                blocks: cached.result.blocks(),
+                blocks,
                 query: cached.query,
                 mode: cached.mode,
             })

@@ -119,7 +119,8 @@ async fn c8_compare_and_auth_flags_stream_their_tables() {
     ] {
         let s = run_q(&app, q).await;
 
-        assert!(has_part(&s, id, "table"), "{q}: {s}");
+        assert!(s.contains(&format!("id=\"ev-{id}\"")), "{q}: {s}");
+        assert!(s.contains("class=\"dns-view\""), "{q}: {s}");
     }
 }
 

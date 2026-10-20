@@ -92,7 +92,8 @@ runs render as structured views instead of key-value trees. The query input auto
    `response_code`, `error`, `response_time`; under that one child per record with `name`,
    `type`, `ttl`, `data`, `soa_serial_age_days`, `human`, `explain`) and `dns.servers` "Servers"
    (one child per server summary). Absent facts are omitted, never a placeholder. The same blocks
-   come with a result read from the API cache. (2.15, theme D)
+   come with a result read from the API cache, followed there by the `dns.errors` and
+   `dns.warnings` blocks the live part adds. (2.15, theme D)
 2. **Part view.** `pages::views` gains a part-level hook asked once per part before its blocks:
    the DNS part view claims `dns.answers`, `dns.servers`, `dns.warnings` and each job block whose
    every value the view shows (a records block whose every record data appears among that type's
@@ -101,11 +102,14 @@ runs render as structured views instead of key-value trees. The query input auto
    first claimed block; unclaimed blocks render as before. The fragment carries `id="ev-<id>"`
    for each claimed block. SDD §6.1 is amended. (theme D)
 3. **Run summary.** The fragment starts with one mono line: "<record_types> types · <lookups>
-   lookups · <servers> servers · <transport> · <agree> agree · <diverge> diverge · <unmeasured>
-   not measured · <duration>", a zero count left out except agree and diverge; then each warning
+   lookups · <servers> servers · <transport> · <agree> agree · <diverge> diverge · <single> single
+   · <unmeasured> not measured · <duration>", a zero count left out except agree and diverge; a
+   muted line "<total_queries> queries sent" with "DNSSEC requested" when the done event says so;
+   then each warning
    and each degraded provider ("<provider> skipped: circuit open") as a notice line. Compare names
    its transports, authcompare its authoritative servers. A job that never finished shows the
-   notice "The query ended before every server answered" and no summary line. (2.25, 2.12)
+   notice "The query ended before every server answered" and no summary line: its counts are
+   partial, and every answer they count is in the cards. (2.25, 2.12)
 
 ### Results tab
 
@@ -116,11 +120,14 @@ runs render as structured views instead of key-value trees. The query input auto
 5. **Answer groups.** Inside a card, answers are grouped by identical outcome and record data, the
    largest group first; each group shows its records, "<n> / <m> servers" and per server its name
    (or address) with the transport (and the source in authcompare), the TTL range across the group
-   and a response-time bar whose length is a Rust function of the server's time over the job's
+   (each record's own TTL range in its details) and a response-time bar whose length is a Rust function of the server's time over the job's
    slowest measured answer. A diverging card shows every group. (2.15, 2.29, 2.30)
 6. **Negative and failed answers.** `no_records` reads "no records", `nxdomain` reads "NXDOMAIN",
    an `unmeasured` answer reads "not measured: <response code or error>" beside the answered
-   groups (Rule M), so a failure on one server is visible while another answers. (2.21)
+   groups (Rule M), so a failure on one server is visible while another answers; the error is
+   preferred to the response code, which is NOERROR for a referral. A "not measured" block is
+   claimed only when its reason is among its type's answers. Record data keeps the shell's links
+   and address badges. (2.21)
 7. **Readable data.** Each record shows its zone-file data (mono) and, where `record_format.rs`
    has a human form that differs from the data, the human form under it in muted text. (2.20)
 
@@ -312,6 +319,15 @@ GIVEN the DNS inspector at 390 px WHEN measured THEN the document is not wider t
 - The draft's exports requirement ("JSON gains `summary`") becomes "the exports carry the summary
   blocks": the shell exports blocks, and a second, unblocked copy of the summary would fork the
   export format (implementer under the operator's autonomy mandate, 2026-10-21).
+- Phase 1 review: record data in the part view keeps the shell's links and badges (it had
+  dropped them for claimed records blocks); an unmeasured answer reads its error before its
+  response code (a referral is NOERROR); a "not measured" block or a failed compare row is claimed
+  only when its reason is shown; each record shows its own TTL range in its details (a merged
+  records block keeps one TTL per record, a group's range could hide it); the summary line counts
+  single answers and a meta line shows the queries sent and DNSSEC; an API-cache replay carries the
+  job's errors and warnings as the live part does (Rule M). An unfinished job's partial counts stay
+  unshown: its cards hold every answer they count (implementer under the operator's autonomy
+  mandate, 2026-10-21).
 - The trace heading names no traced type and the shared-result notices of the draft are dropped:
   the traced type is not in the collected trace result and adding it would change the API's done
   event; the run line already shows the query. A multi-type `+trace` puts "Only the first type is

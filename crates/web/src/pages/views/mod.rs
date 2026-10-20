@@ -9,7 +9,7 @@ mod ip;
 mod tls;
 
 use askama::Template;
-use netray_model::evidence::{Block, Fields, Node, Shape, Value};
+use netray_model::evidence::{Block, BlockId, Fields, Node, Shape, Value};
 use netray_model::{CheckId, Status};
 
 use crate::components::{Cell, Tone};
@@ -30,6 +30,27 @@ pub fn render(block: &Block, ctx: &ViewContext<'_>) -> Option<String> {
         .or_else(|| tls::render(block, ctx))
         .or_else(|| email::render(block, ctx))
         .or_else(|| ip::render(block, ctx))
+}
+
+/// A part view's fragment and the blocks it shows in full, in block order.
+pub struct PartView {
+    pub html: String,
+    pub claimed: Vec<BlockId>,
+}
+
+/// The part view of a part's `blocks`, asked once before its blocks: `None` when no part view
+/// claims them.
+pub fn render_part(blocks: &[Block], ctx: &ViewContext<'_>) -> Option<PartView> {
+    dns::render_part(blocks, ctx)
+}
+
+/// The length of a bar in percent of the slowest value, rounded; 0 when the slowest is 0.
+pub fn bar_width(value_ms: u64, slowest_ms: u64) -> u8 {
+    if slowest_ms == 0 {
+        return 0;
+    }
+    let pct = (u128::from(value_ms) * 100 + u128::from(slowest_ms) / 2) / u128::from(slowest_ms);
+    pct.min(100) as u8
 }
 
 /// Whether a protocol view claims `block`.

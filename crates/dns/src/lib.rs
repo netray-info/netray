@@ -24,6 +24,7 @@ pub use api::query::PostQueryRequest;
 pub use api::trace::TraceRequest;
 pub use config::ModuleConfig;
 pub use jobs::blocks;
+pub use jobs::blocks::{authcompare_page_blocks, compare_page_blocks, query_page_blocks};
 pub use jobs::{
     Agreement, AnswerOutcome, DnsJobSummary, DnsRecordDetail, DnsServerAnswer, DnsServerSummary,
     DnsTypeComparison,

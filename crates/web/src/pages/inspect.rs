@@ -1031,7 +1031,19 @@ fn part_html(
     let (html, text) = match result {
         Ok(blocks) => {
             let mut html = String::new();
+            let ctx = views::ViewContext {
+                statuses: &statuses,
+                decorate: &decorate,
+                feeds: &[],
+            };
+            let mut part = views::render_part(blocks, &ctx);
             for block in blocks {
+                if let Some(view) = &mut part
+                    && view.claimed.contains(&block.id)
+                {
+                    html.push_str(&std::mem::take(&mut view.html));
+                    continue;
+                }
                 let feeds = block_feeds(evidence, &block.id);
                 let slot = slot(block, &decorate, &statuses, &feeds);
                 match slot.view {

@@ -334,7 +334,7 @@ async fn c10_two_servers_that_differ_make_a_diverge_card_with_two_groups() {
     assert!(c.contains(r#"data-agreement="diverge""#), "{s}");
     assert!(c.contains(r#"data-tone="warn">diverge</span>"#), "{s}");
     assert_eq!(c.matches(r#"class="dns-group""#).count(), 2, "{s}");
-    assert_eq!(c.matches(r#"class="dns-group__server""#).count(), 2, "{s}");
+    assert_eq!(c.matches(r#"class="dns-group__server""#).count(), 4, "{s}");
     let g2 = c.rfind(r#"class="dns-group""#).unwrap();
     let (first, second) = c.split_at(g2);
     let has = |g: &str, ip: &str| g.contains(ip);

@@ -1105,3 +1105,194 @@ main td {
 .csp-view__directive-issues [data-tone="pass"] { color: var(--status-pass-text); }
 .csp-view__directive-issues [data-tone="warn"] { color: var(--status-warn-text); }
 .csp-view__directive-issues [data-tone="fail"] { color: var(--status-fail-text); }
+/* The DNS part view: board G's section cards and its tab style (marker). */
+.dns-view {
+  min-width: 0;
+  max-width: 100%;
+}
+.dns-view__summary {
+  margin: 0 0 var(--space-2);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  overflow-wrap: break-word;
+}
+.dns-view__meta {
+  margin: 0 0 var(--space-2);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+}
+.dns-view__notices {
+  display: contents;
+}
+.dns-view__notice {
+  margin: 0 0 var(--space-2);
+  color: var(--status-warn-text);
+  font-size: var(--font-size-small);
+}
+.dns-view__tabs {
+  margin-block-start: var(--space-3);
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: var(--color-surface);
+}
+.dns-view__nav {
+  display: flex;
+  flex-wrap: wrap;
+  border-bottom: var(--line-hair) solid var(--color-line);
+}
+.dns-view__tab {
+  padding: 12px 18px 12px 24px;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-regular);
+  letter-spacing: 0.1em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+.dns-view__tab[aria-current="true"] {
+  color: var(--color-ink);
+  font-weight: var(--font-weight-bold);
+}
+.dns-view__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4) 18px;
+}
+.dns-view__tabs[data-ready] .dns-view__panel:not([data-shown]) {
+  display: none;
+}
+.dns-type {
+  min-width: 0;
+  overflow-x: auto;
+  padding: 18px;
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: var(--color-surface);
+}
+.dns-type__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+.dns-type__name {
+  margin: 0;
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  font-weight: 700;
+}
+.dns-type__badge {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+.dns-type__badge[data-tone="pass"] { color: var(--status-pass-text); }
+.dns-type__badge[data-tone="warn"] { color: var(--status-warn-text); }
+.dns-type__badge[data-tone="muted"] { color: var(--color-muted); }
+.dns-group {
+  margin-block-start: var(--space-3);
+  padding-block-start: var(--space-3);
+  border-top: var(--line-hair) solid var(--color-line);
+}
+.dns-group__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+.dns-group__outcome {
+  margin: var(--space-2) 0 0;
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+}
+.dns-group[data-outcome="unmeasured"] .dns-group__outcome {
+  color: var(--color-muted);
+}
+.dns-group__servers {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.dns-group__server {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-small);
+}
+.dns-group__name {
+  color: var(--color-ink);
+}
+.dns-group__transport,
+.dns-group__source,
+.dns-group__time {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+.dns-bar {
+  display: inline-block;
+  width: 96px;
+  height: var(--line-marker);
+  background: var(--color-line);
+}
+.dns-bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--color-muted);
+}
+.dns-record {
+  margin-block-start: var(--space-2);
+}
+.dns-record > summary {
+  cursor: pointer;
+}
+.dns-record__data {
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  overflow-wrap: break-word;
+}
+.dns-record__human {
+  display: block;
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+}
+.dns-record__meta,
+.dns-record__explain {
+  margin: var(--space-1) 0 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-caption);
+}
+.dns-servers {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dns-server {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--font-size-small);
+}
+.dns-server + .dns-server {
+  margin-block-start: var(--space-2);
+}
+.dns-server__name {
+  color: var(--color-ink);
+}
+.dns-server__id,
+.dns-server__measured {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
