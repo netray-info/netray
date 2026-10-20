@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+**Grades change (scoring profile v4).** Three new graded checks: `tls.legacy_versions` (SSLv3, TLS 1.0 or TLS 1.1 accepted fails), `tls.weak_suites` (RC4, 3DES, DES, export, NULL or anonymous suites fail; CBC or static RSA suites warn) and `http.coop` (a missing, `unsafe-none` or unrecognised Cross-Origin-Opener-Policy warns). Every domain's grade may change once; the first v4 run of each domain is recorded as a new history entry whose diff shows the three checks as added by release and separates the profile's effect from the domain's. A server that resets or closes the connection instead of answering a legacy-version probe with an alert, and accepts no other legacy version, leaves `tls.legacy_versions` unmeasured, so the TLS section is incomplete and the run gets no letter unless a hard-fail check failed.
+
 ### Added
 
+- **TLS protocol and cipher probes.** Each address that completes a handshake is probed with hand-built ClientHello messages (SSLv3, TLS 1.0, TLS 1.1, TLS 1.2 when TLS 1.3 was negotiated, and the insecure, CBC and static-RSA suite groups; at most seven short connections, each bounded by the handshake timeout). Evidence: `tls.probes@<address>:<port>` per address and `tls.protocols` per port (TLS 1.0 to 1.3 enabled or disabled, suite groups accepted or refused, forward secrecy across suites).
 - **V2 design system (`netray-web`, no route yet).**
   - `crates/web/tokens.json` is the token source. `build.rs` generates `tokens.css` (light, dark by preference or `[data-theme="dark"]`, phone values up to `layout.phoneMax`, `color-scheme`) and Rust constants. A test checks every status colour's contrast in both themes.
   - The ten R44 components, each an askama macro with its own stylesheet and view struct. The spectrum and trace keep the SDD's drawing rules.
