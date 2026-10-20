@@ -3,7 +3,7 @@
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { slug } from './manifest.mjs';
+import { boardSlug } from './manifest.mjs';
 
 export async function openExport(browser, exportPath) {
   const context = await browser.newContext({
@@ -47,7 +47,7 @@ export async function measureBoard(exportPage, board, outDir) {
   );
 
   mkdirSync(outDir, { recursive: true });
-  const screenshot = join(outDir, `${slug(board.title)}-board.png`);
+  const screenshot = join(outDir, `${boardSlug(board)}-board.png`);
   await handle.screenshot({ path: screenshot });
 
   const values = {};

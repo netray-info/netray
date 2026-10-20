@@ -295,6 +295,13 @@ main td {
   font-weight: var(--font-weight-strong);
   letter-spacing: var(--font-tracking-display);
   line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+/* One label is one atomic box: the h1 breaks between labels (after a dot), never at a hyphen;
+   a label wider than the line still wraps inside its own box (v2-result-polish R13). */
+.result-hero__label {
+  display: inline-block;
+  max-width: 100%;
 }
 .hard-fail {
   margin: 0;
@@ -408,6 +415,46 @@ main td {
 }
 .evidence-tabs[data-ready] .evidence-tabs__panel:not([data-shown]) {
   display: none;
+}
+.evidence-tabs__caption {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+}
+.evidence-tabs__scroll {
+  overflow-x: auto;
+}
+.evidence-tabs__compact {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-evidence);
+}
+.evidence-tabs__compact th {
+  padding: 6px 12px;
+  color: var(--color-muted);
+  font-weight: var(--font-weight-medium);
+  text-align: left;
+}
+.evidence-tabs__compact th {
+  border-bottom: 0;
+}
+.evidence-tabs__compact td {
+  padding: 8px 12px;
+  border-top: var(--line-hair) solid var(--color-line);
+  border-bottom: 0;
+  color: var(--color-ink);
+}
+.evidence-tabs__compact :is(th, td):first-child {
+  padding-left: 0;
+}
+.evidence-tabs__compact strong {
+  font-weight: var(--font-weight-bold);
+}
+.evidence-tabs__blocks > summary {
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+  cursor: pointer;
 }
 .evidence-tabs__links {
   display: flex;
@@ -753,6 +800,17 @@ main td {
   .evidence-tabs__panel table {
     display: block;
     overflow-x: auto;
+  }
+  .evidence-tabs__compact {
+    min-width: 520px;
+  }
+  .evidence-tabs__compact :is(th, td) {
+    padding-inline: 10px;
+  }
+  .evidence-tabs__panel .evidence-tabs__compact {
+    display: table;
+    overflow-x: visible;
+    font-size: var(--font-size-evidence);
   }
   .evidence-tabs__panel :is(th, td) {
     white-space: nowrap;

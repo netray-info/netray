@@ -30,7 +30,10 @@ within tolerance or accepted; 1: open deviations, a `no state` row or a stale ac
 
 A manifest board names the board's title in the export, host, path (a live target enters at
 `{target}`), width, theme and its elements: a name, a board selector, a page selector (Playwright
-selectors), a class and the CSS properties to compare.
+selectors), a class and the CSS properties to compare. An optional `state` names one more page state of
+the same canvas board (a long domain, full multi-address evidence): the board is measured again at
+its own path, its files are `<title slug>-<state slug>-*` and its rows and `accepted` entries name
+it "<title> [<state>]".
 
 ## Five classes
 

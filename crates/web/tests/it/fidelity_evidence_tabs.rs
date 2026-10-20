@@ -161,8 +161,8 @@ async fn c1_c2_a_stored_entry_renders_the_evidence_card() {
     for (name, protocol) in PROTOCOLS.iter().zip(protocols) {
         let panel = panel(&body, name);
         assert!(
-            panel.contains(r#"class="evidence-block""#),
-            "{name}: no blocks"
+            panel.contains(r#"class="evidence-tabs__compact""#),
+            "{name}: no compact table"
         );
         assert!(
             panel.contains(r#"<p class="evidence-tabs__feeds">Feeds lines: <code>"#),

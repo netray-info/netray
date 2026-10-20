@@ -3,6 +3,7 @@
 // No dependencies; nothing here touches a browser, the network or the file system.
 
 import { basename } from 'node:path';
+import { boardName } from './manifest.mjs';
 
 const hex2 = (n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
 
@@ -91,7 +92,7 @@ export function deviations(board, boardValues, pageValues) {
   const out = [];
   for (const element of board.elements) {
     const base = {
-      board: board.title,
+      board: boardName(board),
       width: board.width,
       theme: board.theme,
       element: element.name,
@@ -124,7 +125,7 @@ export function deviations(board, boardValues, pageValues) {
 
 export function noStateDeviation(board, reason) {
   return {
-    board: board.title,
+    board: boardName(board),
     width: board.width,
     theme: board.theme,
     element: null,

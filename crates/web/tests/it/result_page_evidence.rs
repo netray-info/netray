@@ -137,12 +137,16 @@ async fn c6_evidence_section_has_one_linked_panel_per_protocol() {
 
 #[tokio::test]
 async fn c13_page_renders_the_evidence_blocks_in_their_panels() {
-    let (app, _id, _dir) = app_with_entry().await;
+    let (app, id, _dir) = app_with_entry().await;
 
     let (status, body) = get(&app, "/example.com").await;
 
     assert_eq!(status, StatusCode::OK);
+    // v2-result-polish: a stored panel shows the compact table; its blocks live in the entry view.
     let tls = element(&body, "tls");
-    assert!(tls.contains(r#"class="evidence-block""#), "{tls}");
-    assert!(tls.contains(BLOCK_TITLE), "{tls}");
+    assert!(!tls.contains(r#"class="evidence-block""#), "{tls}");
+    assert!(
+        tls.contains(&format!(r#"href="/r/{id}/tls">All evidence →</a>"#)),
+        "{tls}"
+    );
 }
