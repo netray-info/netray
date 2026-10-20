@@ -220,6 +220,7 @@ mod shell_frame;
 mod shell_header;
 mod shell_headings;
 mod shell_nojs;
+mod shell_review_p1;
 mod shell_run_head;
 mod shell_store_readonly;
 mod shell_tabs;
