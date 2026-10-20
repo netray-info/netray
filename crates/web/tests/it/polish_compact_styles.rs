@@ -112,7 +112,7 @@ fn the_compact_table_styles_resolve_to_the_board_values() {
         (".evidence-tabs__compact", "font-family:var(--font-mono)"),
         (
             ".evidence-tabs__compact",
-            "font-size:var(--font-size-small)",
+            "font-size:var(--font-size-evidence)",
         ),
         (".evidence-tabs__compact th", "padding:6px12px"),
         (
@@ -151,8 +151,8 @@ fn the_compact_table_scrolls_sideways_on_a_phone() {
         |sel: &str| -> Vec<String> { regions.iter().flat_map(|r| blocks_in(r, sel)).collect() };
     let rows = [
         (
-            ".evidence-tabs__compact",
-            "font-size:var(--font-size-label)",
+            ".evidence-tabs__panel .evidence-tabs__compact",
+            "font-size:var(--font-size-evidence)",
         ),
         (".evidence-tabs__compact", "min-width:520px"),
         (".evidence-tabs__compact :is(th, td)", "padding-inline:10px"),
@@ -172,4 +172,7 @@ fn the_medium_font_weight_is_a_token() {
     )
     .unwrap();
     assert_eq!(tokens["font"]["weight"]["medium"]["$value"], 500);
+    // The compact tables' size: 13 px, 12 px at phone width (board M), not the 11 px phone label.
+    assert_eq!(tokens["font"]["size"]["evidence"]["$value"], "13px");
+    assert_eq!(tokens["font"]["size"]["evidencePhone"]["$value"], "12px");
 }

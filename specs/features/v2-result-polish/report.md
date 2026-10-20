@@ -54,7 +54,7 @@ Reader over the phase diff: 5 blockers, 2 amendments, 1 nit; all repaired in thi
 
 | class | finding | repair |
 |---|---|---|
-| BLOCKER | phone compact table at 13 px: `.evidence-tabs__panel table` outranks `.evidence-tabs__compact` | `.evidence-tabs__panel .evidence-tabs__compact` sets 12 px in the phone block |
+| BLOCKER | phone compact table at 13 px: `.evidence-tabs__panel table` outranks `.evidence-tabs__compact` | `.evidence-tabs__panel .evidence-tabs__compact` takes the size in the phone block; the range review found it still resolved to the 11 px phone label, now token `font.size.evidence` (13 px, 12 px at phone width) |
 | BLOCKER | phone `display: block; overflow-x: auto` of evidence-block tables also hit the compact table: two nested scroll areas | the same rule restores `display: table; overflow-x: visible`; `.evidence-tabs__scroll` is the one scroller |
 | BLOCKER | `main td` made body cells muted with a bottom rule | `.evidence-tabs__compact td` ink, no bottom rule; th no bottom rule |
 | BLOCKER | DKIM key without type rendered "mail: revoked," | empty key type and bits count as unknown |

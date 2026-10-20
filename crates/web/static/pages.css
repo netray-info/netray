@@ -428,7 +428,7 @@ main td {
   width: 100%;
   border-collapse: collapse;
   font-family: var(--font-mono);
-  font-size: var(--font-size-small);
+  font-size: var(--font-size-evidence);
 }
 .evidence-tabs__compact th {
   padding: 6px 12px;
@@ -803,7 +803,6 @@ main td {
   }
   .evidence-tabs__compact {
     min-width: 520px;
-    font-size: var(--font-size-label);
   }
   .evidence-tabs__compact :is(th, td) {
     padding-inline: 10px;
@@ -811,7 +810,7 @@ main td {
   .evidence-tabs__panel .evidence-tabs__compact {
     display: table;
     overflow-x: visible;
-    font-size: var(--font-size-label);
+    font-size: var(--font-size-evidence);
   }
   .evidence-tabs__panel :is(th, td) {
     white-space: nowrap;

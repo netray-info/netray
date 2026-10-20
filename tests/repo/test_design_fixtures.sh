@@ -46,7 +46,7 @@ else:
     if len(n4) != 2 or len(n6) != 2:
         errs.append(f"want two IPv4 and two IPv6, got {len(n4)} and {len(n6)}")
     for a in n4:
-        if not (a in ipaddress.ip_network("192.0.2.0/24") or a in ipaddress.ip_network("198.51.100.0/24")):
+        if not any(a in ipaddress.ip_network(n) for n in ("192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24")):
             errs.append(f"IPv4 {a} outside the documentation ranges")
     for a in n6:
         if a not in ipaddress.ip_network("2001:db8::/32"):

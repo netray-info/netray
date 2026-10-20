@@ -92,7 +92,7 @@ what the review found by eye.
    `vpn` joined by ", ", else "none"; an absent or empty cell stays empty.
 10. **Styles.** Desktop: caption 13 px muted; table mono 13 px, header cells weight 500 muted with
     padding 6 px 12 px, body cells padding 8 px 12 px with a 1 px `line` top rule, first column
-    without left padding, strong cells weight 700. Phone (≤ 480 px): table 12 px, cell padding
+    without left padding, strong cells weight 700. Phone (≤ 480 px): table 12 px (token `font.size.evidence`, 13 px with a 12 px phone value; the 11 px phone label is not it), cell padding
     10 px sideways, minimum width 520 px inside the scrolling panel. (Boards F and M.)
 
 ### Hero
@@ -119,7 +119,10 @@ what the review found by eye.
     validates as every fixture does.
 16. **Manifest.** The private manifest gains the long-domain state on the first-visit board
     (1280, light) and the mobile board (390, light), measuring hero and evidence elements, and on
-    every result board the elements "run title height" (desktop boards), "evidence caption",
+    every result board the elements "title column height" (desktop boards: the run title's line
+    shows as the column's height; the board's run title span reads `height: auto`, and in the
+    long-domain state the h1 wraps by design, so there the one-line run title is read from the
+    side-by-side image), "evidence caption",
     "evidence th", "evidence td" and an "evidence panel" whose page selector matches only a panel
     without a full evidence block. `just design-check` exits 0 with every row measured or
     accepted.
@@ -218,7 +221,7 @@ carries it; `partials/result_evidence.html` renders it; `pages.css` styles it.
 - A run without a stored entry has no evidence view to link: its blocks stay reachable in a closed `details` disclosure instead of the link, so an incomplete run loses no evidence and no JavaScript is needed (implementer under the operator's autonomy mandate, 2026-10-20).
 - Run title (item 3): the descriptor stops widening the grade block, which gives the title column the width for "… · CACHED · FIRST RUN"; the title is not shortened and no part is dropped (implementer under the operator's autonomy mandate, 2026-10-20).
 - Long domains (item 4): break points after the dots (`<wbr>`), each label an inline-block box so a hyphen (browsers break after one) is none (review of Phase 2), keeping board M's `overflow-wrap: anywhere` as the last resort for a single label wider than the line, on both widths; no font scaling, which would put the h1 off the board's 40 and 26 px (implementer under the operator's autonomy mandate, 2026-10-20).
-- Gate blind spots (item 5): a manifest board `state` lets one canvas board measure several page states; the panel's "no full evidence block" rule is an element whose page selector only matches a compact panel, and the one-line run title is a height row; a wrap point is not measurable, so the long-domain states also serve the side-by-side reading (implementer under the operator's autonomy mandate, 2026-10-20).
+- Gate blind spots (item 5): a manifest board `state` lets one canvas board measure several page states; the panel's "no full evidence block" rule is an element whose page selector only matches a compact panel, and the one-line run title is the title column's height row (the board's span has no measurable height); a wrap point is not measurable, so the long-domain states also serve the side-by-side reading (implementer under the operator's autonomy mandate, 2026-10-20).
 
 ## Open decisions
 
