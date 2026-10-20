@@ -99,7 +99,7 @@ fn without(mut v: serde_json::Value, ids: &[&str]) -> serde_json::Value {
         .unwrap()
         .retain(|b| !ids.contains(&b["id"].as_str().unwrap()));
     for c in v["checks"].as_array_mut().unwrap() {
-        if let Some(ev) = c["evidence"].as_array_mut() {
+        if let Some(ev) = c.get_mut("evidence").and_then(|e| e.as_array_mut()) {
             ev.retain(|e| !ids.contains(&e.as_str().unwrap()));
         }
     }
