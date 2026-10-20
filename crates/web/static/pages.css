@@ -985,3 +985,23 @@ main td {
 #evidence > .inspector-export {
   margin: var(--space-2) 0 0;
 }
+/* A check row's links to its blocks: small, under the row's text column. */
+.evidence-section__link {
+  display: inline-block;
+  margin: 0 var(--space-3) var(--space-2) 116px;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+}
+.evidence-section__link + .evidence-section__link {
+  margin-left: 0;
+}
+/* Tap targets at phone width (v2-inspector-shell R29). */
+@media (max-width: 480px) {
+  .evidence-section__link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin-left: 0;
+  }
+}

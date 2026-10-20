@@ -574,7 +574,7 @@ struct BandFragment {
 /// The band region of a finished run: the zoomed plate, its named lines and the live check list.
 struct BandView {
     spectrum: String,
-    lines: Vec<(String, String)>,
+    lines: Vec<(String, String, &'static str)>,
     caption: String,
     heading: String,
     meta: Option<String>,
@@ -1221,12 +1221,25 @@ fn band_view(
     let spectrum = band_html(protocol, checks)?;
     let specs = netray_engine::catalogue::catalogue().for_protocol(protocol);
     let specs = specs.entries();
-    let lines: Vec<(String, String)> = specs
+    // A line's name carries its status tone, as board G colours a warning line's label.
+    let lines: Vec<(String, String, &'static str)> = specs
         .iter()
-        .map(|spec| (spec.short.clone(), line_code(&spec.id).unwrap_or_default()))
+        .map(|spec| {
+            let status = checks.iter().find(|c| c.id == spec.id).map(|c| c.status);
+            let tone = match status {
+                Some(Status::Warn) => "warn",
+                Some(Status::Fail) => "fail",
+                _ => "none",
+            };
+            (
+                spec.short.clone(),
+                line_code(&spec.id).unwrap_or_default(),
+                tone,
+            )
+        })
         .collect();
     let caption = match (lines.first(), lines.last()) {
-        (Some((_, first)), Some((_, last))) => {
+        (Some((_, first, _)), Some((_, last, _))) => {
             let (tag, from) = first.split_once('\u{b7}').unwrap_or((first, ""));
             let to = last.split_once('\u{b7}').map_or("", |(_, n)| n);
             if lines.len() == 1 {

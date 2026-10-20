@@ -1,8 +1,10 @@
 {% import "components/check_row.html" as check_row %}
 <div id="inspect-band">
 {% if let Some(band) = band %}<figure class="inspector-band">
+<div class="inspector-band__inner">
 {{ band.spectrum|safe }}
-<ol class="inspector-band__lines">{% for (short, code) in band.lines %}<li class="inspector-band__line"><span class="inspector-band__short">{{ short }}</span> <span class="inspector-band__code">{{ code }}</span></li>{% endfor %}</ol>
+<ol class="inspector-band__lines">{% for (short, code, tone) in band.lines %}<li class="inspector-band__line" data-tone="{{ tone }}"><span class="inspector-band__short">{{ short }}</span> <span class="inspector-band__code">{{ code }}</span></li>{% endfor %}</ol>
+</div>
 <figcaption class="inspector-band__caption">{{ band.caption }}</figcaption>
 </figure>
 <section class="inspector-section inspector-checks" id="inspect-checks">

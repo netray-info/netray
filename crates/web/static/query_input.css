@@ -68,6 +68,7 @@
 }
 .query-input--card .query-input__submit {
   height: 44px;
+  padding: 0 22px;
   box-sizing: border-box;
   font-size: var(--font-size-button);
   font-weight: 600;

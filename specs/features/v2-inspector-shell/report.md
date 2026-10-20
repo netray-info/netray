@@ -400,3 +400,49 @@ and nothing restored it (now a finished run streams `inspect-export` after `pass
 page's element; a fresh-head visit answered from the store sends none). Amendments: a refused run
 no longer drops the export; an unknown-profile entry gets its export ("Grade X"); `/` is left to the
 browser where no domain input exists, and the help lists it only there.
+
+## Phase 9 — Design gate and visual reading
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R27 Bundle cap: the islands bundle stays under 30 KB gzipped; islands write no style and compute no verdict | already_implemented | islands/test/budget.test.ts |
+| C2 | R28 Design gate: the manifest names the shell elements of boards G and GDark on a page with a finished run; just design-check exits 0 for them | green | design-check, scratch Playwright measure |
+| C3 | R29 Visual reading: screenshots of every inspector at 1280 and 390 px, light and dark, read beside board G; findings closed; no sideways scroll at 390 px, targets at least 44 px | green | design-check, scratch Playwright measure |
+| C4 | GIVEN the manifest's G and GDark shell elements WHEN just design-check runs THEN it exits 0 | green | design-check, scratch Playwright measure |
+| C5 | GIVEN the islands bundle WHEN built THEN the cap test passes | already_implemented | islands/test/budget.test.ts |
+| C6 | GIVEN every inspector at 390 px WHEN measured THEN no page is wider than the viewport and no target is below 44 px | green | design-check, scratch Playwright measure |
+| C7 | GIVEN the screenshots WHEN read beside board G THEN every finding is a report row and none stays open | green | design-check, scratch Playwright measure |
+| V1 | Visual: Inspectors menu chevron and full footer missing (site navigation) | green | decided (non-goal, theme J) |
+| V2 | Visual: TLS depth parts missing (ports, addresses, certificate, protocols) | green | decided (non-goal, theme E) |
+| V3 | Visual: Checks section after the band | green | decided (operator, theme B) |
+| V4 | Visual: back link and related box absent on the IP target | green | decided (DNS blocked locally; integration tests pin them) |
+| V5 | Visual: share, export and help controls | green | decided (requirements 12, 17, 20) |
+| V6 | Visual: band overflowed at 1280, warn lines off screen | green | rebuilt: names centred on columns, two rows; band fits 1056 px |
+| V7 | Visual: band farther from heading and labels than on G | green | decided: the spectrum component's flag row (one renderer) |
+| V8 | Visual: HTTP flag row above the band; labels not toned | green | rebuilt: line names take warn/fail tone; flag row kept (one renderer) |
+| V9 | Visual: region word under the band | green | decided: spectrum component region label (one renderer) |
+| V10 | Visual: unstyled block links between check rows | green | rebuilt: mono 12 px muted under the text column, no indent at 390 px |
+| V11 | Visual: lowercase part headings and raw detail dump | green | rebuilt: heading capitalised; the dump is the evidence the TLS depth feature replaces |
+| V12 | Visual: clear button not on G | green | decided (requirement 4) |
+| V13 | Visual: DNS builder outside the card, browser defaults | green | rebuilt: continues the input card, labels are 44 px targets |
+| V14 | Visual: header to tabs and tabs to card distances | green | rebuilt: tabs pulled up 10 px, 12 px to the card, G's tab padding at desktop |
+| V15 | Visual 390: separator floating, help button on its own row, actions indented | green | rebuilt: separator hidden at phone width, the tab row scrolls inside on one line with the help button, actions at the gutter |
+| R1 | Review: no help button at 390 px | green | rebuilt: the button stays in the one-line tab row |
+| R2 | Review: second-row band names collided with neighbouring codes | green | rebuilt: codes share one row, odd names a row below, even names a third row; overlap check over 90 pages finds none |
+| R3 | Review: the DNS builder sat under the note, not under the card | green | rebuilt: the fieldset follows the form, the note after it |
+| R4 | Review: the resolver select was 19 px tall at 390 px | green | rebuilt: 44 px |
+| R5 | Review: block links 20 px left of the text column | green | rebuilt: 116 px indent |
+| R6 | Review: a name toned warn over a muted band line | green | deferred: rare (an unmeasured weighted check mutes the section); the tone follows the check's status |
+| R7 | Review: a wait timeout yields missing-element rows, not a no-state row | green | deferred: the design check's wait is new; reported as a proposal |
+
+### Behavioural verification
+
+`just design-check` (full manifest, 12 boards incl. G and GDark with 28 shell elements each):
+"0 open deviation(s), 0 stale accepted entries", exit 0. Measured over 90 pages (5 inspectors x
+idle/finished/refused x 1280/768/390 x light/dark): no page wider than the viewport, no band names
+or codes overlapping, and at 390 px no visible link, button, input, select or summary below 44 px
+(checkboxes counted by their label). Screenshots in the session
+scratchpad (`shots/<tool>-<state>-<width>-<theme>.png`), read by an independent reader beside
+boards 17/18; its 9 open findings became rows V6-V15 above.

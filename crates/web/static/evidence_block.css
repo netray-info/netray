@@ -89,3 +89,10 @@
 .ip-badge[data-tone="muted"] { color: var(--color-muted); }
 .ip-badge[data-tone="warn"] { color: var(--status-warn-text); }
 .ip-badge[data-tone="fail"] { color: var(--status-fail-text); }
+@media (max-width: 480px) {
+  .evidence-value__link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}

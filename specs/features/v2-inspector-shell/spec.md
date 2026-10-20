@@ -159,7 +159,8 @@ Each requirement names the inventory rows or board rows it closes.
    grade letter when its latest entry has a letter grade (an incomplete entry shows none); the route reads the grade with the history store's latest
    entry, and no job reads or writes the store (v2-inspectors requirement 11 holds). (9.52, 9.53;
    boards 17/18)
-7. **Section headings.** Each result section is its own card with an h2 at 20 px weight 650; the
+7. **Section headings.** Each result section has an h2 at 20 px weight 650 above its content (the
+   evidence blocks are the cards, as on board G); the
    page's heading order is h1 (target) then h2 sections, with no skipped level; the idle page's h1
    is visually hidden and names the inspector. (9.59, 9.66; boards 17/18)
 
@@ -595,6 +596,16 @@ GIVEN the screenshots WHEN read beside board G THEN every finding is a `report.m
   exists (idle and not-found pages). Review fixes: the grade line follows the page's shown score;
   the export is streamed with the run instead of dropped (implementer under the operator's
   autonomy mandate, 2026-10-20).
+- Phase 9: the design check measures G and GDark on `/inspect/tls?h=1.1.1.1:443` after the run
+  ends (a manifest `wait` selector): outbound DNS is blocked locally, so the back link and the
+  related-records box (host targets only) leave the manifest and stay pinned by
+  `tests/it/shell_run_head.rs` and `shell_links.rs`. Visual reading: band line names centre on their
+  columns on two alternating rows and take the warn or fail tone (board G colours ECH); section
+  h2s stand above their cards; tabs carry G's left marker bar and weight; the run head's controls
+  are compact text buttons; the DNS builder continues the input card. Kept: the spectrum
+  component's own flag row and region label above and beside the band (one spectrum renderer;
+  a band-only variant is a proposal for the operator) (implementer under the operator's autonomy
+  mandate, 2026-10-20).
 - The Inspectors menu and the full footer of canvas v43 belong to the site-navigation feature
   (theme J); a reader's finding on G's chevron or footer is answered by this non-goal
   (implementer under the operator's autonomy mandate, 2026-10-20).

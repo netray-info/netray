@@ -2,8 +2,8 @@
 <div id="inspect-result">
 <div class="inspector-run__head">
 {% call rl::run_title(title) %}{% endcall %}
-{% if let Some((href, domain)) = link %}<a class="inspector-backlink" href="{{ href }}">{% if let Some(g) = grade %}<span class="inspector-backlink__grade">{{ g }}</span> {% endif %}Back to the result of {{ domain }} →</a>
-{% endif %}{{ share|safe }}{{ export|safe }}</div>
+<div class="inspector-run__actions">{% if let Some((href, domain)) = link %}<a class="inspector-backlink" href="{{ href }}">{% if let Some(g) = grade %}<span class="inspector-backlink__grade">{{ g }}</span> {% endif %}Back to the result of {{ domain }} →</a>
+{% endif %}{{ share|safe }}{{ export|safe }}</div></div>
 <h1 class="inspector-run__target">{{ target }}</h1>
 {% match band %}{% when BandSlot::Pending %}<div id="inspect-band"></div>
 {% when BandSlot::Done(html) %}{{ html|safe }}
