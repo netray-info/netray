@@ -1,5 +1,5 @@
 {% import "components/check_row.html" as check_row %}
-<details id="passed">
-<summary>Checks that passed or do not apply</summary>
+{% if rows.is_empty() %}<details id="passed" class="clean-bar" hidden></details>{% else %}<details id="passed" class="clean-bar">
+<summary class="clean-bar__summary"><span><strong class="clean-bar__count">{% if clean == 1 %}1 line{% else %}{{ clean }} lines{% endif %} clean</strong> <span class="clean-bar__label">· checks that pass</span></span><span class="clean-bar__show">show</span></summary>
 {% for row in rows %}{% call check_row::check_row(row) %}{% endcall %}{% endfor %}
-</details>
+</details>{% endif %}

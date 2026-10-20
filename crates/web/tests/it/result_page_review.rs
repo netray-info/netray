@@ -120,7 +120,7 @@ async fn an_entry_scored_with_an_unknown_profile_still_renders_as_the_latest() {
     let (status, body) = get(&app, "/shop.example.com").await;
     assert_eq!(status, StatusCode::OK);
     assert!(body.contains(r#"data-state="fresh""#), "{body}");
-    assert!(body.contains(&format!("entry {}", ids[0])), "{body}");
+    assert!(body.contains(&format!(r#"href="/r/{}""#, ids[0])), "{body}");
     assert!(!body.contains("not checked yet"), "{body}");
     assert!(body.contains(r#"id="band-tls""#), "{body}");
     assert!(body.contains("tls.chain_trusted"), "{body}");
@@ -157,26 +157,14 @@ async fn since_starts_where_a_check_first_appears() {
     .await;
     let app = router(ResultState::new(store, Arc::new(StubRuns), 300));
     let (_, body) = get(&app, "/shop.example.com").await;
-    let secs = t0 + 10 * day;
-    let days = secs.div_euclid(day);
-    // days-to-civil for the month and day of E2.
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let want = format!("{m:02}-{d:02}");
     let row = body
         .split(r#"<article class="check-row""#)
         .skip(1)
         .find(|r| r.contains("tls.caa_compliant"))
         .expect("caa issue row");
+    let want = "lit up in run 2";
     assert!(
-        row.contains(&format!(r#"<span class="check-row__since">{want}</span>"#))
-            || row.contains(&format!("check-row__since\">since {want}")),
+        row.contains(&format!(r#"<span class="check-row__since">{want}</span>"#)),
         "since {want} missing in {row}"
     );
 }

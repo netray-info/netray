@@ -1,0 +1,6 @@
+<div id="hard-fail-slot">{% if let Some(banner) = banner %}
+<section id="hard-fail" class="hard-fail">
+{% if let Some(text) = banner.hard_fail %}<p class="hard-fail__sentence">{{ text }}</p>{% endif %}
+{% if let Some(text) = banner.without %}<p class="hard-fail__without">{{ text }}</p>{% endif %}
+</section>
+{% endif %}</div>

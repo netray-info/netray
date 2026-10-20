@@ -1,6 +1,6 @@
 //! The result page (spec v2-result-page, Phase 3; C5 requirement 22, C11): `POST /{domain}/run`
 //! streams an incomplete run: the timed-out section is unmeasured, nothing is stored, the end
-//! fragments carry no share link and the evidence is the live section partial.
+//! fragments carry no share link and the evidence is the live tab panel.
 use std::net::IpAddr;
 use std::sync::Arc;
 
@@ -201,9 +201,10 @@ fn last<'a>(events: &'a [(String, String, String)], id: &str) -> &'a str {
 }
 
 fn assert_live_partial(html: &str, protocol: &str) {
-    assert!(html.contains(r#"class="evidence-section""#), "{html}");
     assert!(
-        html.contains(&format!(r#"data-protocol="{protocol}""#)),
+        html.starts_with(&format!(
+            r#"<div id="evidence-{protocol}" class="evidence-tabs__panel" data-panel="{protocol}""#
+        )),
         "{html}"
     );
     assert!(!html.contains("/r/"), "{html}");

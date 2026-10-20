@@ -23,10 +23,10 @@ use serde::Deserialize;
 
 use super::views::{self, Grouping, Links};
 use super::{
-    EvidenceInner, PROTOCOLS, Parts, ResultState, RunLineBody, SHOWN, assemble, domain_segment,
-    evidence_part, figure_parts, full_page, href_of, is_fresh, issues_part, not_stored_shown,
-    progress_part, recorded_entry, resolve, run_line_part, sentences_of, spectrum_part,
-    stored_parts, unrecorded_shown,
+    EvidenceInner, PROTOCOLS, Parts, ResultState, RunLineBody, SHOWN, StoredHow, assemble,
+    domain_segment, done_rows, evidence_meta_part, evidence_part, figure_parts, full_page, href_of,
+    is_fresh, issues_part, not_stored_shown, progress_part, recorded_entry, resolve, run_line_part,
+    sentences_of, spectrum_part, stored_parts, unrecorded_shown,
 };
 use crate::api::{RunEvent, RunEvents, RunRefusal, RunStart, RunTrigger, wants_event_stream};
 use crate::client::client_ip;
@@ -145,7 +145,12 @@ fn stored_answer(domain: &str, entries: &[Entry], sse: bool) -> Response {
     if !sse {
         return see_other(domain);
     }
-    match stored_parts(domain, entries, false, None, None, None) {
+    let how = StoredHow {
+        recorded: None,
+        cached: true,
+        ordinal_known: true,
+    };
+    match stored_parts(domain, entries, false, how, None, None) {
         Some(parts) => {
             let mut events: Vec<Event> = parts
                 .fragments()
@@ -352,13 +357,7 @@ impl Live {
             .take(SHOWN - 1)
             .map(|e| views::layout_input_or_current(&e.run))
             .collect();
-        let mut rows = vec![(super::now(), netray_model::Grade::Incomplete)];
-        rows.extend(
-            self.entries
-                .iter()
-                .take(SHOWN - 1)
-                .map(|e| (e.created_at, e.grade)),
-        );
+        let rows = done_rows(run, netray_model::Grade::Incomplete, &self.entries);
         let live = run
             .sections
             .iter()
@@ -366,8 +365,17 @@ impl Live {
             .collect::<Vec<_>>()
             .join(" ");
         let sentences = sentences_of(self.entries.iter().take(SHOWN - 1).rev());
-        let html = figure_parts(&self.domain, &current, &older, &rows, &live)
-            .and_then(|(plate, trace)| spectrum_part(&plate, &trace, &sentences, true));
+        let stored = !self.entries.is_empty();
+        let html =
+            figure_parts(&self.domain, &current, &older, &rows, &live, stored).and_then(|figure| {
+                spectrum_part(
+                    &figure.plate,
+                    &figure.trace,
+                    &figure.legend,
+                    &sentences,
+                    true,
+                )
+            });
         self.push("spectrum", html);
     }
 
@@ -396,16 +404,15 @@ impl Live {
             &BTreeMap::new(),
         );
         self.push("issues", issues_part(&groups));
-        let inner = evidence::render_section(&evidence::section(
-            &run,
-            protocol,
-            evidence::live_run_line(),
-        ))
-        .inspect_err(|e| tracing::warn!(error = %e, "evidence section render failed"))
-        .ok()
-        .map(EvidenceInner::Section);
-        let html = inner.and_then(|inner| evidence_part(protocol, &inner));
+        let inner = EvidenceInner {
+            shown: false,
+            panel: Some(evidence::panel(&run, protocol, &self.domain, None)),
+        };
+        let html = evidence_part(protocol, &inner);
         self.push(&format!("evidence-{}", protocol.as_str()), html);
+        if self.sections.len() == 1 {
+            self.push("evidence-meta", evidence_meta_part(false));
+        }
     }
 
     /// The parts of the history with the recorded entry as its head; when the re-read does not
@@ -423,10 +430,17 @@ impl Live {
             .inspect_err(|e| tracing::warn!(domain = %domain, error = %e, "history lookup failed"))
             .unwrap_or_default();
         let entry = recorded_entry(domain, done, recorded)?;
-        if entries.first().map(|e| &e.id) != Some(&entry.id) {
+        let stand_in = entries.first().map(|e| &e.id) != Some(&entry.id);
+        if stand_in {
             entries.insert(0, entry);
         }
-        stored_parts(domain, &entries, false, Some(recorded), None, selectors)
+        let ordinal_known = !stand_in || matches!(recorded, Recorded::First { .. });
+        let how = StoredHow {
+            recorded: Some(recorded),
+            cached: false,
+            ordinal_known,
+        };
+        stored_parts(domain, &entries, false, how, None, selectors)
     }
 
     async fn finish(&mut self, recorded: Option<Recorded>) {

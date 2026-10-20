@@ -118,7 +118,7 @@ fn c3_x_groups_and_boundaries() {
 
 #[test]
 fn c4_label_box_edge_shift_and_leader() {
-    assert!(near(label_width(4), 33.76, 1e-9));
+    assert!(near(label_width(4), 31.28, 1e-9));
     // 4 lines at 400 px: pitch 100, plate 400
     let ls = lines(
         4,
@@ -126,11 +126,11 @@ fn c4_label_box_edge_shift_and_leader() {
     );
     let p = place_ok(&ls, 400);
     let l0 = &p.labels[0];
-    assert!(near(l0.start, 50.0, EPS) && near(l0.width, 33.76, 1e-9) && near(l0.leader, 50.0, EPS));
-    // line 3 at x 350, 8 chars = 63.52 px: 350 + 63.52 > 400 -> start 336.48, leader stays at 350
+    assert!(near(l0.start, 50.0, EPS) && near(l0.width, 31.28, 1e-9) && near(l0.leader, 50.0, EPS));
+    // line 3 at x 350, 8 chars = 58.56 px: 350 + 58.56 > 400 -> start 341.44, leader stays at 350
     let l3 = &p.labels[1];
-    assert!(near(l3.start, 336.48, EPS) && near(l3.leader, 350.0, EPS));
-    // over-wide: 8 chars = 63.52 px in a 32 px plate starts at 0
+    assert!(near(l3.start, 341.44, EPS) && near(l3.leader, 350.0, EPS));
+    // over-wide: 8 chars = 58.56 px in a 32 px plate starts at 0
     let p = place_ok(&lines(4, &[(2, "abcdefgh", LineTone::Fail)]), 32);
     assert_eq!(p.labels[0].start, 0.0);
     assert!(near(p.labels[0].leader, 20.0, EPS));
@@ -138,11 +138,11 @@ fn c4_label_box_edge_shift_and_leader() {
 
 #[test]
 fn c5_greedy_rows_and_nothing_dropped() {
-    // 54 lines at 432 px, pitch 8; fails on lines 0-5 with 4 chars (33.76 px boxes at 4, 12, ..., 44)
-    let over: Vec<(usize, &str, LineTone)> = (0..6).map(|i| (i, "abcd", LineTone::Fail)).collect();
+    // 54 lines at 432 px, pitch 8; fails on lines 0-5 with 5 chars (38.1 px boxes at 4, 12, ..., 44)
+    let over: Vec<(usize, &str, LineTone)> = (0..6).map(|i| (i, "abcde", LineTone::Fail)).collect();
     let p = place_ok(&lines(54, &over), 432);
     let rows: Vec<usize> = p.labels.iter().map(|l| l.row).collect();
-    // line 4 (start 36) overlaps rows 0-3 and opens row 4; line 5 (start 44) clears box 0 (ends 37.76)
+    // line 4 (start 36) overlaps rows 0-3 and opens row 4; line 5 (start 44) clears box 0 (ends 42.1)
     assert_eq!(rows, vec![0, 1, 2, 3, 4, 0]);
     assert_eq!(p.rows, 5);
     assert_eq!(p.labels.len(), 6);
@@ -220,11 +220,11 @@ fn c15_single_warn_row_zero_three_rows() {
 
 #[test]
 fn c16_right_edge_shift() {
-    // last line x = 53.5 * 8 = 428; 8 chars = 63.52 px; 432 - 63.52 = 368.48
+    // last line x = 53.5 * 8 = 428; 8 chars = 58.56 px; 432 - 58.56 = 373.44
     let p = place_ok(&lines(54, &[(53, "abcdefgh", LineTone::Fail)]), 432);
     let l = &p.labels[0];
-    assert!(near(l.width, 63.52, 1e-9));
-    assert!(near(l.start, 368.48, EPS));
+    assert!(near(l.width, 58.56, 1e-9));
+    assert!(near(l.start, 373.44, EPS));
     assert!(near(l.leader, 428.0, EPS));
     // a box that fits starts at its line: line 10, x = 84
     let p = place_ok(&lines(54, &[(10, "abcd", LineTone::Fail)]), 432);
@@ -253,16 +253,16 @@ fn c18_only_fixed_is_labelled() {
 
 #[test]
 fn c19_touching_boxes_share_a_row() {
-    // 54 lines at 432 px, pitch 8. Line 0 (x 4) carries a 50-char label:
-    // width 50 * 0.62 * 12 + 4 = 376, box [4, 380). Line 47 sits at x 47.5 * 8 = 380,
-    // so the box of line 47 starts exactly where line 0's box ends.
+    // 54 lines at 810 px, pitch 15. Line 0 (x 7.5) carries a 50-char label:
+    // width 50 * 0.62 * 11 + 4 = 345, box [7.5, 352.5). Line 23 sits at x 23.5 * 15 = 352.5,
+    // so the box of line 23 starts exactly where line 0's box ends.
     let long = "x".repeat(50);
     let p = place_ok(
         &lines(
             54,
-            &[(0, &long, LineTone::Fail), (47, "abcd", LineTone::Fail)],
+            &[(0, &long, LineTone::Fail), (23, "abcd", LineTone::Fail)],
         ),
-        432,
+        810,
     );
     let (a, b) = (&p.labels[0], &p.labels[1]);
     assert!(
@@ -299,17 +299,17 @@ fn c20_dense_placement_scales_to_wider_plate() {
 /// and an edge-shifted box returns to its leader once the plate leaves room.
 #[test]
 fn c7_scaled_start_clamps_over_wide_and_shifted_boxes() {
-    // c17's input: 4 lines at 32 px, 8 chars (63.52 px) on line 3, leader 28
+    // c17's input: 4 lines at 32 px, 8 chars (58.56 px) on line 3, leader 28
     let p = place_ok(&lines(4, &[(3, "abcdefgh", LineTone::Fail)]), 32);
     let l = &p.labels[0];
     assert_eq!(scaled_start(l, 32.0, 32.0), 0.0);
     assert_eq!(scaled_start(l, 32.0, 40.0), 0.0);
-    // 54 lines at 432 px, last line (x 428) with 6 chars (48.64 px): shifted to 383.36
+    // 54 lines at 432 px, last line (x 428) with 6 chars (44.92 px): shifted to 387.08
     let p = place_ok(&lines(54, &[(53, "FCrDNS", LineTone::Warn)]), 432);
     let l = &p.labels[0];
-    assert!(near(scaled_start(l, 432.0, 432.0), 383.36, EPS));
+    assert!(near(scaled_start(l, 432.0, 432.0), 387.08, EPS));
     // at 1056 px the leader is at 1046.22; the box ends at the edge and spans its leader
     let s = scaled_start(l, 432.0, 1056.0);
-    assert!(near(s, 1056.0 - 48.64, EPS));
+    assert!(near(s, 1056.0 - 44.92, EPS));
     assert!(s <= 428.0 * 1056.0 / 432.0 && 428.0 * 1056.0 / 432.0 <= s + l.width);
 }

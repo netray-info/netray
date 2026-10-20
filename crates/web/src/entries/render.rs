@@ -6,6 +6,7 @@ use askama::Template;
 
 use super::view::EntryPageView;
 use crate::components::QueryInputView;
+use crate::pages::Frame;
 use crate::tokens;
 
 const COMPONENT_CSS: [&str; 10] = [
@@ -33,7 +34,7 @@ fn stylesheet() -> &'static str {
 #[derive(Template)]
 #[template(path = "pages/entry.html")]
 struct EntryPage<'a> {
-    styles: &'static str,
+    frame: Frame,
     view: &'a EntryPageView,
 }
 
@@ -53,7 +54,11 @@ struct PrivacyPage {
 /// The entry page of a stored entry.
 pub fn entry(view: &EntryPageView) -> askama::Result<String> {
     EntryPage {
-        styles: stylesheet(),
+        frame: Frame::new(
+            &format!("{} · {}", view.domain, view.grade.letter),
+            "The result of one check run.",
+            &format!("/r/{}", view.id),
+        ),
         view,
     }
     .render()

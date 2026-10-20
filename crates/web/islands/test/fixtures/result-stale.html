@@ -1,29 +1,38 @@
 
 <div id="result" class="result" data-state="stale" data-domain="shop.example.com" data-island="recent">
-<header id="result-header">
+<header id="result-header" class="result-hero">
 <div id="result-grade" data-grade="A" data-date="2025-10-09">
 <div class="grade" data-tone="pass">
   <span class="grade__letter">A</span>
   
 </div>
 </div>
-<h1>shop.example.com</h1>
+<div class="result-hero__title">
 <div id="run-line">
-<p class="run-line">
-  <span class="run-line__part">run of 2025-10-09 08:53 UTC</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">entry ENTRY0</span>
+<p class="run-line run-line--title">
+  <span class="run-line__part">Run 1</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">2025-10-09 08:53 UTC</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">5 checks</span>&#32;<span class="run-line__sep" data-part="profile" aria-hidden="true">·</span>&#32;<span class="run-line__part" data-part="profile">profile 3</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">first run</span>
 </p>
 </div>
+<h1>shop.example.com</h1>
 <div id="progress"></div>
+</div>
+<div class="result-hero__actions">
 <form id="recheck" class="recheck" method="post" action="/shop.example.com/run" data-island="stream" data-stream-url="/shop.example.com/run" data-stream-autostart="visit">
-<button id="recheck-button" type="submit" name="trigger" value="recheck">re-check now</button>
+<button id="recheck-button" class="button button--primary" type="submit" name="trigger" value="recheck">Re-check now</button>
 </form>
-<p id="result-share"><a id="share" href="/r/ENTRY0">share</a></p>
+<div id="result-share"><a id="share" class="button button--secondary" href="/r/ENTRY0" data-island="share" aria-haspopup="dialog">Share</a><dialog id="share-dialog" class="share-dialog" aria-labelledby="share-dialog-title"><h2 id="share-dialog-title">Share and embed</h2><button type="button" class="share-dialog__close" aria-label="Close">&times;</button><div class="share-dialog__tabs" role="tablist"><button type="button" role="tab" class="marker share-dialog__tab" id="share-tab-snapshot" aria-selected="true" aria-controls="share-snapshot">Snapshot</button><button type="button" role="tab" class="marker share-dialog__tab" id="share-tab-rerun" aria-selected="false" aria-controls="share-rerun">Re-run link</button><button type="button" role="tab" class="marker share-dialog__tab" id="share-tab-badge" aria-selected="false" aria-controls="share-badge">Badge</button><button type="button" role="tab" class="marker share-dialog__tab" id="share-tab-card" aria-selected="false" aria-controls="share-card">Social card</button></div>
+<div role="tabpanel" id="share-snapshot" class="share-dialog__panel" aria-labelledby="share-tab-snapshot"><div class="share-dialog__row"><input id="share-snapshot-url" class="share-dialog__field" readonly value="https://netray.info/r/ENTRY0"><button type="button" class="button button--secondary share-dialog__copy" data-copy="share-snapshot-url" aria-live="polite">Copy</button></div></div>
+<div role="tabpanel" id="share-rerun" class="share-dialog__panel" aria-labelledby="share-tab-rerun" hidden><div class="share-dialog__row"><input id="share-rerun-url" class="share-dialog__field" readonly value="https://netray.info/shop.example.com"><button type="button" class="button button--secondary share-dialog__copy" data-copy="share-rerun-url" aria-live="polite">Copy</button></div></div>
+<div role="tabpanel" id="share-badge" class="share-dialog__panel" aria-labelledby="share-tab-badge" hidden><div class="share-dialog__styles"><label><input type="radio" name="badge-style" value="flat" checked data-markdown="[![netray grade](https://netray.info/badge/shop.example.com.svg)](https://netray.info/shop.example.com)" data-html="&lt;a href=&quot;https://netray.info/shop.example.com&quot;&gt;&lt;img src=&quot;https://netray.info/badge/shop.example.com.svg&quot; alt=&quot;netray grade&quot;&gt;&lt;/a&gt;"> flat</label><label><input type="radio" name="badge-style" value="for-the-badge" data-markdown="[![netray grade](https://netray.info/badge/shop.example.com.svg?style=for-the-badge)](https://netray.info/shop.example.com)" data-html="&lt;a href=&quot;https://netray.info/shop.example.com&quot;&gt;&lt;img src=&quot;https://netray.info/badge/shop.example.com.svg?style=for-the-badge&quot; alt=&quot;netray grade&quot;&gt;&lt;/a&gt;"> for-the-badge</label></div><div class="share-dialog__row"><textarea id="share-badge-md" class="share-dialog__field" rows="2" readonly>[![netray grade](https://netray.info/badge/shop.example.com.svg)](https://netray.info/shop.example.com)</textarea><button type="button" class="button button--secondary share-dialog__copy" data-copy="share-badge-md" aria-live="polite">Copy</button></div><div class="share-dialog__row"><textarea id="share-badge-html" class="share-dialog__field" rows="2" readonly>&lt;a href=&quot;https://netray.info/shop.example.com&quot;&gt;&lt;img src=&quot;https://netray.info/badge/shop.example.com.svg&quot; alt=&quot;netray grade&quot;&gt;&lt;/a&gt;</textarea><button type="button" class="button button--secondary share-dialog__copy" data-copy="share-badge-html" aria-live="polite">Copy</button></div><div class="share-dialog__preview"><img class="share-dialog__badge" data-src="/badge/shop.example.com.svg" alt="netray grade badge for shop.example.com"></div></div>
+<div role="tabpanel" id="share-card" class="share-dialog__panel" aria-labelledby="share-tab-card" hidden><div class="share-dialog__row"><input id="share-card-url" class="share-dialog__field" readonly value="https://netray.info/r/ENTRY0/og.png"><button type="button" class="button button--secondary share-dialog__copy" data-copy="share-card-url" aria-live="polite">Copy</button></div><div class="share-dialog__preview"><img class="share-dialog__card" data-src="/r/ENTRY0/og.png" alt="Social card for shop.example.com"></div></div></dialog></div>
+</div>
 </header>
+<div id="hard-fail-slot"></div>
 <figure id="spectrum" data-island="spectrum">
 
 <div class="spectrum">
-  <div class="spectrum__box" style="min-width: calc(54 * var(--spectrum-line-pitch-min))">
-    <div class="spectrum__label-band" style="height: calc(var(--spectrum-label-leader) + 3 * var(--spectrum-label-row))">
+  <div class="spectrum__box" style="--spectrum-lines: 54">
+    <div class="spectrum__label-band" style="height: calc(var(--spectrum-label-band) + 0 * var(--spectrum-label-row))">
       
       <div class="spectrum__labels" data-run="0" data-shown>
         
@@ -39,43 +48,43 @@
         <g class="spectrum__run" data-run="0" data-shown>
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="dns.dnssec" x1="0.9259%" x2="0.9259%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="dns.dnssec" x1="0.9259%" x2="0.9259%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="dns.dnskey_algorithm" x1="2.7778%" x2="2.7778%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="dns.dnskey_algorithm" x1="2.7778%" x2="2.7778%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="dns.dnssec_rollover" x1="4.6296%" x2="4.6296%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="dns.dnssec_rollover" x1="4.6296%" x2="4.6296%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="dns.caa" x1="6.4815%" x2="6.4815%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="dns.caa" x1="6.4815%" x2="6.4815%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="pass" data-code="dns.ns" x1="8.3333%" x2="8.3333%" y1="100%" y2="42.8571%" />
+          <line class="spectrum__line" data-tone="pass" data-code="dns.ns" x1="8.3333%" x2="8.3333%" y1="100%" y2="27.8571%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="dns.ns_lame" x1="10.1852%" x2="10.1852%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="dns.ns_lame" x1="10.1852%" x2="10.1852%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="dns.ns_delegation" x1="12.0370%" x2="12.0370%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="dns.ns_delegation" x1="12.0370%" x2="12.0370%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="dns.cname_apex" x1="13.8889%" x2="13.8889%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="dns.cname_apex" x1="13.8889%" x2="13.8889%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="dns.https_svcb" x1="15.7407%" x2="15.7407%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="dns.https_svcb" x1="15.7407%" x2="15.7407%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="dns.ttl" x1="17.5926%" x2="17.5926%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="dns.ttl" x1="17.5926%" x2="17.5926%" y1="100%" y2="46.4286%" />
           
           
         </g>
@@ -88,7 +97,7 @@
         <g class="spectrum__run" data-run="0" data-shown>
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="tls.tls_reachable" x1="19.4444%" x2="19.4444%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="tls.tls_reachable" x1="19.4444%" x2="19.4444%" y1="100%" y2="46.4286%" />
           
           
           
@@ -96,79 +105,79 @@
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="tls.not_expired" x1="23.1481%" x2="23.1481%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="tls.not_expired" x1="23.1481%" x2="23.1481%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="tls.hostname_match" x1="25.0000%" x2="25.0000%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="tls.hostname_match" x1="25.0000%" x2="25.0000%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="tls.chain_complete" x1="26.8519%" x2="26.8519%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="tls.chain_complete" x1="26.8519%" x2="26.8519%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="tls.strong_signature" x1="28.7037%" x2="28.7037%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="tls.strong_signature" x1="28.7037%" x2="28.7037%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="tls.key_strength" x1="30.5556%" x2="30.5556%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="tls.key_strength" x1="30.5556%" x2="30.5556%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="tls.expiry_window" x1="32.4074%" x2="32.4074%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="tls.expiry_window" x1="32.4074%" x2="32.4074%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="tls.cert_lifetime" x1="34.2593%" x2="34.2593%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="tls.cert_lifetime" x1="34.2593%" x2="34.2593%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="tls.san_quality" x1="36.1111%" x2="36.1111%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="tls.san_quality" x1="36.1111%" x2="36.1111%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="tls.aia_reachability" x1="37.9630%" x2="37.9630%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="tls.aia_reachability" x1="37.9630%" x2="37.9630%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="tls.tls_version" x1="39.8148%" x2="39.8148%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="tls.tls_version" x1="39.8148%" x2="39.8148%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="tls.forward_secrecy" x1="41.6667%" x2="41.6667%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="tls.forward_secrecy" x1="41.6667%" x2="41.6667%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="tls.aead_cipher" x1="43.5185%" x2="43.5185%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="tls.aead_cipher" x1="43.5185%" x2="43.5185%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="tls.ocsp_stapled" x1="45.3704%" x2="45.3704%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="tls.ocsp_stapled" x1="45.3704%" x2="45.3704%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="tls.ct_logged" x1="47.2222%" x2="47.2222%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="tls.ct_logged" x1="47.2222%" x2="47.2222%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="tls.caa_compliant" x1="49.0741%" x2="49.0741%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="tls.caa_compliant" x1="49.0741%" x2="49.0741%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="tls.dane_valid" x1="50.9259%" x2="50.9259%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="tls.dane_valid" x1="50.9259%" x2="50.9259%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="tls.consistency" x1="52.7778%" x2="52.7778%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="tls.consistency" x1="52.7778%" x2="52.7778%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="tls.alpn_consistency" x1="54.6296%" x2="54.6296%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="tls.alpn_consistency" x1="54.6296%" x2="54.6296%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="tls.ech_advertised" x1="56.4815%" x2="56.4815%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="tls.ech_advertised" x1="56.4815%" x2="56.4815%" y1="100%" y2="46.4286%" />
           
           
         </g>
@@ -181,51 +190,51 @@
         <g class="spectrum__run" data-run="0" data-shown>
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="http.https_redirect" x1="58.3333%" x2="58.3333%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="http.https_redirect" x1="58.3333%" x2="58.3333%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="pass" data-code="http.hsts" x1="60.1852%" x2="60.1852%" y1="100%" y2="42.8571%" />
+          <line class="spectrum__line" data-tone="pass" data-code="http.hsts" x1="60.1852%" x2="60.1852%" y1="100%" y2="27.8571%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="http.cors" x1="62.0370%" x2="62.0370%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="http.cors" x1="62.0370%" x2="62.0370%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="http.cookie_secure" x1="63.8889%" x2="63.8889%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="http.cookie_secure" x1="63.8889%" x2="63.8889%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="http.csp" x1="65.7407%" x2="65.7407%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="http.csp" x1="65.7407%" x2="65.7407%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="http.x_frame_options" x1="67.5926%" x2="67.5926%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="http.x_frame_options" x1="67.5926%" x2="67.5926%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="http.x_content_type_options" x1="69.4444%" x2="69.4444%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="http.x_content_type_options" x1="69.4444%" x2="69.4444%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="http.referrer_policy" x1="71.2963%" x2="71.2963%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="http.referrer_policy" x1="71.2963%" x2="71.2963%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="http.permissions_policy" x1="73.1481%" x2="73.1481%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="http.permissions_policy" x1="73.1481%" x2="73.1481%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="http.deprecated_headers" x1="75.0000%" x2="75.0000%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="http.deprecated_headers" x1="75.0000%" x2="75.0000%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="http.info_leakage" x1="76.8519%" x2="76.8519%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="http.info_leakage" x1="76.8519%" x2="76.8519%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="http.caching" x1="78.7037%" x2="78.7037%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="http.caching" x1="78.7037%" x2="78.7037%" y1="100%" y2="46.4286%" />
           
           
         </g>
@@ -238,43 +247,43 @@
         <g class="spectrum__run" data-run="0" data-shown>
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="email.mx" x1="80.5556%" x2="80.5556%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="email.mx" x1="80.5556%" x2="80.5556%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="pass" data-code="email.spf" x1="82.4074%" x2="82.4074%" y1="100%" y2="57.1429%" />
+          <line class="spectrum__line" data-tone="pass" data-code="email.spf" x1="82.4074%" x2="82.4074%" y1="100%" y2="37.1429%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="email.dkim" x1="84.2593%" x2="84.2593%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="email.dkim" x1="84.2593%" x2="84.2593%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="email.dmarc" x1="86.1111%" x2="86.1111%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="email.dmarc" x1="86.1111%" x2="86.1111%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="email.mta_sts" x1="87.9630%" x2="87.9630%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="email.mta_sts" x1="87.9630%" x2="87.9630%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="email.tls_rpt" x1="89.8148%" x2="89.8148%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="email.tls_rpt" x1="89.8148%" x2="89.8148%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="email.bimi" x1="91.6667%" x2="91.6667%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="email.bimi" x1="91.6667%" x2="91.6667%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="email.dane" x1="93.5185%" x2="93.5185%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="email.dane" x1="93.5185%" x2="93.5185%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="email.dnsbl" x1="95.3704%" x2="95.3704%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="email.dnsbl" x1="95.3704%" x2="95.3704%" y1="100%" y2="46.4286%" />
           
           
           
-          <line class="spectrum__line" data-tone="untested" data-code="email.fcrdns" x1="97.2222%" x2="97.2222%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="untested" data-code="email.fcrdns" x1="97.2222%" x2="97.2222%" y1="100%" y2="46.4286%" />
           
           
         </g>
@@ -287,7 +296,7 @@
         <g class="spectrum__run" data-run="0" data-shown>
           
           
-          <line class="spectrum__line" data-tone="pass" data-code="ip.reputation" x1="99.0741%" x2="99.0741%" y1="100%" y2="71.4286%" />
+          <line class="spectrum__line" data-tone="pass" data-code="ip.reputation" x1="99.0741%" x2="99.0741%" y1="100%" y2="46.4286%" />
           
           
         </g>
@@ -428,272 +437,432 @@
     </div>
     <div class="spectrum__axis">
       
-      <span class="spectrum__region-label" style="left: 0.0000%">dns</span>
+      <span class="spectrum__tick" data-major style="left: 0.0000%"></span>
       
-      <span class="spectrum__region-label" style="left: 18.5185%">tls</span>
+      <span class="spectrum__tick" style="left: 1.8519%"></span>
       
-      <span class="spectrum__region-label" style="left: 57.4074%">http</span>
+      <span class="spectrum__tick" style="left: 3.7037%"></span>
       
-      <span class="spectrum__region-label" style="left: 79.6296%">email</span>
+      <span class="spectrum__tick" style="left: 5.5556%"></span>
       
-      <span class="spectrum__region-label" style="left: 98.1481%">ip</span>
+      <span class="spectrum__tick" style="left: 7.4074%"></span>
+      
+      <span class="spectrum__tick" style="left: 9.2593%"></span>
+      
+      <span class="spectrum__tick" style="left: 11.1111%"></span>
+      
+      <span class="spectrum__tick" style="left: 12.9630%"></span>
+      
+      <span class="spectrum__tick" style="left: 14.8148%"></span>
+      
+      <span class="spectrum__tick" style="left: 16.6667%"></span>
+      
+      <span class="spectrum__tick" data-major style="left: 18.5185%"></span>
+      
+      <span class="spectrum__tick" style="left: 20.3704%"></span>
+      
+      <span class="spectrum__tick" style="left: 22.2222%"></span>
+      
+      <span class="spectrum__tick" style="left: 24.0741%"></span>
+      
+      <span class="spectrum__tick" style="left: 25.9259%"></span>
+      
+      <span class="spectrum__tick" style="left: 27.7778%"></span>
+      
+      <span class="spectrum__tick" style="left: 29.6296%"></span>
+      
+      <span class="spectrum__tick" style="left: 31.4815%"></span>
+      
+      <span class="spectrum__tick" style="left: 33.3333%"></span>
+      
+      <span class="spectrum__tick" style="left: 35.1852%"></span>
+      
+      <span class="spectrum__tick" style="left: 37.0370%"></span>
+      
+      <span class="spectrum__tick" style="left: 38.8889%"></span>
+      
+      <span class="spectrum__tick" style="left: 40.7407%"></span>
+      
+      <span class="spectrum__tick" style="left: 42.5926%"></span>
+      
+      <span class="spectrum__tick" style="left: 44.4444%"></span>
+      
+      <span class="spectrum__tick" style="left: 46.2963%"></span>
+      
+      <span class="spectrum__tick" style="left: 48.1481%"></span>
+      
+      <span class="spectrum__tick" style="left: 50.0000%"></span>
+      
+      <span class="spectrum__tick" style="left: 51.8519%"></span>
+      
+      <span class="spectrum__tick" style="left: 53.7037%"></span>
+      
+      <span class="spectrum__tick" style="left: 55.5556%"></span>
+      
+      <span class="spectrum__tick" data-major style="left: 57.4074%"></span>
+      
+      <span class="spectrum__tick" style="left: 59.2593%"></span>
+      
+      <span class="spectrum__tick" style="left: 61.1111%"></span>
+      
+      <span class="spectrum__tick" style="left: 62.9630%"></span>
+      
+      <span class="spectrum__tick" style="left: 64.8148%"></span>
+      
+      <span class="spectrum__tick" style="left: 66.6667%"></span>
+      
+      <span class="spectrum__tick" style="left: 68.5185%"></span>
+      
+      <span class="spectrum__tick" style="left: 70.3704%"></span>
+      
+      <span class="spectrum__tick" style="left: 72.2222%"></span>
+      
+      <span class="spectrum__tick" style="left: 74.0741%"></span>
+      
+      <span class="spectrum__tick" style="left: 75.9259%"></span>
+      
+      <span class="spectrum__tick" style="left: 77.7778%"></span>
+      
+      <span class="spectrum__tick" data-major style="left: 79.6296%"></span>
+      
+      <span class="spectrum__tick" style="left: 81.4815%"></span>
+      
+      <span class="spectrum__tick" style="left: 83.3333%"></span>
+      
+      <span class="spectrum__tick" style="left: 85.1852%"></span>
+      
+      <span class="spectrum__tick" style="left: 87.0370%"></span>
+      
+      <span class="spectrum__tick" style="left: 88.8889%"></span>
+      
+      <span class="spectrum__tick" style="left: 90.7407%"></span>
+      
+      <span class="spectrum__tick" style="left: 92.5926%"></span>
+      
+      <span class="spectrum__tick" style="left: 94.4444%"></span>
+      
+      <span class="spectrum__tick" style="left: 96.2963%"></span>
+      
+      <span class="spectrum__tick" data-major style="left: 98.1481%"></span>
+      
+      <span class="spectrum__tick" data-major data-last style="left: 100.0000%"></span>
+      
+      
+      <span class="spectrum__region-label" data-protocol="DNS" style="left: 0.0000%; width: 18.5185%"><span class="spectrum__region-name">DNS</span> </span>
+      
+      <span class="spectrum__region-label" data-protocol="TLS" style="left: 18.5185%; width: 38.8889%"><span class="spectrum__region-name">TLS</span> </span>
+      
+      <span class="spectrum__region-label" data-protocol="HTTP" style="left: 57.4074%; width: 22.2222%"><span class="spectrum__region-name">HTTP</span> </span>
+      
+      <span class="spectrum__region-label" data-protocol="EMAIL" style="left: 79.6296%; width: 18.5185%"><span class="spectrum__region-name" data-short="MAIL">EMAIL</span> </span>
+      
+      <span class="spectrum__region-label" data-protocol="IP" style="left: 98.1481%; width: 1.8519%"><span class="spectrum__region-name">IP</span> </span>
       
     </div>
+    
   </div>
 </div>
 
-<p id="spectrum-gutter" aria-live="polite"></p>
+
 <p id="spectrum-sentence" aria-live="polite"></p>
 
-<div id="trace">
-<ol class="trace">
-  
-  <li class="trace__row marker" data-run="0" aria-current="true">
-    <span class="trace__date">2025-10-09 08:53</span>
-    <span class="trace__grade">A</span>
-    <span class="trace__cells"><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="pass"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="pass"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="pass"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="pass"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="untested"></span><span class="trace__cell" data-tone="pass"></span></span>
-  </li>
-  
-</ol>
-</div>
+<div id="trace"></div>
+<div class="legend-row">
 <ul id="legend">
-<li>pass</li>
-<li>warn</li>
-<li>fail</li>
-<li>fixed</li>
-<li>muted</li>
+<li><span class="legend__mark" data-tone="pass"></span>pass</li>
+<li><span class="legend__mark" data-tone="warn"></span>warn</li>
+<li><span class="legend__mark" data-tone="fail"></span>fail</li>
 </ul>
+<span class="legend__note">54 checks · line height = weight in the grade</span>
+
+</div>
 <ul id="spectrum-sentences" hidden>
 
-<li data-code="dns.dnssec" data-sentence="not tested since 10-09"></li>
+<li data-code="dns.dnssec" data-name="DNSSEC DNS·01" data-sentence="not tested since 10-09"></li>
 
-<li data-code="dns.dnskey_algorithm" data-sentence="not tested since 10-09"></li>
+<li data-code="dns.dnskey_algorithm" data-name="DNSKEY DNS·02" data-sentence="not tested since 10-09"></li>
 
-<li data-code="dns.dnssec_rollover" data-sentence="not tested since 10-09"></li>
+<li data-code="dns.dnssec_rollover" data-name="Rollover DNS·03" data-sentence="not tested since 10-09"></li>
 
-<li data-code="dns.caa" data-sentence="not tested since 10-09"></li>
+<li data-code="dns.caa" data-name="CAA DNS·04" data-sentence="not tested since 10-09"></li>
 
-<li data-code="dns.ns" data-sentence="pass since 10-09"></li>
+<li data-code="dns.ns" data-name="NS DNS·05" data-sentence="pass since 10-09"></li>
 
-<li data-code="dns.ns_lame" data-sentence="not tested since 10-09"></li>
+<li data-code="dns.ns_lame" data-name="Lame NS DNS·06" data-sentence="not tested since 10-09"></li>
 
-<li data-code="dns.ns_delegation" data-sentence="not tested since 10-09"></li>
+<li data-code="dns.ns_delegation" data-name="Deleg DNS·07" data-sentence="not tested since 10-09"></li>
 
-<li data-code="dns.cname_apex" data-sentence="not tested since 10-09"></li>
+<li data-code="dns.cname_apex" data-name="Apex DNS·08" data-sentence="not tested since 10-09"></li>
 
-<li data-code="dns.https_svcb" data-sentence="not tested since 10-09"></li>
+<li data-code="dns.https_svcb" data-name="HTTPS RR DNS·09" data-sentence="not tested since 10-09"></li>
 
-<li data-code="dns.ttl" data-sentence="not tested since 10-09"></li>
+<li data-code="dns.ttl" data-name="TTL DNS·10" data-sentence="not tested since 10-09"></li>
 
-<li data-code="tls.tls_reachable" data-sentence="not tested since 10-09"></li>
+<li data-code="tls.tls_reachable" data-name="Reach TLS·11" data-sentence="not tested since 10-09"></li>
 
-<li data-code="tls.chain_trusted" data-sentence="pass since 10-09"></li>
+<li data-code="tls.chain_trusted" data-name="Trust TLS·12" data-sentence="pass since 10-09"></li>
 
-<li data-code="tls.not_expired" data-sentence="not tested since 10-09"></li>
+<li data-code="tls.not_expired" data-name="Expired TLS·13" data-sentence="not tested since 10-09"></li>
 
-<li data-code="tls.hostname_match" data-sentence="not tested since 10-09"></li>
+<li data-code="tls.hostname_match" data-name="Hostname TLS·14" data-sentence="not tested since 10-09"></li>
 
-<li data-code="tls.chain_complete" data-sentence="not tested since 10-09"></li>
+<li data-code="tls.chain_complete" data-name="Chain TLS·15" data-sentence="not tested since 10-09"></li>
 
-<li data-code="tls.strong_signature" data-sentence="not tested since 10-09"></li>
+<li data-code="tls.strong_signature" data-name="Sig TLS·16" data-sentence="not tested since 10-09"></li>
 
-<li data-code="tls.key_strength" data-sentence="not tested since 10-09"></li>
+<li data-code="tls.key_strength" data-name="Key TLS·17" data-sentence="not tested since 10-09"></li>
 
-<li data-code="tls.expiry_window" data-sentence="not tested since 10-09"></li>
+<li data-code="tls.expiry_window" data-name="Expiry TLS·18" data-sentence="not tested since 10-09"></li>
 
-<li data-code="tls.cert_lifetime" data-sentence="not tested since 10-09"></li>
+<li data-code="tls.cert_lifetime" data-name="Lifetime TLS·19" data-sentence="not tested since 10-09"></li>
 
-<li data-code="tls.san_quality" data-sentence="not tested since 10-09"></li>
+<li data-code="tls.san_quality" data-name="SAN TLS·20" data-sentence="not tested since 10-09"></li>
 
-<li data-code="tls.aia_reachability" data-sentence="not tested since 10-09"></li>
+<li data-code="tls.aia_reachability" data-name="AIA TLS·21" data-sentence="not tested since 10-09"></li>
 
-<li data-code="tls.tls_version" data-sentence="not tested since 10-09"></li>
+<li data-code="tls.tls_version" data-name="Version TLS·22" data-sentence="not tested since 10-09"></li>
 
-<li data-code="tls.forward_secrecy" data-sentence="not tested since 10-09"></li>
+<li data-code="tls.forward_secrecy" data-name="PFS TLS·23" data-sentence="not tested since 10-09"></li>
 
-<li data-code="tls.aead_cipher" data-sentence="not tested since 10-09"></li>
+<li data-code="tls.aead_cipher" data-name="AEAD TLS·24" data-sentence="not tested since 10-09"></li>
 
-<li data-code="tls.ocsp_stapled" data-sentence="not tested since 10-09"></li>
+<li data-code="tls.ocsp_stapled" data-name="OCSP TLS·25" data-sentence="not tested since 10-09"></li>
 
-<li data-code="tls.ct_logged" data-sentence="not tested since 10-09"></li>
+<li data-code="tls.ct_logged" data-name="CT TLS·26" data-sentence="not tested since 10-09"></li>
 
-<li data-code="tls.caa_compliant" data-sentence="not tested since 10-09"></li>
+<li data-code="tls.caa_compliant" data-name="CAA ok TLS·27" data-sentence="not tested since 10-09"></li>
 
-<li data-code="tls.dane_valid" data-sentence="not tested since 10-09"></li>
+<li data-code="tls.dane_valid" data-name="DANE TLS·28" data-sentence="not tested since 10-09"></li>
 
-<li data-code="tls.consistency" data-sentence="not tested since 10-09"></li>
+<li data-code="tls.consistency" data-name="Consist TLS·29" data-sentence="not tested since 10-09"></li>
 
-<li data-code="tls.alpn_consistency" data-sentence="not tested since 10-09"></li>
+<li data-code="tls.alpn_consistency" data-name="ALPN TLS·30" data-sentence="not tested since 10-09"></li>
 
-<li data-code="tls.ech_advertised" data-sentence="not tested since 10-09"></li>
+<li data-code="tls.ech_advertised" data-name="ECH TLS·31" data-sentence="not tested since 10-09"></li>
 
-<li data-code="http.https_redirect" data-sentence="not tested since 10-09"></li>
+<li data-code="http.https_redirect" data-name="Redirect HTTP·32" data-sentence="not tested since 10-09"></li>
 
-<li data-code="http.hsts" data-sentence="pass since 10-09"></li>
+<li data-code="http.hsts" data-name="HSTS HTTP·33" data-sentence="pass since 10-09"></li>
 
-<li data-code="http.cors" data-sentence="not tested since 10-09"></li>
+<li data-code="http.cors" data-name="CORS HTTP·34" data-sentence="not tested since 10-09"></li>
 
-<li data-code="http.cookie_secure" data-sentence="not tested since 10-09"></li>
+<li data-code="http.cookie_secure" data-name="Cookies HTTP·35" data-sentence="not tested since 10-09"></li>
 
-<li data-code="http.csp" data-sentence="not tested since 10-09"></li>
+<li data-code="http.csp" data-name="CSP HTTP·36" data-sentence="not tested since 10-09"></li>
 
-<li data-code="http.x_frame_options" data-sentence="not tested since 10-09"></li>
+<li data-code="http.x_frame_options" data-name="XFO HTTP·37" data-sentence="not tested since 10-09"></li>
 
-<li data-code="http.x_content_type_options" data-sentence="not tested since 10-09"></li>
+<li data-code="http.x_content_type_options" data-name="XCTO HTTP·38" data-sentence="not tested since 10-09"></li>
 
-<li data-code="http.referrer_policy" data-sentence="not tested since 10-09"></li>
+<li data-code="http.referrer_policy" data-name="Referrer HTTP·39" data-sentence="not tested since 10-09"></li>
 
-<li data-code="http.permissions_policy" data-sentence="not tested since 10-09"></li>
+<li data-code="http.permissions_policy" data-name="Perms HTTP·40" data-sentence="not tested since 10-09"></li>
 
-<li data-code="http.deprecated_headers" data-sentence="not tested since 10-09"></li>
+<li data-code="http.deprecated_headers" data-name="Legacy HTTP·41" data-sentence="not tested since 10-09"></li>
 
-<li data-code="http.info_leakage" data-sentence="not tested since 10-09"></li>
+<li data-code="http.info_leakage" data-name="Leakage HTTP·42" data-sentence="not tested since 10-09"></li>
 
-<li data-code="http.caching" data-sentence="not tested since 10-09"></li>
+<li data-code="http.caching" data-name="Caching HTTP·43" data-sentence="not tested since 10-09"></li>
 
-<li data-code="email.mx" data-sentence="not tested since 10-09"></li>
+<li data-code="email.mx" data-name="MX MAIL·44" data-sentence="not tested since 10-09"></li>
 
-<li data-code="email.spf" data-sentence="pass since 10-09"></li>
+<li data-code="email.spf" data-name="SPF MAIL·45" data-sentence="pass since 10-09"></li>
 
-<li data-code="email.dkim" data-sentence="not tested since 10-09"></li>
+<li data-code="email.dkim" data-name="DKIM MAIL·46" data-sentence="not tested since 10-09"></li>
 
-<li data-code="email.dmarc" data-sentence="not tested since 10-09"></li>
+<li data-code="email.dmarc" data-name="DMARC MAIL·47" data-sentence="not tested since 10-09"></li>
 
-<li data-code="email.mta_sts" data-sentence="not tested since 10-09"></li>
+<li data-code="email.mta_sts" data-name="MTA-STS MAIL·48" data-sentence="not tested since 10-09"></li>
 
-<li data-code="email.tls_rpt" data-sentence="not tested since 10-09"></li>
+<li data-code="email.tls_rpt" data-name="TLS-RPT MAIL·49" data-sentence="not tested since 10-09"></li>
 
-<li data-code="email.bimi" data-sentence="not tested since 10-09"></li>
+<li data-code="email.bimi" data-name="BIMI MAIL·50" data-sentence="not tested since 10-09"></li>
 
-<li data-code="email.dane" data-sentence="not tested since 10-09"></li>
+<li data-code="email.dane" data-name="MX DANE MAIL·51" data-sentence="not tested since 10-09"></li>
 
-<li data-code="email.dnsbl" data-sentence="not tested since 10-09"></li>
+<li data-code="email.dnsbl" data-name="DNSBL MAIL·52" data-sentence="not tested since 10-09"></li>
 
-<li data-code="email.fcrdns" data-sentence="not tested since 10-09"></li>
+<li data-code="email.fcrdns" data-name="FCrDNS MAIL·53" data-sentence="not tested since 10-09"></li>
 
-<li data-code="ip.reputation" data-sentence="pass since 10-09"></li>
+<li data-code="ip.reputation" data-name="Rep IP·54" data-sentence="pass since 10-09"></li>
 
 </ul>
 </figure>
-<section id="diff">
-
-<section class="diff-block">
-  <h3 class="diff-block__title">Changes since the previous entry</h3>
-  <p class="diff-block__summary"></p>
-  <ul class="diff-block__entries">
-    
-  </ul>
-  <p class="diff-block__note">first state recorded — re-check after your change</p>
-</section>
-
+<section id="diff" class="first-run">
+<h2 class="first-run__title">First run recorded.</h2>
+<p class="first-run__text">This is the first spectrum of shop.example.com. Re-check after your next change and netray stacks the runs into a history: a line that turns neutral is a fix, a line that lights up is a regression.</p>
+<div class="first-run__ghost" aria-hidden="true">
+<div class="first-run__row"><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="pass"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="pass"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="pass"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="pass"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="untested"></span><span class="first-run__cell" data-tone="pass"></span></div>
+<div class="first-run__dashed"></div>
+<div class="first-run__dashed"></div>
+</div>
 </section>
 <section id="issues" data-island="issues">
-<div hidden>
-<div class="grouping-switch" role="group" aria-label="Group issues by">
-  
-  <button type="button" class="grouping-switch__option marker" data-group="owner" aria-pressed="true">owner</button>
-  
-  <button type="button" class="grouping-switch__option marker" data-group="severity" aria-pressed="false">severity</button>
-  
-  <button type="button" class="grouping-switch__option marker" data-group="protocol" aria-pressed="false">protocol</button>
-  
-</div>
-</div>
 
 </section>
 <section id="evidence">
-<div id="evidence-dns">
-<a href="/r/ENTRY0/dns">dns</a> <span>measured</span>
+<div class="section-head"><h2>Evidence</h2><p id="evidence-meta" class="evidence-meta">recorded with this run</p></div>
+<div class="evidence-tabs" data-island="tabs">
+<nav id="evidence-nav" class="evidence-tabs__nav" aria-label="Evidence views">
+<a class="evidence-tabs__tab marker" href="#evidence-dns" data-tab="dns" aria-current="true">DNS</a>
+<a class="evidence-tabs__tab marker" href="#evidence-tls" data-tab="tls">TLS</a>
+<a class="evidence-tabs__tab marker" href="#evidence-http" data-tab="http">HTTP</a>
+<a class="evidence-tabs__tab marker" href="#evidence-email" data-tab="email">Email</a>
+<a class="evidence-tabs__tab marker" href="#evidence-ip" data-tab="ip">IP</a>
+</nav>
+<div id="evidence-dns" class="evidence-tabs__panel" data-panel="dns" data-shown>
+
+
+
+
+<div class="evidence-tabs__links">
+
+<a class="evidence-tabs__all" href="/r/ENTRY0/dns">All evidence →</a>
+<a class="evidence-tabs__explore" href="/inspect/dns?q=shop.example.com">Open in the DNS inspector →</a>
 </div>
-<div id="evidence-tls">
-<a href="/r/ENTRY0/tls">tls</a> <span>measured</span>
+
 </div>
-<div id="evidence-http">
-<a href="/r/ENTRY0/http">http</a> <span>measured</span>
+<div id="evidence-tls" class="evidence-tabs__panel" data-panel="tls">
+
+
+
+
+<div class="evidence-tabs__links">
+
+<a class="evidence-tabs__all" href="/r/ENTRY0/tls">All evidence →</a>
+<a class="evidence-tabs__explore" href="/inspect/tls?h=shop.example.com:443">Open in the TLS inspector →</a>
 </div>
-<div id="evidence-email">
-<a href="/r/ENTRY0/email">email</a> <span>measured</span>
+
 </div>
-<div id="evidence-ip">
-<a href="/r/ENTRY0/ip">ip</a> <span>measured</span>
+<div id="evidence-http" class="evidence-tabs__panel" data-panel="http">
+
+
+
+
+<div class="evidence-tabs__links">
+
+<a class="evidence-tabs__all" href="/r/ENTRY0/http">All evidence →</a>
+<a class="evidence-tabs__explore" href="/inspect/http?url=https%3A%2F%2Fshop.example.com%2F">Open in the HTTP inspector →</a>
+</div>
+
+</div>
+<div id="evidence-email" class="evidence-tabs__panel" data-panel="email">
+
+
+
+
+<div class="evidence-tabs__links">
+
+<a class="evidence-tabs__all" href="/r/ENTRY0/email">All evidence →</a>
+<a class="evidence-tabs__explore" href="/inspect/dns?q=shop.example.com%20MX">Open in the DNS inspector →</a>
+</div>
+
+</div>
+<div id="evidence-ip" class="evidence-tabs__panel" data-panel="ip">
+
+
+
+
+<div class="evidence-tabs__links">
+
+<a class="evidence-tabs__all" href="/r/ENTRY0/ip">All evidence →</a>
+<a class="evidence-tabs__explore" href="/inspect/dns?q=shop.example.com%20A">Open in the DNS inspector →</a>
+</div>
+
+</div>
 </div>
 </section>
-<details id="passed">
-<summary>Checks that passed or do not apply</summary>
+<details id="passed" class="clean-bar">
+<summary class="clean-bar__summary"><span><strong class="clean-bar__count">5 lines clean</strong> <span class="clean-bar__label">· checks that pass</span></span><span class="clean-bar__show">show</span></summary>
 
 <article class="check-row" data-tone="pass">
-  <header class="check-row__head">
-    <span class="check-row__code">dns.ns</span>
-    <span class="check-row__tone">pass</span>
-    <h3 class="check-row__title">Nameserver redundancy</h3>
+  <div class="check-row__side">
+    <span class="check-row__bar" data-tone="pass"></span>
+    <span class="check-row__sev">pass</span>
+    <span class="check-row__code">DNS·05</span>
+  </div>
+  <div class="check-row__main" data-check="dns.ns">
+    <p class="check-row__phone-meta"><span class="check-row__sev">pass</span> · DNS·05</p>
+    <div class="check-row__head">
+      <h3 class="check-row__title">Nameserver redundancy</h3>
+      
+    </div>
+    <p class="check-row__body"></p>
     
-  </header>
-  <p class="check-row__body"></p>
-  
-  <p class="check-row__links">
-    
-    
-  </p>
+    <p class="check-row__meta"><span>DNS · RFC 2182</span></p>
+  </div>
 </article>
 
 <article class="check-row" data-tone="pass">
-  <header class="check-row__head">
-    <span class="check-row__code">tls.chain_trusted</span>
-    <span class="check-row__tone">pass</span>
-    <h3 class="check-row__title">Chain trusted</h3>
+  <div class="check-row__side">
+    <span class="check-row__bar" data-tone="pass"></span>
+    <span class="check-row__sev">pass</span>
+    <span class="check-row__code">TLS·12</span>
+  </div>
+  <div class="check-row__main" data-check="tls.chain_trusted">
+    <p class="check-row__phone-meta"><span class="check-row__sev">pass</span> · TLS·12</p>
+    <div class="check-row__head">
+      <h3 class="check-row__title">Chain trusted</h3>
+      
+    </div>
+    <p class="check-row__body"></p>
     
-  </header>
-  <p class="check-row__body"></p>
-  
-  <p class="check-row__links">
-    
-    
-  </p>
+    <p class="check-row__meta"><span>TLS · RFC 5280</span></p>
+  </div>
 </article>
 
 <article class="check-row" data-tone="pass">
-  <header class="check-row__head">
-    <span class="check-row__code">http.hsts</span>
-    <span class="check-row__tone">pass</span>
-    <h3 class="check-row__title">HSTS</h3>
+  <div class="check-row__side">
+    <span class="check-row__bar" data-tone="pass"></span>
+    <span class="check-row__sev">pass</span>
+    <span class="check-row__code">HTTP·33</span>
+  </div>
+  <div class="check-row__main" data-check="http.hsts">
+    <p class="check-row__phone-meta"><span class="check-row__sev">pass</span> · HTTP·33</p>
+    <div class="check-row__head">
+      <h3 class="check-row__title">HSTS</h3>
+      
+    </div>
+    <p class="check-row__body"></p>
     
-  </header>
-  <p class="check-row__body"></p>
-  
-  <p class="check-row__links">
-    
-    
-  </p>
+    <p class="check-row__meta"><span>HTTP · RFC 6797</span></p>
+  </div>
 </article>
 
 <article class="check-row" data-tone="pass">
-  <header class="check-row__head">
-    <span class="check-row__code">email.spf</span>
-    <span class="check-row__tone">pass</span>
-    <h3 class="check-row__title">SPF</h3>
+  <div class="check-row__side">
+    <span class="check-row__bar" data-tone="pass"></span>
+    <span class="check-row__sev">pass</span>
+    <span class="check-row__code">MAIL·45</span>
+  </div>
+  <div class="check-row__main" data-check="email.spf">
+    <p class="check-row__phone-meta"><span class="check-row__sev">pass</span> · MAIL·45</p>
+    <div class="check-row__head">
+      <h3 class="check-row__title">SPF</h3>
+      
+    </div>
+    <p class="check-row__body"></p>
     
-  </header>
-  <p class="check-row__body"></p>
-  
-  <p class="check-row__links">
-    
-    
-  </p>
+    <p class="check-row__meta"><span>Email · RFC 7208</span></p>
+  </div>
 </article>
 
 <article class="check-row" data-tone="pass">
-  <header class="check-row__head">
-    <span class="check-row__code">ip.reputation</span>
-    <span class="check-row__tone">pass</span>
-    <h3 class="check-row__title">IP reputation</h3>
+  <div class="check-row__side">
+    <span class="check-row__bar" data-tone="pass"></span>
+    <span class="check-row__sev">pass</span>
+    <span class="check-row__code">IP·54</span>
+  </div>
+  <div class="check-row__main" data-check="ip.reputation">
+    <p class="check-row__phone-meta"><span class="check-row__sev">pass</span> · IP·54</p>
+    <div class="check-row__head">
+      <h3 class="check-row__title">IP reputation</h3>
+      
+    </div>
+    <p class="check-row__body"></p>
     
-  </header>
-  <p class="check-row__body"></p>
-  
-  <p class="check-row__links">
-    
-    
-  </p>
+    <p class="check-row__meta"><span>IP · RFC 5782</span></p>
+  </div>
 </article>
 
 </details>

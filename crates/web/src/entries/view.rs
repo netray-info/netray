@@ -9,6 +9,7 @@ use netray_model::{CheckId, Grade, Status};
 use netray_store::Entry;
 
 use crate::components::{CheckRowView, DiffBlockView, DiffEntry, GradeView, RunLineView, Tone};
+use crate::pages::result::views::{line_code, meta_text};
 
 /// The number of checks per status.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -118,21 +119,25 @@ fn issue_row(id: &CheckId, status: Status) -> CheckRowView {
     match catalogue().get(id) {
         Some(spec) => CheckRowView {
             code: id.to_string(),
+            line: line_code(id),
             tone,
             title: spec.title.clone(),
             since: None,
             body: spec.finding.clone(),
             fix: Some(spec.fix_hint.clone()),
+            meta: Some(meta_text(spec)),
             evidence_href: None,
             guide_href: Some(spec.guide.clone()),
         },
         None => CheckRowView {
             code: id.to_string(),
+            line: None,
             tone,
             title: id.to_string(),
             since: None,
             body: String::new(),
             fix: None,
+            meta: None,
             evidence_href: None,
             guide_href: None,
         },

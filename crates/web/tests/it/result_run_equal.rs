@@ -264,11 +264,12 @@ fn last<'a>(fragments: &'a [(String, String)], id: &str) -> &'a str {
         .1
 }
 
-const END_IDS: [&str; 13] = [
+const END_IDS: [&str; 16] = [
     "result-grade",
     "run-line",
     "progress",
     "result-share",
+    "hard-fail-slot",
     "spectrum",
     "diff",
     "issues",
@@ -277,6 +278,8 @@ const END_IDS: [&str; 13] = [
     "evidence-http",
     "evidence-email",
     "evidence-ip",
+    "evidence-nav",
+    "evidence-meta",
     "passed",
 ];
 
@@ -287,10 +290,12 @@ async fn c3_c7_end_fragments_equal_the_elements_of_the_page_after_a_changed_run(
     let fragments = run(&app).await;
     let body = page(&app).await;
 
+    // The page renders the fresh entry as "cached"; the run that just made it was not.
+    let cached = r#"&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">cached</span>"#;
     for id in END_IDS {
         assert_eq!(
             last(&fragments, id),
-            element(&body, id),
+            element(&body, id).replace(cached, ""),
             "end fragment {id} differs from the page"
         );
     }

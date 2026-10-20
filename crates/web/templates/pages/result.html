@@ -2,12 +2,17 @@
 {% block main %}
 <div id="result" class="result" data-state="{{ state }}" data-domain="{{ domain }}" data-island="recent">
 {{ parts.header|safe }}
+{{ parts.hard_fail|safe }}
 {{ parts.spectrum|safe }}
 {{ parts.diff|safe }}
 {{ parts.issues|safe }}
 <section id="evidence">
+<div class="section-head"><h2>Evidence</h2>{{ parts.meta|safe }}</div>
+<div class="evidence-tabs" data-island="tabs">
+{{ parts.nav|safe }}
 {% for item in parts.evidence %}{{ item|safe }}
-{% endfor %}</section>
+{% endfor %}</div>
+</section>
 {{ parts.passed|safe }}
 </div>
 {% endblock %}

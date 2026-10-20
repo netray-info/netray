@@ -1,11 +1,11 @@
 {% macro spectrum(view, live) %}
 <div class="spectrum">
-  <div class="spectrum__box" style="min-width: calc({{ view.line_count }} * var(--spectrum-line-pitch-min))">
-    <div class="spectrum__label-band" style="height: calc(var(--spectrum-label-leader) + {{ view.rows }} * var(--spectrum-label-row))">
+  <div class="spectrum__box" style="--spectrum-lines: {{ view.line_count }}">
+    <div class="spectrum__label-band" style="height: {{ view.band_height() }}">
       {% for set in view.label_sets %}
       <div class="spectrum__labels" data-run="{{ set.run }}"{% if set.shown %} data-shown{% endif %}>
         {% for label in set.labels %}
-        <span class="spectrum__leader" data-tone="{{ label.tone.as_str() }}" style="left: {{ label.x_pct() }}%; height: calc(var(--spectrum-label-leader) + {{ label.row }} * var(--spectrum-label-row))"></span>
+        <span class="spectrum__leader" data-tone="{{ label.tone.as_str() }}" style="left: {{ label.x_pct() }}%; height: {{ label.rise() }}"></span>
         {% endfor %}
         {% for label in set.labels %}
         <span class="spectrum__line-label" data-tone="{{ label.tone.as_str() }}" data-code="{{ label.code }}" style="left: clamp(0px, {{ label.x_pct() }}%, calc(100% - {{ label.width_px() }}px)); bottom: calc(var(--spectrum-label-leader) + {{ label.row }} * var(--spectrum-label-row))">{{ label.text }}</span>
@@ -44,10 +44,24 @@
       {% endfor %}
     </div>
     <div class="spectrum__axis">
+      {% for tick in view.ticks() %}
+      <span class="spectrum__tick"{% if tick.major %} data-major{% endif %}{% if tick.last %} data-last{% endif %} style="left: {{ tick.x_pct() }}%"></span>
+      {% endfor %}
       {% for region in view.regions %}
-      <span class="spectrum__region-label" style="left: {{ region.x_pct() }}%">{{ region.label }}</span>
+      <span class="spectrum__region-label" data-protocol="{{ region.label }}" style="left: {{ region.x_pct() }}%; width: {{ region.width_pct() }}%"><span class="spectrum__region-name"{% if let Some(short) = region.short() %} data-short="{{ short }}"{% endif %}>{{ region.label }}</span> {% if let Some(grade) = region.grade %}<span class="spectrum__region-grade">{{ grade }}</span>{% endif %}</span>
       {% endfor %}
     </div>
+    {% for set in view.run_grades %}
+    <span class="spectrum__region-grades" data-run="{{ set.run }}" hidden>{% for (protocol, letter) in set.grades %}<span data-protocol="{{ protocol }}">{{ letter }}</span>{% endfor %}</span>
+    {% endfor %}
   </div>
 </div>
+{% if let Some(g) = view.gutter %}
+<div id="spectrum-gutter" class="spectrum-gutter"><span class="spectrum-gutter__run">{% if let Some(run) = g.run %}Run {{ run }}{% endif %}</span><span class="spectrum-gutter__date">{{ g.date }}</span><span class="spectrum-gutter__grade">grade <strong>{{ g.grade }}</strong></span></div>
+{% endif %}
 {% endmacro %}
+{% macro stepper_box(n) %}<div class="spectrum-stepper__box">
+<div class="spectrum-stepper__run">{% if let Some(run) = n.run %}Run <strong>{{ run }}</strong> · {% endif %}<strong>{{ n.date }}</strong> · grade <strong>{{ n.grade }}</strong></div>
+<span class="spectrum-stepper__state">latest run</span>
+</div>{% endmacro %}
+{% macro stepper_hint() %}<p class="spectrum-stepper__hint">Tap a line for its history. Step back with ‹ to replay a run.</p>{% endmacro %}

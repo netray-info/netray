@@ -269,26 +269,25 @@ fn c5_first_line_x_and_scroll_box_min_width() {
         .into_iter()
         .find(|t| has_class(t, "spectrum__box"))
         .expect("box");
-    assert_eq!(
-        attr(boxed, "style"),
-        Some("min-width: calc(54 * var(--spectrum-line-pitch-min))")
-    );
+    assert_eq!(attr(boxed, "style"), Some("--spectrum-lines: 54"));
 }
 
 #[test]
-fn c6_row_two_label_and_leader_share_the_calc() {
+fn c6_row_two_label_sits_on_the_calc_and_its_leader_is_36px() {
     let l = lay(&run(&failing(Protocol::Dns, 3)), &[]);
     let html = render(&l, 0);
     let set = &label_sets(&html)[0];
-    let want = calc_rows(2);
     let label = labels_of(set.1)
         .into_iter()
-        .find(|t| style_value(t, "bottom") == want)
+        .find(|t| style_value(t, "bottom") == calc_rows(2))
         .expect("a label in row 2");
     let tone = attr(label, "data-tone").unwrap();
     let leader = leaders_of(set.1)
         .into_iter()
-        .find(|t| style_value(t, "height") == want)
+        .find(|t| {
+            style_value(t, "height")
+                == "calc(var(--spectrum-label-leader) + 2 * var(--spectrum-label-row))"
+        })
         .expect("a leader of row 2");
     assert_eq!(attr(leader, "data-tone"), Some(tone));
     // The third dns line sits at x = 20 of 432 px.
@@ -299,10 +298,16 @@ fn c6_row_two_label_and_leader_share_the_calc() {
 fn c7_band_height_follows_the_largest_row_count() {
     let four = lay(&run(&failing(Protocol::Dns, 4)), &[]);
     assert_eq!(four.runs[0].rows, 4);
-    assert_eq!(band_height(&render(&four, 0)), calc_rows(4));
+    assert_eq!(
+        band_height(&render(&four, 0)),
+        "calc(var(--spectrum-label-band) + 1 * var(--spectrum-label-row))"
+    );
 
     let one = lay(&run(&failing(Protocol::Dns, 1)), &[]);
-    assert_eq!(band_height(&render(&one, 0)), calc_rows(3));
+    assert_eq!(
+        band_height(&render(&one, 0)),
+        "calc(var(--spectrum-label-band) + 0 * var(--spectrum-label-row))"
+    );
 
     // The current run fails dns 1-3 and has dns 4-5 not applicable, so the older run's fails on
     // dns 4-5 are not fixed in it (a fixed line would carry a label and a row of its own).
@@ -313,7 +318,10 @@ fn c7_band_height_follows_the_largest_row_count() {
     let mixed = lay(&run(&current), &[run(&failing(Protocol::Dns, 5))]);
     assert_eq!(mixed.runs[0].rows, 3);
     assert_eq!(mixed.runs[1].rows, 5);
-    assert_eq!(band_height(&render(&mixed, 0)), calc_rows(5));
+    assert_eq!(
+        band_height(&render(&mixed, 0)),
+        "calc(var(--spectrum-label-band) + 2 * var(--spectrum-label-row))"
+    );
 }
 
 #[test]
@@ -427,7 +435,7 @@ fn c12_runs_differ_only_in_data_shown() {
 }
 
 #[test]
-fn c13_leaders_precede_opaque_labels() {
+fn c13_leaders_precede_transparent_labels() {
     let l = lay(&run(&failing(Protocol::Dns, 2)), &[]);
     assert_eq!(l.runs[0].labels.len(), 2);
     let html = render(&l, 0);
@@ -443,8 +451,8 @@ fn c13_leaders_precede_opaque_labels() {
     let body = css_rule_body(&css, ".spectrum__line-label");
     assert!(
         body.split(';')
-            .any(|d| d.trim().replace(' ', "") == "background:var(--color-bg)"),
-        "no opaque background in {body}"
+            .any(|d| d.trim().replace(' ', "") == "background:transparent"),
+        "no transparent background in {body}"
     );
 }
 

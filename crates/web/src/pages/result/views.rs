@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use netray_engine::catalogue::{Catalogue, CheckSpec, catalogue};
 use netray_engine::profile::{Profile, Profiles};
+use netray_engine::scoring::Score;
 use netray_engine::{SectionEvent, SectionOutcome};
 use netray_model::diff::{BlockChangeKind, ChangeClass, Diff};
 use netray_model::evidence::{BlockId, EVIDENCE_SCHEMA_VERSION};
@@ -14,11 +15,12 @@ use netray_store::{Entry, Recorded};
 
 use crate::api::{RefusalReason, RunRefusal};
 use crate::components::{
-    CheckRowView, DiffBlockView, DiffEntry, SegmentState, Tone, TraceRow, TraceView, line_tone,
+    CheckRowView, DiffBlockView, DiffEntry, RunLineView, SegmentState, Tone, TraceRow, TraceView,
+    line_tone,
 };
 use crate::entries::view::{epoch_days_to_ymd, grade_letter, status_tone};
 use crate::evidence::href;
-use crate::spectrum::{Layout, RunInput, SectionState};
+use crate::spectrum::{Layout, LineTone, RunInput, SectionState};
 
 /// Where an issue's evidence link points.
 pub enum Links<'a> {
@@ -54,15 +56,6 @@ pub struct IssueGroup {
     pub rows: Vec<IssueRow>,
 }
 
-const OWNERS: [FixOwner; 6] = [
-    FixOwner::DnsProvider,
-    FixOwner::Registrar,
-    FixOwner::CertificateProvider,
-    FixOwner::WebServer,
-    FixOwner::MailProvider,
-    FixOwner::Hosting,
-];
-
 const SEVERITIES: [Severity; 4] = [
     Severity::Critical,
     Severity::High,
@@ -91,12 +84,12 @@ fn owner_word(owner: FixOwner) -> &'static str {
 
 fn owner_label(owner: FixOwner) -> &'static str {
     match owner {
-        FixOwner::DnsProvider => "your DNS provider",
-        FixOwner::Registrar => "your registrar",
-        FixOwner::CertificateProvider => "your certificate provider",
-        FixOwner::WebServer => "your web server configuration",
-        FixOwner::MailProvider => "your mail provider",
-        FixOwner::Hosting => "your hosting provider",
+        FixOwner::DnsProvider => "Your DNS provider",
+        FixOwner::Registrar => "Your registrar",
+        FixOwner::CertificateProvider => "Your certificate provider",
+        FixOwner::WebServer => "Your web server configuration",
+        FixOwner::MailProvider => "Your mail provider",
+        FixOwner::Hosting => "Your hosting provider",
     }
 }
 
@@ -121,7 +114,7 @@ fn protocol_label(protocol: Protocol) -> &'static str {
         Protocol::Dns => "DNS",
         Protocol::Tls => "TLS",
         Protocol::Http => "HTTP",
-        Protocol::Email => "email",
+        Protocol::Email => "Email",
         Protocol::Ip => "IP",
     }
 }
@@ -172,11 +165,13 @@ fn issue_row(
     IssueRow {
         view: CheckRowView {
             code: check.id.to_string(),
+            line: line_code(&check.id),
             tone: status_tone(Some(check.status)),
             title: spec.title.clone(),
             since: since.get(&check.id).cloned(),
             body,
             fix: Some(spec.fix_hint.clone()),
+            meta: Some(meta_text(spec)),
             evidence_href: Some(evidence_href(check, links)),
             guide_href: Some(spec.guide.clone()),
         },
@@ -193,9 +188,9 @@ fn issue_row(
     }
 }
 
-/// Every warn and fail check of `run` that the catalogue knows, once, grouped. Groups run in
-/// a fixed order and empty ones are left out; inside a group rows run by severity, fail before
-/// warn, then catalogue order.
+/// Every warn and fail check of `run` that the catalogue knows, once, grouped. Rows run fail
+/// before warn, then by severity, then catalogue order, as the board lists them; groups run by
+/// their first row, so the group holding the worst line comes first.
 pub fn issues(
     run: &Run,
     catalogue: &Catalogue,
@@ -213,42 +208,41 @@ pub fn issues(
             Some((issue_row(c, spec, order, &links, since), spec.severity))
         })
         .collect();
-    rows.sort_by_key(|(r, severity)| (severity_rank(*severity), r.status == "warn", r.order));
+    rows.sort_by_key(|(r, severity)| (r.status == "warn", severity_rank(*severity), r.order));
 
-    let keyed: Vec<(String, String)> = match grouping {
-        Grouping::Owner => OWNERS
-            .iter()
-            .map(|o| (owner_word(*o).to_string(), owner_label(*o).to_string()))
-            .collect(),
-        Grouping::Severity => SEVERITIES
-            .iter()
-            .map(|s| (severity_word(*s).to_string(), severity_word(*s).to_string()))
-            .collect(),
-        Grouping::Protocol => PROTOCOLS
-            .iter()
-            .map(|p| (p.as_str().to_string(), protocol_label(*p).to_string()))
-            .collect(),
-    };
-    let key_of = |row: &IssueRow| match grouping {
-        Grouping::Owner => row.owner,
-        Grouping::Severity => row.severity,
-        Grouping::Protocol => row.protocol,
-    };
-    keyed
-        .into_iter()
-        .filter_map(|(key, label)| {
-            let group: Vec<IssueRow> = rows
-                .iter()
-                .filter(|(r, _)| key_of(r) == key)
-                .map(|(r, _)| r.clone())
-                .collect();
-            (!group.is_empty()).then_some(IssueGroup {
-                key,
-                label,
-                rows: group,
-            })
-        })
-        .collect()
+    let mut groups: Vec<IssueGroup> = Vec::new();
+    for (row, _) in rows {
+        let (key, label) = match grouping {
+            Grouping::Owner => (row.owner, row.owner_label),
+            Grouping::Severity => (row.severity, row.severity),
+            Grouping::Protocol => (
+                row.protocol,
+                PROTOCOLS
+                    .into_iter()
+                    .find(|p| p.as_str() == row.protocol)
+                    .map_or(row.protocol, protocol_label),
+            ),
+        };
+        match groups.iter_mut().find(|g| g.key == key) {
+            Some(group) => group.rows.push(row),
+            None => groups.push(IssueGroup {
+                key: key.to_string(),
+                label: label.to_string(),
+                rows: vec![row],
+            }),
+        }
+    }
+    groups
+}
+
+/// The number of checks the clean bar counts: those that pass or do not apply and that the
+/// catalogue still knows.
+pub fn clean_count(run: &Run, catalogue: &Catalogue) -> usize {
+    run.checks
+        .iter()
+        .filter(|c| matches!(c.status, Status::Pass | Status::NotApplicable))
+        .filter(|c| index_of(catalogue, &c.id).is_some())
+        .count()
 }
 
 /// Every check that is not an open issue: pass, not applicable, not tested, unmeasured, each in
@@ -280,6 +274,7 @@ pub fn passed_checks(run: &Run, catalogue: &Catalogue) -> Vec<CheckRowView> {
             (rank, spec_at.unwrap_or(pos)),
             CheckRowView {
                 code: check.id.to_string(),
+                line: line_code(&check.id),
                 tone: status_tone(Some(check.status)),
                 title: spec_at.map_or_else(
                     || check.id.to_string(),
@@ -288,6 +283,7 @@ pub fn passed_checks(run: &Run, catalogue: &Catalogue) -> Vec<CheckRowView> {
                 since: None,
                 body,
                 fix: None,
+                meta: spec_at.map(|i| meta_text(&catalogue.entries()[i])),
                 evidence_href: None,
                 guide_href: None,
             },
@@ -295,6 +291,34 @@ pub fn passed_checks(run: &Run, catalogue: &Catalogue) -> Vec<CheckRowView> {
     }
     rows.sort_by_key(|(key, _)| *key);
     rows.into_iter().map(|(_, row)| row).collect()
+}
+
+/// The meta line of an item: its protocol and the catalogue's source, "HTTP \u{b7} RFC 6797".
+pub fn meta_text(spec: &CheckSpec) -> String {
+    format!("{} \u{b7} {}", section_name(spec.protocol), spec.source)
+}
+
+/// A check's code: its protocol tag and its 1-based position in the spectrum's line order, two
+/// digits ("DNS·04"). `None` for an id the catalogue does not hold.
+pub fn line_code(id: &CheckId) -> Option<String> {
+    let cat = catalogue();
+    let mut position = 0;
+    for protocol in PROTOCOLS {
+        for spec in cat.for_protocol(protocol).entries() {
+            position += 1;
+            if &spec.id == id {
+                let tag = match protocol {
+                    Protocol::Dns => "DNS",
+                    Protocol::Tls => "TLS",
+                    Protocol::Http => "HTTP",
+                    Protocol::Email => "MAIL",
+                    Protocol::Ip => "IP",
+                };
+                return Some(format!("{tag}\u{b7}{position:02}"));
+            }
+        }
+    }
+    None
 }
 
 /// The class label of a change.
@@ -371,7 +395,7 @@ pub fn diff_view(diff: Option<&Diff>, catalogue: &Catalogue) -> DiffView {
         text: catalogue
             .get(&c.id)
             .map_or_else(|| c.id.to_string(), |s| s.title.clone()),
-        protocol: c.id.protocol().as_str().to_string(),
+        protocol: line_code(&c.id).unwrap_or_else(|| c.id.protocol().as_str().to_string()),
     });
     let blocks = diff.evidence.iter().map(|b| {
         let (kind, text) = match &b.kind {
@@ -406,14 +430,7 @@ pub fn diff_view(diff: Option<&Diff>, catalogue: &Catalogue) -> DiffView {
         ],
         None => vec![step(diff.grade.from, None), step(diff.grade.to, None)],
     };
-    let summary = grade
-        .iter()
-        .map(|s| match &s.note {
-            Some(note) => format!("{} ({note})", s.grade),
-            None => s.grade.clone(),
-        })
-        .collect::<Vec<_>>()
-        .join(" \u{2192} ");
+    let summary = grade_line(&grade);
     DiffView {
         block: DiffBlockView {
             title: DIFF_TITLE.to_string(),
@@ -427,8 +444,93 @@ pub fn diff_view(diff: Option<&Diff>, catalogue: &Catalogue) -> DiffView {
     }
 }
 
+/// The grade steps of a diff as one line: "C → B", with the rescored step "C → D (profile
+/// effect) → B (domain effect)".
+pub fn grade_line(steps: &[GradeStep]) -> String {
+    steps
+        .iter()
+        .map(|s| match &s.note {
+            Some(note) => format!("{} ({note})", s.grade),
+            None => s.grade.clone(),
+        })
+        .collect::<Vec<_>>()
+        .join(" \u{2192} ")
+}
+
 fn date_of(timestamp: i64) -> (u64, u8, u8) {
     epoch_days_to_ymd(timestamp.div_euclid(86_400).max(0) as u64)
+}
+
+/// A protocol's name in a sentence of the page.
+pub fn section_name(protocol: Protocol) -> &'static str {
+    match protocol {
+        Protocol::Dns => "DNS",
+        Protocol::Tls => "TLS",
+        Protocol::Http => "HTTP",
+        Protocol::Email => "Email",
+        Protocol::Ip => "IP",
+    }
+}
+
+/// The run title of `entry`, the `ordinal`-th of its domain (the first is 1) when that is
+/// known: ordinal, time, check count, profile, the duration when known, "cached" and "first run".
+pub fn run_title(entry: &Entry, ordinal: Option<usize>, cached: bool) -> RunLineView {
+    let checks = entry.run.checks.len();
+    let mut parts: Vec<String> = ordinal.map(|n| format!("Run {n}")).into_iter().collect();
+    parts.extend([
+        format!("{} UTC", utc_minute(entry.created_at)),
+        format!("{checks} check{}", if checks == 1 { "" } else { "s" }),
+        format!("profile {}", entry.profile_version),
+    ]);
+    if let Some(ms) = entry.duration_ms {
+        parts.push(format!("{:.1} s", ms as f64 / 1000.0));
+    }
+    if cached {
+        parts.push("cached".to_string());
+    }
+    if ordinal == Some(1) {
+        parts.push("first run".to_string());
+    }
+    RunLineView { parts }
+}
+
+/// The hard-fail banner: the failed hard-fail checks and the sections left out of the score.
+#[derive(Debug, Clone)]
+pub struct HardFailView {
+    pub hard_fail: Option<String>,
+    pub without: Option<String>,
+}
+
+/// The banner of `score` under the letter `shown`, `None` when nothing is left to say. The
+/// hard-fail sentence names the letter F, so it stays out when the score's grade is not `shown`.
+pub fn hard_fail_view(score: &Score, catalogue: &Catalogue, shown: Grade) -> Option<HardFailView> {
+    let hard_fail = (!score.hard_fail_checks.is_empty() && score.grade == shown).then(|| {
+        let titles: Vec<String> = score
+            .hard_fail_checks
+            .iter()
+            .map(|id| {
+                catalogue
+                    .get(id)
+                    .map_or_else(|| id.to_string(), |spec| spec.title.clone())
+            })
+            .collect();
+        format!(
+            "Hard fail: {}. A failed hard-fail check sets the grade to F whatever the score.",
+            titles.join(", ")
+        )
+    });
+    let without = (!score.not_applicable.is_empty()).then(|| {
+        let sections: Vec<String> = score
+            .not_applicable
+            .iter()
+            .map(|(protocol, reason)| match reason.as_str() {
+                "" => section_name(*protocol).to_string(),
+                reason => format!("{} ({reason})", section_name(*protocol)),
+            })
+            .collect();
+        format!("Score computed without: {}", sections.join(", "))
+    });
+    (hard_fail.is_some() || without.is_some()).then_some(HardFailView { hard_fail, without })
 }
 
 /// The UTC date of `timestamp`, `YYYY-MM-DD`.
@@ -531,6 +633,32 @@ pub fn history_sentence(points: &[(i64, Status)]) -> String {
         .join(" \u{00b7} ")
 }
 
+/// The score shown under the letter `grade`: the percentage rounded down, so it never reaches
+/// the next grade's integer threshold (89.7 shows 89 under B), with a guard against float error
+/// in the engine's division (an exact 80 that arrives as 79.999… shows 80). The number stays
+/// below the threshold of the grade above `grade`, so it never contradicts the letter; a
+/// hard-failed run (grade F whatever the score) shows its number as it is.
+pub fn score_number(
+    percentage: f64,
+    grade: Grade,
+    hard_failed: bool,
+    thresholds: &[(Grade, u32)],
+) -> u8 {
+    let n = (percentage + 1e-9).floor().clamp(0.0, 100.0) as u32;
+    if hard_failed {
+        return n as u8;
+    }
+    let above = thresholds
+        .iter()
+        .position(|(g, _)| *g == grade)
+        .and_then(|i| i.checked_sub(1))
+        .map(|i| thresholds[i].1);
+    match above {
+        Some(upper) if upper > 0 => n.min(upper - 1) as u8,
+        _ => n as u8,
+    }
+}
+
 /// The history sentence of every catalogue line over `points` (oldest first), as (check id,
 /// sentence) in catalogue order; a run that lacks a check counts as `not_tested` for it.
 pub fn history_sentences(points: &[(i64, &Run)]) -> Vec<(String, String)> {
@@ -554,23 +682,27 @@ pub fn history_sentences(points: &[(i64, &Run)]) -> Vec<(String, String)> {
         .collect()
 }
 
-/// The start of the current span, unless it covers every point.
-pub fn issue_since(points: &[(i64, Status)]) -> Option<String> {
-    let spans = spans(points);
-    match spans.as_slice() {
-        [] | [_] => None,
-        [.., (_, start, _, _)] => Some(month_day(*start)),
-    }
-}
-
-/// As `issue_since` over points where `None` marks a run that lacks the check, which counts as a
-/// state of its own.
-pub fn issue_since_present(points: &[(i64, Option<Status>)]) -> Option<String> {
-    let spans = spans(points);
-    match spans.as_slice() {
-        [] | [_] => None,
-        [.., (_, start, _, _)] => Some(month_day(*start)),
-    }
+/// What an open check's history says, from its statuses over the shown runs, oldest first
+/// (`None` marks a run without the check, which counts as not open) and the number of the first
+/// run. `None` when the check is not open in the latest run.
+pub fn since_text(statuses: &[Option<Status>], first_run_no: usize) -> Option<String> {
+    let now = (*statuses.last()?).filter(|s| is_open(*s))?;
+    let start = statuses
+        .iter()
+        .rposition(|s| *s != Some(now))
+        .map_or(0, |i| i + 1);
+    let run = first_run_no + start;
+    Some(match start.checked_sub(1).map(|i| statuses[i]) {
+        None if statuses.len() == 1 => "first run".to_string(),
+        None => format!("in all {} runs", statuses.len()),
+        Some(Some(Status::Fail)) if now == Status::Warn => {
+            format!("down from fail since run {run}")
+        }
+        Some(Some(Status::Warn)) if now == Status::Fail => {
+            format!("up from warn since run {run}")
+        }
+        Some(_) => format!("lit up in run {run}"),
+    })
 }
 
 /// The layout input of a stored run; `None` when its profile version is unknown.
@@ -611,22 +743,52 @@ pub fn utc_minute(timestamp: i64) -> String {
     )
 }
 
-/// The trace of a layout: one row per run, newest first, `rows` the (created_at, grade) of each
-/// run in the layout's run order.
-pub fn trace_view(layout: &Layout, rows: &[(i64, Grade)]) -> TraceView {
+/// A line's mark in the trace: a fix is a pass there, the trace draws no fix.
+fn trace_tone(tone: LineTone) -> Tone {
+    match tone {
+        LineTone::Fixed => Tone::Pass,
+        tone => line_tone(tone),
+    }
+}
+
+/// One run of the history behind the trace: when it was recorded, its grade and its place in
+/// the stored history when that is known.
+pub struct TraceInput {
+    pub created_at: i64,
+    pub grade: Grade,
+    pub no: Option<usize>,
+}
+
+/// The trace of a layout: one row per run, newest first, `inputs` the history of each run in
+/// the layout's run order; `table_href` the history table's address when the domain has one.
+pub fn trace_view(layout: &Layout, inputs: &[TraceInput], table_href: Option<String>) -> TraceView {
+    let shown: Vec<&TraceInput> = inputs.iter().take(layout.runs.len()).collect();
+    let rows: Vec<TraceRow> = layout
+        .runs
+        .iter()
+        .zip(&shown)
+        .enumerate()
+        .map(|(k, (run, input))| TraceRow {
+            no: input.no,
+            date: run_date(input.created_at),
+            grade: grade_letter(input.grade).to_string(),
+            cells: run.tones.iter().map(|t| trace_tone(*t)).collect(),
+            current: k == 0,
+        })
+        .collect();
+    let edge =
+        |input: Option<&&TraceInput>| input.map_or_else(String::new, |i| month_day(i.created_at));
+    let count = rows.len();
     TraceView {
-        rows: layout
-            .runs
-            .iter()
-            .zip(rows)
-            .enumerate()
-            .map(|(k, (run, (created_at, grade)))| TraceRow {
-                date: utc_minute(*created_at),
-                grade: grade_letter(*grade).to_string(),
-                cells: run.tones.iter().map(|t| line_tone(*t)).collect(),
-                current: k == 0,
-            })
-            .collect(),
+        newest: edge(shown.first()),
+        oldest: edge(shown.last()),
+        caption: format!(
+            "Each line carries its trace: {count} {}, newest on top.",
+            if count == 1 { "run" } else { "runs" }
+        ),
+        hint: "hover a run to replay the spectrum \u{b7} tap to pin".to_string(),
+        table_href,
+        rows,
     }
 }
 
@@ -743,21 +905,4 @@ pub fn refusal_line(refusal: &RunRefusal) -> (String, u64) {
         }
     };
     (lead, refusal.retry_after_s)
-}
-
-/// What a run says about one protocol's section: "measured", "not applicable: <reason>" or
-/// "incomplete: <reason>"; a section the run does not list counts as measured.
-pub fn section_outcome(run: &Run, protocol: Protocol) -> String {
-    let Some(section) = run.sections.iter().find(|s| s.protocol == protocol) else {
-        return "measured".to_string();
-    };
-    let word = match section.outcome {
-        SectionKind::Measured => return "measured".to_string(),
-        SectionKind::NotApplicable => "not applicable",
-        SectionKind::Incomplete | SectionKind::TimedOut => "incomplete",
-    };
-    match &section.reason {
-        Some(reason) => format!("{word}: {reason}"),
-        None => word.to_string(),
-    }
 }

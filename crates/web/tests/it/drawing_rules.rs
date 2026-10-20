@@ -140,13 +140,17 @@ fn fixed_view() -> SpectrumView {
                 label: "DNS".into(),
                 x: 0.0,
                 width: 50.0,
+                grade: None,
             },
             SpectrumRegion {
                 label: "TLS".into(),
                 x: 50.0,
                 width: 50.0,
+                grade: None,
             },
         ],
+        gutter: None,
+        run_grades: vec![],
     }
 }
 
@@ -350,7 +354,10 @@ fn spectrum_pass_and_unmeasured_lines_carry_no_short_name_above_the_plate() {
             label: "DNS".into(),
             x: 0.0,
             width: 100.0,
+            grade: None,
         }],
+        gutter: None,
+        run_grades: vec![],
     })
     .unwrap();
     let labels = html.find("spectrum__labels").unwrap();
@@ -375,18 +382,25 @@ fn trace_pass_row_is_a_hairline_and_fail_row_a_block() {
     let html = trace(&TraceView {
         rows: vec![
             TraceRow {
+                no: Some(2),
                 date: "2026-10-15".into(),
                 grade: "A".into(),
                 cells: vec![Tone::Pass],
                 current: true,
             },
             TraceRow {
+                no: Some(1),
                 date: "2026-10-14".into(),
                 grade: "D".into(),
                 cells: vec![Tone::Fail],
                 current: false,
             },
         ],
+        newest: "10-15".into(),
+        oldest: "10-14".into(),
+        caption: "Each line carries its trace: 2 runs, newest on top.".into(),
+        hint: "hover a run to replay the spectrum".into(),
+        table_href: None,
     })
     .unwrap();
     let css = stylesheet("trace.css");
@@ -402,15 +416,18 @@ fn trace_pass_row_is_a_hairline_and_fail_row_a_block() {
         );
     }
     let height = |tone: &str| {
-        let sel = format!(".trace__cell[data-tone=\"{tone}\"]");
-        resolve(&css, &[".trace__cell", &sel], "height")
+        let sel = format!(".trace__cell[data-tone=\"{tone}\"]::before");
+        resolve(&css, &[".trace__cell::before", &sel], "height")
     };
     assert_eq!(height("pass").as_deref(), Some("var(--line-hair)"));
-    assert_eq!(height("fail").as_deref(), Some("var(--spectrum-trace-row)"));
+    assert_eq!(height("fail").as_deref(), Some("var(--line-warn)"));
     assert_eq!(
         resolve(
             &css,
-            &[".trace__cell", ".trace__cell[data-tone=\"pass\"]"],
+            &[
+                ".trace__cell::before",
+                ".trace__cell[data-tone=\"pass\"]::before"
+            ],
             "background"
         )
         .as_deref(),
@@ -419,7 +436,10 @@ fn trace_pass_row_is_a_hairline_and_fail_row_a_block() {
     assert_eq!(
         resolve(
             &css,
-            &[".trace__cell", ".trace__cell[data-tone=\"fail\"]"],
+            &[
+                ".trace__cell::before",
+                ".trace__cell[data-tone=\"fail\"]::before"
+            ],
             "background"
         )
         .as_deref(),

@@ -4,3 +4,17 @@
   font-family: var(--font-mono);
   font-size: var(--font-size-small);
 }
+.run-line--title {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  letter-spacing: var(--font-tracking-caps);
+  text-transform: uppercase;
+}
+@media (max-width: 480px) {
+  .run-line--title {
+    letter-spacing: .1em;
+  }
+  .run-line--title [data-part="profile"] {
+    display: none;
+  }
+}

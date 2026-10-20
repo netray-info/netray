@@ -121,7 +121,7 @@ async fn c1_spectrum_holds_gutter_sentence_stepper_sentences_and_targets() {
     assert!(spectrum.contains("id=\"spectrum-gutter\""), "{spectrum}");
     assert!(spectrum.contains("id=\"spectrum-sentence\""), "{spectrum}");
 
-    let stepper = between(spectrum, "id=\"spectrum-stepper\"", "</div>");
+    let stepper = between(spectrum, "id=\"spectrum-stepper\"", "<div id=\"trace\">");
     assert_eq!(
         stepper.matches("<button type=\"button\"").count(),
         2,

@@ -174,7 +174,10 @@ fn spectrum_renders_plate_lines_and_regions() {
             label: "Transport zone".into(),
             x: 50.0,
             width: 25.0,
+            grade: None,
         }],
+        gutter: None,
+        run_grades: vec![],
     })
     .unwrap();
     assert_root(&html, "spectrum");
@@ -199,18 +202,25 @@ fn trace_renders_rows_cells_and_single_current_marker() {
     let html = trace(&TraceView {
         rows: vec![
             TraceRow {
+                no: Some(2),
                 date: "2026-10-15".into(),
                 grade: "A-".into(),
                 cells: vec![Tone::Pass, Tone::Warn, Tone::Fail],
                 current: true,
             },
             TraceRow {
+                no: Some(1),
                 date: "2026-09-01".into(),
                 grade: "C+".into(),
                 cells: vec![Tone::Fix, Tone::Untested],
                 current: false,
             },
         ],
+        newest: "10-15".into(),
+        oldest: "09-01".into(),
+        caption: "Each line carries its trace: 2 runs, newest on top.".into(),
+        hint: "hover a run to replay the spectrum".into(),
+        table_href: None,
     })
     .unwrap();
     assert_root(&html, "trace");
@@ -221,10 +231,6 @@ fn trace_renders_rows_cells_and_single_current_marker() {
         "in: {html}"
     );
     assert_eq!(html.matches("aria-current").count(), 1, "in: {html}");
-    assert!(
-        class_tokens(&html).iter().any(|t| t == "marker"),
-        "no marker in: {html}"
-    );
     for tone in ["pass", "warn", "fail", "fix", "untested"] {
         assert_eq!(
             html.matches(&format!("data-tone=\"{tone}\"")).count(),
@@ -243,11 +249,13 @@ fn trace_renders_rows_cells_and_single_current_marker() {
 fn check_row_renders_values_links_and_escapes() {
     let full = CheckRowView {
         code: "HTML-042".into(),
+        line: None,
         tone: Tone::Fix,
         title: "Missing <b> & tag".into(),
         since: Some("since v0.9".into()),
         body: "The page lacks a canonical link.".into(),
         fix: Some("Add a canonical link element.".into()),
+        meta: None,
         evidence_href: Some("/check/example.com#ev-1".into()),
         guide_href: Some("https://netray.info/guide/html-042".into()),
     };

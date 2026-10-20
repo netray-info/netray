@@ -1,4 +1,15 @@
 {% import "components/diff_block.html" as diff_block %}
-<section id="diff">
-{% if let Some(d) = diff %}{% call diff_block::diff_block(d) %}{% endcall %}{% endif %}
-</section>
+{% if let Some(f) = first %}<section id="diff" class="first-run">
+<h2 class="first-run__title">First run recorded.</h2>
+<p class="first-run__text">{{ f.text }}</p>
+<div class="first-run__ghost" aria-hidden="true">
+<div class="first-run__row">{% for tone in f.cells %}<span class="first-run__cell" data-tone="{{ tone.as_str() }}"></span>{% endfor %}</div>
+<div class="first-run__dashed"></div>
+<div class="first-run__dashed"></div>
+</div>
+</section>{% else %}<section id="diff">
+{% if let Some(h) = heading %}<div class="section-head"><h2>{{ h }}</h2>
+{% if let Some(m) = meta %}<p class="since-meta">{{ m }}</p>
+{% endif %}</div>
+{% endif %}{% if let Some(d) = diff %}{% call diff_block::diff_block(d) %}{% endcall %}{% endif %}
+</section>{% endif %}

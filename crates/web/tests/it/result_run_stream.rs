@@ -271,18 +271,22 @@ fn expected_ids(order: &[usize]) -> Vec<String> {
     let mut want: Vec<String> = ["run-line", "progress", "spectrum"]
         .map(String::from)
         .to_vec();
-    for i in order {
+    for (n, i) in order.iter().enumerate() {
         let p = ORDER[*i].1;
         for f in ["progress", "spectrum", "issues"] {
             want.push(f.to_string());
         }
         want.push(format!("evidence-{p}"));
+        if n == 0 {
+            want.push("evidence-meta".to_string());
+        }
     }
     for f in [
         "result-grade",
         "run-line",
         "progress",
         "result-share",
+        "hard-fail-slot",
         "spectrum",
         "diff",
         "issues",
@@ -292,6 +296,8 @@ fn expected_ids(order: &[usize]) -> Vec<String> {
     for (_, p, _) in ORDER {
         want.push(format!("evidence-{p}"));
     }
+    want.push("evidence-nav".to_string());
+    want.push("evidence-meta".to_string());
     want.push("passed".to_string());
     // A first visit's recorded run turns the check button into re-check (branch review F1).
     want.push("recheck-button".to_string());
@@ -407,6 +413,7 @@ async fn c14_a_fresh_head_answers_from_the_store_on_visit_and_runs_on_recheck() 
             "run-line",
             "progress",
             "result-share",
+            "hard-fail-slot",
             "spectrum",
             "diff",
             "issues",
@@ -415,12 +422,15 @@ async fn c14_a_fresh_head_answers_from_the_store_on_visit_and_runs_on_recheck() 
             "evidence-http",
             "evidence-email",
             "evidence-ip",
+            "evidence-nav",
+            "evidence-meta",
             "passed",
             "recheck-button"
         ]
     );
     let run_line = &frags.iter().find(|(i, _)| i == "run-line").unwrap().1;
-    assert!(run_line.contains(&format!("entry {id}")), "{run_line}");
+    assert!(!run_line.contains(&id), "{run_line}");
+    assert!(run_line.contains("cached"), "{run_line}");
     assert_eq!(f.store.entries(DOMAIN).await.unwrap().len(), 1);
 
     let recheck = post(&f.app, "recheck", &[]).await;

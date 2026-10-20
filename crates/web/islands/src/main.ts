@@ -2,8 +2,10 @@ import { countdown } from "./countdown";
 import { dns } from "./dns";
 import { issues } from "./issues";
 import { recent } from "./recent";
+import { share } from "./share";
 import { spectrum } from "./spectrum";
 import { status } from "./status";
+import { tabs } from "./tabs";
 import { stream } from "./stream";
 import { theme } from "./theme";
 
@@ -34,8 +36,10 @@ register("countdown", countdown);
 register("dns", dns);
 register("issues", issues);
 register("recent", recent);
+register("share", share);
 register("spectrum", spectrum);
 register("status", status);
+register("tabs", tabs);
 register("theme", theme);
 
 mount(document);

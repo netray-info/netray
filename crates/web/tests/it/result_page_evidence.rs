@@ -1,6 +1,6 @@
 //! Result page evidence section (spec v2-result-page, Phase 2, requirement 14; criteria C6, C13):
-//! `GET /{domain}` holds one `evidence-<protocol>` element per protocol, linking the stored entry's
-//! protocol view and naming the section outcome, and renders no evidence block itself.
+//! `GET /{domain}` holds one `evidence-<protocol>` tab panel per protocol, each linking the
+//! entry's view of the protocol (v2-result-fidelity requirement 35), and renders the blocks.
 use std::net::IpAddr;
 use std::sync::Arc;
 
@@ -105,24 +105,19 @@ async fn get(app: &Router, path: &str) -> (StatusCode, String) {
     (status, String::from_utf8_lossy(&bytes).into_owned())
 }
 
-/// The markup from the element `id="evidence-<protocol>"` up to the next evidence element or the
-/// end of the section.
+/// The markup from the element `id="evidence-<protocol>"` up to the next evidence element.
 fn element<'a>(body: &'a str, protocol: &str) -> &'a str {
     let marker = format!("id=\"evidence-{protocol}\"");
     let start = body
         .find(&marker)
         .unwrap_or_else(|| panic!("no {marker} in: {body}"));
     let rest = &body[start + marker.len()..];
-    let end = [rest.find("id=\"evidence-"), rest.find("</section>")]
-        .into_iter()
-        .flatten()
-        .min()
-        .unwrap_or(rest.len());
+    let end = rest.find("id=\"evidence-").unwrap_or(rest.len());
     &rest[..end]
 }
 
 #[tokio::test]
-async fn c6_evidence_section_has_one_linked_element_per_protocol() {
+async fn c6_evidence_section_has_one_linked_panel_per_protocol() {
     let (app, id, _dir) = app_with_entry().await;
 
     let (status, body) = get(&app, "/example.com").await;
@@ -132,29 +127,22 @@ async fn c6_evidence_section_has_one_linked_element_per_protocol() {
         let el = element(&body, protocol);
         let href = format!("href=\"/r/{id}/{protocol}\"");
         assert!(el.contains(&href), "{protocol} lacks {href}: {el}");
+        assert_eq!(
+            el.contains(REASON),
+            protocol == "email",
+            "{protocol} section reason: {el}"
+        );
     }
-    assert!(
-        element(&body, "email").contains(REASON),
-        "email element lacks its reason: {}",
-        element(&body, "email")
-    );
-    assert!(
-        !element(&body, "dns").contains(REASON),
-        "dns element shows another section's reason"
-    );
 }
 
 #[tokio::test]
-async fn c13_page_renders_no_evidence_block_markup() {
-    let (app, id, _dir) = app_with_entry().await;
+async fn c13_page_renders_the_evidence_blocks_in_their_panels() {
+    let (app, _id, _dir) = app_with_entry().await;
 
     let (status, body) = get(&app, "/example.com").await;
 
     assert_eq!(status, StatusCode::OK);
-    assert!(
-        body.contains(&format!("href=\"/r/{id}/tls\"")),
-        "tls link missing: {body}"
-    );
-    assert!(!body.contains("evidence-block"), "block markup in: {body}");
-    assert!(!body.contains(BLOCK_TITLE), "block title in: {body}");
+    let tls = element(&body, "tls");
+    assert!(tls.contains(r#"class="evidence-block""#), "{tls}");
+    assert!(tls.contains(BLOCK_TITLE), "{tls}");
 }

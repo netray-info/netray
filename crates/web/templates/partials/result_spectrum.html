@@ -1,24 +1,28 @@
+{% import "components/spectrum.html" as spectrum %}
 <figure id="spectrum" data-island="spectrum"{% if refreshing %} data-refreshing{% endif %}>
 {{ plate|safe }}
-<p id="spectrum-gutter" aria-live="polite"></p>
 <p id="spectrum-sentence" aria-live="polite"></p>
 {% if stepper %}
 <div id="spectrum-stepper">
-<button type="button" data-step="-1" aria-label="newer run">&lsaquo;</button>
-<button type="button" data-step="1" aria-label="older run">&rsaquo;</button>
+<button type="button" data-step="1" aria-label="older run">&lsaquo;</button>
+{% if let Some(n) = legend.newest %}{% call spectrum::stepper_box(n) %}{% endcall %}{% endif %}<button type="button" data-step="-1" aria-label="newer run" disabled>&rsaquo;</button>
 </div>
+{% call spectrum::stepper_hint() %}{% endcall %}
 {% endif %}
 <div id="trace">{{ trace|safe }}</div>
+<div class="legend-row">
 <ul id="legend">
-<li>pass</li>
-<li>warn</li>
-<li>fail</li>
-<li>fixed</li>
-<li>muted</li>
-</ul>
+<li><span class="legend__mark" data-tone="pass"></span>pass</li>
+<li><span class="legend__mark" data-tone="warn"></span>warn</li>
+<li><span class="legend__mark" data-tone="fail"></span>fail</li>
+{% for fixed in legend.fixed %}<li class="legend__fixed" data-run="{{ loop.index0 }}"{% if loop.index0 > 0 %} hidden{% endif %}>{% if let Some(since) = fixed %}<span class="legend__mark" data-tone="fix"></span>fixed since {{ since }}{% endif %}</li>
+{% endfor %}</ul>
+{% if legend.checks > 0 %}<span class="legend__note">{{ legend.checks }} checks · line height = weight in the grade</span>
+{% endif %}
+</div>
 <ul id="spectrum-sentences" hidden>
-{% for (code, sentence) in sentences %}
-<li data-code="{{ code }}" data-sentence="{{ sentence }}"></li>
+{% for (code, name, sentence) in sentences %}
+<li data-code="{{ code }}"{% if !name.is_empty() %} data-name="{{ name }}"{% endif %} data-sentence="{{ sentence }}"></li>
 {% endfor %}
 </ul>
 </figure>

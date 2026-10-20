@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}{{ frame.title }}{% endblock %}</title>
 {% block meta %}<meta name="description" content="{{ frame.description }}">
-<link rel="canonical" href="https://netray.info{{ frame.canonical }}">
+<link rel="canonical" href="{{ frame.origin() }}{{ frame.canonical }}">
 <meta property="og:title" content="{{ frame.title }}">
 <meta property="og:description" content="{{ frame.description }}">
 <meta property="og:image" content="{{ frame.og_image }}">{% endblock %}
@@ -16,15 +16,16 @@
 <body>
 {% block header %}<header class="page-header">
 <a href="/"><img src="/static/logo.svg" alt="netray"></a>
+<span class="page-tagline">{% include "partials/header_tagline.html" %}</span>
+<details class="page-menu">
+<summary class="page-menu__button" aria-label="Menu"><span class="page-menu__bar"></span><span class="page-menu__bar"></span><span class="page-menu__bar"></span></summary>
 <nav class="page-nav">
+<a href="/inspect/dns">Inspectors</a>
 <a href="/guide/">Guides</a>
-<a href="/compare">Compare</a>
+<a href="/api/v1/docs">API</a>
 <a href="/status">Status</a>
-<a href="https://ip.netray.info">IP</a>
-<a href="https://dns.netray.info">DNS</a>
-<a href="https://tls.netray.info">TLS</a>
-<a href="https://http.netray.info">HTTP</a>
 </nav>
+</details>
 <button type="button" class="theme-toggle" data-island="theme" aria-label="Switch theme">Theme</button>
 </header>{% endblock %}
 <main>{% block main %}{% endblock %}</main>
@@ -33,6 +34,7 @@
 <nav>
 <a href="/privacy">Privacy</a>
 <a href="/status">Status</a>
+<a href="/compare">Compare</a>
 </nav>
 </footer>
 {% block scripts %}<script type="module" src="/static/islands.js"></script>

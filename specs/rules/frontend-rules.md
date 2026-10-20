@@ -21,10 +21,11 @@ definition, this file the pointer.
 
 - **One frame.** Every page extends `base.html`. For the 404, the 400 and the 500 page,
   `crates/web/tests/it/pages_frame.rs` checks that head, header, footer and scripts appear exactly
-  once, in order, and that the 404 and 500 pages share the frame's prefix and footer. The pages of
-  `v2-entries` (entry, gone, privacy) override `styles` with one inline `<style>` and `header` and
-  `scripts` with nothing (spec v2-pages, requirement 32), so they carry no navigation, script or
-  island; the footer stays shared.
+  once, in order, and that the 404 and 500 pages share the frame's prefix and footer. The entry page
+  `/r/<id>` renders inside the full frame (v2-result-fidelity, requirement 13); the gone and
+  privacy pages override `styles` with one inline `<style>` and `header` and `scripts` with
+  nothing (spec v2-pages, requirement 32), so they carry no navigation, script or island; the
+  footer stays shared: `crates/web/tests/it/entries_frame.rs`.
 - **Components exist once.** The ten components (`grade`, `run_line`, `progress_ray`, `spectrum`,
   `trace`, `check_row`, `evidence_block`, `diff_block`, `grouping_switch`, `query_input`) are a
   macro in `templates/components/<name>.html` plus a stylesheet `static/<name>.css` each:
@@ -80,7 +81,13 @@ The islands live in `crates/web/islands/src/`, one module each, bundled by esbui
   refuses a checkout without the built bundle: `tests/repo/test_islands_package.sh`. Its
   `npm test` type-checks before vitest runs: `tests/repo/test_islands_typecheck.sh`.
 - The `theme` and `status` islands: `crates/web/islands/test/theme.test.ts`,
-  `crates/web/islands/test/status.test.ts`.
+  `crates/web/islands/test/status.test.ts`. The result page's `tabs` (evidence tabs) and `share`
+  (share dialog) islands: `crates/web/islands/test/tabs.test.ts`,
+  `crates/web/islands/test/share.test.ts`.
+- **Phone values.** Phone sizes are `*Phone` tokens, which `build.rs` emits inside the
+  `layout.phoneMax` media block, so a rule that reads the token adapts by itself; a geometry the
+  layout writes inline (the spectrum's label band and leaders) is a `calc()` over those tokens,
+  never a px value, or the phone value cannot apply.
 
 ## 4. The marker rule
 

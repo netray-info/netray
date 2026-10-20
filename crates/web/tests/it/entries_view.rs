@@ -10,6 +10,7 @@ use netray_store::{Entry, HistoryStore};
 use netray_web::components::Tone;
 use netray_web::entries::render;
 use netray_web::entries::view::{entry_view, format_utc_timestamp};
+use netray_web::pages::result::views::line_code;
 
 const CREATED_AT: i64 = 1_778_262_240;
 
@@ -139,7 +140,8 @@ async fn fail_rows_precede_warn_rows_in_catalogue_order_and_pass_has_none() {
     let html = render::entry(&v).unwrap();
     let mut last = 0;
     for code in &want {
-        let needle = format!("<span class=\"check-row__code\">{code}</span>");
+        let line = line_code(&CheckId::parse(code).unwrap()).unwrap();
+        let needle = format!("<span class=\"check-row__code\">{line}</span>");
         let at = html
             .find(&needle)
             .unwrap_or_else(|| panic!("no row for {code}"));

@@ -248,10 +248,7 @@ async fn a_failed_history_re_read_after_a_stored_record_ends_as_the_recorded_ent
     let grade = last(&fragments, "result-grade");
     assert!(grade.contains(r#"grade__letter">A<"#), "{grade}");
     let run_line = text_of(last(&fragments, "run-line"));
-    assert!(
-        run_line.contains(&format!("entry {UNSTORED_ID}")),
-        "{run_line}"
-    );
+    assert!(!run_line.contains(UNSTORED_ID), "{run_line}");
     let share = last(&fragments, "result-share");
     assert!(
         share.contains(&format!(r#"href="/r/{UNSTORED_ID}""#)),

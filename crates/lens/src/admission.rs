@@ -477,8 +477,9 @@ async fn run_task(
             .await
         }
     };
+    let elapsed = started.elapsed();
     if trigger.counted() {
-        observe_run(started.elapsed());
+        observe_run(elapsed);
     }
     drop(guard);
     state
@@ -500,7 +501,7 @@ async fn run_task(
     });
     tx.send_modify(|s| s.done = Some(Arc::clone(&published)));
 
-    let recorded = crate::history::record(&state, &domain, dkim, &published.run).await;
+    let recorded = crate::history::record(&state, &domain, dkim, &published.run, elapsed).await;
     crate::cache::hold(&state, recorded.as_ref(), &published).await;
     // Out of the register before the stream ends: a caller that read `Recorded` never joins this run.
     drop(deregister);

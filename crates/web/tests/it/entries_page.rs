@@ -15,11 +15,13 @@ const COUNTS: &str = "1 pass · 0 warn · 2 fail · 0 not applicable · 0 not te
 fn row(code: &str, title: &str, tone: Tone) -> CheckRowView {
     CheckRowView {
         code: code.into(),
+        line: None,
         tone,
         title: title.into(),
         since: None,
         body: "body".into(),
         fix: None,
+        meta: None,
         evidence_href: None,
         guide_href: None,
     }
@@ -129,7 +131,10 @@ fn domain_and_check_title_are_escaped() {
         None,
     ))
     .expect("render");
-    assert!(!html.contains("<script"), "page holds a script element");
+    assert!(
+        !html.contains("<script>alert"),
+        "page holds an injected script element"
+    );
     assert!(
         html.contains("&lt;script&gt;alert(1)") || html.contains("&#60;script&#62;alert(1)"),
         "domain not escaped"
@@ -162,6 +167,7 @@ fn entry(grade: Grade) -> Entry {
         },
         diff: None::<Diff>,
         engine_version: "0.26.0".into(),
+        duration_ms: None,
     }
 }
 

@@ -5,6 +5,9 @@
 .spectrum [data-run]:not([data-shown]) {
   display: none;
 }
+.spectrum__box {
+  min-width: calc(var(--spectrum-lines) * var(--spectrum-line-pitch-min));
+}
 .spectrum__label-band {
   position: relative;
 }
@@ -14,7 +17,20 @@
 }
 .spectrum__axis {
   position: relative;
-  height: var(--space-5);
+  height: 32px;
+}
+.spectrum__tick {
+  position: absolute;
+  inset-block-start: 0;
+  width: var(--line-hair);
+  height: 4px;
+  background: var(--color-grid);
+}
+.spectrum__tick[data-major] {
+  height: 10px;
+}
+.spectrum__tick[data-last] {
+  transform: translateX(-100%);
 }
 .spectrum__plate {
   display: block;
@@ -22,6 +38,7 @@
   height: var(--spectrum-plate-height);
   border: var(--line-hair) solid var(--color-plate-border);
   background: var(--color-plate);
+  border-radius: var(--radius-max);
   box-sizing: border-box;
 }
 .spectrum__boundary {
@@ -60,24 +77,37 @@
   stroke: var(--status-fix-mark);
   stroke-width: var(--line-pass);
 }
-.spectrum__region-label,
-.spectrum__line-label {
-  position: absolute;
-  font-size: var(--font-size-label);
-  white-space: nowrap;
-}
 .spectrum__region-label {
-  inset-block-start: 0;
-  padding-inline-start: var(--space-1);
-  color: var(--color-muted);
-  letter-spacing: var(--font-tracking-caps);
-  text-transform: uppercase;
-}
-.spectrum__line-label {
-  padding-inline-start: var(--space-1);
-  background: var(--color-bg);
+  position: absolute;
+  display: flex;
+  justify-content: center;
+  gap: .5em;
+  white-space: nowrap;
+  inset-block-start: 14px;
+  box-sizing: border-box;
   color: var(--color-muted);
   font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  letter-spacing: .14em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.spectrum__region-label:last-child {
+  justify-content: flex-end;
+}
+.spectrum__region-grade {
+  color: var(--color-ink);
+}
+.spectrum__line-label {
+  position: absolute;
+  white-space: nowrap;
+  padding-inline-start: var(--space-1);
+  background: transparent;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  font-weight: 600;
+  line-height: 1;
 }
 .spectrum__leader {
   position: absolute;
@@ -99,4 +129,108 @@
   top: calc(-1 * var(--spectrum-plate-height));
   height: var(--spectrum-plate-height);
   transform: translateX(-50%);
+}
+.spectrum-gutter {
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  gap: 2px;
+  margin-block-start: 56px;
+  padding-inline-start: var(--space-2);
+  border-inline-start: var(--line-marker) solid transparent;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+.spectrum-gutter[data-replaying] {
+  border-inline-start-color: var(--color-ink);
+}
+.spectrum-gutter__date {
+  color: var(--color-ink);
+  font-weight: var(--font-weight-bold);
+}
+.spectrum-gutter__grade strong {
+  color: var(--color-ink);
+}
+.spectrum__region-grades {
+  display: none;
+}
+.spectrum-stepper__hint {
+  display: none;
+}
+@media (max-width: 480px) {
+  /* Board M draws the region names alone: the narrow regions have no room for a grade, which stays readable to a screen reader. */
+  .spectrum__region-grade {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .spectrum__box {
+    min-width: 0;
+  }
+  .spectrum__axis {
+    height: 26px;
+  }
+  .spectrum__tick {
+    height: 3px;
+  }
+  .spectrum__tick[data-major] {
+    height: 8px;
+  }
+  .spectrum__region-label {
+    font-size: var(--font-size-region);
+    letter-spacing: .1em;
+  }
+  .spectrum__region-name[data-short] {
+    font-size: var(--font-size-collapsed);
+  }
+  .spectrum__region-name[data-short]::after {
+    content: attr(data-short) / "";
+    font-size: var(--font-size-region);
+  }
+  .spectrum-gutter {
+    display: none;
+  }
+  .spectrum-stepper__box {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    box-sizing: border-box;
+    min-width: 0;
+    padding: 4px 8px;
+    border: var(--line-hair) solid var(--color-line);
+    border-radius: var(--radius-max);
+    color: var(--color-muted);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-stepper);
+  }
+  .spectrum-stepper__run strong {
+    color: var(--color-ink);
+    font-weight: var(--font-weight-bold);
+  }
+  .spectrum-stepper__state {
+    font-size: var(--font-size-caption);
+  }
+  .spectrum-stepper__hint {
+    display: block;
+    grid-column: 1 / -1;
+    order: 3;
+    margin: 10px 0 0;
+    color: var(--color-muted);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-label);
+  }
+  .spectrum-stepper__hint[data-active] {
+    color: var(--color-ink);
+  }
+}
+/* Without a history there is no replay gutter: the figure takes the full width, as board FFirst. */
+#spectrum:not(:has(.spectrum-gutter)) {
+  grid-template-columns: minmax(0, 1fr);
 }

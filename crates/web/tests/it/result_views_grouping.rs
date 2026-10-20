@@ -8,19 +8,19 @@ use netray_model::{Grade, Protocol, Status};
 use netray_web::pages::result::views::{Grouping, IssueGroup, Links, issues};
 
 const OWNERS: [(&str, &str); 6] = [
-    ("dns_provider", "your DNS provider"),
-    ("registrar", "your registrar"),
-    ("certificate_provider", "your certificate provider"),
-    ("web_server", "your web server configuration"),
-    ("mail_provider", "your mail provider"),
-    ("hosting", "your hosting provider"),
+    ("dns_provider", "Your DNS provider"),
+    ("registrar", "Your registrar"),
+    ("certificate_provider", "Your certificate provider"),
+    ("web_server", "Your web server configuration"),
+    ("mail_provider", "Your mail provider"),
+    ("hosting", "Your hosting provider"),
 ];
 const SEVERITIES: [&str; 4] = ["critical", "high", "medium", "low"];
 const PROTOCOLS: [(&str, &str); 5] = [
     ("dns", "DNS"),
     ("tls", "TLS"),
     ("http", "HTTP"),
-    ("email", "email"),
+    ("email", "Email"),
     ("ip", "IP"),
 ];
 
@@ -91,8 +91,6 @@ fn grouped(grouping: Grouping) -> Vec<IssueGroup> {
 
 /// The expected keys and the rows' check ids, derived from the catalogue with explicit rank tables.
 fn expected(grouping: Grouping) -> Vec<(String, Vec<String>)> {
-    let owners: Vec<&str> = OWNERS.iter().map(|o| o.0).collect();
-    let protocols: Vec<&str> = PROTOCOLS.iter().map(|p| p.0).collect();
     let mut open: Vec<(usize, String, String, String, bool)> = Vec::new();
     for (i, c) in catalogue().entries().iter().enumerate() {
         if status_at(i) == Status::Pass {
@@ -106,53 +104,46 @@ fn expected(grouping: Grouping) -> Vec<(String, Vec<String>)> {
             status_at(i) == Status::Fail,
         ));
     }
-    let (keys, key_of): (
-        Vec<&str>,
-        fn(&(usize, String, String, String, bool)) -> &str,
-    ) = match grouping {
-        Grouping::Owner => (owners, |r| r.1.as_str()),
-        Grouping::Severity => (SEVERITIES.to_vec(), |r| r.2.as_str()),
-        Grouping::Protocol => (protocols, |r| r.3.as_str()),
+    let key_of: fn(&(usize, String, String, String, bool)) -> &str = match grouping {
+        Grouping::Owner => |r| r.1.as_str(),
+        Grouping::Severity => |r| r.2.as_str(),
+        Grouping::Protocol => |r| r.3.as_str(),
     };
-    let mut out = Vec::new();
-    for key in keys {
-        let mut rows: Vec<_> = open.iter().filter(|r| key_of(r) == key).collect();
-        rows.sort_by_key(|r| (pos(&SEVERITIES, &r.2), !r.4, r.0));
-        if !rows.is_empty() {
-            out.push((
-                key.to_owned(),
-                rows.iter()
-                    .map(|r| catalogue().entries()[r.0].id.to_string())
-                    .collect(),
-            ));
+    open.sort_by_key(|r| (!r.4, pos(&SEVERITIES, &r.2), r.0));
+    let mut out: Vec<(String, Vec<String>)> = Vec::new();
+    for row in &open {
+        let id = catalogue().entries()[row.0].id.to_string();
+        match out.iter_mut().find(|(key, _)| key == key_of(row)) {
+            Some((_, ids)) => ids.push(id),
+            None => out.push((key_of(row).to_owned(), vec![id])),
         }
     }
     out
 }
 
 #[test]
-fn groups_run_in_the_fixed_order_with_the_fixed_labels() {
+fn groups_run_by_their_first_row_with_the_fixed_labels() {
+    let order = |g: Grouping| -> Vec<String> { expected(g).into_iter().map(|(k, _)| k).collect() };
+
     let owner = grouped(Grouping::Owner);
-    let labels: Vec<(&str, &str)> = OWNERS.to_vec();
     let got: Vec<(&str, &str)> = owner
         .iter()
         .map(|g| (g.key.as_str(), g.label.as_str()))
         .collect();
-    let want: Vec<(&str, &str)> = labels
-        .into_iter()
-        .filter(|(k, _)| got.iter().any(|(g, _)| g == k))
+    let want: Vec<(&str, &str)> = order(Grouping::Owner)
+        .iter()
+        .map(|k| *OWNERS.iter().find(|(o, _)| o == k).unwrap())
         .collect();
-    assert_eq!(got, want, "owner groups: fixed order and labels");
+    assert_eq!(got, want, "owner groups: first row order and labels");
     assert!(got.len() >= 3, "the catalogue spans several owners");
 
     let sev = grouped(Grouping::Severity);
     let got: Vec<&str> = sev.iter().map(|g| g.label.as_str()).collect();
-    let want: Vec<&str> = SEVERITIES
-        .iter()
-        .copied()
-        .filter(|s| got.contains(s))
-        .collect();
-    assert_eq!(got, want, "severity groups run critical to low");
+    assert_eq!(
+        got,
+        order(Grouping::Severity),
+        "severity groups by first row"
+    );
     assert!(got.len() >= 3);
 
     let proto = grouped(Grouping::Protocol);
@@ -160,17 +151,16 @@ fn groups_run_in_the_fixed_order_with_the_fixed_labels() {
         .iter()
         .map(|g| (g.key.as_str(), g.label.as_str()))
         .collect();
-    let want: Vec<(&str, &str)> = PROTOCOLS
+    let want: Vec<(&str, &str)> = order(Grouping::Protocol)
         .iter()
-        .copied()
-        .filter(|(k, _)| got.iter().any(|(g, _)| g == k))
+        .map(|k| *PROTOCOLS.iter().find(|(p, _)| p == k).unwrap())
         .collect();
-    assert_eq!(got, want, "protocol groups: dns, tls, http, email, ip");
+    assert_eq!(got, want, "protocol groups by first row");
     assert_eq!(got.len(), 5);
 }
 
 #[test]
-fn rows_inside_a_group_follow_severity_then_status_then_catalogue_order() {
+fn rows_inside_a_group_follow_status_then_severity_then_catalogue_order() {
     for grouping in [Grouping::Owner, Grouping::Severity, Grouping::Protocol] {
         let got: Vec<(String, Vec<String>)> = grouped(grouping)
             .iter()

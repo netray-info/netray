@@ -75,6 +75,11 @@ fn lookup_grade(thresholds: &[(Grade, u32)], percentage: f64) -> Grade {
         .map_or(Grade::F, |(g, _)| *g)
 }
 
+/// The letter grade of `percentage` under `profile`'s thresholds.
+pub fn grade_for(profile: &Profile, percentage: f64) -> Grade {
+    lookup_grade(&profile.thresholds, percentage)
+}
+
 /// Scores the finished sections against `profile`. A profile section without an event is
 /// ignored. A hard-fail check with status Fail gives `F`, even when the score is incomplete;
 /// otherwise an incomplete score, or no scored section at all, is `Incomplete`.

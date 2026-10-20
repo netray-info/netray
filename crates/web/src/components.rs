@@ -131,6 +131,22 @@ pub struct GradeView {
     pub tone: Tone,
 }
 
+impl GradeView {
+    /// The grade legend's "descriptor, meaning" of the letter.
+    pub fn descriptor(&self) -> &'static str {
+        use netray_model::Grade;
+        crate::grade_legend::descriptor(match self.letter.as_str() {
+            "A+" => Grade::APlus,
+            "A" => Grade::A,
+            "B" => Grade::B,
+            "C" => Grade::C,
+            "D" => Grade::D,
+            "F" => Grade::F,
+            _ => Grade::Incomplete,
+        })
+    }
+}
+
 /// The run line: parts joined by a separator.
 #[derive(Debug, Clone)]
 pub struct RunLineView {
@@ -230,6 +246,15 @@ impl SpectrumLabel {
     fn width_px(&self) -> String {
         format!("{:.2}", self.width)
     }
+
+    /// The leader's height: the first leader plus one label row per row (8, 22, 36 px on the
+    /// desktop; the phone tokens give 6, 18, 30 px).
+    fn rise(&self) -> String {
+        format!(
+            "calc(var(--spectrum-label-leader) + {} * var(--spectrum-label-row))",
+            self.row
+        )
+    }
 }
 
 /// One run's placed labels.
@@ -246,13 +271,58 @@ pub struct SpectrumRegion {
     pub label: String,
     pub x: f64,
     pub width: f64,
+    /// The section's letter grade, `None` for a section without a score.
+    pub grade: Option<String>,
 }
 
 impl SpectrumRegion {
     fn x_pct(&self) -> String {
         format!("{:.4}", self.x)
     }
+
+    fn width_pct(&self) -> String {
+        format!("{:.4}", self.width)
+    }
+
+    /// The name the phone width shows instead of a long one.
+    fn short(&self) -> Option<&'static str> {
+        (self.label == "EMAIL").then_some("MAIL")
+    }
 }
+
+/// The replay gutter right of the plate: the run on display. `run` is absent when the run has
+/// no place in the stored history.
+#[derive(Debug, Clone)]
+pub struct SpectrumGutter {
+    pub run: Option<usize>,
+    pub date: String,
+    pub grade: String,
+}
+
+/// One run's region grades as (protocol, letter) pairs, the data the replay copies into the
+/// region labels.
+#[derive(Debug, Clone)]
+pub struct SpectrumRunGrades {
+    pub run: usize,
+    pub grades: Vec<(String, String)>,
+}
+
+/// A tick on the spectrum axis at `x` percent of the plate; major at the ends and region bounds.
+#[derive(Debug, Clone)]
+pub struct SpectrumTick {
+    pub x: f64,
+    pub major: bool,
+    pub last: bool,
+}
+
+impl SpectrumTick {
+    fn x_pct(&self) -> String {
+        format!("{:.4}", self.x)
+    }
+}
+
+/// The label band's height in px while at most three rows are needed.
+const LABEL_BAND_ROWS: usize = 3;
 
 /// The spectrum plate; `rows` is the label band's row count, `line_count` sizes the scroll box.
 #[derive(Debug, Clone)]
@@ -263,6 +333,8 @@ pub struct SpectrumView {
     pub bands: Vec<SpectrumBand>,
     pub label_sets: Vec<SpectrumLabelSet>,
     pub regions: Vec<SpectrumRegion>,
+    pub gutter: Option<SpectrumGutter>,
+    pub run_grades: Vec<SpectrumRunGrades>,
 }
 
 pub(crate) fn line_tone(tone: crate::spectrum::LineTone) -> Tone {
@@ -277,6 +349,52 @@ pub(crate) fn line_tone(tone: crate::spectrum::LineTone) -> Tone {
 }
 
 impl SpectrumView {
+    /// The axis ticks: one per line boundary, major at the plate's ends and the region bounds.
+    fn ticks(&self) -> Vec<SpectrumTick> {
+        let count = self.line_count;
+        let step = 100.0 / count.max(1) as f64;
+        (0..=count)
+            .map(|i| {
+                let x = i as f64 * step;
+                SpectrumTick {
+                    x,
+                    major: i == 0
+                        || i == count
+                        || self.regions.iter().any(|r| (r.x - x).abs() < 1e-6),
+                    last: i == count,
+                }
+            })
+            .collect()
+    }
+
+    /// The label band's height in px: 56 up to three rows, one row more each beyond.
+    /// The band: `spectrum.labelBand` for up to three rows, one label row more per extra row.
+    fn band_height(&self) -> String {
+        let extra = self.rows.saturating_sub(LABEL_BAND_ROWS);
+        format!("calc(var(--spectrum-label-band) + {extra} * var(--spectrum-label-row))")
+    }
+
+    /// The view with each region labelled by its section's letter grade; `grades` maps a
+    /// protocol name to it, a protocol without an entry keeps its name only.
+    pub fn with_grades(mut self, grades: &std::collections::BTreeMap<String, String>) -> Self {
+        for region in &mut self.regions {
+            region.grade = grades.get(&region.label.to_lowercase()).cloned();
+        }
+        self
+    }
+
+    /// The view with the replay gutter naming the run on display.
+    pub fn with_gutter(mut self, gutter: SpectrumGutter) -> Self {
+        self.gutter = Some(gutter);
+        self
+    }
+
+    /// The view with every run's region grades, for the replay.
+    pub fn with_run_grades(mut self, run_grades: Vec<SpectrumRunGrades>) -> Self {
+        self.run_grades = run_grades;
+        self
+    }
+
     /// One line's share of the plate width, the width of its hit target.
     fn pitch_pct(&self) -> String {
         format!("{:.4}", 100.0 / self.line_count.max(1) as f64)
@@ -343,9 +461,10 @@ impl SpectrumView {
             .groups
             .iter()
             .map(|g| SpectrumRegion {
-                label: layout.lines[g.first].protocol.as_str().to_string(),
+                label: layout.lines[g.first].protocol.as_str().to_uppercase(),
                 x: g.start / plate * 100.0,
                 width: g.width / plate * 100.0,
+                grade: None,
             })
             .collect();
         SpectrumView {
@@ -355,34 +474,48 @@ impl SpectrumView {
             bands,
             label_sets,
             regions,
+            gutter: None,
+            run_grades: Vec::new(),
         }
     }
 }
 
-/// One run of the trace; `current` marks the run on display.
+/// One run of the trace; `current` marks the run on display, `no` its place in the stored
+/// history when that is known.
 #[derive(Debug, Clone)]
 pub struct TraceRow {
+    pub no: Option<usize>,
     pub date: String,
     pub grade: String,
     pub cells: Vec<Tone>,
     pub current: bool,
 }
 
-/// The trace waterfall, newest run first.
+/// The per-line trace, newest run first; the edge dates, the caption and the hint come with it,
+/// `table_href` is the history table's address when the domain has one.
 #[derive(Debug, Clone)]
 pub struct TraceView {
     pub rows: Vec<TraceRow>,
+    pub newest: String,
+    pub oldest: String,
+    pub caption: String,
+    pub hint: String,
+    pub table_href: Option<String>,
 }
 
 /// One check result.
 #[derive(Debug, Clone)]
 pub struct CheckRowView {
     pub code: String,
+    /// The line code shown in the side column ("HTTP\u{b7}21"); `code` shows when it is `None`.
+    pub line: Option<String>,
     pub tone: Tone,
     pub title: String,
     pub since: Option<String>,
     pub body: String,
     pub fix: Option<String>,
+    /// The meta line's text, "<Protocol> \u{b7} <source>".
+    pub meta: Option<String>,
     pub evidence_href: Option<String>,
     pub guide_href: Option<String>,
 }
@@ -402,10 +535,12 @@ pub struct DiffEntry {
     pub kind: String,
     pub tone: Tone,
     pub text: String,
+    /// The right-hand column: a check's line code, the protocol of an evidence change.
     pub protocol: String,
 }
 
-/// The diff against the previous run; `note` explains an empty diff.
+/// The diff against the previous run; `note` explains an empty diff. An empty `title` or
+/// `summary` is not rendered.
 #[derive(Debug, Clone)]
 pub struct DiffBlockView {
     pub title: String,

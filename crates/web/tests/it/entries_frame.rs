@@ -58,6 +58,7 @@ fn entry() -> Entry {
         },
         diff: None,
         engine_version: "0.30.0".into(),
+        duration_ms: None,
     }
 }
 
@@ -70,6 +71,13 @@ fn pages() -> Vec<(&'static str, String)> {
         ("gone", render::gone().expect("render gone")),
         ("privacy", render::privacy().expect("render privacy")),
     ]
+}
+
+fn inlined_pages() -> Vec<(&'static str, String)> {
+    pages()
+        .into_iter()
+        .filter(|(page, _)| *page != "entry")
+        .collect()
 }
 
 #[test]
@@ -116,7 +124,7 @@ fn pages_inline_tokens_base_and_component_css_in_order_in_one_style_element() {
             crate_file(&format!("static/{name}.css")).trim().to_string(),
         ));
     }
-    for (page, html) in pages() {
+    for (page, html) in inlined_pages() {
         let start = html
             .find("<style")
             .unwrap_or_else(|| panic!("{page}: no <style>"));
@@ -139,6 +147,20 @@ fn pages_are_self_contained_documents_with_a_privacy_footer() {
     for (page, html) in pages() {
         assert!(html.starts_with("<!DOCTYPE html>"), "{page}: doctype first");
         assert!(html.contains("<html lang=\"en\">"), "{page}: html lang");
+        let f0 = html
+            .find("<footer")
+            .unwrap_or_else(|| panic!("{page}: no footer"));
+        let f1 = html
+            .find("</footer>")
+            .unwrap_or_else(|| panic!("{page}: no </footer>"));
+        let footer = &html[f0..f1];
+        assert!(
+            footer.contains("href=\"/privacy\""),
+            "{page}: footer links /privacy"
+        );
+        assert!(footer.contains(TAGLINE), "{page}: footer holds the tagline");
+    }
+    for (page, html) in inlined_pages() {
         assert_eq!(
             html.matches("<style").count(),
             1,
@@ -150,28 +172,18 @@ fn pages_are_self_contained_documents_with_a_privacy_footer() {
         assert!(style.contains(".check-row"), "{page}: the .check-row rule");
         assert!(!html.contains("<script"), "{page}: no script");
         assert!(!html.contains("/static/"), "{page}: no /static/ link");
-        let f0 = html
-            .find("<footer")
-            .unwrap_or_else(|| panic!("{page}: no footer"));
-        let f1 = html
-            .find("</footer>")
-            .unwrap_or_else(|| panic!("{page}: no </footer>"));
+        let f0 = html.find("<footer").expect("footer");
+        let f1 = html.find("</footer>").expect("footer end");
         assert!(
             !html[..f0].contains("<nav") && !html[f1..].contains("<nav"),
             "{page}: no navigation outside the frame's footer"
         );
-        let footer = &html[f0..f1];
-        assert!(
-            footer.contains("href=\"/privacy\""),
-            "{page}: footer links /privacy"
-        );
-        assert!(footer.contains(TAGLINE), "{page}: footer holds the tagline");
     }
 }
 
 #[test]
 fn pages_override_header_and_scripts_with_nothing() {
-    for page in ["entry", "gone", "privacy"] {
+    for page in ["gone", "privacy"] {
         let src = crate_file(&format!("templates/pages/{page}.html"));
         for block in ["header", "scripts"] {
             let empty = format!("{{% block {block} %}}{{% endblock %}}");

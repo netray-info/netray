@@ -59,6 +59,7 @@ fn entry(diff: Option<Diff>) -> Entry {
         },
         diff,
         engine_version: "0.26.0".into(),
+        duration_ms: None,
     }
 }
 

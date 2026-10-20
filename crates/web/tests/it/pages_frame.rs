@@ -131,15 +131,7 @@ fn assert_frame(page: &str, html: &str) {
             .is_some_and(|b| !button[b..].contains('>')),
         "{page}: data-island=\"theme\" must be on a button"
     );
-    for href in [
-        "/guide/",
-        "/compare",
-        "/status",
-        "https://ip.netray.info",
-        "https://dns.netray.info",
-        "https://tls.netray.info",
-        "https://http.netray.info",
-    ] {
+    for href in ["/inspect/dns", "/guide/", "/api/v1/docs", "/status"] {
         once(page, header, &format!("href=\"{href}\""));
     }
     assert!(
@@ -152,6 +144,7 @@ fn assert_frame(page: &str, html: &str) {
     assert!(footer.contains(TAGLINE), "{page}: footer tagline");
     once(page, footer, "href=\"/privacy\"");
     once(page, footer, "href=\"/status\"");
+    once(page, footer, "href=\"/compare\"");
 
     // Order.
     let h = pos(page, html, "<header");
@@ -256,13 +249,10 @@ async fn not_found_and_server_error_share_prefix_and_footer() {
 async fn navigation_labels_are_the_approved_ones() {
     let html = netray_web_frame_body().await;
     for (href, label) in [
+        ("/inspect/dns", "Inspectors"),
         ("/guide/", "Guides"),
-        ("/compare", "Compare"),
+        ("/api/v1/docs", "API"),
         ("/status", "Status"),
-        ("https://ip.netray.info", "IP"),
-        ("https://dns.netray.info", "DNS"),
-        ("https://tls.netray.info", "TLS"),
-        ("https://http.netray.info", "HTTP"),
     ] {
         let at = html
             .find(&format!("href=\"{href}"))

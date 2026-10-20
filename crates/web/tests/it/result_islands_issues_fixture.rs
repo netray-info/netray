@@ -28,30 +28,30 @@ const DOMAIN: &str = "shop.example.com";
 const CREATED_AT: i64 = 1_760_000_000;
 
 const CHECKS: [(&str, Status, &str, &str); 5] = [
-    ("dns.ns", Status::Warn, "dns_provider", "your DNS provider"),
+    ("dns.ns", Status::Warn, "dns_provider", "Your DNS provider"),
     (
         "tls.chain_trusted",
         Status::Fail,
         "web_server",
-        "your web server configuration",
+        "Your web server configuration",
     ),
     (
         "http.hsts",
         Status::Warn,
         "web_server",
-        "your web server configuration",
+        "Your web server configuration",
     ),
     (
         "email.spf",
         Status::Fail,
         "dns_provider",
-        "your DNS provider",
+        "Your DNS provider",
     ),
     (
         "ip.reputation",
         Status::Fail,
         "hosting",
-        "your hosting provider",
+        "Your hosting provider",
     ),
 ];
 const PROTOCOLS: [Protocol; 5] = [
