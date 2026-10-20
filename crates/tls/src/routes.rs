@@ -524,7 +524,8 @@ async fn do_inspect(
 pub struct InspectRequest {
     pub parsed: input::ParsedInput,
     pub ips: Vec<IpAddr>,
-    /// How many of `ips`, from the first, are probed after their handshake (the plan's charge).
+    /// How many of `ips` are probed (the plan's charge): the first, in order, whose handshake
+    /// succeeded.
     pub probed: usize,
     pub warnings: Vec<String>,
     pub skipped_ips: Vec<String>,
@@ -1114,7 +1115,8 @@ struct PortEnv {
     /// Permits of the addresses probing at once, apart from the handshake permits.
     probe_semaphore: Arc<tokio::sync::Semaphore>,
     backend: Arc<dyn TlsBackend>,
-    /// The addresses, from the first, whose probes the plan charged.
+    /// How many addresses' probes the plan charged; the slots go to the first addresses whose
+    /// handshake succeeded.
     probed: usize,
 }
 
@@ -1134,17 +1136,14 @@ async fn inspect_port(
         backend,
         probed,
     } = env;
+    // Stage 1: the handshakes, each under a handshake permit held for the handshake only.
     let mut join_set = tokio::task::JoinSet::new();
-
     for (idx, &ip) in ips.iter().enumerate() {
         let semaphore = Arc::clone(&semaphore);
-        let probe_semaphore = Arc::clone(&probe_semaphore);
         let trust_store = Arc::clone(&trust_store);
         let backend = Arc::clone(&backend);
         let hostname = hostname.map(|h| h.to_string());
         join_set.spawn(async move {
-            // The handshake permit covers the handshake only: validation, live OCSP and the
-            // probes run after it is released, so a hanging server never holds it.
             let mut result = {
                 let _permit = semaphore.acquire().await.ok();
                 backend
@@ -1154,12 +1153,6 @@ async fn inspect_port(
             if result.error.is_some() {
                 metrics::counter!("tlsight_handshake_errors_total").increment(1);
             }
-
-            let version = result
-                .tls
-                .as_ref()
-                .filter(|_| result.error.is_none())
-                .map(|t| t.version.clone());
 
             // Run validation if we got a chain
             if let Some(chain) = &result.chain {
@@ -1177,7 +1170,34 @@ async fn inspect_port(
                     result.ct = validate::ct::extract_ct_info(leaf_der.as_ref());
                 }
             }
+            (idx, ip, result)
+        });
+    }
+    let mut handshaken: Vec<(usize, IpAddr, tls::IpInspectionResult)> =
+        join_set.join_all().await.into_iter().collect();
+    handshaken.sort_by_key(|(idx, _, _)| *idx);
 
+    // The probe slots the plan charged go to the first addresses, in selection order, whose
+    // handshake succeeded: a failed handshake passes its slot on.
+    let mut slots = probed;
+    let mut join_set = tokio::task::JoinSet::new();
+    for (idx, ip, mut result) in handshaken {
+        let version = result
+            .tls
+            .as_ref()
+            .filter(|_| result.error.is_none())
+            .map(|t| t.version.clone());
+        let version = match version {
+            Some(v) if slots > 0 => {
+                slots -= 1;
+                Some(v)
+            }
+            _ => None,
+        };
+        let probe_semaphore = Arc::clone(&probe_semaphore);
+        let backend = Arc::clone(&backend);
+        let hostname = hostname.map(|h| h.to_string());
+        join_set.spawn(async move {
             // Live OCSP revocation check via AIA OCSP URL, beside the protocol probes
             let live_ocsp = async {
                 let chain = result.chain.as_ref()?;
@@ -1193,7 +1213,7 @@ async fn inspect_port(
             // every kind the address would have probed is unanswered (Rule M). The grace only
             // backstops a backend that overruns its own timeout.
             let probes = async {
-                let version = version.as_ref().filter(|_| idx < probed)?;
+                let version = version.as_ref()?;
                 let timed_out = || {
                     (backend.probe_connections() > 0)
                         .then(|| tls::probe::ProtocolProbes::unanswered(version, "timed out"))
@@ -1215,7 +1235,6 @@ async fn inspect_port(
                 tls_params.ocsp_live = Some(ocsp_result);
             }
             result.probes = probes;
-
             (idx, result)
         });
     }

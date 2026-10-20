@@ -77,8 +77,8 @@ the request timeout.
    planned cost to its per-target limiter.
 8. The inspector job's admission charges `[api.tls]` the planned cost of one address on every
    requested port (with the backend's probe connections) instead of the port count.
-9. `inspect_port` probes only the addresses the plan marks as probed, and only after a successful
-   handshake.
+9. `inspect_port` probes as many addresses as the plan charged: the first, in selection order,
+   whose handshake succeeded, after the port's handshakes have returned.
 10. The handshake permit is released when the handshake returns, before validation, live OCSP and
     probes.
 11. Probes of one address take a permit of a separate probe semaphore (`AppState`, size
@@ -204,6 +204,15 @@ GIVEN a probe semaphore permit held elsewhere for longer than the handshake time
   and usually replaced every answered probe with `timed out` when one probe hung. The deadline
   now bounds the permit wait; the probes run on the time left with a 250 ms grace for the
   backend's own join (implementer under the operator's autonomy mandate, 2026-10-19).
+- Final review (BLOCKER, fixed): the probe slot was bound to the first planned address before
+  its handshake, so a failed first handshake left no address probed and the two checks not
+  applicable. `inspect_port` now runs the port's handshakes first and gives the charged slots to
+  the first addresses whose handshake succeeded; probes and live OCSP start when the port's
+  handshakes have returned, which adds at most one handshake timeout before them (implementer
+  under the operator's autonomy mandate, 2026-10-19).
+- Final review (minor): the module's probe charge is not reached by an offline test (the only
+  offline module target is a blocked address); deferred (implementer under the operator's
+  autonomy mandate, 2026-10-19).
 - No global limiter is added: the TLS inspection has none to charge (implementer under the
   operator's autonomy mandate, 2026-10-19).
 - Probe concurrency reuses `max_concurrent_handshakes` as the number of addresses probing at once
