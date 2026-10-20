@@ -171,12 +171,58 @@ Local lens from this worktree, seeded history; `curl -s http://127.0.0.1:18431/s
 
 | id | criterion | status | test file |
 |---|---|---|---|
-| C1 | R14 the inspector band renders the plate only: no label band, no axis, no region word; 96 px plate | open | |
-| C2 | R17 the manifest holds the descriptor and All evidence rows | open | |
-| C3 | R18 design-check exits 0 and the reader's findings beside board G are closed | open | |
-| C4 | S a finished inspector band holds the plate and line names and no label band, axis or region label | open | |
-| C5 | S the result page's spectrum keeps its label band and axis | open | |
-| C6 | S the slim plate is 96 px tall | open | |
-| C7 | S design-check exits 0 with the descriptor and All evidence rows measured | open | |
-| C8 | S every finding of the reading beside board G is a report row and none stays open | open | |
-| C9 | S /inspect/http at 390 px with the 4 kB policy is not wider than the viewport | open | |
+| C1 | R14 the inspector band renders the plate only: no label band, no axis, no region word; 96 px plate | green | crates/web/tests/it/inspect_band_slim.rs |
+| C2 | R17 the manifest holds the descriptor and All evidence rows | green | design-check |
+| C3 | R18 design-check exits 0 and the reader's findings beside board G are closed | green | design-check, reading below |
+| C4 | S a finished inspector band holds the plate and line names and no label band, axis or region label | green | crates/web/tests/it/inspect_band_slim.rs |
+| C5 | S the result page's spectrum keeps its label band and axis | already_implemented | crates/web/tests/it/inspect_band_slim.rs |
+| C6 | S the slim plate is 96 px tall | green | crates/web/tests/it/inspect_band_slim.rs |
+| C7 | S design-check exits 0 with the descriptor and All evidence rows measured | green | design-check |
+| C8 | S every finding of the reading beside board G is a report row and none stays open | green | reading below |
+| C9 | S /inspect/http at 390 px with the 4 kB policy is not wider than the viewport | green | scratchpad shots.mjs, measured below |
+
+### Visual reading beside board G
+
+A reader with no part in the build compared the HTTP inspector (`/inspect/http?url=https://1.1.1.1/`; the probes timed out locally, so only the port-80 probe and the server view render) and the evidence view of a seeded fixture holding every HTTP view (`/csp.example.com/http`, a policy of 8 kB) at 1280 and 390 px, light and dark, with boards 17 and 18.
+
+| id | finding | status | disposition |
+|---|---|---|---|
+| V1 | inspector band: the h1 sits on the plate (G leaves about 22 px) | green | rebuilt: `.inspector-band` margin-top `--space-5` |
+| V2 | inspector band: G's two guide rules in the plate are missing | green | rebuilt: `spectrum__guide` lines in the slim plate; test `the_slim_plate_draws_board_gs_two_guide_rules` |
+| V3 | views: a heading sits 8 to 15 px under the card before it (G about 45 px) | green | rebuilt: `.protocol-view` margin-block-start `--space-9`; test `the_feeds_line_sits_inside_the_card_and_views_keep_the_section_gap` |
+| V4 | views: the feeds line stands outside the card, flush against the next heading | green | rebuilt: inside the card at its foot; same test |
+| V5 | facts grid: a toned cell is indented against untoned ones (isolation) | green | rebuilt: in a grid with a toned cell every cell keeps the bar slot (`data-toned`); an untoned grid stays flush; test `only_a_grid_with_a_toned_cell_reserves_the_bar_slot` |
+| V6 | facts grid at 390: label to value distance differs between cells | green | kept: the address is a link, and the shell gives links a 44 px tap target at phone width (v2-inspector-shell phase 9) |
+| V7 | inspector band at 390 runs past the gutter | green | kept: the band scrolls inside its figure (`overflow-x: auto`), as G wraps its figure; the document is 390 px wide (C9) |
+| V8 | band labels alternate on two rows (G: one row) | green | kept: v2-inspector-shell phase 9 decision (two rows so names never overlap) |
+| V9 | check list without a card frame; one continuous tone line at 390 | green | not this feature: the shell's live check list (v2-inspector-shell); proposal for the operator |
+| V10 | tab row "?" and the export links where G has the back link | green | not this feature: v2-inspector-shell decisions (help, exports; back link needs DNS, outside the manifest) |
+| V11 | evidence view: no band, run line below the actions, "?" box | green | not this feature: the evidence view frame (v2-inspectors, v2-inspector-shell); proposal for the operator |
+| V12 | generic blocks (redirects, port 80, headers, CORS, cookies) as key/value rows stacked in one card | green | not this feature: the generic evidence block; their protocol views are later work (proposal) |
+| V13 | section order follows the run's block order, not line order | green | kept: SDD §6.1 orders blocks as the run holds them |
+| V14 | the address value is underlined | green | kept: the shell's link to the IP inspector (v2-inspector-shell requirement 19) |
+
+### Behavioural verification
+
+`NETRAY_DESIGN_DIR=/Users/lukas/Documents/src/netray.info/specs/design/canvas just design-check`:
+`0 open deviation(s), 0 stale accepted entries`; 12 boards, 865 elements, 1614 properties
+measured (2 accepted, unchanged). New rows measured: grade descriptor 11 px mono (F family),
+10 px (M, MDark), colour; "All evidence →" 13 px (F family, M, MDark); band plate height 96 px
+(G, GDark).
+
+Document width (Playwright, scratchpad `shots.mjs`), every page and theme:
+
+```
+evidence 1280 light: scrollWidth 1280 viewport 1280
+evidence 390 light: scrollWidth 390 viewport 390
+inspector 1280 light: scrollWidth 1280 viewport 1280
+inspector 390 light: scrollWidth 390 viewport 390
+(dark identical)
+```
+
+Phase 4 review: SDD §5.4 amended for the inspector band (AMENDMENT); the V6 fix changed nothing
+at 390 px and was reverted, the row's cause is the 44 px tap target (AMENDMENT); the bar slot made
+untoned grids indent against the card's note and feeds lines, so only a toned grid reserves it
+(AMENDMENT).
+
+The CSP table of 124 sources wraps between source elements inside its card at 390 px.

@@ -98,3 +98,31 @@ fn c4_fragment_has_no_script_and_no_island() {
     assert!(!html.contains("<script"), "{html}");
     assert!(!html.contains("data-island"), "{html}");
 }
+
+/// The visual reading beside board G: the feeds line sits inside the card, and sections keep
+/// G's distance from the card before them.
+#[test]
+fn the_feeds_line_sits_inside_the_card_and_views_keep_the_section_gap() {
+    let block = Block {
+        id: BlockId::parse("http.hsts").unwrap(),
+        title: "HSTS".into(),
+        shape: Shape::Fields(vec![("preload".into(), Value::Bool(false))]),
+    };
+    let decorate = decorate(&[]);
+    let feeds = vec!["HSTS".to_string()];
+    let ctx = ViewContext {
+        statuses: &[],
+        decorate: &decorate,
+        feeds: &feeds,
+    };
+    let html = render(&block, &ctx).expect("claimed");
+    let card = html.find("protocol-view__card").expect("card");
+    let feeds_at = html.find("protocol-view__feeds").expect("feeds");
+    let card_end = html.rfind("</div>").expect("card end");
+    assert!(card < feeds_at && feeds_at < card_end, "{html}");
+    let view = rule(&css(), ".protocol-view");
+    assert!(
+        declares(&view, "margin-block-start", "var(--space-9)"),
+        "{view}"
+    );
+}

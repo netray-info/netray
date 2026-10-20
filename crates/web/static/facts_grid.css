@@ -10,9 +10,10 @@
   gap: var(--space-1);
   min-width: 0;
 }
-.facts-grid__cell[data-tone] {
+.facts-grid[data-toned] .facts-grid__cell {
+  /* in a grid with a toned cell every cell keeps the bar's slot, so the cells align */
   padding-inline-start: var(--space-2);
-  border-inline-start: var(--line-marker) solid var(--color-line);
+  border-inline-start: var(--line-marker) solid transparent;
 }
 .facts-grid__cell[data-tone="pass"] { border-inline-start-color: var(--status-pass-mark); }
 .facts-grid__cell[data-tone="warn"] { border-inline-start-color: var(--status-warn-mark); }

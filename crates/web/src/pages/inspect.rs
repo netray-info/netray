@@ -1324,7 +1324,7 @@ fn band_html(protocol: Protocol, checks: &[CheckResult]) -> Result<String, Strin
     let l = layout(&input, &[], &catalogue, BAND_WIDTH)
         .map_err(|_| "the band could not be laid out".to_string())?;
     let label = format!("{} checks", protocol.as_str().to_ascii_uppercase());
-    components::spectrum(&SpectrumView::from_layout(&l, &label, 0)).map_err(|e| e.to_string())
+    components::spectrum_slim(&SpectrumView::from_layout(&l, &label, 0)).map_err(|e| e.to_string())
 }
 
 /// What the start fragment's head shows: the target, the back link and the stored grade.

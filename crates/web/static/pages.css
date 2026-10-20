@@ -1006,9 +1006,11 @@ main td {
   }
 }
 /* A protocol view stands in a block's place: board G's section heading above a card. */
+/* board G's distance from one section's card to the next heading */
 .protocol-view {
   min-width: 0;
   max-width: 100%;
+  margin-block-start: var(--space-9);
 }
 .protocol-view__title {
   margin: 0 0 var(--space-3);

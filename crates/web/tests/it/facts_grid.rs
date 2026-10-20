@@ -99,3 +99,28 @@ fn facts_grid_has_one_macro_and_a_stylesheet_with_the_board_g_columns() {
         "facts_grid.css must declare grid-template-columns with minmax(240px"
     );
 }
+
+/// The visual reading beside board G: only a grid with a toned cell reserves the tone bar's slot
+/// in every cell; an untoned grid stays flush with the card's other lines.
+#[test]
+fn only_a_grid_with_a_toned_cell_reserves_the_bar_slot() {
+    let cell = |tone| FactCell {
+        label: "Label".into(),
+        values: vec![Cell::from("value".to_string())],
+        chips: false,
+        tone,
+    };
+    let toned = facts_grid(&FactsGridView {
+        cells: vec![cell(None), cell(Some(Tone::Pass))],
+    })
+    .unwrap();
+    assert!(
+        toned.contains(r#"<div class="facts-grid" data-toned>"#),
+        "{toned}"
+    );
+    let plain = facts_grid(&FactsGridView {
+        cells: vec![cell(None), cell(None)],
+    })
+    .unwrap();
+    assert!(plain.contains(r#"<div class="facts-grid">"#), "{plain}");
+}

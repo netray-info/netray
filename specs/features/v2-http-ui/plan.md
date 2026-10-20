@@ -92,3 +92,23 @@ never read the views).
    (three fixed cells; COOP toned by `http.coop`; COEP and CORP value plus "present" or "missing",
    no tone; `protocol-view__note` "COEP and CORP are not part of the grade.").
 2. `pages.css`: `.protocol-view__empty` (muted).
+
+## Phase 4 — Slim band, manifest rows and design gate
+
+### Groups
+
+G1: C1, C4, C5, C6 (the slim band: `components.rs`, `spectrum.html`, `spectrum.css`,
+`tokens.json`, `pages/inspect.rs`). C2, C3, C7, C8, C9 are measured by `just design-check` and
+the reading beside board G (private canvas, no cargo test can render it).
+
+### Plan
+
+1. `components.rs`: `spectrum_slim(view)` renders the macro with a third argument `slim` (as `live`): a `slim` field would break the protected struct literals in `components.rs` and `drawing_rules.rs` tests.
+2. `templates/components/spectrum.html`: the root carries `data-slim` when slim; the label band,
+   the targets, the axis with its region labels and the region grades render only when not slim.
+3. `tokens.json`: `spectrum.bandPlateHeight` 96px (board G's band plate), emitted as
+   `--spectrum-band-plate-height` by the token pipeline; `static/spectrum.css`:
+   `.spectrum[data-slim] .spectrum__plate { height: var(--spectrum-band-plate-height) }`.
+4. `pages/inspect.rs` `band_html`: sets `slim` on the band's view.
+5. Private manifest (netray.info): the descriptor and All evidence rows on F, M; a band plate
+   height row on G and GDark.

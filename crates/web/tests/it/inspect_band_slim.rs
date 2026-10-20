@@ -345,3 +345,21 @@ fn c6_slim_plate_is_96px_high() {
         .expect("no `.spectrum[data-slim] .spectrum__plate` height rule");
     assert_eq!(resolve(&height), "96px");
 }
+
+/// The visual reading beside board G: the slim plate draws G's two guide rules.
+#[tokio::test]
+async fn the_slim_plate_draws_board_gs_two_guide_rules() {
+    let result = applied().await;
+    let band = &result[result.find(r#"id="inspect-band""#).expect("band")..];
+    let band = &band[..band.find("</figure>").expect("band figure end")];
+    assert_eq!(
+        band.matches(r#"class="spectrum__guide""#).count(),
+        2,
+        "{band}"
+    );
+    let page = page(1, false).await;
+    assert!(
+        !page.contains("spectrum__guide"),
+        "the result page draws no guide rules"
+    );
+}

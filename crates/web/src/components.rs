@@ -573,6 +573,13 @@ pub struct FactsGridView {
     pub cells: Vec<FactCell>,
 }
 
+impl FactsGridView {
+    /// Whether any cell carries a tone: then every cell keeps the tone bar's slot.
+    pub fn toned(&self) -> bool {
+        self.cells.iter().any(|c| c.tone.is_some())
+    }
+}
+
 /// One change between two runs.
 #[derive(Debug, Clone)]
 pub struct DiffEntry {
@@ -657,17 +664,32 @@ component!(
     spectrum,
     SpectrumTemplate,
     SpectrumView,
-    "{% import \"components/spectrum.html\" as c %}{% call c::spectrum(view, \"\") %}{% endcall %}"
+    "{% import \"components/spectrum.html\" as c %}{% call c::spectrum(view, \"\", false) %}{% endcall %}"
 );
 
 #[derive(Template)]
 #[template(
-    source = "{% import \"components/spectrum.html\" as c %}{% call c::spectrum(view, live) %}{% endcall %}",
+    source = "{% import \"components/spectrum.html\" as c %}{% call c::spectrum(view, live, false) %}{% endcall %}",
     ext = "html"
 )]
 struct SpectrumLiveTemplate<'a> {
     view: &'a SpectrumView,
     live: &'a str,
+}
+
+#[derive(Template)]
+#[template(
+    source = "{% import \"components/spectrum.html\" as c %}{% call c::spectrum(view, \"\", true) %}{% endcall %}",
+    ext = "html"
+)]
+struct SpectrumSlimTemplate<'a> {
+    view: &'a SpectrumView,
+}
+
+/// Renders the `spectrum` component as the inspector band: plate and line names only, without
+/// the label band, targets, axis and region labels.
+pub fn spectrum_slim(view: &SpectrumView) -> askama::Result<String> {
+    SpectrumSlimTemplate { view }.render()
 }
 
 /// Renders the `spectrum` component with the bands named in `live` (space-separated protocol

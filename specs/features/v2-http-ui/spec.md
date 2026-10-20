@@ -327,6 +327,12 @@ GIVEN `/inspect/http` at 390 px with the 4 kB policy WHEN measured THEN the docu
   in received order, and an unreadable COOP/COEP/CORP value apart from a missing one (today both
   are `missing`, while the COOP check's finding names the non-ASCII value) (implementer under the
   operator's autonomy mandate, 2026-10-20).
+- Phase 4 reading beside board G: the slim plate gets G's two guide rules and its distance from
+  the h1; views keep G's section gap and carry the feeds line inside the card; every facts-grid
+  cell keeps the tone bar's slot. Findings on the shell's check list, tabs and exports, the
+  evidence view's frame, the generic blocks and block order belong to other features and are
+  closed here as not this feature's, with proposals for the operator (report.md, V9 to V14)
+  (implementer under the operator's autonomy mandate, 2026-10-20).
 - Board: none for the HTTP inspector; it follows board G's frame. Proposal for the operator: add an
   "HTTP inspector" board (CSP table, caching and isolation cells) to the canvas so later runs of
   `just design-check` measure it (drafting agent, 2026-10-20).
