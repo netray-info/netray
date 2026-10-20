@@ -281,6 +281,8 @@ const END_IDS: [&str; 16] = [
     "evidence-nav",
     "evidence-meta",
     "passed",
+    // v2-inspector-shell requirement 25: the export of the entry the run recorded.
+    "inspect-export",
 ];
 
 #[tokio::test]

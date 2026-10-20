@@ -212,13 +212,18 @@ async fn result_page_carries_help_export_and_page_island() {
     );
 
     let md = template(&html, "markdown");
-    assert!(md.starts_with("# example.com\n\nGrade B · score "), "{md}");
+    // The grade line says what the page shows: the letter, and the score only where the page
+    // shows one (a rescored entry, whose engine grade differs, shows the letter alone).
+    assert!(md.starts_with("# example.com\n\nGrade B"), "{md}");
     let line = md.lines().nth(2).unwrap();
-    let n = line
-        .strip_prefix("Grade B · score ")
-        .and_then(|s| s.strip_suffix(" / 100"))
-        .unwrap_or_else(|| panic!("grade line: {line}"));
-    assert!(n.parse::<u32>().unwrap() <= 100, "{line}");
+    let page_score = html
+        .split(r#"<span class="grade__score">score <strong>"#)
+        .nth(1)
+        .and_then(|s| s.split("</strong>").next());
+    match page_score {
+        Some(n) => assert_eq!(line, format!("Grade B · score {} / 100", n.trim()), "{md}"),
+        None => assert_eq!(line, "Grade B", "{md}"),
+    }
 
     let (issues, checks) = md
         .split_once("## Checks")
@@ -304,5 +309,7 @@ async fn idle_and_not_found_pages_carry_the_page_island_and_input() {
 async fn a_page_without_a_stored_entry_has_no_export_slot() {
     let a = apps().await;
     let (_, html) = get(&a.result, "/unseen.example.com").await;
-    assert!(!html.contains("id=\"inspect-export\""), "{html}");
+    // No export without a stored entry: at most the empty slot a run's export fragment fills.
+    assert!(!html.contains("data-export="), "{html}");
+    assert!(!html.contains("inspector-export__copy"), "{html}");
 }

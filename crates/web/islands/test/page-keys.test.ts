@@ -113,3 +113,25 @@ describe("page island", () => {
     });
   });
 });
+
+// Phase 8 review: the export stays until a run's own export fragment replaces it, and `/` on a
+// page without a domain input is left to the browser.
+describe("page island, review", () => {
+  it("keeps the export slot when a stream fragment arrives", () => {
+    document.body.innerHTML =
+      '<div data-island="page"><div id="inspect-export" class="inspector-export"></div><p id="run-line"></p></div>';
+    mount(document);
+    document
+      .getElementById("run-line")
+      ?.dispatchEvent(new CustomEvent("netray:stream-fragment", { bubbles: true, detail: "run-line" }));
+    expect(document.getElementById("inspect-export")).not.toBeNull();
+  });
+
+  it("leaves / alone where the page has no domain input", () => {
+    document.body.innerHTML = '<div data-island="page"><p>result</p></div>';
+    mount(document);
+    const ev = new KeyboardEvent("keydown", { key: "/", bubbles: true, cancelable: true });
+    document.body.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(false);
+  });
+});

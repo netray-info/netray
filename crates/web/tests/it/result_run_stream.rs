@@ -299,6 +299,8 @@ fn expected_ids(order: &[usize]) -> Vec<String> {
     want.push("evidence-nav".to_string());
     want.push("evidence-meta".to_string());
     want.push("passed".to_string());
+    // v2-inspector-shell requirement 25: the export of the entry the run recorded.
+    want.push("inspect-export".to_string());
     // A first visit's recorded run turns the check button into re-check (branch review F1).
     want.push("recheck-button".to_string());
     want
