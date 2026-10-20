@@ -99,8 +99,12 @@ fn html_of(block: Block) -> String {
 /// The `dns-type` card of `record_type`.
 fn card<'a>(html: &'a str, record_type: &str) -> &'a str {
     let marker = format!(r#"data-type="{record_type}""#);
-    let at = html.find(&marker).unwrap_or_else(|| panic!("no {record_type} card: {html}"));
-    let start = html[..at].rfind("<article").expect("card opens with article");
+    let at = html
+        .find(&marker)
+        .unwrap_or_else(|| panic!("no {record_type} card: {html}"));
+    let start = html[..at]
+        .rfind("<article")
+        .expect("card opens with article");
     let len = html[at..].find("</article>").expect("card closes");
     &html[start..at + len]
 }
@@ -114,9 +118,21 @@ fn c4_one_card_per_type_in_summary_order_with_the_agreement_badge() {
         ("unmeasured", "muted", "not measured"),
     ];
     let types = vec![
-        type_node("A", "agree", vec![server("8.8.8.8", "Google 1", 300, "192.0.2.10", 10)]),
-        type_node("AAAA", "diverge", vec![server("8.8.8.8", "Google 1", 300, "192.0.2.10", 10)]),
-        type_node("MX", "single", vec![server("8.8.8.8", "Google 1", 300, "192.0.2.10", 10)]),
+        type_node(
+            "A",
+            "agree",
+            vec![server("8.8.8.8", "Google 1", 300, "192.0.2.10", 10)],
+        ),
+        type_node(
+            "AAAA",
+            "diverge",
+            vec![server("8.8.8.8", "Google 1", 300, "192.0.2.10", 10)],
+        ),
+        type_node(
+            "MX",
+            "single",
+            vec![server("8.8.8.8", "Google 1", 300, "192.0.2.10", 10)],
+        ),
         type_node("TXT", "unmeasured", vec![]),
     ];
     let html = html_of(answers("query", types));
@@ -129,10 +145,18 @@ fn c4_one_card_per_type_in_summary_order_with_the_agreement_badge() {
     assert!(order.windows(2).all(|w| w[0] < w[1]), "{html}");
     for (t, (agreement, tone, label)) in ["A", "AAAA", "MX", "TXT"].iter().zip(cases) {
         let c = card(&html, t);
-        assert!(c.contains(&format!(r#"data-agreement="{agreement}""#)), "{c}");
-        assert!(c.contains(&format!(r#"<h4 class="dns-type__name">{t}</h4>"#)), "{c}");
         assert!(
-            c.contains(&format!(r#"class="dns-type__badge" data-tone="{tone}">{label}</span>"#)),
+            c.contains(&format!(r#"data-agreement="{agreement}""#)),
+            "{c}"
+        );
+        assert!(
+            c.contains(&format!(r#"<h4 class="dns-type__name">{t}</h4>"#)),
+            "{c}"
+        );
+        assert!(
+            c.contains(&format!(
+                r#"class="dns-type__badge" data-tone="{tone}">{label}</span>"#
+            )),
             "{c}"
         );
     }
@@ -156,14 +180,31 @@ fn c5_groups_by_identical_answer_largest_first_with_ttl_range_and_servers() {
     let big = c.find("2 / 3 servers").expect("largest group count");
     let small = c.find("1 / 3 servers").expect("smaller group count");
     assert!(big < small, "{c}");
-    assert!(c.contains(r#"class="dns-group__count">2 / 3 servers</span>"#), "{c}");
+    assert!(
+        c.contains(r#"class="dns-group__count">2 / 3 servers</span>"#),
+        "{c}"
+    );
     // The two-server group has TTLs 300 and 60; the other a single 60.
-    assert!(c.contains(r#"class="dns-group__ttl">TTL 60 to 300 s</span>"#), "{c}");
-    assert!(c.contains(r#"class="dns-group__ttl">TTL 60 s</span>"#), "{c}");
+    assert!(
+        c.contains(r#"class="dns-group__ttl">TTL 60 to 300 s</span>"#),
+        "{c}"
+    );
+    assert!(
+        c.contains(r#"class="dns-group__ttl">TTL 60 s</span>"#),
+        "{c}"
+    );
     assert_eq!(c.matches(r#"class="dns-group__server""#).count(), 3, "{c}");
-    assert_eq!(c.matches(r#"class="dns-group__transport">udp</span>"#).count(), 3, "{c}");
+    assert_eq!(
+        c.matches(r#"class="dns-group__transport">udp</span>"#)
+            .count(),
+        3,
+        "{c}"
+    );
     let first_group = &c[big..small];
-    assert!(first_group.contains("Google 1") && first_group.contains("Quad9 1"), "{c}");
+    assert!(
+        first_group.contains("Google 1") && first_group.contains("Quad9 1"),
+        "{c}"
+    );
     assert!(c[small..].contains("Cloudflare 1"), "{c}");
 }
 
@@ -188,8 +229,18 @@ fn c16_bar_widths_scale_to_the_slowest_server() {
     )];
     let html = html_of(answers("query", types));
 
-    assert_eq!(html.matches(r#"class="dns-bar__fill" style="width: 100%""#).count(), 1, "{html}");
-    assert_eq!(html.matches(r#"class="dns-bar__fill" style="width: 25%""#).count(), 1, "{html}");
+    assert_eq!(
+        html.matches(r#"class="dns-bar__fill" style="width: 100%""#)
+            .count(),
+        1,
+        "{html}"
+    );
+    assert_eq!(
+        html.matches(r#"class="dns-bar__fill" style="width: 25%""#)
+            .count(),
+        1,
+        "{html}"
+    );
     assert_eq!(bar_width(10, 40), 25);
     assert_eq!(bar_width(40, 40), 100);
     assert_eq!(bar_width(5, 0), 0);
@@ -255,7 +306,10 @@ fn app() -> Router {
 }
 
 async fn run_q(app: &Router, q: &str) -> String {
-    let body = format!("q={}", q.replace('+', "%2B").replace(' ', "+").replace('@', "%40"));
+    let body = format!(
+        "q={}",
+        q.replace('+', "%2B").replace(' ', "+").replace('@', "%40")
+    );
     let mut req = Request::post("/inspect/dns/run")
         .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header("x-forwarded-for", CALLER)

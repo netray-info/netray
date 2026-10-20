@@ -62,7 +62,11 @@ fn answers(finished: bool, extra: Vec<(String, Value)>, types: &[(&str, &str)]) 
             children: vec![],
         })
         .collect();
-    block("dns.answers", "Answers", Shape::Tree(Node { fields, children }))
+    block(
+        "dns.answers",
+        "Answers",
+        Shape::Tree(Node { fields, children }),
+    )
 }
 
 fn render_blocks(blocks: &[Block]) -> (String, Vec<String>) {
@@ -97,7 +101,11 @@ fn c3_summary_line_lists_counts_transport_and_duration() {
         field("total_queries", Value::Int(6)),
         field("transport", text("udp")),
     ];
-    let mut b = answers(true, extra, &[("A", "agree"), ("AAAA", "agree"), ("MX", "unmeasured")]);
+    let mut b = answers(
+        true,
+        extra,
+        &[("A", "agree"), ("AAAA", "agree"), ("MX", "unmeasured")],
+    );
     // One type did not answer: unmeasured 1 (replaces the zero default).
     if let Shape::Tree(node) = &mut b.shape {
         for f in &mut node.fields {
@@ -111,7 +119,9 @@ fn c3_summary_line_lists_counts_transport_and_duration() {
 
     assert_eq!(
         summary(&html),
-        Some("3 types · 6 lookups · 2 servers · udp · 2 agree · 0 diverge · 1 not measured · 12 ms"),
+        Some(
+            "3 types · 6 lookups · 2 servers · udp · 2 agree · 0 diverge · 1 not measured · 12 ms"
+        ),
         "{html}"
     );
 }
@@ -128,8 +138,7 @@ fn c3_zero_counts_are_left_out_except_agree_and_diverge() {
 
     let s = summary(&html).unwrap_or_else(|| panic!("no summary line: {html}"));
     assert_eq!(
-        s,
-        "2 types · 6 lookups · 2 servers · udp · 2 agree · 0 diverge · 12 ms",
+        s, "2 types · 6 lookups · 2 servers · udp · 2 agree · 0 diverge · 12 ms",
         "{html}"
     );
     assert!(!s.contains("not measured"), "{s}");
@@ -195,7 +204,9 @@ fn c3_an_unfinished_job_shows_a_notice_and_no_summary() {
     let (html, _) = render_blocks(&[b]);
 
     assert!(
-        html.contains("<p class=\"dns-view__notice\">The query ended before every server answered</p>"),
+        html.contains(
+            "<p class=\"dns-view__notice\">The query ended before every server answered</p>"
+        ),
         "{html}"
     );
     assert!(!html.contains("dns-view__summary"), "{html}");
@@ -228,7 +239,10 @@ fn c15_a_warning_shows_as_a_notice_line_and_is_claimed() {
         "{html}"
     );
     assert!(claimed.contains(&"dns.warnings".to_string()), "{claimed:?}");
-    assert!(!html.contains("<table"), "a generic Warnings table remains: {html}");
+    assert!(
+        !html.contains("<table"),
+        "a generic Warnings table remains: {html}"
+    );
 }
 
 struct NoRuns;

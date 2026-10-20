@@ -63,8 +63,9 @@ fn shell_over(state: &ApiState) -> Router {
 }
 
 fn with_peer(mut req: Request<Body>) -> Request<Body> {
-    req.extensions_mut()
-        .insert(ConnectInfo("198.51.100.1:0".parse::<std::net::SocketAddr>().unwrap()));
+    req.extensions_mut().insert(ConnectInfo(
+        "198.51.100.1:0".parse::<std::net::SocketAddr>().unwrap(),
+    ));
     req
 }
 
@@ -168,7 +169,10 @@ async fn c9_a_query_streams_a_dns_type_card_with_one_agreeing_group() {
     assert_eq!(status, StatusCode::OK, "{s}");
     assert!(s.contains(r#"class="dns-type""#), "{s}");
     assert!(s.contains(r#"data-type="A""#), "{s}");
-    assert!(s.contains(r#"dns-type__badge" data-tone="pass">agree<"#), "{s}");
+    assert!(
+        s.contains(r#"dns-type__badge" data-tone="pass">agree<"#),
+        "{s}"
+    );
     assert_eq!(s.matches(r#"class="dns-group""#).count(), 1, "{s}");
     assert!(s.contains("192.0.2.10"), "{s}");
     let after = s
@@ -176,9 +180,16 @@ async fn c9_a_query_streams_a_dns_type_card_with_one_agreeing_group() {
         .nth(1)
         .unwrap_or_else(|| panic!("no dns-group__count in {s}"));
     let count = &after[..after.find('<').unwrap()];
-    let (m, rest) = count.split_once(" / ").unwrap_or_else(|| panic!("{count:?}"));
-    let n = rest.strip_suffix(" servers").unwrap_or_else(|| panic!("{count:?}"));
-    assert!(!m.is_empty() && m.bytes().all(|b| b.is_ascii_digit()), "{count:?}");
+    let (m, rest) = count
+        .split_once(" / ")
+        .unwrap_or_else(|| panic!("{count:?}"));
+    let n = rest
+        .strip_suffix(" servers")
+        .unwrap_or_else(|| panic!("{count:?}"));
+    assert!(
+        !m.is_empty() && m.bytes().all(|b| b.is_ascii_digit()),
+        "{count:?}"
+    );
     assert_eq!(m, n, "{count:?}");
     assert!(!s.contains(r#"id="ev-dns.a" data-shape="#), "{s}");
 }
@@ -229,7 +240,10 @@ fn c18_a_records_block_with_data_no_answer_holds_is_not_claimed() {
         children: vec![answer],
     };
     let a_type = Node {
-        fields: vec![field("record_type", txt("A")), field("agreement", txt("single"))],
+        fields: vec![
+            field("record_type", txt("A")),
+            field("agreement", txt("single")),
+        ],
         children: vec![server],
     };
     let root = Node {

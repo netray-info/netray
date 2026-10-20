@@ -102,16 +102,31 @@ fn badges(html: &str) -> Vec<String> {
 #[test]
 fn negative_outcomes_read_in_words_beside_answered_groups() {
     let servers = vec![
+        server("192.0.2.1", "answered", vec![], vec![record("192.0.2.10")]),
         server(
-            "192.0.2.1",
-            "answered",
+            "192.0.2.2",
+            "no_records",
+            vec![field("response_code", text("NOERROR"))],
             vec![],
-            vec![record("192.0.2.10")],
         ),
-        server("192.0.2.2", "no_records", vec![field("response_code", text("NOERROR"))], vec![]),
-        server("192.0.2.3", "nxdomain", vec![field("response_code", text("NXDOMAIN"))], vec![]),
-        server("192.0.2.4", "unmeasured", vec![field("response_code", text("SERVFAIL"))], vec![]),
-        server("192.0.2.5", "unmeasured", vec![field("error", text("timeout"))], vec![]),
+        server(
+            "192.0.2.3",
+            "nxdomain",
+            vec![field("response_code", text("NXDOMAIN"))],
+            vec![],
+        ),
+        server(
+            "192.0.2.4",
+            "unmeasured",
+            vec![field("response_code", text("SERVFAIL"))],
+            vec![],
+        ),
+        server(
+            "192.0.2.5",
+            "unmeasured",
+            vec![field("error", text("timeout"))],
+            vec![],
+        ),
     ];
     let html = render(&[answers(vec![type_card("A", "diverge", servers)])]);
 
@@ -122,7 +137,10 @@ fn negative_outcomes_read_in_words_beside_answered_groups() {
         "not measured: SERVFAIL",
         "not measured: timeout",
     ] {
-        assert!(got.contains(&want.to_string()), "{want:?} missing in {got:?}");
+        assert!(
+            got.contains(&want.to_string()),
+            "{want:?} missing in {got:?}"
+        );
     }
     assert!(html.contains("192.0.2.10"), "answered group stays: {html}");
     assert!(html.contains("data-outcome=\"answered\""), "{html}");
@@ -132,20 +150,39 @@ fn negative_outcomes_read_in_words_beside_answered_groups() {
 fn single_answer_with_one_unmeasured_server() {
     let servers = vec![
         server("192.0.2.1", "answered", vec![], vec![record("192.0.2.10")]),
-        server("192.0.2.2", "unmeasured", vec![field("response_code", text("SERVFAIL"))], vec![]),
+        server(
+            "192.0.2.2",
+            "unmeasured",
+            vec![field("response_code", text("SERVFAIL"))],
+            vec![],
+        ),
     ];
     let html = render(&[answers(vec![type_card("A", "single", servers)])]);
 
     assert_eq!(badges(&html), vec!["single answer".to_string()], "{html}");
     assert!(html.contains("192.0.2.10"), "{html}");
-    assert_eq!(outcomes(&html), vec!["not measured: SERVFAIL".to_string()], "{html}");
+    assert_eq!(
+        outcomes(&html),
+        vec!["not measured: SERVFAIL".to_string()],
+        "{html}"
+    );
 }
 
 #[test]
 fn every_server_no_records_reads_no_records() {
     let servers = vec![
-        server("192.0.2.1", "no_records", vec![field("response_code", text("NOERROR"))], vec![]),
-        server("192.0.2.2", "no_records", vec![field("response_code", text("NOERROR"))], vec![]),
+        server(
+            "192.0.2.1",
+            "no_records",
+            vec![field("response_code", text("NOERROR"))],
+            vec![],
+        ),
+        server(
+            "192.0.2.2",
+            "no_records",
+            vec![field("response_code", text("NOERROR"))],
+            vec![],
+        ),
     ];
     let html = render(&[answers(vec![type_card("AAAA", "agree", servers)])]);
 
