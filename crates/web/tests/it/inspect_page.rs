@@ -78,7 +78,7 @@ async fn c1_each_inspector_page_renders_the_form_without_starting_a_job() {
             "{tool}: no input {field}"
         );
         assert!(
-            body.contains(r#"<div id="inspect-result"></div>"#),
+            body.contains(r#"<div id="inspect-result"><h1 class="visually-hidden">"#),
             "{tool}: {body}"
         );
         assert!(body.contains("<noscript>"), "{tool}: no noscript notice");
@@ -99,7 +99,7 @@ async fn c7_a_query_prefills_the_input_and_autostarts_without_starting_a_job() {
     assert!(body.contains(r#"value="example.com:443""#), "{body}");
     assert!(body.contains(r#"data-stream-autostart="load""#), "{body}");
     assert!(
-        body.contains(r#"<div id="inspect-result"></div>"#),
+        body.contains(r#"<div id="inspect-result"><h1 class="visually-hidden">"#),
         "{body}"
     );
     assert_no_job(&stub, "tls prefill");

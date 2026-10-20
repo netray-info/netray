@@ -1,8 +1,8 @@
 //! The inspector page links back to the registrable domain of a prefilled host name (V2 spec
-//! v2-inspectors, requirement 12, C14 and C4): `GET /inspect/<tool>?<field>=<value>` renders
-//! `<a href="/<registrable>">` for a name with a registrable domain (Public Suffix List), and no
-//! back-link for an IP literal or a public suffix. The frame's own links are derived from a page
-//! without a prefill, so the test never hard-codes the nav.
+//! v2-inspectors, requirement 12, C14 and C4): a run of `<field>=<value>` carries
+//! `<a class="inspector-backlink" href="/<registrable>">` in its start fragment for a name with a
+//! registrable domain (Public Suffix List), and no back-link for an IP literal or a public suffix
+//! (v2-inspector-shell requirement 6 moved the link from the page into the run's head).
 use std::collections::BTreeSet;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -28,32 +28,33 @@ impl InspectorJobs for Stub {
     }
 }
 
-async fn page(uri: &str) -> String {
+/// The back-link targets of a posted run: the `inspector-backlink` hrefs of its start fragment
+/// (v2-inspector-shell requirement 6 moved the link from the page into the run's head).
+async fn added_links(tool: &str, query: &str) -> BTreeSet<String> {
     let app: Router = inspect_router(InspectDeps::new(Arc::new(Stub), InspectConfig::default()));
     let res = app
-        .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+        .oneshot(
+            Request::post(format!("/inspect/{tool}/run"))
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from(query.to_owned()))
+                .unwrap(),
+        )
         .await
         .unwrap();
-    assert_eq!(res.status(), StatusCode::OK, "GET {uri}");
+    assert_eq!(res.status(), StatusCode::OK, "POST {tool} {query}");
     let bytes = res.into_body().collect().await.unwrap().to_bytes();
-    String::from_utf8_lossy(&bytes).into_owned()
-}
-
-/// Every `href="/..."` target on the page.
-fn local_hrefs(body: &str) -> BTreeSet<String> {
-    body.split("href=\"")
+    let text = String::from_utf8_lossy(&bytes).into_owned();
+    let data = text
+        .lines()
+        .find_map(|l| l.strip_prefix("data:"))
+        .expect("a first fragment");
+    let j: serde_json::Value = serde_json::from_str(data.trim()).unwrap();
+    let html = j["html"].as_str().unwrap_or_default();
+    html.split(r#"class="inspector-backlink" href=""#)
         .skip(1)
         .filter_map(|rest| rest.split('"').next())
-        .filter(|h| h.starts_with('/'))
         .map(str::to_owned)
         .collect()
-}
-
-/// The links a prefilled page adds over the same tool's page without a prefill.
-async fn added_links(tool: &str, query: &str) -> BTreeSet<String> {
-    let frame = local_hrefs(&page(&format!("/inspect/{tool}")).await);
-    let with = local_hrefs(&page(&format!("/inspect/{tool}?{query}")).await);
-    with.difference(&frame).cloned().collect()
 }
 
 #[tokio::test]
@@ -79,7 +80,7 @@ async fn prefilled_target_links_back_to_its_registrable_domain() {
         assert_eq!(
             added_links(tool, query).await,
             want,
-            "GET /inspect/{tool}?{query}"
+            "POST /inspect/{tool}/run {query}"
         );
     }
 }

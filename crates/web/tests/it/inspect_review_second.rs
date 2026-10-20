@@ -20,7 +20,7 @@ impl InspectorJobs for Stub {
         Ok(())
     }
     fn start(&self, _: JobRequest) -> Result<Job, String> {
-        Err("stub".into())
+        Ok(Job::new(vec![]))
     }
 }
 
@@ -34,31 +34,51 @@ async fn page(uri: &str) -> String {
     String::from_utf8_lossy(&bytes).into_owned()
 }
 
-fn backlink(body: &str) -> &str {
-    let start = body
-        .find("id=\"inspect-backlink\"")
-        .expect("the page holds the back-link element");
-    let end = body[start..].find("</p>").expect("the element closes") + start;
-    &body[start..end]
+/// The start fragment of a posted run (v2-inspector-shell requirement 6: the back link moved from
+/// the page into the run's head).
+async fn start(tool: &str, field: &str, value: &str) -> String {
+    let body = format!(
+        "{field}={}",
+        percent_encoding::utf8_percent_encode(value, percent_encoding::NON_ALPHANUMERIC)
+    );
+    let res = inspect_router(InspectDeps::new(Arc::new(Stub), InspectConfig::default()))
+        .oneshot(
+            Request::post(format!("/inspect/{tool}/run"))
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let text = String::from_utf8_lossy(&bytes).into_owned();
+    let data = text
+        .lines()
+        .find_map(|l| l.strip_prefix("data:"))
+        .expect("a first fragment");
+    let j: serde_json::Value = serde_json::from_str(data.trim()).unwrap();
+    j["html"].as_str().unwrap_or_default().to_owned()
 }
 
 #[tokio::test]
 async fn a_target_that_is_not_a_host_name_gets_no_backlink() {
-    for uri in [
-        "/inspect/dns?q=https://example.com",
-        "/inspect/dns?q=www.example.com/",
-        "/inspect/tls?h=www.example.com/",
-        "/inspect/tls?h=exa%20mple.com",
+    for (tool, field, value) in [
+        ("dns", "q", "https://example.com"),
+        ("dns", "q", "www.example.com/"),
+        ("tls", "h", "www.example.com/"),
+        ("tls", "h", "exa mple.com"),
     ] {
-        let body = page(uri).await;
+        let html = start(tool, field, value).await;
         assert!(
-            !backlink(&body).contains("href="),
-            "{uri}: {}",
-            backlink(&body)
+            !html.contains("inspector-backlink"),
+            "{tool} {value}: {html}"
         );
     }
-    let body = page("/inspect/dns?q=www.example.com").await;
-    assert!(backlink(&body).contains("href=\"/example.com\""));
+    let html = start("dns", "q", "www.example.com").await;
+    assert!(
+        html.contains(r#"class="inspector-backlink" href="/example.com""#),
+        "{html}"
+    );
 }
 
 #[tokio::test]

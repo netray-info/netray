@@ -194,9 +194,9 @@ async fn c18_back_link_carries_the_stored_grade_only_with_an_entry() {
         .nth(1)
         .unwrap();
     assert!(
-        link.split('>')
-            .nth(1)
+        link.split_once('>')
             .unwrap()
+            .1
             .starts_with(r#"<span class="inspector-backlink__grade">B"#),
         "{link}"
     );

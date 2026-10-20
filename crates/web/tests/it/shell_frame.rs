@@ -59,7 +59,7 @@ fn div_at(body: &str, needle: &str) -> Option<String> {
                 return Some(body[start..i + 6].to_owned());
             }
         }
-        i += 1;
+        i += rest.chars().next().map_or(1, char::len_utf8);
     }
     None
 }
