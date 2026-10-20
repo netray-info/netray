@@ -165,3 +165,8 @@ certificate its anchor, failing `tls.chain_complete` where the module passes. Re
 `a_lone_self_signed_certificate_is_untrusted_but_complete` (red before the fix, green after). The
 fixtures also carry an empty `dns.rrsig` block (a minor of both readers). `just design-check`: 0
 open after the regeneration.
+
+### Checks to build
+
+- A repo check that `BLOCK_LINKS.dns` in `tests/acceptance/v2/inspectors.spec.ts` names one link per `dns.*` records block of `example.com.json`: the offline gate never runs the Playwright count (tests/repo).
+- The `inspectors.spec.ts` check-row assertion compares catalogue shorts with the line codes the page now shows ("DNS·01"); it fails on main's templates and is unreached by the gate: realign it, and run `just acceptance-local v2/inspectors.spec.ts` in a release checklist.

@@ -1,7 +1,8 @@
 # Spec: v2-fixture-consistency
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-20
+Finished: 2026-10-20
 
 ## Goal
 
@@ -198,6 +199,7 @@ Tests in `crates/lens/tests/it/` (lens links every module's `testing` feature).
 - Review of Phase 2: a missing email block is rebuilt as a failed lookup (Rule M), as in DNS; the NSEC `\000` next name, SPF include trees, BIMI logo fetches and non-blocked MTA-STS fetch failures are outside the rebuild and stay out of the fixtures, which use NSEC next names the parser reads and `v=spf1 mx -all` (implementer under the operator's autonomy mandate, 2026-10-20).
 - Review of Phase 3: the DNSBL blocks name the module's configured zones (zen.spamhaus.org, b.barracudacentral.org, bl.spamcop.net, dbl.spamhaus.org), an exception to the example.com rule: the rebuild queries the module's own zone list, the zones are public service names, not data about a party, and the contract goldens carry them already (implementer under the operator's autonomy mandate, 2026-10-20).
 - Review of the range: a recorded run has no caller DKIM selectors, so the email rebuild passes none and the fixtures' keys sit under `default`, a selector the module probes itself; a lone self-signed certificate is untrusted but at an anchor (`tls.chain_complete` passes, as in the module); fixtures carry an empty `dns.rrsig` block. An incomplete section's reason is passed back wrapped by lens, which the guard does not unwrap: no fixture has one (out of scope) (implementer under the operator's autonomy mandate, 2026-10-20).
+- Finish entries (CLAUDE.md bullets, the solutions note, the checks to build) written without an operator question under the mandate (implementer under the operator's autonomy mandate, 2026-10-20).
 
 ## Open decisions
 
