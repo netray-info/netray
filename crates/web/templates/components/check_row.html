@@ -6,6 +6,7 @@
     <span class="check-row__code">{% if let Some(line) = view.line %}{{ line }}{% else %}{{ view.code }}{% endif %}</span>
   </div>
   <div class="check-row__main" data-check="{{ view.code }}">
+    <p class="check-row__phone-meta"><span class="check-row__sev">{{ view.tone.as_str() }}</span> · {% if let Some(line) = view.line %}{{ line }}{% else %}{{ view.code }}{% endif %}{% if let Some(since) = view.since %} · {{ since }}{% endif %}</p>
     <div class="check-row__head">
       <h3 class="check-row__title">{{ view.title }}</h3>
       {% if let Some(since) = view.since %}<span class="check-row__since">{{ since }}</span>{% endif %}

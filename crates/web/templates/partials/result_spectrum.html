@@ -1,11 +1,13 @@
+{% import "components/spectrum.html" as spectrum %}
 <figure id="spectrum" data-island="spectrum"{% if refreshing %} data-refreshing{% endif %}>
 {{ plate|safe }}
 <p id="spectrum-sentence" aria-live="polite"></p>
 {% if stepper %}
 <div id="spectrum-stepper">
-<button type="button" data-step="-1" aria-label="newer run">&lsaquo;</button>
-<button type="button" data-step="1" aria-label="older run">&rsaquo;</button>
+<button type="button" data-step="1" aria-label="older run">&lsaquo;</button>
+{% if let Some(n) = legend.newest %}{% call spectrum::stepper_box(n) %}{% endcall %}{% endif %}<button type="button" data-step="-1" aria-label="newer run">&rsaquo;</button>
 </div>
+{% call spectrum::stepper_hint() %}{% endcall %}
 {% endif %}
 <div id="trace">{{ trace|safe }}</div>
 <div class="legend-row">

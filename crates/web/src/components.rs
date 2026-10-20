@@ -247,12 +247,13 @@ impl SpectrumLabel {
         format!("{:.2}", self.width)
     }
 
-    /// The leader's height: row 0 is 8, each row adds 14.
+    /// The leader's height: the first leader plus one label row per row (8, 22, 36 px on the
+    /// desktop; the phone tokens give 6, 18, 30 px).
     fn rise(&self) -> String {
-        use crate::tokens::values::{SPECTRUM_LABEL_LEADER, SPECTRUM_LABEL_ROW};
-        let rise = crate::spectrum::px(SPECTRUM_LABEL_LEADER)
-            + self.row as f64 * crate::spectrum::px(SPECTRUM_LABEL_ROW);
-        format!("{rise:.0}px")
+        format!(
+            "calc(var(--spectrum-label-leader) + {} * var(--spectrum-label-row))",
+            self.row
+        )
     }
 }
 
@@ -281,6 +282,11 @@ impl SpectrumRegion {
 
     fn width_pct(&self) -> String {
         format!("{:.4}", self.width)
+    }
+
+    /// The name the phone width shows instead of a long one.
+    fn short(&self) -> Option<&'static str> {
+        (self.label == "EMAIL").then_some("MAIL")
     }
 }
 
@@ -316,7 +322,6 @@ impl SpectrumTick {
 }
 
 /// The label band's height in px while at most three rows are needed.
-const LABEL_BAND_PX: f64 = 56.0;
 const LABEL_BAND_ROWS: usize = 3;
 
 /// The spectrum plate; `rows` is the label band's row count, `line_count` sizes the scroll box.
@@ -363,17 +368,17 @@ impl SpectrumView {
     }
 
     /// The label band's height in px: 56 up to three rows, one row more each beyond.
+    /// The band: `spectrum.labelBand` for up to three rows, one label row more per extra row.
     fn band_height(&self) -> String {
-        let extra = self.rows.saturating_sub(LABEL_BAND_ROWS) as f64;
-        let row = crate::spectrum::px(crate::tokens::values::SPECTRUM_LABEL_ROW);
-        format!("{:.0}px", LABEL_BAND_PX + extra * row)
+        let extra = self.rows.saturating_sub(LABEL_BAND_ROWS);
+        format!("calc(var(--spectrum-label-band) + {extra} * var(--spectrum-label-row))")
     }
 
     /// The view with each region labelled by its section's letter grade; `grades` maps a
     /// protocol name to it, a protocol without an entry keeps its name only.
     pub fn with_grades(mut self, grades: &std::collections::BTreeMap<String, String>) -> Self {
         for region in &mut self.regions {
-            region.grade = grades.get(&region.label).cloned();
+            region.grade = grades.get(&region.label.to_lowercase()).cloned();
         }
         self
     }
@@ -456,7 +461,7 @@ impl SpectrumView {
             .groups
             .iter()
             .map(|g| SpectrumRegion {
-                label: layout.lines[g.first].protocol.as_str().to_string(),
+                label: layout.lines[g.first].protocol.as_str().to_uppercase(),
                 x: g.start / plate * 100.0,
                 width: g.width / plate * 100.0,
                 grade: None,

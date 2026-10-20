@@ -10,7 +10,7 @@
 <div class="result-hero__title">
 <div id="run-line">
 <p class="run-line run-line--title">
-  <span class="run-line__part">Run 1</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">2025-10-09 08:53 UTC</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">5 checks</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">profile 3</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">first run</span>
+  <span class="run-line__part">Run 1</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">2025-10-09 08:53 UTC</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">5 checks</span>&#32;<span class="run-line__sep" data-part="profile" aria-hidden="true">·</span>&#32;<span class="run-line__part" data-part="profile">profile 3</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">first run</span>
 </p>
 </div>
 <h1>shop.example.com</h1>
@@ -27,8 +27,8 @@
 <figure id="spectrum" data-island="spectrum">
 
 <div class="spectrum">
-  <div class="spectrum__box" style="min-width: calc(54 * var(--spectrum-line-pitch-min))">
-    <div class="spectrum__label-band" style="height: 56px">
+  <div class="spectrum__box" style="--spectrum-lines: 54">
+    <div class="spectrum__label-band" style="height: calc(var(--spectrum-label-band) + 0 * var(--spectrum-label-row))">
       
       <div class="spectrum__labels" data-run="0" data-shown>
         
@@ -544,15 +544,15 @@
       <span class="spectrum__tick" data-major data-last style="left: 100.0000%"></span>
       
       
-      <span class="spectrum__region-label" data-protocol="dns" style="left: 0.0000%; width: 18.5185%">dns</span>
+      <span class="spectrum__region-label" data-protocol="DNS" style="left: 0.0000%; width: 18.5185%"><span class="spectrum__region-name">DNS</span> </span>
       
-      <span class="spectrum__region-label" data-protocol="tls" style="left: 18.5185%; width: 38.8889%">tls</span>
+      <span class="spectrum__region-label" data-protocol="TLS" style="left: 18.5185%; width: 38.8889%"><span class="spectrum__region-name">TLS</span> </span>
       
-      <span class="spectrum__region-label" data-protocol="http" style="left: 57.4074%; width: 22.2222%">http</span>
+      <span class="spectrum__region-label" data-protocol="HTTP" style="left: 57.4074%; width: 22.2222%"><span class="spectrum__region-name">HTTP</span> </span>
       
-      <span class="spectrum__region-label" data-protocol="email" style="left: 79.6296%; width: 18.5185%">email</span>
+      <span class="spectrum__region-label" data-protocol="EMAIL" style="left: 79.6296%; width: 18.5185%"><span class="spectrum__region-name" data-short="MAIL">EMAIL</span> </span>
       
-      <span class="spectrum__region-label" data-protocol="ip" style="left: 98.1481%; width: 1.8519%">ip</span>
+      <span class="spectrum__region-label" data-protocol="IP" style="left: 98.1481%; width: 1.8519%"><span class="spectrum__region-name">IP</span> </span>
       
     </div>
     
@@ -794,6 +794,7 @@
     <span class="check-row__code">DNS·05</span>
   </div>
   <div class="check-row__main" data-check="dns.ns">
+    <p class="check-row__phone-meta"><span class="check-row__sev">pass</span> · DNS·05</p>
     <div class="check-row__head">
       <h3 class="check-row__title">Nameserver redundancy</h3>
       
@@ -811,6 +812,7 @@
     <span class="check-row__code">TLS·12</span>
   </div>
   <div class="check-row__main" data-check="tls.chain_trusted">
+    <p class="check-row__phone-meta"><span class="check-row__sev">pass</span> · TLS·12</p>
     <div class="check-row__head">
       <h3 class="check-row__title">Chain trusted</h3>
       
@@ -828,6 +830,7 @@
     <span class="check-row__code">HTTP·33</span>
   </div>
   <div class="check-row__main" data-check="http.hsts">
+    <p class="check-row__phone-meta"><span class="check-row__sev">pass</span> · HTTP·33</p>
     <div class="check-row__head">
       <h3 class="check-row__title">HSTS</h3>
       
@@ -845,6 +848,7 @@
     <span class="check-row__code">MAIL·45</span>
   </div>
   <div class="check-row__main" data-check="email.spf">
+    <p class="check-row__phone-meta"><span class="check-row__sev">pass</span> · MAIL·45</p>
     <div class="check-row__head">
       <h3 class="check-row__title">SPF</h3>
       
@@ -862,6 +866,7 @@
     <span class="check-row__code">IP·54</span>
   </div>
   <div class="check-row__main" data-check="ip.reputation">
+    <p class="check-row__phone-meta"><span class="check-row__sev">pass</span> · IP·54</p>
     <div class="check-row__head">
       <h3 class="check-row__title">IP reputation</h3>
       

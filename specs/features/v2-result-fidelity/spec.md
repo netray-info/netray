@@ -266,7 +266,7 @@ value" means the value the gate measures on the named boards; the inventory row 
     10 px, region labels 9 px; the `min-width` that forced 432 px goes. (9.63; boards 27/28)
 39. **Phone trace and stepper.** The per-line trace (requirement 20, 6 px rows) with a stepper bar
     under it: "‹" and "›" buttons of 44 px at the edges and between them "Run <k> · <date> · grade
-    <letter>" over "latest run" (or "run <k> of <n>"); the hint "Tap a line for its history. Step
+    <letter>" over "latest run" (or "replaying history · › to return" while stepped back, as board M); the hint "Tap a line for its history. Step
     back with ‹ to replay a run."; then requirement 24's link. (9.64; boards 27/28)
 40. **Tap targets.** At 390 px every link and button on the page is at least 44 px tall, footer
     links and the clean bar included. (9.67; boards 27/28)
@@ -527,8 +527,11 @@ GIVEN the side-by-side images WHEN a reader compares them THEN every finding is 
 
 - Phase 5: the explore link reads "Open in the <TOOL> inspector →" after the board, the tool taken from the link's inspector path (email and IP open the DNS inspector); an unmeasured section without a stored reason reads "timed out, nothing measured" or "incomplete, nothing measured" (implementer under the operator's autonomy mandate, 2026-10-20).
 
+- Phase 6: the phone menu is a `details` around the nav with Theme after it; the label band and leaders follow the phone tokens (46 px; 6, 18, 30 px); `font.size.labelPhone` 11 px lowers every label-size text at phone width as board M does; the email region's short "MAIL" comes from `data-short` through `::after` with an empty alt text; browsers without `::details-content` get the menu button on the desktop too (implementer under the operator's autonomy mandate, 2026-10-20).
+
 ### Proposals for the operator
 
+- Phone legend and section grades (board M): board M draws no legend under the trace and no section grades on the axis, so at phone width the legend is hidden and the region grades are visually hidden (kept for screen readers; the narrow regions have no room). Options: keep (board M), or show the legend and grades on the phone too (requirement 16 and 18 read without a phone exception).
 - Evidence tab content (board F, "adjust canvas" or "deliberately different"): each tab renders every evidence block of its protocol through the shared renderer (Decision log), so the TLS tab of a two-address domain holds two chains, two handshakes, CT and CAA, much longer than the board's single chain table. Options: keep (complete evidence, the board's table is a sample), or a compact first block per protocol with "All evidence →" for the rest (needs module knowledge in the web crate or a summary field per block).
 
 ## Open decisions

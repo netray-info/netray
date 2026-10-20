@@ -79,3 +79,17 @@
   background: var(--color-ink);
   transform: translateY(-50%);
 }
+@media (max-width: 480px) {
+  .trace__edges,
+  .trace__caption,
+  .trace__hint {
+    display: none;
+  }
+  .trace__table-link {
+    display: inline-flex;
+    align-items: center;
+    order: 4;
+    min-height: 44px;
+    font-size: var(--font-size-small);
+  }
+}

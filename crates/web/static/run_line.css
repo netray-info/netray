@@ -10,3 +10,11 @@
   letter-spacing: var(--font-tracking-caps);
   text-transform: uppercase;
 }
+@media (max-width: 480px) {
+  .run-line--title {
+    letter-spacing: .1em;
+  }
+  .run-line--title [data-part="profile"] {
+    display: none;
+  }
+}

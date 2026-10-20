@@ -22,3 +22,13 @@
 #issues:not([data-ready]) .grouping-switch {
   visibility: hidden;
 }
+@media (max-width: 480px) {
+  .grouping-switch {
+    flex: 1 1 100%;
+  }
+  .grouping-switch__option {
+    flex: 1 1 0;
+    min-height: 44px;
+    font-size: var(--font-size-stepper);
+  }
+}

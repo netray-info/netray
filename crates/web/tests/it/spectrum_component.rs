@@ -269,10 +269,7 @@ fn c5_first_line_x_and_scroll_box_min_width() {
         .into_iter()
         .find(|t| has_class(t, "spectrum__box"))
         .expect("box");
-    assert_eq!(
-        attr(boxed, "style"),
-        Some("min-width: calc(54 * var(--spectrum-line-pitch-min))")
-    );
+    assert_eq!(attr(boxed, "style"), Some("--spectrum-lines: 54"));
 }
 
 #[test]
@@ -287,7 +284,10 @@ fn c6_row_two_label_sits_on_the_calc_and_its_leader_is_36px() {
     let tone = attr(label, "data-tone").unwrap();
     let leader = leaders_of(set.1)
         .into_iter()
-        .find(|t| style_value(t, "height") == "36px")
+        .find(|t| {
+            style_value(t, "height")
+                == "calc(var(--spectrum-label-leader) + 2 * var(--spectrum-label-row))"
+        })
         .expect("a leader of row 2");
     assert_eq!(attr(leader, "data-tone"), Some(tone));
     // The third dns line sits at x = 20 of 432 px.
@@ -298,10 +298,16 @@ fn c6_row_two_label_sits_on_the_calc_and_its_leader_is_36px() {
 fn c7_band_height_follows_the_largest_row_count() {
     let four = lay(&run(&failing(Protocol::Dns, 4)), &[]);
     assert_eq!(four.runs[0].rows, 4);
-    assert_eq!(band_height(&render(&four, 0)), "70px");
+    assert_eq!(
+        band_height(&render(&four, 0)),
+        "calc(var(--spectrum-label-band) + 1 * var(--spectrum-label-row))"
+    );
 
     let one = lay(&run(&failing(Protocol::Dns, 1)), &[]);
-    assert_eq!(band_height(&render(&one, 0)), "56px");
+    assert_eq!(
+        band_height(&render(&one, 0)),
+        "calc(var(--spectrum-label-band) + 0 * var(--spectrum-label-row))"
+    );
 
     // The current run fails dns 1-3 and has dns 4-5 not applicable, so the older run's fails on
     // dns 4-5 are not fixed in it (a fixed line would carry a label and a row of its own).
@@ -312,7 +318,10 @@ fn c7_band_height_follows_the_largest_row_count() {
     let mixed = lay(&run(&current), &[run(&failing(Protocol::Dns, 5))]);
     assert_eq!(mixed.runs[0].rows, 3);
     assert_eq!(mixed.runs[1].rows, 5);
-    assert_eq!(band_height(&render(&mixed, 0)), "84px");
+    assert_eq!(
+        band_height(&render(&mixed, 0)),
+        "calc(var(--spectrum-label-band) + 2 * var(--spectrum-label-row))"
+    );
 }
 
 #[test]

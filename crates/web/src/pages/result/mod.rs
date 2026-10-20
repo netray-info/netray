@@ -744,11 +744,21 @@ pub(crate) fn done_rows(done: &Run, grade: Grade, entries: &[Entry]) -> Vec<Figu
 }
 
 /// What the key under the spectrum says: per run the predecessor a fix is measured against,
-/// when there is one, and the number of lines the spectrum draws, 0 when it draws none.
+/// when there is one, the number of lines the spectrum draws, 0 when it draws none, and the run
+/// the phone stepper names.
 #[derive(Default)]
 struct Legend {
     fixed: Vec<Option<String>>,
     checks: usize,
+    newest: Option<StepRun>,
+}
+
+/// The run the phone stepper names: its place in the stored history when known, its date and
+/// its grade letter.
+struct StepRun {
+    run: Option<usize>,
+    date: String,
+    grade: String,
 }
 
 /// The legend text naming run `earlier`, `None` when no run precedes.
@@ -851,6 +861,11 @@ pub(crate) fn figure_parts(
             Vec::new()
         },
         checks: layout.lines.len(),
+        newest: Some(StepRun {
+            run: newest.no,
+            date: views::run_date(newest.created_at),
+            grade: grade_letter(newest.grade).to_string(),
+        }),
     };
     let cells = layout
         .runs

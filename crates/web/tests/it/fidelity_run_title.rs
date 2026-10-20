@@ -138,9 +138,15 @@ fn title_parts(body: &str) -> Vec<String> {
         .nth(1)
         .unwrap_or_else(|| panic!("no run title in {body}"));
     let p = p.split("</p>").next().unwrap();
-    p.split("run-line__part\">")
+    p.split("run-line__part\"")
         .skip(1)
-        .map(|s| s.split("</span>").next().unwrap().to_string())
+        .map(|s| {
+            s[s.find('>').unwrap() + 1..]
+                .split("</span>")
+                .next()
+                .unwrap()
+                .to_string()
+        })
         .collect()
 }
 

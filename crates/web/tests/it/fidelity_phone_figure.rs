@@ -113,7 +113,6 @@ async fn get(app: &Router, path: &str) -> (StatusCode, String) {
     (status, String::from_utf8_lossy(&bytes).into_owned())
 }
 
-
 const PROFILE_PART: &str = "run-line__part\" data-part=\"profile\"";
 const REGION_NAME_CLASS: &str = "spectrum__region-name";
 const STEPPER_RUN_CLASS: &str = "spectrum-stepper__run";
@@ -164,7 +163,10 @@ fn top_blocks(css: &str) -> Vec<(String, String)> {
             '}' if depth > 0 => {
                 depth -= 1;
                 if depth == 0 {
-                    out.push((css[start..body_start - 1].trim().to_string(), css[body_start..i].to_string()));
+                    out.push((
+                        css[start..body_start - 1].trim().to_string(),
+                        css[body_start..i].to_string(),
+                    ));
                     start = i + 1;
                 }
             }
@@ -210,7 +212,11 @@ fn static_css() -> String {
 
 fn is_phone_media(prelude: &str) -> bool {
     prelude.starts_with("@media")
-        && prelude.chars().filter(|c| !c.is_whitespace()).collect::<String>().contains("max-width:480px")
+        && prelude
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect::<String>()
+            .contains("max-width:480px")
 }
 
 /// Rules of every `@media (max-width: 480px)` block in `static/*.css`.
@@ -306,7 +312,12 @@ fn text_between<'a>(body: &'a str, open: &str) -> &'a str {
         .split(open)
         .nth(1)
         .unwrap_or_else(|| panic!("no {open} in {body}"));
-    rest.split("</div>").next().unwrap().split("</p>").next().unwrap()
+    rest.split("</div>")
+        .next()
+        .unwrap()
+        .split("</p>")
+        .next()
+        .unwrap()
 }
 
 // ---- C2 / R37 -------------------------------------------------------------------------------
@@ -321,16 +332,26 @@ async fn c2_phone_title_hides_the_profile_part_and_hero_takes_phone_values() {
         .split("</p>")
         .next()
         .unwrap();
-    assert!(title.contains(PROFILE_PART), "profile part is not marked: {title}");
+    assert!(
+        title.contains(PROFILE_PART),
+        "profile part is not marked: {title}"
+    );
     assert!(title.contains("Run 12"), "{title}");
 
     let hides = phone_value(
         |s| s.contains(".run-line--title") && s.contains("[data-part=\"profile\"]"),
         "display",
     );
-    assert_eq!(hides.as_deref(), Some("none"), "phone rule hiding the profile part");
+    assert_eq!(
+        hides.as_deref(),
+        Some("none"),
+        "phone rule hiding the profile part"
+    );
 
-    assert_eq!(effective(eq(".grade__letter"), "font-size").as_deref(), Some("64px"));
+    assert_eq!(
+        effective(eq(".grade__letter"), "font-size").as_deref(),
+        Some("64px")
+    );
     assert_eq!(
         effective(|s| s.contains("h1") && s.contains("result"), "font-size").as_deref(),
         Some("26px")
@@ -344,8 +365,14 @@ async fn c2_phone_title_hides_the_profile_part_and_hero_takes_phone_values() {
         Some("100%"),
         "actions row is full width"
     );
-    assert_eq!(phone_value(eq("#recheck-button"), "flex").as_deref(), Some("1"));
-    assert_eq!(effective(eq(".button"), "font-size").as_deref(), Some("15px"));
+    assert_eq!(
+        phone_value(eq("#recheck-button"), "flex").as_deref(),
+        Some("1")
+    );
+    assert_eq!(
+        effective(eq(".button"), "font-size").as_deref(),
+        Some("15px")
+    );
 }
 
 // ---- C3 / C10 / C6 (R38, R16 phone half) ----------------------------------------------------
@@ -368,8 +395,14 @@ async fn c3_c10_c6_phone_spectrum_drops_the_min_width_and_sets_labels() {
         "inline min-width forces a width at phone width: {box_tag}"
     );
 
-    assert_eq!(effective(eq(".spectrum__line-label"), "font-size").as_deref(), Some("10px"));
-    assert_eq!(effective(eq(".spectrum__region-label"), "font-size").as_deref(), Some("9px"));
+    assert_eq!(
+        effective(eq(".spectrum__line-label"), "font-size").as_deref(),
+        Some("10px")
+    );
+    assert_eq!(
+        effective(eq(".spectrum__region-label"), "font-size").as_deref(),
+        Some("9px")
+    );
     assert_eq!(
         effective(eq(".spectrum__region-label"), "letter-spacing").as_deref(),
         Some(".1em")
@@ -384,14 +417,20 @@ async fn c3_c10_c6_phone_spectrum_drops_the_min_width_and_sets_labels() {
         .next()
         .unwrap();
     assert!(
-        email.contains(&format!("class=\"{REGION_NAME_CLASS}\" data-short=\"MAIL\">EMAIL<")),
+        email.contains(&format!(
+            "class=\"{REGION_NAME_CLASS}\" data-short=\"MAIL\">EMAIL<"
+        )),
         "email region name markup: {email}"
     );
     let shows = phone_value(
         |s| s.contains(REGION_NAME_CLASS) && s.contains("::after"),
         "content",
     );
-    assert_eq!(shows.as_deref(), Some("attr(data-short)"), "phone rule showing MAIL");
+    assert_eq!(
+        shows.as_deref(),
+        Some("attr(data-short) / \"\""),
+        "phone rule showing MAIL"
+    );
     assert!(
         base_rules()
             .iter()
@@ -422,13 +461,20 @@ async fn c4_c11_phone_stepper_shows_run_state_hint_and_history_link() {
     assert_eq!(day.len(), 10, "date is YYYY-MM-DD: {run}");
     assert!(day.starts_with("2027-01-"), "{run}");
     assert!(run.contains("Run <strong>12</strong> · <strong>"), "{run}");
-    assert!(run.contains("</strong> · grade <strong>A</strong>"), "{run}");
     assert!(
-        stepper.contains(&format!("<span class=\"{STEPPER_STATE_CLASS}\">latest run</span>")),
+        run.contains("</strong> · grade <strong>A</strong>"),
+        "{run}"
+    );
+    assert!(
+        stepper.contains(&format!(
+            "<span class=\"{STEPPER_STATE_CLASS}\">latest run</span>"
+        )),
         "{stepper}"
     );
     assert!(
-        body.contains(&format!("<p class=\"{STEPPER_HINT_CLASS}\">{HINT_TEXT}</p>")),
+        body.contains(&format!(
+            "<p class=\"{STEPPER_HINT_CLASS}\">{HINT_TEXT}</p>"
+        )),
         "hint markup"
     );
     let hint_at = body.find(STEPPER_HINT_CLASS).unwrap();
@@ -457,10 +503,18 @@ async fn c4_c11_phone_stepper_shows_run_state_hint_and_history_link() {
         .rev()
         .find(|(k, _)| k == "--spectrum-trace-row")
         .map(|(_, v)| resolve(&v));
-    assert_eq!(row.as_deref(), Some("6px"), "--spectrum-trace-row at phone width");
+    assert_eq!(
+        row.as_deref(),
+        Some("6px"),
+        "--spectrum-trace-row at phone width"
+    );
     let btn = |p: &str| phone_value(eq("#spectrum-stepper button"), p);
     assert_eq!(btn("min-width").as_deref(), Some("44px"));
     assert_eq!(btn("min-height").as_deref(), Some("44px"));
-    assert!(btn("border").is_some_and(|b| b.starts_with("1px solid")), "button border: {:?}", btn("border"));
+    assert!(
+        btn("border").is_some_and(|b| b.starts_with("1px solid")),
+        "button border: {:?}",
+        btn("border")
+    );
     assert_eq!(btn("border-radius").as_deref(), Some("2px"));
 }

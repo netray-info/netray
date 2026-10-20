@@ -1,6 +1,6 @@
 {% macro spectrum(view, live) %}
 <div class="spectrum">
-  <div class="spectrum__box" style="min-width: calc({{ view.line_count }} * var(--spectrum-line-pitch-min))">
+  <div class="spectrum__box" style="--spectrum-lines: {{ view.line_count }}">
     <div class="spectrum__label-band" style="height: {{ view.band_height() }}">
       {% for set in view.label_sets %}
       <div class="spectrum__labels" data-run="{{ set.run }}"{% if set.shown %} data-shown{% endif %}>
@@ -48,7 +48,7 @@
       <span class="spectrum__tick"{% if tick.major %} data-major{% endif %}{% if tick.last %} data-last{% endif %} style="left: {{ tick.x_pct() }}%"></span>
       {% endfor %}
       {% for region in view.regions %}
-      <span class="spectrum__region-label" data-protocol="{{ region.label }}" style="left: {{ region.x_pct() }}%; width: {{ region.width_pct() }}%">{{ region.label }}{% if let Some(grade) = region.grade %} <span class="spectrum__region-grade">{{ grade }}</span>{% endif %}</span>
+      <span class="spectrum__region-label" data-protocol="{{ region.label }}" style="left: {{ region.x_pct() }}%; width: {{ region.width_pct() }}%"><span class="spectrum__region-name"{% if let Some(short) = region.short() %} data-short="{{ short }}"{% endif %}>{{ region.label }}</span> {% if let Some(grade) = region.grade %}<span class="spectrum__region-grade">{{ grade }}</span>{% endif %}</span>
       {% endfor %}
     </div>
     {% for set in view.run_grades %}
@@ -60,3 +60,8 @@
 <div id="spectrum-gutter" class="spectrum-gutter"><span class="spectrum-gutter__run">{% if let Some(run) = g.run %}Run {{ run }}{% endif %}</span><span class="spectrum-gutter__date">{{ g.date }}</span><span class="spectrum-gutter__grade">grade <strong>{{ g.grade }}</strong></span></div>
 {% endif %}
 {% endmacro %}
+{% macro stepper_box(n) %}<div class="spectrum-stepper__box">
+<div class="spectrum-stepper__run">{% if let Some(run) = n.run %}Run <strong>{{ run }}</strong> · {% endif %}<strong>{{ n.date }}</strong> · grade <strong>{{ n.grade }}</strong></div>
+<span class="spectrum-stepper__state">latest run</span>
+</div>{% endmacro %}
+{% macro stepper_hint() %}<p class="spectrum-stepper__hint">Tap a line for its history. Step back with ‹ to replay a run.</p>{% endmacro %}

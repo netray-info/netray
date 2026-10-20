@@ -17,13 +17,16 @@
 {% block header %}<header class="page-header">
 <a href="/"><img src="/static/logo.svg" alt="netray"></a>
 <span class="page-tagline">{% include "partials/header_tagline.html" %}</span>
+<details class="page-menu">
+<summary class="page-menu__button" aria-label="Menu"><span class="page-menu__bar"></span><span class="page-menu__bar"></span><span class="page-menu__bar"></span></summary>
 <nav class="page-nav">
 <a href="/inspect/dns">Inspectors</a>
 <a href="/guide/">Guides</a>
 <a href="/api/v1/docs">API</a>
 <a href="/status">Status</a>
-<button type="button" class="theme-toggle" data-island="theme" aria-label="Switch theme">Theme</button>
 </nav>
+</details>
+<button type="button" class="theme-toggle" data-island="theme" aria-label="Switch theme">Theme</button>
 </header>{% endblock %}
 <main>{% block main %}{% endblock %}</main>
 <footer class="page-footer">

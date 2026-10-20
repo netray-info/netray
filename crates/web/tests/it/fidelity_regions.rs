@@ -117,6 +117,21 @@ async fn page_of(run: &Run) -> String {
 }
 
 /// The region labels as (opening tag, inner html), in document order.
+/// `rest` with the region name's own span replaced by its text.
+fn unwrap_name(rest: &str) -> String {
+    let Some(open) = rest.find("<span class=\"spectrum__region-name\"") else {
+        return rest.to_string();
+    };
+    let gt = open + rest[open..].find('>').unwrap();
+    let close = gt + rest[gt..].find("</span>").unwrap();
+    format!(
+        "{}{}{}",
+        &rest[..open],
+        &rest[gt + 1..close],
+        &rest[close + 7..]
+    )
+}
+
 fn region_labels(html: &str) -> Vec<(String, String)> {
     const OPEN: &str = "<span class=\"spectrum__region-label\"";
     let axis = between(html, "class=\"spectrum__axis\"", "</div>");
@@ -125,7 +140,8 @@ fn region_labels(html: &str) -> Vec<(String, String)> {
         .map(|chunk| {
             let gt = chunk.find('>').unwrap();
             let tag = format!("{OPEN}{}>", &chunk[..gt]);
-            let rest = &chunk[gt + 1..];
+            let rest = unwrap_name(&chunk[gt + 1..]);
+            let rest = rest.as_str();
             let inner = if let Some(g) = rest.find("</span></span>") {
                 rest[..g + 7].to_string()
             } else {

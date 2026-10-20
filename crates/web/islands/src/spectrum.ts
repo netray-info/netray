@@ -17,6 +17,10 @@ export function spectrum(el: HTMLElement): void {
   const query = <T extends HTMLElement>(sel: string): T | null => el.ownerDocument.querySelector<T>(sel);
   const caption = el.querySelector<HTMLElement>(".trace__caption");
   const hint = el.querySelector<HTMLElement>(".trace__hint");
+  const tapHint = el.querySelector<HTMLElement>(".spectrum-stepper__hint");
+  if (tapHint && !tapHint.hasAttribute("data-rest")) {
+    tapHint.setAttribute("data-rest", tapHint.textContent ?? "");
+  }
   const rest = (e: HTMLElement | null): string => e?.getAttribute("data-rest") ?? "";
   const setText = (e: Element | null, value: string): void => {
     if (e && e.textContent !== value) e.textContent = value;
@@ -35,6 +39,33 @@ export function spectrum(el: HTMLElement): void {
       strong.textContent = letter;
       grade.replaceChildren("grade ", strong);
     }
+  };
+
+  const stepper = el.querySelector("#spectrum-stepper");
+  const fillStepper = (row: HTMLElement | undefined, replaying: boolean): void => {
+    if (!stepper || !row) return;
+    const run = stepper.querySelector(".spectrum-stepper__run");
+    const no = row.getAttribute("data-run-no");
+    const date = row.getAttribute("data-date") ?? "";
+    const letter = row.getAttribute("data-grade") ?? "";
+    const text = `${no ? `Run ${no} · ` : ""}${date} · grade ${letter}`;
+    if (run && run.textContent !== text) {
+      const strong = (value: string): HTMLElement => {
+        const e = el.ownerDocument.createElement("strong");
+        e.textContent = value;
+        return e;
+      };
+      run.replaceChildren(
+        ...(no ? ["Run ", strong(no), " · "] : []),
+        strong(date),
+        " · grade ",
+        strong(letter),
+      );
+    }
+    setText(
+      stepper.querySelector(".spectrum-stepper__state"),
+      replaying ? "replaying history · › to return" : "latest run",
+    );
   };
 
   const retitle = (row: HTMLElement | undefined, replaying: boolean): void => {
@@ -66,7 +97,7 @@ export function spectrum(el: HTMLElement): void {
     const grades = el.querySelector(`.spectrum__region-grades[data-run="${shown}"]`);
     if (grades) {
       for (const label of el.querySelectorAll<HTMLElement>(".spectrum__region-label[data-protocol]")) {
-        const letter = grades.querySelector(`[data-protocol="${label.getAttribute("data-protocol")}"]`)?.textContent ?? "";
+        const letter = grades.querySelector(`[data-protocol="${(label.getAttribute("data-protocol") ?? "").toLowerCase()}"]`)?.textContent ?? "";
         let slot = label.querySelector(".spectrum__region-grade");
         if (!slot && letter) {
           slot = label.ownerDocument.createElement("span");
@@ -88,6 +119,7 @@ export function spectrum(el: HTMLElement): void {
       else row.removeAttribute("aria-current");
     }
     fillGutter(shownRow);
+    fillStepper(shownRow, replaying);
     gutter?.toggleAttribute("data-replaying", replaying);
     retitle(shownRow, replaying);
 
@@ -96,11 +128,17 @@ export function spectrum(el: HTMLElement): void {
     );
     const sentenceText = item?.getAttribute("data-sentence")?.trim() ?? "";
     if (sentence) sentence.textContent = sentenceText;
+    const name = item?.getAttribute("data-name") || selected;
+    const line = `${name}${sentenceText ? ` · ${sentenceText}` : ""}`;
     if (caption) {
       const named = item !== undefined && (hovered !== null || pinned !== null);
       caption.toggleAttribute("data-active", named);
-      const name = item?.getAttribute("data-name") || selected;
-      setText(caption, named ? `${name}${sentenceText ? ` · ${sentenceText}` : ""}` : rest(caption));
+      setText(caption, named ? line : rest(caption));
+    }
+    if (tapHint) {
+      const tapped = item !== undefined && phone();
+      tapHint.toggleAttribute("data-active", tapped);
+      setText(tapHint, tapped ? line : rest(tapHint));
     }
     if (hint) {
       const run = shownRow?.getAttribute("data-run-no");
@@ -163,6 +201,11 @@ export function spectrum(el: HTMLElement): void {
       if (!phone()) select();
     });
     target.addEventListener("click", () => {
+      if (phone() && sticky && selected === target.getAttribute("data-target")) {
+        release();
+        render();
+        return;
+      }
       sticky = true;
       select();
     });

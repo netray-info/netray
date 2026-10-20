@@ -5,6 +5,9 @@
 .spectrum [data-run]:not([data-shown]) {
   display: none;
 }
+.spectrum__box {
+  min-width: calc(var(--spectrum-lines) * var(--spectrum-line-pitch-min));
+}
 .spectrum__label-band {
   position: relative;
 }
@@ -150,4 +153,79 @@
 }
 .spectrum__region-grades {
   display: none;
+}
+.spectrum-stepper__hint {
+  display: none;
+}
+@media (max-width: 480px) {
+  /* Board M draws the region names alone: the narrow regions have no room for a grade, which stays readable to a screen reader. */
+  .spectrum__region-grade {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .spectrum__box {
+    min-width: 0;
+  }
+  .spectrum__axis {
+    height: 26px;
+  }
+  .spectrum__tick {
+    height: 3px;
+  }
+  .spectrum__tick[data-major] {
+    height: 8px;
+  }
+  .spectrum__region-label {
+    font-size: var(--font-size-region);
+    letter-spacing: .1em;
+  }
+  .spectrum__region-name[data-short] {
+    font-size: var(--font-size-collapsed);
+  }
+  .spectrum__region-name[data-short]::after {
+    content: attr(data-short) / "";
+    font-size: var(--font-size-region);
+  }
+  .spectrum-gutter {
+    display: none;
+  }
+  .spectrum-stepper__box {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    box-sizing: border-box;
+    min-width: 0;
+    padding: 4px 8px;
+    border: var(--line-hair) solid var(--color-line);
+    border-radius: var(--radius-max);
+    color: var(--color-muted);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-stepper);
+  }
+  .spectrum-stepper__run strong {
+    color: var(--color-ink);
+    font-weight: var(--font-weight-bold);
+  }
+  .spectrum-stepper__state {
+    font-size: var(--font-size-caption);
+  }
+  .spectrum-stepper__hint {
+    display: block;
+    grid-column: 1 / -1;
+    order: 3;
+    margin: 0;
+    color: var(--color-muted);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-label);
+  }
+  .spectrum-stepper__hint[data-active] {
+    color: var(--color-ink);
+  }
 }

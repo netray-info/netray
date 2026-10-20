@@ -283,3 +283,59 @@ The desktop boards report no open row (C7; board M's evidence rows come with Pha
 | BLOCKER | in-page links into hidden panels went nowhere | fixed: the island opens the target's tab on click, hash change and the initial hash |
 | NIT | "recorded with this run" on unrecorded states | fixed: shown only for a stored entry, streamed |
 | NIT | weakened explore label check | fixed by the orchestrator: the label names the inspector per protocol |
+
+## Phase 6 — Phone layout
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R36 Phone header: one row of the wordmark at 58 × 33 px, the Theme button and a 44 × 44 px menu button (1 px line border, radius 2 px) disclosing the nav on details; every nav entry in the open menu at least 44 px tall | green | crates/web/tests/it/fidelity_phone_header.rs |
+| C2 | R37 Phone result header: the run title on top without the profile part, the grade letter at 64 px beside the h1, Re-check now full width (primary, 44 px) with Share beside it | green | crates/web/tests/it/fidelity_phone_figure.rs |
+| C3 | R38 Phone spectrum fits the 358 px column without sideways scroll: line labels 10 px, region labels 9 px; the min-width that forced 432 px goes | green | crates/web/tests/it/fidelity_phone_figure.rs |
+| C4 | R39 Phone trace (6 px rows) with a stepper bar: ‹ and › buttons of 44 px at the edges, between them "Run k · date · grade X" over "latest run" (or "run k of n"); the hint "Tap a line for its history. Step back with ‹ to replay a run."; then the history link | green | crates/web/tests/it/fidelity_phone_figure.rs |
+| C5 | R40 Tap targets: at 390 px every link and button on the page at least 44 px tall, footer links and the clean bar included | green | crates/web/tests/it/fidelity_phone_header.rs |
+| C6 | R16 phone half: region labels 9 px at phone width, the email region labelled "MAIL" | green | crates/web/tests/it/fidelity_phone_figure.rs |
+| C7 | R26 phone half: diff rows with the sentence first and "kind · code" as a meta line under it | green | crates/web/tests/it/fidelity_phone_rows.rs |
+| C8 | R31 phone half: items in one column with the meta line "SEV · code · since" above the title | green | crates/web/tests/it/fidelity_phone_rows.rs |
+| C9 | GIVEN 390 px WHEN the header renders THEN wordmark, Theme and the 44 × 44 menu button share one row and the nav is hidden until the menu opens | green | crates/web/tests/it/fidelity_phone_header.rs |
+| C10 | GIVEN 390 px WHEN the page renders THEN the document is not wider than the viewport and the spectrum's region labels include "MAIL" | green | crates/web/tests/it/fidelity_phone_figure.rs |
+| C11 | GIVEN 390 px with 12 entries WHEN rendered THEN the stepper reads "Run 12 · date · grade B" over "latest run" and the hint "Tap a line for its history. Step back with ‹ to replay a run." | green | crates/web/tests/it/fidelity_phone_figure.rs |
+| C12 | GIVEN 390 px light WHEN every link and button is measured THEN none is below 44 px tall | green | crates/web/tests/it/fidelity_phone_header.rs |
+| C13 | GIVEN boards M and MDark WHEN just design-check runs THEN it reports no row | green | design-check |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 phone menu, hero, spectrum, stepper, diff and item rows, tap targets | 3 (red at the end; the orchestrator's run was green) | sonnet | 189648 | 619 |
+| G2 design-check | run by the orchestrator; label band and leaders as phone-aware token calcs (46 px; 6, 18, 30 px), the mobile manifest's run-title regex and stepper box selector, legend, attention meta, trace caption and region grades out of view at phone width as board M, the switch full width, the stepper gap | n/a | n/a | n/a |
+| review fixes | 2 | sonnet | 88921 | 218 |
+
+### Behavioural verification
+
+`just design-check` (manifest netray-ops 649f4d7: 41 elements on the phone boards M and MDark, the new MDark board included):
+
+```
+0 open deviation(s), 0 stale accepted entries
+```
+
+All eight boards report no open row (C13). Side-by-side of board M light: menu box, run title without the profile, grade beside the h1, full-width Re-check with Share, the spectrum without sideways scroll and "MAIL", the 6 px trace, the stepper with the run box and the hint, the history link, diff rows with their meta lines, the switch across the width, items with their SEV · code · since lines.
+
+### Reader
+
+| class | finding | disposition |
+|---|---|---|
+| BLOCKER | Theme outside the nav took the header's 15 px and gap | fixed: 13 px, 20 px after the nav; phone padding 0 10px |
+| BLOCKER | the wordmark link was 33 px tall on the phone | fixed: 44 px |
+| BLOCKER | screen readers read "EMAILMAIL" | fixed: `::after` with an empty alt text |
+| AMENDMENT | no nav in browsers without `::details-content` | repaired: the menu button shows there; browser floor logged |
+| AMENDMENT | section grades removed on the phone | repaired: visually hidden, kept for screen readers; proposal for the operator |
+| AMENDMENT | legend hidden on the phone | board M; proposal for the operator |
+| AMENDMENT | stepper state while stepped back | spec amended to board M's wording |
+| AMENDMENT | Phase 5's tabs island and two partials were never committed | committed with this phase |
+| DEFERRED | the phone named no tapped line | fixed: the hint names it (board M) |
+| NIT | switch and "show" at 11 px | fixed: 12 px |
+| NIT | phone tone bars all 3 px | fixed: tone widths |
+| NIT | Theme against the menu button | fixed with the padding |
+| NIT | arrow glyph and desktop min-width untested | listed |

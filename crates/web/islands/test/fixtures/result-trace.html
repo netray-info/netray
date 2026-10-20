@@ -10,7 +10,7 @@
 <div class="result-hero__title">
 <div id="run-line">
 <p class="run-line run-line--title">
-  <span class="run-line__part">Run 3</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">2025-10-11 08:53 UTC</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">5 checks</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">profile 3</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">cached</span>
+  <span class="run-line__part">Run 3</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">2025-10-11 08:53 UTC</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">5 checks</span>&#32;<span class="run-line__sep" data-part="profile" aria-hidden="true">·</span>&#32;<span class="run-line__part" data-part="profile">profile 3</span>&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;<span class="run-line__part">cached</span>
 </p>
 </div>
 <h1>shop.example.com</h1>
@@ -27,20 +27,20 @@
 <figure id="spectrum" data-island="spectrum">
 
 <div class="spectrum">
-  <div class="spectrum__box" style="min-width: calc(54 * var(--spectrum-line-pitch-min))">
-    <div class="spectrum__label-band" style="height: 56px">
+  <div class="spectrum__box" style="--spectrum-lines: 54">
+    <div class="spectrum__label-band" style="height: calc(var(--spectrum-label-band) + 0 * var(--spectrum-label-row))">
       
       <div class="spectrum__labels" data-run="0" data-shown>
         
-        <span class="spectrum__leader" data-tone="fail" style="left: 8.3333%; height: 8px"></span>
+        <span class="spectrum__leader" data-tone="fail" style="left: 8.3333%; height: calc(var(--spectrum-label-leader) + 0 * var(--spectrum-label-row))"></span>
         
-        <span class="spectrum__leader" data-tone="fail" style="left: 21.2963%; height: 8px"></span>
+        <span class="spectrum__leader" data-tone="fail" style="left: 21.2963%; height: calc(var(--spectrum-label-leader) + 0 * var(--spectrum-label-row))"></span>
         
-        <span class="spectrum__leader" data-tone="fail" style="left: 60.1852%; height: 8px"></span>
+        <span class="spectrum__leader" data-tone="fail" style="left: 60.1852%; height: calc(var(--spectrum-label-leader) + 0 * var(--spectrum-label-row))"></span>
         
-        <span class="spectrum__leader" data-tone="fail" style="left: 82.4074%; height: 8px"></span>
+        <span class="spectrum__leader" data-tone="fail" style="left: 82.4074%; height: calc(var(--spectrum-label-leader) + 0 * var(--spectrum-label-row))"></span>
         
-        <span class="spectrum__leader" data-tone="fail" style="left: 99.0741%; height: 8px"></span>
+        <span class="spectrum__leader" data-tone="fail" style="left: 99.0741%; height: calc(var(--spectrum-label-leader) + 0 * var(--spectrum-label-row))"></span>
         
         
         <span class="spectrum__line-label" data-tone="fail" data-code="dns.ns" style="left: clamp(0px, 8.3333%, calc(100% - 17.64px)); bottom: calc(var(--spectrum-label-leader) + 0 * var(--spectrum-label-row))">NS</span>
@@ -57,15 +57,15 @@
       
       <div class="spectrum__labels" data-run="1">
         
-        <span class="spectrum__leader" data-tone="warn" style="left: 8.3333%; height: 8px"></span>
+        <span class="spectrum__leader" data-tone="warn" style="left: 8.3333%; height: calc(var(--spectrum-label-leader) + 0 * var(--spectrum-label-row))"></span>
         
-        <span class="spectrum__leader" data-tone="warn" style="left: 21.2963%; height: 8px"></span>
+        <span class="spectrum__leader" data-tone="warn" style="left: 21.2963%; height: calc(var(--spectrum-label-leader) + 0 * var(--spectrum-label-row))"></span>
         
-        <span class="spectrum__leader" data-tone="warn" style="left: 60.1852%; height: 8px"></span>
+        <span class="spectrum__leader" data-tone="warn" style="left: 60.1852%; height: calc(var(--spectrum-label-leader) + 0 * var(--spectrum-label-row))"></span>
         
-        <span class="spectrum__leader" data-tone="warn" style="left: 82.4074%; height: 8px"></span>
+        <span class="spectrum__leader" data-tone="warn" style="left: 82.4074%; height: calc(var(--spectrum-label-leader) + 0 * var(--spectrum-label-row))"></span>
         
-        <span class="spectrum__leader" data-tone="warn" style="left: 99.0741%; height: 8px"></span>
+        <span class="spectrum__leader" data-tone="warn" style="left: 99.0741%; height: calc(var(--spectrum-label-leader) + 0 * var(--spectrum-label-row))"></span>
         
         
         <span class="spectrum__line-label" data-tone="warn" data-code="dns.ns" style="left: clamp(0px, 8.3333%, calc(100% - 17.64px)); bottom: calc(var(--spectrum-label-leader) + 0 * var(--spectrum-label-row))">NS</span>
@@ -1066,15 +1066,15 @@
       <span class="spectrum__tick" data-major data-last style="left: 100.0000%"></span>
       
       
-      <span class="spectrum__region-label" data-protocol="dns" style="left: 0.0000%; width: 18.5185%">dns</span>
+      <span class="spectrum__region-label" data-protocol="DNS" style="left: 0.0000%; width: 18.5185%"><span class="spectrum__region-name">DNS</span> </span>
       
-      <span class="spectrum__region-label" data-protocol="tls" style="left: 18.5185%; width: 38.8889%">tls</span>
+      <span class="spectrum__region-label" data-protocol="TLS" style="left: 18.5185%; width: 38.8889%"><span class="spectrum__region-name">TLS</span> </span>
       
-      <span class="spectrum__region-label" data-protocol="http" style="left: 57.4074%; width: 22.2222%">http</span>
+      <span class="spectrum__region-label" data-protocol="HTTP" style="left: 57.4074%; width: 22.2222%"><span class="spectrum__region-name">HTTP</span> </span>
       
-      <span class="spectrum__region-label" data-protocol="email" style="left: 79.6296%; width: 18.5185%">email</span>
+      <span class="spectrum__region-label" data-protocol="EMAIL" style="left: 79.6296%; width: 18.5185%"><span class="spectrum__region-name" data-short="MAIL">EMAIL</span> </span>
       
-      <span class="spectrum__region-label" data-protocol="ip" style="left: 98.1481%; width: 1.8519%">ip</span>
+      <span class="spectrum__region-label" data-protocol="IP" style="left: 98.1481%; width: 1.8519%"><span class="spectrum__region-name">IP</span> </span>
       
     </div>
     
@@ -1093,9 +1093,13 @@
 <p id="spectrum-sentence" aria-live="polite"></p>
 
 <div id="spectrum-stepper">
-<button type="button" data-step="-1" aria-label="newer run">&lsaquo;</button>
-<button type="button" data-step="1" aria-label="older run">&rsaquo;</button>
+<button type="button" data-step="1" aria-label="older run">&lsaquo;</button>
+<div class="spectrum-stepper__box">
+<div class="spectrum-stepper__run">Run <strong>3</strong> · <strong>2025-10-11</strong> · grade <strong>C</strong></div>
+<span class="spectrum-stepper__state">latest run</span>
+</div><button type="button" data-step="-1" aria-label="newer run">&rsaquo;</button>
 </div>
+<p class="spectrum-stepper__hint">Tap a line for its history. Step back with ‹ to replay a run.</p>
 
 <div id="trace">
 <ol class="trace">
@@ -1258,6 +1262,7 @@
       <span class="diff-block__marker" aria-hidden="true"></span>
       <span class="diff-block__kind">worse</span>
       <span class="diff-block__text">Nameserver redundancy</span>
+      <span class="diff-block__meta">worse · DNS·05</span>
       <span class="diff-block__code">DNS·05</span>
     </li>
     
@@ -1265,6 +1270,7 @@
       <span class="diff-block__marker" aria-hidden="true"></span>
       <span class="diff-block__kind">worse</span>
       <span class="diff-block__text">Chain trusted</span>
+      <span class="diff-block__meta">worse · TLS·12</span>
       <span class="diff-block__code">TLS·12</span>
     </li>
     
@@ -1272,6 +1278,7 @@
       <span class="diff-block__marker" aria-hidden="true"></span>
       <span class="diff-block__kind">worse</span>
       <span class="diff-block__text">HSTS</span>
+      <span class="diff-block__meta">worse · HTTP·33</span>
       <span class="diff-block__code">HTTP·33</span>
     </li>
     
@@ -1279,6 +1286,7 @@
       <span class="diff-block__marker" aria-hidden="true"></span>
       <span class="diff-block__kind">worse</span>
       <span class="diff-block__text">SPF</span>
+      <span class="diff-block__meta">worse · MAIL·45</span>
       <span class="diff-block__code">MAIL·45</span>
     </li>
     
@@ -1286,6 +1294,7 @@
       <span class="diff-block__marker" aria-hidden="true"></span>
       <span class="diff-block__kind">worse</span>
       <span class="diff-block__text">IP reputation</span>
+      <span class="diff-block__meta">worse · IP·54</span>
       <span class="diff-block__code">IP·54</span>
     </li>
     
@@ -1322,6 +1331,7 @@
     <span class="check-row__code">TLS·12</span>
   </div>
   <div class="check-row__main" data-check="tls.chain_trusted">
+    <p class="check-row__phone-meta"><span class="check-row__sev">fail</span> · TLS·12 · up from warn since run 3</p>
     <div class="check-row__head">
       <h3 class="check-row__title">Chain trusted</h3>
       <span class="check-row__since">up from warn since run 3</span>
@@ -1343,6 +1353,7 @@
     <span class="check-row__code">HTTP·33</span>
   </div>
   <div class="check-row__main" data-check="http.hsts">
+    <p class="check-row__phone-meta"><span class="check-row__sev">fail</span> · HTTP·33 · up from warn since run 3</p>
     <div class="check-row__head">
       <h3 class="check-row__title">HSTS</h3>
       <span class="check-row__since">up from warn since run 3</span>
@@ -1369,6 +1380,7 @@
     <span class="check-row__code">IP·54</span>
   </div>
   <div class="check-row__main" data-check="ip.reputation">
+    <p class="check-row__phone-meta"><span class="check-row__sev">fail</span> · IP·54 · up from warn since run 3</p>
     <div class="check-row__head">
       <h3 class="check-row__title">IP reputation</h3>
       <span class="check-row__since">up from warn since run 3</span>
@@ -1395,6 +1407,7 @@
     <span class="check-row__code">DNS·05</span>
   </div>
   <div class="check-row__main" data-check="dns.ns">
+    <p class="check-row__phone-meta"><span class="check-row__sev">fail</span> · DNS·05 · up from warn since run 3</p>
     <div class="check-row__head">
       <h3 class="check-row__title">Nameserver redundancy</h3>
       <span class="check-row__since">up from warn since run 3</span>
@@ -1416,6 +1429,7 @@
     <span class="check-row__code">MAIL·45</span>
   </div>
   <div class="check-row__main" data-check="email.spf">
+    <p class="check-row__phone-meta"><span class="check-row__sev">fail</span> · MAIL·45 · up from warn since run 3</p>
     <div class="check-row__head">
       <h3 class="check-row__title">SPF</h3>
       <span class="check-row__since">up from warn since run 3</span>

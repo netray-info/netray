@@ -227,9 +227,11 @@ async fn the_last_region_label_is_the_last_child_of_the_axis() {
     let html = page(&[hard_fail_run(Grade::F)]).await;
     let axis = &html[html.find("class=\"spectrum__axis\"").unwrap()..];
     let axis = &axis[..axis.find("</div>").unwrap()];
-    let last_open = axis.rfind("<span ").unwrap();
+    let last_open = axis
+        .rfind("<span class=\"spectrum__region-label\"")
+        .unwrap();
     assert!(
-        axis[last_open..].starts_with("<span class=\"spectrum__region-label\""),
+        !axis[last_open..].contains("<span class=\"spectrum__tick\""),
         "{axis}"
     );
 }

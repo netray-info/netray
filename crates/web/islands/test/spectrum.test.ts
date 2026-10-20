@@ -138,7 +138,7 @@ describe("spectrum island (requirement 17)", () => {
     expect(muts.length).toBeGreaterThan(0);
     const slot = (n: Node): boolean => {
       const el = n instanceof Element ? n : n.parentElement;
-      return !!el?.closest("#spectrum-gutter, #spectrum-sentence, .trace__caption, .trace__hint, #run-line");
+      return !!el?.closest("#spectrum-gutter, #spectrum-stepper, #spectrum-sentence, .spectrum-stepper__hint, .trace__caption, .trace__hint, #run-line");
     };
     for (const m of muts) {
       if (m.type === "attributes") {

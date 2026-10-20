@@ -19,6 +19,38 @@
   color: var(--color-muted);
   font-size: var(--font-size-small);
 }
+.page-menu {
+  display: flex;
+  align-items: center;
+}
+.page-menu::details-content {
+  content-visibility: visible;
+}
+.page-menu__button {
+  display: none;
+  list-style: none;
+  cursor: pointer;
+}
+@supports not selector(::details-content) {
+  .page-menu__button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    box-sizing: border-box;
+    min-width: 44px;
+    min-height: 44px;
+    border: var(--line-hair) solid var(--color-line);
+    border-radius: var(--radius-max);
+  }
+}
+.page-menu__bar {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: var(--color-ink);
+}
 .page-nav {
   display: flex;
   flex-wrap: wrap;
@@ -40,8 +72,10 @@
   padding: 0;
   border: 0;
   background: transparent;
+  margin-inline-start: var(--space-2);
   color: var(--color-muted);
   font: inherit;
+  font-size: var(--font-size-small);
   cursor: pointer;
 }
 .theme-toggle:hover {
@@ -565,6 +599,145 @@ main td {
   display: none;
 }
 @media (max-width: 480px) {
+  /* Board M draws no legend under the trace and no counts beside the attention heading. */
+  .legend-row,
+  .attention-meta {
+    display: none;
+  }
+  .page-header {
+    position: relative;
+    flex-wrap: nowrap;
+    gap: 0;
+    padding: 14px var(--layout-gutter);
+  }
+  .page-header > a {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    margin-inline-end: auto;
+  }
+  .page-header img {
+    height: 33px;
+  }
+  .page-tagline {
+    display: none;
+  }
+  .page-menu {
+    order: 3;
+  }
+  .theme-toggle {
+    order: 2;
+    min-width: 44px;
+    min-height: 44px;
+    margin-inline: 0 var(--space-1);
+    padding: 0 10px;
+  }
+  .page-menu__button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    box-sizing: border-box;
+    min-width: 44px;
+    min-height: 44px;
+    border: var(--line-hair) solid var(--color-line);
+    border-radius: var(--radius-max);
+  }
+  .page-menu:not([open]) .page-nav {
+    display: none;
+  }
+  .page-nav {
+    position: absolute;
+    inset-inline: var(--layout-gutter);
+    top: 100%;
+    z-index: 1;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    border: var(--line-hair) solid var(--color-line);
+    border-radius: var(--radius-max);
+    background: var(--color-surface);
+  }
+  .page-nav a,
+  .page-footer a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .page-nav a {
+    padding-inline: var(--space-4);
+  }
+  main {
+    padding: 14px var(--layout-gutter);
+  }
+  #result {
+    gap: 26px;
+  }
+  .result-hero {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 14px;
+  }
+  .result-hero__title {
+    display: contents;
+  }
+  #run-line,
+  #progress,
+  .result-hero__actions {
+    grid-column: 1 / -1;
+  }
+  #progress:empty {
+    display: none;
+  }
+  #result-grade {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  #result-header.result-hero h1 {
+    grid-column: 2;
+    grid-row: 2;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+  .result-hero__actions {
+    width: 100%;
+    gap: var(--space-2);
+  }
+  #recheck {
+    display: flex;
+    flex: 1;
+  }
+  #recheck-button {
+    flex: 1;
+    min-height: 44px;
+  }
+  #share {
+    min-height: 44px;
+  }
+  #spectrum {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #spectrum-stepper {
+    display: flex;
+    order: 2;
+    align-items: stretch;
+    gap: var(--space-2);
+    margin-block-start: 14px;
+  }
+  #spectrum-stepper button {
+    min-width: 44px;
+    min-height: 44px;
+    border: var(--line-hair) solid var(--color-line);
+    border-radius: var(--radius-max);
+    background: transparent;
+    color: var(--color-ink);
+    font: inherit;
+    cursor: pointer;
+  }
+  .legend-row {
+    order: 5;
+  }
   .evidence-tabs__swipe {
     display: block;
     margin: 0;
@@ -576,14 +749,28 @@ main td {
     display: block;
     overflow-x: auto;
   }
-  #spectrum-stepper {
-    display: flex;
-    justify-content: space-between;
-    gap: var(--space-2);
-  }
-  #spectrum-stepper button {
-    min-width: 44px;
+  .evidence-tabs__tab {
+    display: inline-flex;
+    align-items: center;
     min-height: 44px;
+    padding: 12px 14px 12px 20px;
+  }
+  .evidence-tabs__panel {
+    padding: 14px;
+  }
+  .evidence-tabs__links a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .clean-bar {
+    padding: 0 14px;
+  }
+  .clean-bar__summary {
+    min-height: 44px;
+  }
+  .clean-bar__show {
+    font-size: var(--font-size-stepper);
   }
   :is(#result-header, #diff, #issues) :is(a, button) {
     display: inline-flex;

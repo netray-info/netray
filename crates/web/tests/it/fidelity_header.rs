@@ -1,5 +1,6 @@
 //! V2 spec v2-result-fidelity, requirement 2 (criteria C2 and C27): the page header holds
-//! the wordmark link, the tagline and one right-aligned nav ending in the unboxed Theme button.
+//! the wordmark link, the tagline and one right-aligned nav, then the unboxed Theme button as the
+//! header's last element.
 use axum::Router;
 use axum::body::Body;
 use axum::http::Request;
@@ -52,7 +53,6 @@ async fn header_holds_wordmark_tagline_and_nav_ending_in_theme_button() {
         r#"href="/guide/">Guides</a>"#,
         r#"href="/api/v1/docs">API</a>"#,
         r#"href="/status">Status</a>"#,
-        THEME,
     ];
     let mut at = 0;
     for needle in order {
@@ -62,8 +62,11 @@ async fn header_holds_wordmark_tagline_and_nav_ending_in_theme_button() {
         at += i + needle.len();
     }
     assert!(
-        nav.trim_end_matches("</nav>").trim_end().ends_with(THEME),
-        "Theme button must be the nav's last child: {nav}"
+        header
+            .trim_end_matches("</header>")
+            .trim_end()
+            .ends_with(THEME),
+        "Theme button must be the header's last element: {header}"
     );
     assert!(!header.contains("/compare"), "Compare is not in the header");
 

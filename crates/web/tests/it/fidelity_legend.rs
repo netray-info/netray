@@ -141,9 +141,15 @@ const LEGEND_CSS: &str = concat!(
     include_str!("../../static/pages.css")
 );
 
-/// Expected markup (R17): the label band carries `data-rows` and an inline `height: 56px` while
-/// at most three label rows are needed; leaders carry inline `height: 8px|22px|36px`.
-const BAND_56: &str = "height: 56px";
+/// Expected markup (R17): the label band is `spectrum.labelBand` (56 px, 46 px at phone width)
+/// while at most three label rows are needed; a leader is the first leader plus one label row per
+/// row (8, 22, 36 px; 6, 18, 30 px at phone width).
+const BAND_56: &str = "height: calc(var(--spectrum-label-band) + 0 * var(--spectrum-label-row))";
+const LEADERS: [&str; 3] = [
+    "calc(var(--spectrum-label-leader) + 0 * var(--spectrum-label-row))",
+    "calc(var(--spectrum-label-leader) + 1 * var(--spectrum-label-row))",
+    "calc(var(--spectrum-label-leader) + 2 * var(--spectrum-label-row))",
+];
 
 /// The declaration block of the first rule whose selector list contains `selector`.
 fn rule<'a>(css: &'a str, selector: &str) -> &'a str {
@@ -214,11 +220,18 @@ async fn c4_label_band_is_56px_and_leaders_take_three_staggered_lengths() {
     // Rows follow the lowest free row (SDD §5.5, S20); a leader's length names its row.
     assert!(heights.len() >= 3, "leaders: {shown}");
     for (i, h) in heights.iter().enumerate() {
-        assert!(["8px", "22px", "36px"].contains(h), "leader {i}: {shown}");
+        assert!(LEADERS.contains(h), "leader {i}: {shown}");
     }
     assert!(
-        heights.contains(&"8px") && heights.contains(&"22px"),
+        heights.contains(&LEADERS[0]) && heights.contains(&LEADERS[1]),
         "stagger: {shown}"
+    );
+    // The tokens give 56 px and 8, 22 px on the desktop.
+    let tokens = netray_web::tokens::CSS;
+    assert!(tokens.contains("--spectrum-label-band: 56px"), "band token");
+    assert!(
+        tokens.contains("--spectrum-label-band: 46px"),
+        "phone band token"
     );
 }
 
