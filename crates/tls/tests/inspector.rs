@@ -852,7 +852,7 @@ mod probe_slot_no_barrier {
         let stub = Arc::new(
             StubTlsBackend::new()
                 .with_host("example.com", vec![slow, good])
-                .with_handshake_delay(slow, Duration::from_millis(1000))
+                .with_handshake_delay(slow, Duration::from_millis(1200))
                 .with_failed_handshake(slow)
                 .with_probes(canned)
                 .with_probe_delay(Duration::from_secs(10))
