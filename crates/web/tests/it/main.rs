@@ -138,6 +138,7 @@ mod identity_scope;
 mod inspect_backlink;
 mod inspect_band;
 mod inspect_band_layout;
+mod inspect_band_slim;
 mod inspect_config;
 mod inspect_dns_band;
 mod inspect_dns_jobs;
