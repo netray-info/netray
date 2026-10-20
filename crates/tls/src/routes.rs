@@ -1159,7 +1159,9 @@ async fn inspect_port(
 ///
 /// Only considers successful IPs (those with `tls` present).
 /// Returns `None` if fewer than 2 IPs succeeded.
-fn compute_consistency(ip_results: &[tls::IpInspectionResult]) -> Option<ConsistencyResult> {
+pub(crate) fn compute_consistency(
+    ip_results: &[tls::IpInspectionResult],
+) -> Option<ConsistencyResult> {
     let successful: Vec<_> = ip_results.iter().filter(|r| r.tls.is_some()).collect();
 
     if successful.len() < 2 {

@@ -34,7 +34,12 @@ hand-edited status can not come back.
   rebuild assumes the well-behaved world: a chain in issuer order that ends at a self-signed
   certificate is trusted and at an anchor; each NS answers authoritatively with the zone's SOA
   and NS set; the policy host serves the recorded status, content type and body over a
-  certificate the rebuild accepts.
+  certificate the rebuild accepts. A lone self-signed certificate is never trusted (the public
+  root store would refuse it).
+- What the rebuild can not reproduce without DER or a production change, and so no fixture holds:
+  TLSA records (`tls.tlsa`, DANE needs the served certificates' DER) and ALPN that differs between
+  addresses (`tls.alpn_consistency` lists the addresses in hash-map order, so its finding is not
+  stable between calls).
 - Two checks read the wall clock: TLS (`expired` in `tls.chain`) and DNS (`dns.dnssec` over
   DNSKEY-covering RRSIGs). A fixture must give the same result on every day: TLS evaluates at
   the run's own measurement time (leaf `not_after` minus `days_remaining`); fixtures carry no
@@ -185,6 +190,7 @@ Tests in `crates/lens/tests/it/` (lens links every module's `testing` feature).
 - Fixtures are recomputed through the modules' own analysis from their own evidence (a fixpoint), not from separate source contracts: the V1 contract goldens carry their own verdicts and so would not prevent a contradiction, and rebuilding raw input from the blocks keeps the fixtures readable as they are (implementer under the operator's autonomy mandate, 2026-10-20).
 - Facts no block holds are assumed well-behaved (chain trust, NS authority, the policy host's certificate): a fixture can not show what its evidence does not hold, and every story beat is reachable through evidence (implementer under the operator's autonomy mandate, 2026-10-20).
 - The guard lives in lens's `tests/it`: only lens links every module and the scoring that sets the grade, so the comparison covers the whole run, grade included (implementer under the operator's autonomy mandate, 2026-10-20).
+- Review of Phase 1: a lone self-signed certificate is not trusted by the rebuild; TLSA records and differing ALPN stay out of the fixtures (DANE needs DER; the ALPN finding's address order is a hash-map order, and fixing it would be a production change this feature excludes) (implementer under the operator's autonomy mandate, 2026-10-20).
 
 ## Open decisions
 
