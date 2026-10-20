@@ -72,17 +72,19 @@ pub enum Tool {
     Dns,
     Tls,
     Http,
+    Email,
     Ip,
 }
 
 impl Tool {
-    const ALL: [Tool; 4] = [Tool::Dns, Tool::Tls, Tool::Http, Tool::Ip];
+    const ALL: [Tool; 5] = [Tool::Dns, Tool::Tls, Tool::Http, Tool::Email, Tool::Ip];
 
     pub fn as_str(self) -> &'static str {
         match self {
             Tool::Dns => "dns",
             Tool::Tls => "tls",
             Tool::Http => "http",
+            Tool::Email => "email",
             Tool::Ip => "ip",
         }
     }
@@ -93,6 +95,7 @@ impl Tool {
             Tool::Dns => "q",
             Tool::Tls => "h",
             Tool::Http => "url",
+            Tool::Email => "d",
             Tool::Ip => "ip",
         }
     }
@@ -110,6 +113,7 @@ impl Tool {
             Tool::Dns => "DNS inspector",
             Tool::Tls => "TLS inspector",
             Tool::Http => "HTTP inspector",
+            Tool::Email => "Email inspector",
             Tool::Ip => "IP inspector",
         }
     }
@@ -119,6 +123,7 @@ impl Tool {
             Tool::Dns => "DNS, resolved",
             Tool::Tls => "TLS, illuminated",
             Tool::Http => "HTTP, inspected",
+            Tool::Email => "Email, authenticated",
             Tool::Ip => "IP, located",
         }
     }
@@ -128,6 +133,7 @@ impl Tool {
             Tool::Dns => "Query",
             Tool::Tls => "Host",
             Tool::Http => "URL",
+            Tool::Email => "Domain",
             Tool::Ip => "Address",
         }
     }
@@ -137,6 +143,7 @@ impl Tool {
             Tool::Dns => &["example.com A", "_dmarc.example.com TXT"],
             Tool::Tls => &["example.com", "netray.info"],
             Tool::Http => &["https://example.com/", "https://netray.info/"],
+            Tool::Email => &["example.com", "netray.info"],
             Tool::Ip => &["192.0.2.1", "2001:db8::1"],
         }
     }
@@ -150,6 +157,9 @@ impl Tool {
                 "Connects to a host and reads its certificate chain, protocol versions and ciphers."
             }
             Tool::Http => "Fetches a URL and reads its redirects, security headers and cookies.",
+            Tool::Email => {
+                "Reads a domain's mail posture: MX, SPF, DKIM, DMARC, MTA-STS and the rest of its email authentication."
+            }
             Tool::Ip => "Looks up an address: its network, location, reverse name and reputation.",
         }
     }
@@ -159,6 +169,7 @@ impl Tool {
             Tool::Dns => "A name, then optional record types, +flags and @resolvers.",
             Tool::Tls => "A host, optionally with a port: example.com or example.com:443.",
             Tool::Http => "A full URL, scheme included.",
+            Tool::Email => "A domain, then DKIM selectors separated by spaces or commas.",
             Tool::Ip => "An IPv4 or IPv6 address.",
         }
     }
@@ -168,6 +179,7 @@ impl Tool {
             Tool::Dns => ("/guide/record-types", "Record types guide"),
             Tool::Tls => ("/guide/tls-protocol", "TLS protocol guide"),
             Tool::Http => ("/guide/security-headers", "Security headers guide"),
+            Tool::Email => ("/guide/email-auth", "Email authentication guide"),
             Tool::Ip => ("/guide/ip-enrichment", "IP enrichment guide"),
         }
     }
@@ -177,6 +189,7 @@ impl Tool {
             Tool::Dns => "example.com A",
             Tool::Tls => "example.com:443",
             Tool::Http => "https://example.com/",
+            Tool::Email => "example.com",
             Tool::Ip => "192.0.2.1",
         }
     }
@@ -232,6 +245,10 @@ fn http_limits<'de, D: Deserializer<'de>>(d: D) -> Result<InspectLimits, D::Erro
     merged(d, InspectConfig::default().http)
 }
 
+fn email_limits<'de, D: Deserializer<'de>>(d: D) -> Result<InspectLimits, D::Error> {
+    merged(d, InspectConfig::default().email)
+}
+
 fn ip_limits<'de, D: Deserializer<'de>>(d: D) -> Result<InspectLimits, D::Error> {
     merged(d, InspectConfig::default().ip)
 }
@@ -246,6 +263,8 @@ pub struct InspectConfig {
     pub tls: InspectLimits,
     #[serde(deserialize_with = "http_limits")]
     pub http: InspectLimits,
+    #[serde(deserialize_with = "email_limits")]
+    pub email: InspectLimits,
     #[serde(deserialize_with = "ip_limits")]
     pub ip: InspectLimits,
 }
@@ -256,6 +275,8 @@ impl Default for InspectConfig {
             dns: InspectLimits::with_deadline(30_000),
             tls: InspectLimits::with_deadline(15_000),
             http: InspectLimits::with_deadline(30_000),
+            // Past the email inspection's own 30 s cap, so the page shows what it finished.
+            email: InspectLimits::with_deadline(35_000),
             ip: InspectLimits::with_deadline(5_000),
         }
     }
@@ -282,6 +303,7 @@ impl InspectConfig {
             Tool::Dns => self.dns,
             Tool::Tls => self.tls,
             Tool::Http => self.http,
+            Tool::Email => self.email,
             Tool::Ip => self.ip,
         }
     }
@@ -365,7 +387,7 @@ pub struct InspectDeps {
     jobs: Arc<dyn InspectorJobs>,
     config: InspectConfig,
     extractor: Arc<IpExtractor>,
-    slots: [Arc<Semaphore>; 4],
+    slots: [Arc<Semaphore>; 5],
     history: Option<Arc<netray_store::HistoryStore>>,
     shared: SharedRuns,
     dns_results: Option<Arc<dyn DnsResults>>,
@@ -1486,6 +1508,7 @@ fn stream_job(
 fn target_host(tool: Tool, input: &str) -> Option<String> {
     let raw = match tool {
         Tool::Dns => input.split_whitespace().next()?.to_string(),
+        Tool::Email => email_input(input).0,
         Tool::Tls => tls_host(input)?,
         Tool::Http => http_host(input)?,
         Tool::Ip => return None,
@@ -1507,6 +1530,7 @@ fn target_address(tool: Tool, input: &str) -> Option<IpAddr> {
             Host::Ipv6(a) => return Some(a.into()),
             Host::Domain(_) => return None,
         },
+        Tool::Email => return None,
         Tool::Ip => input.trim().to_string(),
     };
     raw.parse().ok()
@@ -1514,12 +1538,25 @@ fn target_address(tool: Tool, input: &str) -> Option<IpAddr> {
 
 /// The heading of a run: the target as the job reads it. An empty IP input names the caller, an
 /// HTTP input its URL with `https://` assumed, a TLS input its host with 443 when it names no port.
+/// The email inspector's reading of its input, shared by the page and the job: the domain (in
+/// its UTS #46 form when it maps, as the result page reads a domain), then the DKIM selectors;
+/// tokens are separated by spaces or commas, empty ones dropped.
+pub fn email_input(input: &str) -> (String, Vec<String>) {
+    let mut tokens = input
+        .split(|c: char| c.is_whitespace() || c == ',')
+        .filter(|t| !t.is_empty());
+    let raw = tokens.next().unwrap_or_default();
+    let domain = netray_common::domain::validate(raw).unwrap_or_else(|_| raw.to_string());
+    (domain, tokens.map(str::to_string).collect())
+}
+
 fn target_heading(tool: Tool, input: &str, client: IpAddr) -> String {
     let trimmed = input.trim();
     match tool {
         Tool::Ip if trimmed.is_empty() => client.to_string(),
         Tool::Http => http_url(trimmed).map_or_else(|| trimmed.to_string(), |url| url.to_string()),
         Tool::Tls => tls_heading(input),
+        Tool::Email if !email_input(input).0.is_empty() => email_input(input).0,
         _ => trimmed.to_string(),
     }
 }

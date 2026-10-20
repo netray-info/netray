@@ -181,3 +181,20 @@ part's addresses (bounded by the deadline) and renders with badges; `SharedRun` 
 the TLS run's related box in the start fragment and the shared page. `api/jobs.rs`: `enrich` over
 the IP lookup (org, network type, Tor, VPN, Spamhaus, C2). `partials/inspect_start.html`,
 `static/inspector_shell.css`: the related box.
+
+## Phase 7 — Email inspector
+
+### Groups
+
+G1: C1–C6 (adding `Tool::Email` breaks the exhaustive matches in `api/jobs.rs`, so one group).
+
+### Plan
+
+`src/pages/inspect.rs`: `Tool::Email` between Http and Ip (declaration and `ALL` order agree,
+`index()` is the discriminant), its per-tool data (field `d`, name, tagline, label, examples, guide,
+help texts); five slots; `[inspect.email]` limits (default 30 000 ms); `target_host` reads the first
+token; `target_address` none. `src/api/email.rs`: `EMAIL_OFF` visible to jobs. `src/api/jobs.rs`:
+`start_email` over `email_inspect()` with the API's limiter and slots (domain, then selectors split
+on spaces and commas), a rate-limit refusal as a gate (429), other refusals as the notice, the
+collected events through `translate` as one part and the Email band; admit passes (the inspection
+charges). `crates/lens/lens.example.toml`: `[inspect.email]`. `specs/sdd/v2.md`: S3, §6.2, the API row.

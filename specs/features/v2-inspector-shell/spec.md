@@ -293,7 +293,9 @@ Each requirement names the inventory rows or board rows it closes.
     module's live run (the inspection behind `POST /api/v1/email/inspect`, its limiter and slots
     shared with the API) as blocks, band and check list, never recorded; refused selectors answer
     the API's validation text as the notice. `[inspect.email]` gets the same `deadline_ms` and
-    `max_concurrent` keys as the other inspectors (default deadline 30 000 ms). SDD S3 and §6.2 are
+    `max_concurrent` keys as the other inspectors (default deadline 35 000 ms, past the email
+    inspection's own 30 s cap). The page and the job read the input one way: the domain (in its
+    UTS #46 form), then selectors separated by spaces or commas, empty tokens dropped. SDD S3 and §6.2 are
     amended in the same commit. (board G tabs; 5.18 via requirement 22; operator decision
     2026-10-19)
 
@@ -582,6 +584,10 @@ GIVEN the screenshots WHEN read beside board G THEN every finding is a `report.m
   are not linked (theme D). Deferred: a DNS key served by the API cache fallback after the shell
   cache evicted it shows no badges, as it shows no band (implementer under the operator's autonomy
   mandate, 2026-10-20).
+- Phase 7 review: one reading of the email input for the page and the job (`email_input`: domain
+  mapped with UTS #46, selectors split on spaces and commas); the email deadline is 35 s, past the
+  inspection's own 30 s cap. Nit kept: full shared email slots answer the notice with 200, as a
+  refused input does (implementer under the operator's autonomy mandate, 2026-10-20).
 - The Inspectors menu and the full footer of canvas v43 belong to the site-navigation feature
   (theme J); a reader's finding on G's chevron or footer is answered by this non-goal
   (implementer under the operator's autonomy mandate, 2026-10-20).

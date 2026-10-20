@@ -314,3 +314,39 @@ read the threat classification (`network_type`) instead of the infrastructure (`
 Amendments folded into requirement 21: CNAME rows link in any block; trees stay text (theme D).
 Deferred: badges on the API-cache fallback page. Planner finding folded in: the IP inspector's own
 run is not enriched (its run is the lookup; requirement 22).
+
+## Phase 7 — Email inspector
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R24 Email inspector page on the shell with field d (domain and DKIM selectors), live unrecorded run over the API's inspection, limiter and slots, inspect.email limits, SDD amended | green | tests/it/shell_email.rs |
+| C2 | GIVEN /inspect/email?d=example.com WHEN the run is posted THEN the email module runs live, band, check list and blocks render, the store is unchanged | green | tests/it/shell_email.rs |
+| C3 | GIVEN d=example.com s1 s2 THEN the inspection receives s1 and s2; GIVEN six selectors THEN the notice carries the API refusal and no inspection starts | green | tests/it/shell_email.rs |
+| C4 | GIVEN the api.email per-client limit spent through the API WHEN /inspect/email/run is posted THEN 429 | green | tests/it/shell_email.rs |
+| C5 | GIVEN no email part THEN the notice names the inspector as off | green | tests/it/shell_email.rs |
+| C6 | GIVEN inspect.email deadline_ms 0 THEN the config is refused naming inspect.email.deadline_ms | green | tests/it/shell_email.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 3 | sonnet, two test defects fixed by the orchestrator (ADLC-Test-Change) | 70114 | 172 |
+| review fixes (shell_review_p7) | 1 | orchestrator | 0 | 0 |
+
+### Behavioural verification
+
+Local lens: `GET /inspect/email` answers 200; `POST /inspect/email/run` with `d=example.com`
+streams `inspect-result`, `inspector-tabs`, `inspect-part-0`, `inspect-band`, `inspect-share`,
+`inspect-export`; the part and the band read "timed out" (outbound DNS is blocked locally: blocked
+locally, no live result to show). The rendered run with the stub inspector is covered by
+`tests/it/shell_email.rs`.
+
+### Review
+
+Reader: 2 blockers, fixed (`tests/it/shell_review_p7.rs`): the page read `example.com,s1` as the
+host while the job read `example.com` plus a selector; a leading separator gave an empty domain.
+One `email_input` now serves both (domain mapped with UTS #46, which also answers the IDN
+amendment). Nits fixed: email deadline 35 s past the inspection's 30 s cap; SDD dates and the
+"four inspectors" and subdomain sentences. Nit kept: full shared slots answer the notice with 200.

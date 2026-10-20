@@ -23,7 +23,7 @@ use super::limit;
 use super::runs::wants_event_stream;
 use super::state::ApiState;
 
-const EMAIL_OFF: &str = "the email inspector is off: no email module was built";
+pub(super) const EMAIL_OFF: &str = "the email inspector is off: no email module was built";
 
 /// The mail posture of a domain: twelve categories, the evidence and a summary. With
 /// `Accept: text/event-stream` the same events arrive as they complete.

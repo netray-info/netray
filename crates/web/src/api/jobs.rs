@@ -12,6 +12,7 @@ use netray_dns::{
     DnsJob, DnsJobEvent, DnsQueryResult, DnsRefusal, DnsResultCache, DnsTraceResult, DnssecRequest,
     TraceRequest, blocks,
 };
+use netray_email::{EmailInspectRequest, EmailRefusal};
 use netray_engine::{Domain, Facts, Module, RunContext, SectionOutcome};
 use netray_model::evidence::Block;
 use netray_model::{CheckResult, Protocol};
@@ -19,6 +20,7 @@ use netray_tls::input::Target;
 use netray_tls::security::rate_limit::{Quotas, Scopes};
 
 use super::dns::DNS_OFF;
+use super::email::EMAIL_OFF;
 use super::error::V1Error;
 use super::inspectors::{HTTP_OFF, TLS_OFF};
 use super::ip::charge;
@@ -415,6 +417,43 @@ impl InspectJobs {
         ))
     }
 
+    fn start_email(&self, req: JobRequest) -> Result<Job, String> {
+        let inspect = self
+            .state
+            .email_inspect()
+            .ok_or_else(|| EMAIL_OFF.to_string())?
+            .clone();
+        let (domain, dkim_selectors) = crate::pages::email_input(&req.input);
+        let request = EmailInspectRequest {
+            domain,
+            dkim_selectors,
+        };
+        self.state.email_limiter().prune_if_due();
+        let events = match inspect.inspect(
+            &request,
+            req.client,
+            self.state.email_limiter(),
+            self.state.email_slots(),
+        ) {
+            Ok(events) => events,
+            Err(EmailRefusal::RateLimited { retry_after_secs }) => {
+                return Ok(Job::new(Vec::new()).with_gate(Box::pin(async move {
+                    Err(Refusal::RateLimited(Duration::from_secs(retry_after_secs)))
+                })));
+            }
+            Err(other) => return Err(other.to_string()),
+        };
+        Ok(job(
+            "inspection",
+            Protocol::Email,
+            Box::pin(async move {
+                let events: Vec<netray_email::quality::types::SseEvent> =
+                    futures::StreamExt::collect::<Vec<_>>(events).await;
+                measured(netray_email::module::translate(&events))
+            }),
+        ))
+    }
+
     fn start_ip(&self, req: JobRequest) -> Result<Job, String> {
         let ip = self
             .state
@@ -692,7 +731,7 @@ impl InspectorJobs for InspectJobs {
             Tool::Tls => self.admit_tls(client, input),
             Tool::Http => self.admit_http(client, input),
             Tool::Ip => self.admit_ip(client, input),
-            Tool::Dns => Ok(()),
+            Tool::Dns | Tool::Email => Ok(()),
         }
     }
 
@@ -701,6 +740,7 @@ impl InspectorJobs for InspectJobs {
             Tool::Tls => self.start_tls(req),
             Tool::Http => self.start_http(req),
             Tool::Ip => self.start_ip(req),
+            Tool::Email => self.start_email(req),
             Tool::Dns => self.start_dns(req),
         }
     }
