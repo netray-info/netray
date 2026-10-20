@@ -43,6 +43,8 @@ mod evidence_mount;
 mod evidence_snapshots_only;
 mod evidence_spa_fallthrough;
 mod evidence_wire;
+mod fixture_evidence_dns;
+mod fixture_evidence_email;
 mod fixture_evidence_http;
 mod fixture_evidence_ip;
 mod fixture_evidence_tls;
