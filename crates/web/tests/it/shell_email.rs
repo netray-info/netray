@@ -117,9 +117,15 @@ async fn c1_get_renders_the_email_shell_and_prefills_with_a_domain() {
     assert!(body.contains(r#"data-tool="email""#), "{body}");
     assert!(body.contains(r#"name="d""#), "{body}");
     assert!(body.contains("Domain"), "{body}");
+    // The current inspector tab (the site nav marks "Inspectors" current too).
     let tab = body
-        .split("<a ")
-        .find(|a| a.contains(r#"aria-current="page""#))
+        .split(r#"<a class="inspector-tabs__tab""#)
+        .skip(1)
+        .find(|a| {
+            a.split('>')
+                .next()
+                .is_some_and(|t| t.contains(r#"aria-current="page""#))
+        })
         .unwrap_or_else(|| panic!("no current tab in {body}"));
     assert!(tab.contains("EMAIL") || tab.contains("Email"), "{tab}");
 
@@ -183,14 +189,20 @@ async fn c2_run_streams_start_band_checks_blocks_and_leaves_the_store_unchanged(
         stream.contains("figure") && stream.contains("inspector-band"),
         "{stream}"
     );
+    // The stream carries each fragment's html as a JSON string: read it unescaped.
+    let stream = stream.replace("\\\"", "\"").replace("\\n", "\n");
     let section = stream
-        .split("inspector-checks")
+        .split(r#"id="inspect-checks""#)
         .nth(1)
         .unwrap_or_else(|| panic!("no inspector-checks in {stream}"));
-    // The catalogue holds ten email checks (grep -c '^id = "email\.' checks.toml).
+    // One row per Email catalogue check.
+    let want = netray_engine::catalogue::catalogue()
+        .for_protocol(netray_model::Protocol::Email)
+        .entries()
+        .len();
     assert_eq!(
         section.matches(r#"<article class="check-row""#).count(),
-        10,
+        want,
         "{section}"
     );
     assert!(stream.contains(r#"id="ev-email."#), "{stream}");
