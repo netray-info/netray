@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}{{ frame.title }}{% endblock %}</title>
 {% block meta %}<meta name="description" content="{{ frame.description }}">
-<link rel="canonical" href="https://netray.info{{ frame.canonical }}">
+<link rel="canonical" href="{{ frame.origin() }}{{ frame.canonical }}">
 <meta property="og:title" content="{{ frame.title }}">
 <meta property="og:description" content="{{ frame.description }}">
 <meta property="og:image" content="{{ frame.og_image }}">{% endblock %}

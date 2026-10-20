@@ -339,3 +339,47 @@ All eight boards report no open row (C13). Side-by-side of board M light: menu b
 | NIT | phone tone bars all 3 px | fixed: tone widths |
 | NIT | Theme against the menu button | fixed with the padding |
 | NIT | arrow glyph and desktop min-width untested | listed |
+
+## Phase 7 — Share and embed
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R41 Share dialog: "Share" opens a dialog "Share and embed" with tabs Snapshot (origin/r/id), Re-run link (origin/domain), Badge (Markdown and HTML snippets of origin/badge/domain.svg linking origin/domain, style flat or for-the-badge rewriting the snippets, a preview), Social card (origin/r/id/og.png with a preview), each a read-only field and a copy button; origin is the canonical origin; Esc and the close button close it, focus returns to Share; without JavaScript Share is a link to /r/id; tokens and components only, bundle under its cap; absent without a stored entry and for an incomplete run | green | crates/web/tests/it/fidelity_share.rs |
+| C2 | GIVEN entry Ab3dE5fG of example.com WHEN the dialog renders THEN the Snapshot field holds origin/r/Ab3dE5fG and the Re-run field origin/example.com | green | crates/web/tests/it/fidelity_share.rs |
+| C3 | GIVEN the Badge tab with style for-the-badge WHEN chosen THEN both snippets carry style=for-the-badge | green | crates/web/tests/it/fidelity_share.rs, crates/web/islands/test/share.test.ts |
+| C4 | GIVEN the Social card tab WHEN rendered THEN it holds origin/r/Ab3dE5fG/og.png and a preview image of it | green | crates/web/tests/it/fidelity_share.rs |
+| C5 | GIVEN the share island WHEN a copy button is pressed THEN the clipboard receives the field's text and the button announces it | green | crates/web/islands/test/share.test.ts |
+| C6 | GIVEN the open dialog WHEN Esc is pressed THEN it closes and focus returns to Share | green | crates/web/islands/test/share.test.ts |
+| C7 | GIVEN no JavaScript WHEN Share is followed THEN it leads to /r/Ab3dE5fG | green | crates/web/tests/it/fidelity_share.rs |
+| C8 | GIVEN an incomplete run WHEN the header renders THEN there is no Share control | already_implemented | crates/web/tests/it/fidelity_share.rs |
+| C9 | GIVEN the islands bundle WHEN built THEN the cap test passes | already_implemented | crates/web/islands/test/budget.test.ts |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 share dialog, snippets, island | 3 (the gate refused a test title with the colour word "field"; the orchestrator reworded it) | sonnet | 91952 | 189 |
+| review fixes | 3 | sonnet | 62575 | 121 |
+
+### Behavioural verification
+
+Headless Chromium against the design stack (seeded fixtures), `/shop.example.com` at 1280 px:
+
+```
+badge requests before open: 0
+dialog open: true
+snapshot field: https://netray.info/r/0nrOQrDP
+badge requests after open: 1
+dialog open after Esc: false focus on share: share
+```
+
+`just design-check`: `0 open deviation(s), 0 stale accepted entries` (the boards draw no dialog; the Share button is measured).
+
+### Reader
+
+| class | finding | disposition |
+|---|---|---|
+| BLOCKER | the badge preview in the closed dialog fetched /badge on every page view, and lens starts a run for a stale head | fixed: previews load when the dialog opens; tests |
+| AMENDMENT | an open dialog replaced by the stream left focus on the body | repaired: the new Share link takes focus; island test |

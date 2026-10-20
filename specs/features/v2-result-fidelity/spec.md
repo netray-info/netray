@@ -529,6 +529,8 @@ GIVEN the side-by-side images WHEN a reader compares them THEN every finding is 
 
 - Phase 6: the phone menu is a `details` around the nav with Theme after it; the label band and leaders follow the phone tokens (46 px; 6, 18, 30 px); `font.size.labelPhone` 11 px lowers every label-size text at phone width as board M does; the email region's short "MAIL" comes from `data-short` through `::after` with an empty alt text; browsers without `::details-content` get the menu button on the desktop too (implementer under the operator's autonomy mandate, 2026-10-20).
 
+- Phase 7: `#result-share` becomes a `div` (a dialog cannot sit in a `p`); one canonical origin const feeds the canonical link and every snippet; the badge style query is lens's `style=for-the-badge`. Review: the previews load only when the dialog opens (a badge request on a stale head starts a run in lens), and a share dialog replaced by the stream hands focus to the new Share link (implementer under the operator's autonomy mandate, 2026-10-20).
+
 ### Proposals for the operator
 
 - Phone legend and section grades (board M): board M draws no legend under the trace and no section grades on the axis, so at phone width the legend is hidden and the region grades are visually hidden (kept for screen readers; the narrow regions have no room). Options: keep (board M), or show the legend and grades on the phone too (requirement 16 and 18 read without a phone exception).

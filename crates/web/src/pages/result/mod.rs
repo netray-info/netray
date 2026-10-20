@@ -1163,7 +1163,50 @@ struct GradePart<'a> {
 #[derive(Template)]
 #[template(path = "partials/result_share.html")]
 struct SharePart<'a> {
-    share: &'a Option<String>,
+    id: Option<&'a str>,
+    domain: &'a str,
+    snapshot: String,
+    rerun: String,
+    card: String,
+    md_flat: String,
+    html_flat: String,
+    md_big: String,
+    html_big: String,
+}
+
+/// The badge style the badge route reads from `?style=` besides its flat default.
+const BADGE_STYLE_BIG: &str = "for-the-badge";
+
+/// `text` for an attribute value or a textarea, with the named entities the markup elsewhere uses;
+/// the share template prints the result unescaped.
+fn html_escaped(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+fn share_part<'a>(id: Option<&'a str>, domain: &'a str) -> SharePart<'a> {
+    let origin = super::ORIGIN;
+    let rerun = format!("{origin}/{domain}");
+    let badge = format!("{origin}/badge/{domain}.svg");
+    let md = |query: &str| format!("[![netray grade]({badge}{query})]({rerun})");
+    let html = |query: &str| {
+        format!(r#"<a href="{rerun}"><img src="{badge}{query}" alt="netray grade"></a>"#)
+    };
+    let html = |query: &str| html_escaped(&html(query));
+    let big = format!("?style={BADGE_STYLE_BIG}");
+    SharePart {
+        id,
+        domain,
+        snapshot: format!("{origin}/r/{}", id.unwrap_or_default()),
+        card: format!("{origin}/r/{}/og.png", id.unwrap_or_default()),
+        md_flat: md(""),
+        html_flat: html(""),
+        md_big: md(&big),
+        html_big: html(&big),
+        rerun,
+    }
 }
 
 #[derive(Template)]
@@ -1369,9 +1412,7 @@ fn assemble(domain: &str, autostart: bool, shown: Shown, selectors: Option<&str>
     )?;
     let share = warn_render(
         "result-share",
-        trimmed(&SharePart {
-            share: &shown.share,
-        }),
+        trimmed(&share_part(shown.share.as_deref(), domain)),
     )?;
     let header = warn_render(
         "result-header",

@@ -52,7 +52,11 @@ fn run(complete: bool) -> Run {
         profile_version: 3,
         engine_version: "0.26.0".into(),
         evidence_schema_version: EVIDENCE_SCHEMA_VERSION,
-        grade: if complete { Grade::B } else { Grade::Incomplete },
+        grade: if complete {
+            Grade::B
+        } else {
+            Grade::Incomplete
+        },
         complete,
         sections: vec![RunSection {
             protocol: Protocol::Dns,
@@ -130,7 +134,9 @@ async fn c1_c2_c4_c7_a_stored_entry_offers_the_share_dialog() {
     let canonical = format!(r#"<link rel="canonical" href="{ORIGIN}/{DOMAIN}">"#);
     assert!(page.contains(&canonical), "{page}");
 
-    let share = &page[page.find(r#"<div id="result-share">"#).expect("result-share")..];
+    let share = &page[page
+        .find(r#"<div id="result-share">"#)
+        .expect("result-share")..];
     let share = &share[..share.find("</p>").unwrap_or(share.len())];
     let link = format!(
         r#"<a id="share" class="button button--secondary" href="/r/{id}" data-island="share" aria-haspopup="dialog">Share</a>"#
@@ -160,9 +166,15 @@ async fn c1_c2_c4_c7_a_stored_entry_offers_the_share_dialog() {
     assert_eq!(dialog.matches(r#"role="tab""#).count(), 4, "{dialog}");
     assert_eq!(dialog.matches(r#"role="tabpanel""#).count(), 4, "{dialog}");
     for label in ["Snapshot", "Re-run link", "Badge", "Social card"] {
-        assert!(dialog.contains(&format!(">{label}</button>")), "{label}: {dialog}");
+        assert!(
+            dialog.contains(&format!(">{label}</button>")),
+            "{label}: {dialog}"
+        );
     }
-    assert!(dialog.matches("share-dialog__copy").count() >= 5, "{dialog}");
+    assert!(
+        dialog.matches("share-dialog__copy").count() >= 5,
+        "{dialog}"
+    );
     assert!(dialog.matches("data-copy=\"").count() >= 5, "{dialog}");
 
     let text = unescape(dialog);
@@ -183,8 +195,8 @@ async fn c1_c2_c4_c7_a_stored_entry_offers_the_share_dialog() {
         html(""),
         md(ftb),
         html(ftb),
-        r#"<img class="share-dialog__badge" src="/badge/example.com.svg""#.to_string(),
-        format!(r#"<img class="share-dialog__card" src="/r/{id}/og.png" alt=""#),
+        r#"<img class="share-dialog__badge" data-src="/badge/example.com.svg""#.to_string(),
+        format!(r#"<img class="share-dialog__card" data-src="/r/{id}/og.png" alt=""#),
         r#"name="badge-style""#.to_string(),
         r#"value="flat""#.to_string(),
         r#"value="for-the-badge""#.to_string(),
@@ -194,10 +206,13 @@ async fn c1_c2_c4_c7_a_stored_entry_offers_the_share_dialog() {
     for want in wants {
         assert!(text.contains(&want), "missing {want}\n{text}");
     }
-    assert!(
-        text.contains("readonly"),
-        "fields are read-only: {text}"
-    );
+    for preview in [
+        r#"share-dialog__badge" src="#,
+        r#"share-dialog__card" src="#,
+    ] {
+        assert!(!text.contains(preview), "no src on a preview: {text}");
+    }
+    assert!(text.contains("readonly"), "fields are read-only: {text}");
 }
 
 #[tokio::test]

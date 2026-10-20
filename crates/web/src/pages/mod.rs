@@ -29,6 +29,9 @@ pub use inspect::{
 /// The speculation rules every page embeds; the CSP allows exactly their hash.
 pub const SPECULATION_RULES: &str = r#"{"prerender":[{"where":{"or":[{"href_matches":"/guide/*"},{"href_matches":"/r/*"},{"href_matches":"/inspect/*"}]},"eagerness":"moderate"}]}"#;
 
+/// The one origin of the canonical link and of every absolute link a page offers to copy.
+pub(crate) const ORIGIN: &str = "https://netray.info";
+
 const ROBOTS: &str = "User-agent: *\nAllow: /\nSitemap: https://netray.info/sitemap.xml\n";
 
 /// The guides, compare, status, the sitemap and the static files under `/static`, plus the 301s
@@ -117,6 +120,10 @@ pub(crate) struct Frame {
 }
 
 impl Frame {
+    pub(crate) fn origin(&self) -> &'static str {
+        ORIGIN
+    }
+
     pub(crate) fn new(title: &str, description: &str, canonical: &str) -> Self {
         Self {
             title: title.to_string(),

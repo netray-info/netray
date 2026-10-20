@@ -79,3 +79,13 @@ G1: C1–C12 (one group: the phone values touch the frame, the result partials a
 G1 — `base.html`: `details.page-menu` with `summary.page-menu__button` (three bars) around `nav.page-nav`; the Theme button after the details, last in the header row (desktop: summary hidden, nav shown; phone: tagline hidden, logo 58 × 33, the menu button a 44 × 44 box, the closed menu hides the nav, nav links 44 px). The run title marks its profile part `data-part="profile"` (hidden at phone width). Phone rules (`@media (max-width: 480px)` in pages.css and the component stylesheets): hero values (grade 64 px, h1 26 px / 1.15, buttons 15 px, Re-check flex 1), spectrum without the inline min-width, labels 10 px, region labels 9 px .1em, the email region's short name "MAIL" through `data-short`, trace rows 6 px (token), the stepper bar (buttons 44 × 44 with line border, centre box with run, date, grade and state) and its hint, h2 19 px, the diff row meta line `.diff-block__meta` (kind · code) with kind and code hidden, the check row's `.check-row__phone-meta` (SEV · code · since) above the title with a one-column row, 44 px tap targets for every link and button the frame and the result page carry. `fidelity_header.rs` follows the menu markup (Theme last in the header row, outside the details). Island fixtures regenerated; the spectrum island's stepper fills the centre box from the shown row.
 
 G2 — `just design-check` with the M and MDark manifest elements.
+
+## Phase 7 — Share and embed
+
+### Groups
+
+G1: C1–C7 (C8, C9 already hold: no share without a stored entry; the bundle cap test)
+
+### Plan
+
+G1 — `partials/result_share.html`: `#result-share` becomes a `div` (a dialog cannot sit inside a `p`) holding the Share link (`data-island="share"`, `aria-haspopup="dialog"`, href `/r/<id>`) and the `<dialog id="share-dialog">` with the title, close button, four tabs and panels; every snippet text built on the server from one canonical origin const (the base template's canonical link uses the same const): snapshot, re-run, badge Markdown and HTML for flat and for-the-badge (data attributes on the style radios), card URL, previews. `crates/web/src/pages/result/mod.rs` (`SharePart`). `islands/src/share.ts` registered as "share": open via `showModal` (fallback `open`), tabs, style radios swap snippets and preview, copy via `navigator.clipboard` announcing "Copied", Esc and close return focus to Share. Dialog styles in `pages.css` (tokens only). Island fixtures regenerated.

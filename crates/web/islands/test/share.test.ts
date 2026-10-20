@@ -23,7 +23,7 @@ function markup(): string {
   return `<div id="result-share"><a id="share" class="button button--secondary" href="/r/Ab3dE5fG" data-island="share" aria-haspopup="dialog">Share</a><dialog id="share-dialog" class="share-dialog" aria-labelledby="share-dialog-title"><h2 id="share-dialog-title">Share and embed</h2><button type="button" class="share-dialog__close" aria-label="Close">×</button><div role="tablist">${tabs}</div>
 <div role="tabpanel" id="share-snapshot"><input id="share-snapshot-url" class="share-dialog__field" readonly value="https://netray.info/r/Ab3dE5fG"><button type="button" class="share-dialog__copy" data-copy="share-snapshot-url">Copy</button></div>
 <div role="tabpanel" id="share-rerun" hidden><p>re-run</p></div>
-<div role="tabpanel" id="share-badge" hidden><label><input type="radio" name="badge-style" value="flat" checked data-markdown="${FLAT_MD}" data-html='${FLAT_HTML}'>flat</label><label><input type="radio" name="badge-style" value="for-the-badge" data-markdown="${BIG_MD}" data-html='${BIG_HTML}'>for-the-badge</label><textarea id="share-badge-md" class="share-dialog__field" readonly>${FLAT_MD}</textarea><textarea id="share-badge-html" class="share-dialog__field" readonly>${FLAT_HTML.replace(/</g, "&lt;")}</textarea><button type="button" class="share-dialog__copy" data-copy="share-badge-md">Copy</button><img class="share-dialog__badge" src="/badge/example.com.svg"></div>
+<div role="tabpanel" id="share-badge" hidden><label><input type="radio" name="badge-style" value="flat" checked data-markdown="${FLAT_MD}" data-html='${FLAT_HTML}'>flat</label><label><input type="radio" name="badge-style" value="for-the-badge" data-markdown="${BIG_MD}" data-html='${BIG_HTML}'>for-the-badge</label><textarea id="share-badge-md" class="share-dialog__field" readonly>${FLAT_MD}</textarea><textarea id="share-badge-html" class="share-dialog__field" readonly>${FLAT_HTML.replace(/</g, "&lt;")}</textarea><button type="button" class="share-dialog__copy" data-copy="share-badge-md">Copy</button><img class="share-dialog__badge" data-src="/badge/example.com.svg"></div>
 <div role="tabpanel" id="share-card" hidden><p>card</p></div></dialog></div>`;
 }
 
@@ -100,7 +100,7 @@ describe("share island", () => {
     expect(img.getAttribute("src")).toContain("?style=for-the-badge");
   });
 
-  it("C5: a copy button writes the field text and announces Copied", async () => {
+  it("C5: a copy button writes the text of its input and announces Copied", async () => {
     click(link());
     const btn = document.querySelector('[data-copy="share-snapshot-url"]') as HTMLElement;
     click(btn);
