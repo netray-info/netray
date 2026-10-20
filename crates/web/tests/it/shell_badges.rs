@@ -54,6 +54,7 @@ impl IpLookup for Flagged {
             let mut i = self.0.lookup(ip).await?;
             i.network.org = Some("Example Org".into());
             i.network.network_type = "cloud".into();
+            i.network.infra_type = "cloud".into();
             i.network.is_tor = true;
             i.network.is_vpn = false;
             i.network.is_spamhaus = false;
