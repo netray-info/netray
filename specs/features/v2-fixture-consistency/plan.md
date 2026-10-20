@@ -38,3 +38,32 @@ The groups share no production file; they are coded in parallel.
   clock: `module.rs` threads a `now: DateTime<Utc>` from `translate_with_facts` (wall clock) through
   an internal `translate_with_facts_at` to `cert_fields`; `from_evidence` passes the run's time
   (leaf not_after minus days_remaining).
+
+## Phase 2 — DNS and email from evidence
+
+## Groups
+
+- G1 (C1, C3, C4, C5, C6, C7): DNS — `crates/dns/src/testing.rs` (visibility of `pub(crate)` check
+  pieces as needed, no behaviour change).
+- G2 (C2, C3, C8, C9, C10, C11): email — `crates/email/src/testing.rs`, `crates/email/Cargo.toml`
+  (the loopback policy listener's TLS crates as optional dependencies of the `testing` feature).
+
+The groups share no production file; they are coded in parallel.
+
+## Plan
+
+- G1: `from_evidence` rebuilds the measure stage of `api::check::run_check` in `testing.rs`: per
+  `dns.<type>` block one mhost `Lookup` built through serde JSON as `ZoneLookup` does (empty block a
+  definite NODATA, missing block no lookup), DNSKEY key tag computed (RFC 4034 App. B) with zone/SEP/
+  revoked flags; `CheckEvent::Batch` per `CHECK_RECORD_TYPES`; `lint_lookups` over the merged
+  lookups; `check_ns_lame_delegation` and `check_ns_delegation_consistency` over a `RawOutbound` stub
+  that resolves each NS host to a public documentation-free test address and answers
+  authoritatively with the zone's SOA and NS set (template: `ns_check_outcomes`); events in
+  `run_check` order, then `unanswered_events`, then `translate`.
+- G2: `from_evidence` seeds `TestDnsResolver` from the email blocks (MX, MX addresses, TXT at the
+  apex, `_dmarc.`, `_smtp._tls.`, `default._bimi.`, `_mta-sts.`, DMARC report authorisation from
+  `rua_authorized`/`ruf_authorized`, DKIM TXT per row with a committed RSA 2048 key, TLSA, PTR and
+  forward for FCrDNS, DNSBL listings, DNSKEY presence), starts a loopback rustls listener serving
+  the recorded MTA-STS status, content type and body (rcgen self-signed, `accept_invalid_certs`,
+  `allow = |_| true`, `with_mta_sts_port`), runs the inspection with the rows' selectors and
+  `translate`s the events.

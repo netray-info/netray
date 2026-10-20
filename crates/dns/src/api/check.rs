@@ -55,7 +55,7 @@ use netray_common::enrichment::{EnrichmentClient, IpInfo};
 // Record types queried for the base domain (15 types)
 // ---------------------------------------------------------------------------
 
-const CHECK_RECORD_TYPES: [RecordType; 15] = [
+pub(crate) const CHECK_RECORD_TYPES: [RecordType; 15] = [
     RecordType::A,
     RecordType::AAAA,
     RecordType::CAA,
@@ -842,7 +842,7 @@ pub fn unique_lines(results: Vec<CheckResult>) -> Vec<CheckResult> {
 /// needs no change is kept as is, a lookup whose records all repeat earlier ones is dropped,
 /// and a lookup that does not survive the serde round trip (e.g. a name with an escaped
 /// `\000` label) is kept as is, so it can only affect its own deduplication.
-fn unique_records(lookups: &Lookups) -> Lookups {
+pub(crate) fn unique_records(lookups: &Lookups) -> Lookups {
     use mhost::resolver::Lookup;
     use serde_json::Value;
     use std::collections::HashSet;

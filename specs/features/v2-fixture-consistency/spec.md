@@ -39,7 +39,11 @@ hand-edited status can not come back.
 - What the rebuild can not reproduce without DER or a production change, and so no fixture holds:
   TLSA records (`tls.tlsa`, DANE needs the served certificates' DER) and ALPN that differs between
   addresses (`tls.alpn_consistency` lists the addresses in hash-map order, so its finding is not
-  stable between calls).
+  stable between calls); in DNS an NSEC next name with an escaped `\000` label (mhost's name
+  parser refuses it); in email SPF `include:`, `redirect=` and `exists:` targets (their TXT and
+  address records are not in the evidence), a BIMI logo fetch, and an MTA-STS fetch that failed
+  other than "blocked". A missing email block is a failed lookup of its input, as a missing DNS
+  block is (Rule M).
 - Two checks read the wall clock: TLS (`expired` in `tls.chain`) and DNS (`dns.dnssec` over
   DNSKEY-covering RRSIGs). A fixture must give the same result on every day: TLS evaluates at
   the run's own measurement time (leaf `not_after` minus `days_remaining`); fixtures carry no
@@ -191,6 +195,7 @@ Tests in `crates/lens/tests/it/` (lens links every module's `testing` feature).
 - Facts no block holds are assumed well-behaved (chain trust, NS authority, the policy host's certificate): a fixture can not show what its evidence does not hold, and every story beat is reachable through evidence (implementer under the operator's autonomy mandate, 2026-10-20).
 - The guard lives in lens's `tests/it`: only lens links every module and the scoring that sets the grade, so the comparison covers the whole run, grade included (implementer under the operator's autonomy mandate, 2026-10-20).
 - Review of Phase 1: a lone self-signed certificate is not trusted by the rebuild; TLSA records and differing ALPN stay out of the fixtures (DANE needs DER; the ALPN finding's address order is a hash-map order, and fixing it would be a production change this feature excludes) (implementer under the operator's autonomy mandate, 2026-10-20).
+- Review of Phase 2: a missing email block is rebuilt as a failed lookup (Rule M), as in DNS; the NSEC `\000` next name, SPF include trees, BIMI logo fetches and non-blocked MTA-STS fetch failures are outside the rebuild and stay out of the fixtures, which use NSEC next names the parser reads and `v=spf1 mx -all` (implementer under the operator's autonomy mandate, 2026-10-20).
 
 ## Open decisions
 

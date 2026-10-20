@@ -63,8 +63,13 @@ percent-encoding = { workspace = true }
 # URL parsing (BIMI logo scheme validation)
 url = { workspace = true }
 
+# Loopback TLS listener serving a recorded MTA-STS policy (testing::from_evidence).
+rcgen = { version = "0.14", optional = true }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"], optional = true }
+tokio-rustls = { version = "0.26", optional = true }
+
 [features]
-testing = []
+testing = ["dep:rcgen", "dep:rustls", "dep:tokio-rustls"]
 
 [[test]]
 name = "module"
