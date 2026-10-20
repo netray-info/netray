@@ -116,6 +116,7 @@ mod fidelity_review_p5;
 mod fidelity_review_p6;
 mod fidelity_run_title;
 mod fidelity_score;
+mod fidelity_share;
 mod fidelity_since;
 mod fidelity_trace;
 mod gate;
