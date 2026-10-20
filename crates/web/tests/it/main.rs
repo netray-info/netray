@@ -240,6 +240,7 @@ mod shell_review_p2;
 mod shell_review_p3;
 mod shell_review_p5;
 mod shell_review_p6;
+mod shell_review_p7;
 mod shell_run_head;
 mod shell_same_rows;
 mod shell_shared;
