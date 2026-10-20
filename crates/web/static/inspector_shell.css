@@ -1,0 +1,107 @@
+.page-inspector {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.page-inspector__sep {
+  color: var(--color-muted);
+}
+.page-inspector__name {
+  color: var(--color-ink);
+  font-size: var(--font-size-inspector);
+  font-weight: 650;
+}
+.inspector-shell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.inspector-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  border-bottom: var(--line-hair) solid var(--color-line);
+}
+.inspector-tabs__tab {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border-bottom: var(--line-marker) solid transparent;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+  letter-spacing: var(--font-tracking-caps);
+  text-decoration: none;
+  text-transform: uppercase;
+}
+.inspector-tabs__tab[aria-current="page"] {
+  border-bottom-color: var(--color-ink);
+  color: var(--color-ink);
+}
+.inspector-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.inspector-examples__chip {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  text-decoration: none;
+}
+.inspector-examples__chip:hover {
+  color: var(--color-ink);
+}
+.inspector-run__head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.inspector-run__target {
+  margin: 0;
+  font-size: var(--font-size-target);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.inspector-backlink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+  text-decoration: none;
+}
+.inspector-backlink:hover {
+  color: var(--color-ink);
+}
+.inspector-backlink__grade {
+  color: var(--color-ink);
+  font-weight: var(--font-weight-bold);
+}
+.inspector-section {
+  margin-top: var(--space-5);
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+}
+.inspector-section h2 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-h2);
+  font-weight: 650;
+}

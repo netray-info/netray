@@ -68,6 +68,10 @@
 .page-footer a:hover {
   color: var(--color-ink);
 }
+.page-nav a[aria-current="page"] {
+  color: var(--color-ink);
+  font-weight: 600;
+}
 .theme-toggle {
   padding: 0;
   border: 0;

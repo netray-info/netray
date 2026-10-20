@@ -114,10 +114,14 @@ pub fn incomplete_run_line() -> RunLineView {
     }
 }
 
-/// The run line of a live inspector run: not stored.
-pub fn live_run_line() -> RunLineView {
+/// The run title of a live inspector run started at `now` (Unix seconds): not stored.
+pub fn live_run_title(now: i64) -> RunLineView {
     RunLineView {
-        parts: vec!["live".to_string(), "not recorded".to_string()],
+        parts: vec![
+            "live".to_string(),
+            format!("{} UTC", crate::pages::result::views::utc_minute(now)),
+            "not recorded".to_string(),
+        ],
     }
 }
 

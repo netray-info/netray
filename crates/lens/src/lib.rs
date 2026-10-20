@@ -302,7 +302,8 @@ pub fn app(state: state::AppState) -> Router {
             std::sync::Arc::new(netray_web::api::InspectJobs::new(api_state.clone())),
             config.inspect.clone(),
         )
-        .with_ip_extractor(state.ip_extractor.clone()),
+        .with_ip_extractor(state.ip_extractor.clone())
+        .with_history(state.history_store.clone()),
     );
 
     let api_routes = if config.api.enabled {

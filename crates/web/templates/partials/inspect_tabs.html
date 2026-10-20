@@ -1,0 +1,3 @@
+<nav class="inspector-tabs" id="inspector-tabs" aria-label="Inspectors">
+{% for tab in tabs %}<a class="inspector-tabs__tab" href="{{ tab.href }}"{% if tab.current %} aria-current="page"{% endif %}>{{ tab.label }}</a>
+{% endfor %}</nav>

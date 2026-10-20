@@ -4,9 +4,9 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::convert::Infallible;
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use askama::Template;
 use axum::Router;
@@ -24,7 +24,7 @@ use futures::stream::{BoxStream, FuturesUnordered};
 use netray_common::ip_extract::IpExtractor;
 use netray_engine::profile::Profiles;
 use netray_model::evidence::Block;
-use netray_model::{CheckResult, Protocol};
+use netray_model::{CheckResult, Grade, Protocol};
 use percent_encoding::{percent_decode_str, utf8_percent_encode};
 use serde::de::{Deserialize, Deserializer};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
@@ -35,15 +35,18 @@ use super::errors::LOCATION_SET;
 use super::headers::secure;
 use super::{Frame, not_found, page, server_error};
 use crate::client::client_ip;
-use crate::components::{self, QueryInputView, SpectrumView};
-use crate::evidence::{block_view, live_run_line};
+use crate::components::{self, QueryInputView, RunLineView, SpectrumView};
+use crate::entries::view::grade_letter;
+use crate::evidence::{block_view, live_run_title};
 use crate::spectrum::{RunInput, layout};
 use crate::stream::{end, fragment};
 
 const RESULT_ID: &str = "inspect-result";
-const BACKLINK_ID: &str = "inspect-backlink";
 const BAND_ID: &str = "inspect-band";
+const TABS_ID: &str = "inspector-tabs";
 const BAND_WIDTH: u32 = 432;
+/// The longest the run route waits for the back link's grade before it starts the job.
+const GRADE_READ_BUDGET: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Tool {
@@ -83,12 +86,39 @@ impl Tool {
         self as usize
     }
 
-    fn heading(self) -> &'static str {
+    fn name(self) -> &'static str {
         match self {
-            Tool::Dns => "DNS lookup",
+            Tool::Dns => "DNS inspector",
             Tool::Tls => "TLS inspector",
             Tool::Http => "HTTP inspector",
-            Tool::Ip => "IP lookup",
+            Tool::Ip => "IP inspector",
+        }
+    }
+
+    fn tagline(self) -> &'static str {
+        match self {
+            Tool::Dns => "DNS, resolved",
+            Tool::Tls => "TLS, illuminated",
+            Tool::Http => "HTTP, inspected",
+            Tool::Ip => "IP, located",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Tool::Dns => "Query",
+            Tool::Tls => "Host",
+            Tool::Http => "URL",
+            Tool::Ip => "Address",
+        }
+    }
+
+    fn examples(self) -> &'static [&'static str] {
+        match self {
+            Tool::Dns => &["example.com A", "_dmarc.example.com TXT"],
+            Tool::Tls => &["example.com", "netray.info"],
+            Tool::Http => &["https://example.com/", "https://netray.info/"],
+            Tool::Ip => &["192.0.2.1", "2001:db8::1"],
         }
     }
 
@@ -279,6 +309,7 @@ pub struct InspectDeps {
     config: InspectConfig,
     extractor: Arc<IpExtractor>,
     slots: [Arc<Semaphore>; 4],
+    history: Option<Arc<netray_store::HistoryStore>>,
 }
 
 impl InspectDeps {
@@ -291,6 +322,7 @@ impl InspectDeps {
             config,
             extractor: Arc::new(IpExtractor::new(&[])),
             slots,
+            history: None,
         }
     }
 
@@ -298,29 +330,62 @@ impl InspectDeps {
         self.extractor = extractor;
         self
     }
+
+    /// The store the run route reads the latest grade from for the back link; it never writes.
+    pub fn with_history(mut self, history: Option<Arc<netray_store::HistoryStore>>) -> Self {
+        self.history = history;
+        self
+    }
+}
+
+struct TabView {
+    label: &'static str,
+    href: String,
+    current: bool,
+}
+
+struct ExampleView {
+    href: String,
+    text: &'static str,
+}
+
+struct ShellView {
+    tool: &'static str,
+    field: &'static str,
+    name: &'static str,
+    tagline: &'static str,
+    query: QueryInputView,
+    stream_url: String,
+    autostart: bool,
+    tabs: String,
+    examples: Vec<ExampleView>,
+    slot: Option<String>,
 }
 
 #[derive(Template)]
 #[template(path = "pages/inspector.html")]
 struct InspectorPage {
     frame: Frame,
-    heading: &'static str,
-    query: QueryInputView,
-    stream_url: String,
-    autostart: bool,
-    link: Option<(String, String)>,
+    shell: ShellView,
 }
 
 #[derive(Template)]
-#[template(path = "partials/inspect_backlink.html")]
-struct BacklinkFragment {
-    link: Option<(String, String)>,
+#[template(path = "partials/inspect_dns_builder.html")]
+struct DnsBuilder;
+
+#[derive(Template)]
+#[template(path = "partials/inspect_tabs.html")]
+struct TabsFragment {
+    tabs: Vec<TabView>,
 }
 
 #[derive(Template)]
 #[template(path = "partials/inspect_start.html")]
 struct StartFragment {
-    run_line: String,
+    title: RunLineView,
+    target: String,
+    link: Option<(String, String)>,
+    grade: Option<&'static str>,
     parts: Vec<(usize, String)>,
     band: bool,
 }
@@ -329,6 +394,7 @@ struct StartFragment {
 #[template(path = "partials/inspect_part.html")]
 struct PartFragment {
     n: usize,
+    label: String,
     html: Option<String>,
     text: String,
 }
@@ -343,6 +409,7 @@ struct BandFragment {
 #[derive(Template)]
 #[template(path = "partials/inspect_notice.html")]
 struct NoticeFragment {
+    name: &'static str,
     message: String,
 }
 
@@ -365,31 +432,95 @@ async fn show(tool: Result<Path<String>, PathRejection>, uri: Uri) -> Response {
         .ok()
         .and_then(|Query(mut q)| q.remove(tool.field()))
         .filter(|v| !v.is_empty());
-    let link = prefill.as_deref().and_then(|input| backlink(tool, input));
     let name = tool.as_str();
+    let slot = match tool {
+        Tool::Dns => (DnsBuilder).render().ok(),
+        _ => None,
+    };
+    let Ok(tabs) = (TabsFragment {
+        tabs: tabs(tool, prefill.as_deref()),
+    })
+    .render() else {
+        return server_error();
+    };
+    let shell = ShellView {
+        tool: name,
+        field: tool.field(),
+        name: tool.name(),
+        tagline: tool.tagline(),
+        query: QueryInputView {
+            action: format!("/inspect/{name}"),
+            name: tool.field().to_string(),
+            label: tool.label().to_string(),
+            placeholder: tool.placeholder().to_string(),
+            value: prefill.clone(),
+            submit: "Inspect".to_string(),
+        },
+        stream_url: format!("/inspect/{name}/run"),
+        autostart: prefill.is_some(),
+        tabs,
+        examples: tool
+            .examples()
+            .iter()
+            .map(|text| ExampleView {
+                href: format!(
+                    "/inspect/{name}?{}={}",
+                    tool.field(),
+                    utf8_percent_encode(text, LOCATION_SET)
+                ),
+                text,
+            })
+            .collect(),
+        slot,
+    };
     page(
         StatusCode::OK,
         "no-cache",
         &InspectorPage {
             frame: Frame::new(
-                &format!("{} - netray", tool.heading()),
+                &format!("{} - netray", tool.name()),
                 "Run one check live and read the evidence as it arrives.",
                 &format!("/inspect/{name}"),
             ),
-            heading: tool.heading(),
-            query: QueryInputView {
-                action: format!("/inspect/{name}"),
-                name: tool.field().to_string(),
-                label: "Target".to_string(),
-                placeholder: tool.placeholder().to_string(),
-                value: prefill.clone(),
-                submit: "Run".to_string(),
-            },
-            stream_url: format!("/inspect/{name}/run"),
-            autostart: prefill.is_some(),
-            link,
+            shell,
         },
     )
+}
+
+/// The five tabs; the target of `input` rides along where the other inspector takes it.
+fn tabs(current: Tool, input: Option<&str>) -> Vec<TabView> {
+    let host = input.and_then(|i| target_host(current, i));
+    let address = input.and_then(|i| target_address(current, i));
+    let enc = |v: &str| utf8_percent_encode(v, LOCATION_SET).to_string();
+    let carried = |key: &str, tool: &str| -> Option<String> {
+        let value = match (tool, &host, &address) {
+            ("dns", Some(h), _) => h.clone(),
+            ("tls", Some(h), _) if is_ldh_host(h) => format!("{h}:443"),
+            ("http", Some(h), _) if is_ldh_host(h) => format!("https://{h}/"),
+            ("email", Some(h), _) => registrable_domain(h)?,
+            ("ip", _, Some(a)) => a.to_string(),
+            _ => return None,
+        };
+        Some(format!("/inspect/{tool}?{key}={}", enc(&value)))
+    };
+    [
+        ("DNS", "dns", "q"),
+        ("TLS", "tls", "h"),
+        ("HTTP", "http", "url"),
+        ("EMAIL", "email", "d"),
+        ("IP", "ip", "ip"),
+    ]
+    .into_iter()
+    .map(|(label, tool, key)| {
+        let is_current = tool == current.as_str();
+        let href = if is_current { None } else { carried(key, tool) };
+        TabView {
+            label,
+            href: href.unwrap_or_else(|| format!("/inspect/{tool}")),
+            current: is_current,
+        }
+    })
+    .collect()
 }
 
 /// The back-link target for an input: the `/{domain}` path and the domain, when it has one.
@@ -406,9 +537,10 @@ fn sse(status: StatusCode, events: Vec<Event>) -> Response {
     (status, Sse::new(stream)).into_response()
 }
 
-fn too_many_requests(retry_after: Duration) -> Response {
+fn too_many_requests(tool: Tool, retry_after: Duration) -> Response {
     let secs = retry_after.as_secs() + u64::from(retry_after.subsec_nanos() > 0);
     let mut response = notice(
+        tool,
         StatusCode::TOO_MANY_REQUESTS,
         format!("too many requests; try again in {secs} s"),
     );
@@ -416,8 +548,9 @@ fn too_many_requests(retry_after: Duration) -> Response {
     response
 }
 
-fn notice(status: StatusCode, message: String) -> Response {
-    match (NoticeFragment { message }).render() {
+fn notice(tool: Tool, status: StatusCode, message: String) -> Response {
+    let name = tool.name();
+    match (NoticeFragment { name, message }).render() {
         Ok(html) => sse(status, vec![fragment(RESULT_ID, &html), end()]),
         Err(_) => server_error(),
     }
@@ -453,15 +586,40 @@ async fn run(
 
     let Ok(permit) = deps.slots[tool.index()].clone().try_acquire_owned() else {
         return notice(
+            tool,
             StatusCode::SERVICE_UNAVAILABLE,
             "busy, try again in a moment".to_string(),
         );
     };
     if let Err(retry_after) = deps.jobs.admit(tool, client, &input) {
-        return too_many_requests(retry_after);
+        return too_many_requests(tool, retry_after);
     }
-    let link = backlink(tool, &input);
     let deadline = Instant::now() + Duration::from_millis(deps.config.limits(tool).deadline_ms);
+    let link = backlink(tool, &input);
+    let grade = match (&deps.history, &link) {
+        (Some(history), Some((_, domain))) => {
+            // The grade is decoration: a slow store costs it, never the job's budget.
+            let bound = deadline.min(Instant::now() + GRADE_READ_BUDGET);
+            match timeout_at(bound, history.head(domain)).await {
+                Ok(Ok(head)) => head.and_then(|head| letter(head.grade)),
+                Ok(Err(e)) => {
+                    tracing::warn!(domain = %domain, error = %e, "history lookup failed");
+                    None
+                }
+                Err(_) => {
+                    tracing::warn!(domain = %domain, "history lookup timed out");
+                    None
+                }
+            }
+        }
+        _ => None,
+    };
+    let target = target_heading(tool, &input, client);
+    let tabs = TabsFragment {
+        tabs: tabs(tool, Some(input.as_str()).filter(|i| !i.trim().is_empty())),
+    }
+    .render()
+    .ok();
     let mut job = match deps.jobs.start(JobRequest {
         tool,
         input,
@@ -469,17 +627,29 @@ async fn run(
         deadline: deadline.into_std(),
     }) {
         Ok(job) => job,
-        Err(message) => return notice(StatusCode::OK, message),
+        Err(message) => return notice(tool, StatusCode::OK, message),
     };
     if let Some(gate) = job.gate.take() {
         match timeout_at(deadline, gate).await {
             Ok(Ok(())) => {}
-            Ok(Err(Refusal::RateLimited(retry_after))) => return too_many_requests(retry_after),
-            Ok(Err(Refusal::Invalid(message))) => return notice(StatusCode::OK, message),
-            Err(_) => return notice(StatusCode::OK, "timed out".to_string()),
+            Ok(Err(Refusal::RateLimited(retry_after))) => {
+                return too_many_requests(tool, retry_after);
+            }
+            Ok(Err(Refusal::Invalid(message))) => return notice(tool, StatusCode::OK, message),
+            Err(_) => return notice(tool, StatusCode::OK, "timed out".to_string()),
         }
     }
-    match stream_job(job, link, permit, deadline) {
+    match stream_job(
+        job,
+        StartHead {
+            target,
+            link,
+            grade,
+            tabs,
+        },
+        permit,
+        deadline,
+    ) {
         Some(events) => (StatusCode::OK, Sse::new(events)).into_response(),
         None => server_error(),
     }
@@ -492,12 +662,13 @@ struct Run {
     pending: FuturesUnordered<BoxFuture<'static, PartOutput>>,
     waiting: BTreeSet<usize>,
     queue: VecDeque<Event>,
+    labels: Vec<String>,
     deadline: Instant,
     band: Option<(Protocol, BandChecks)>,
     ended: bool,
 }
 
-fn part_event(n: usize, result: Result<Vec<Block>, String>) -> Option<Event> {
+fn part_event(n: usize, label: &str, result: Result<Vec<Block>, String>) -> Option<Event> {
     let (html, text) = match result {
         Ok(blocks) => {
             let mut html = String::new();
@@ -508,7 +679,15 @@ fn part_event(n: usize, result: Result<Vec<Block>, String>) -> Option<Event> {
         }
         Err(text) => (None, text),
     };
-    let html = (PartFragment { n, html, text }).render().ok()?;
+    let label = label.to_string();
+    let html = (PartFragment {
+        n,
+        label,
+        html,
+        text,
+    })
+    .render()
+    .ok()?;
     Some(fragment(&format!("inspect-part-{n}"), &html))
 }
 
@@ -534,14 +713,37 @@ fn band_html(protocol: Protocol, checks: &[CheckResult]) -> Result<String, Strin
     components::spectrum(&SpectrumView::from_layout(&l, &label, 0)).map_err(|e| e.to_string())
 }
 
+/// What the start fragment's head shows: the target, the back link and the stored grade.
+struct StartHead {
+    target: String,
+    link: Option<(String, String)>,
+    grade: Option<&'static str>,
+    tabs: Option<String>,
+}
+
+/// The letter of a stored grade; `None` for a grade that is not a letter.
+fn letter(grade: Grade) -> Option<&'static str> {
+    match grade {
+        Grade::Incomplete => None,
+        grade => Some(grade_letter(grade)),
+    }
+}
+
 fn stream_job(
     job: Job,
-    link: Option<(String, String)>,
+    head: StartHead,
     permit: OwnedSemaphorePermit,
     deadline: Instant,
 ) -> Option<Events> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs() as i64);
+    let labels: Vec<String> = job.parts.iter().map(|part| part.label.clone()).collect();
     let start = StartFragment {
-        run_line: components::run_line(&live_run_line()).ok()?,
+        title: live_run_title(now),
+        target: head.target,
+        link: head.link,
+        grade: head.grade,
         parts: job
             .parts
             .iter()
@@ -552,7 +754,6 @@ fn stream_job(
     }
     .render()
     .ok()?;
-    let backlink = (BacklinkFragment { link }).render().ok()?;
     let pending: FuturesUnordered<_> = job
         .parts
         .into_iter()
@@ -565,10 +766,14 @@ fn stream_job(
         _permit: permit,
         waiting: (0..pending.len()).collect(),
         pending,
-        queue: VecDeque::from([
-            fragment(RESULT_ID, &start),
-            fragment(BACKLINK_ID, &backlink),
-        ]),
+        queue: [
+            Some(fragment(RESULT_ID, &start)),
+            head.tabs.map(|t| fragment(TABS_ID, &t)),
+        ]
+        .into_iter()
+        .flatten()
+        .collect(),
+        labels,
         deadline,
         band: job.band,
         ended: false,
@@ -598,7 +803,7 @@ fn stream_job(
             match timeout_at(run.deadline, run.pending.next()).await {
                 Ok(Some((n, result))) => {
                     run.waiting.remove(&n);
-                    let event = part_event(n, result)
+                    let event = part_event(n, &run.labels[n], result)
                         .unwrap_or_else(|| fragment(&format!("inspect-part-{n}"), "render failed"));
                     return Some((Ok(event), run));
                 }
@@ -607,7 +812,8 @@ fn stream_job(
                     run.pending.clear();
                     let late: Vec<usize> = std::mem::take(&mut run.waiting).into_iter().collect();
                     for n in late {
-                        if let Some(event) = part_event(n, Err("timed out".to_string())) {
+                        let timed_out = Err("timed out".to_string());
+                        if let Some(event) = part_event(n, &run.labels[n], timed_out) {
                             run.queue.push_back(event);
                         }
                     }
@@ -631,46 +837,108 @@ fn target_host(tool: Tool, input: &str) -> Option<String> {
     if host.is_empty() || host.parse::<IpAddr>().is_ok() {
         return None;
     }
-    if !host
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
-    {
-        return None;
-    }
-    Some(host)
+    netray_common::domain::validate(&host).ok()
 }
 
-/// The TLS inspector's order: percent-decode, then bracket, then `host:port`.
+/// The address a posted or prefilled input names, when it names one rather than a host.
+fn target_address(tool: Tool, input: &str) -> Option<IpAddr> {
+    let raw = match tool {
+        Tool::Dns => input.split_whitespace().next()?.to_string(),
+        Tool::Tls => tls_host(input)?,
+        Tool::Http => match http_url(input)?.host()? {
+            Host::Ipv4(a) => return Some(a.into()),
+            Host::Ipv6(a) => return Some(a.into()),
+            Host::Domain(_) => return None,
+        },
+        Tool::Ip => input.trim().to_string(),
+    };
+    raw.parse().ok()
+}
+
+/// The heading of a run: the target as the job reads it. An empty IP input names the caller, an
+/// HTTP input its URL with `https://` assumed, a TLS input its host with 443 when it names no port.
+fn target_heading(tool: Tool, input: &str, client: IpAddr) -> String {
+    let trimmed = input.trim();
+    match tool {
+        Tool::Ip if trimmed.is_empty() => client.to_string(),
+        Tool::Http => http_url(trimmed).map_or_else(|| trimmed.to_string(), |url| url.to_string()),
+        Tool::Tls => tls_heading(input),
+        _ => trimmed.to_string(),
+    }
+}
+
+fn tls_heading(input: &str) -> String {
+    let decoded = percent_decode_str(input)
+        .decode_utf8()
+        .map_or_else(|_| input.trim().to_string(), |d| d.trim().to_string());
+    if decoded.parse::<Ipv6Addr>().is_ok() {
+        return format!("[{decoded}]:443");
+    }
+    if decoded.starts_with('[') {
+        return if decoded.ends_with(']') {
+            format!("{decoded}:443")
+        } else {
+            decoded
+        };
+    }
+    match port_split(&decoded) {
+        Some((host, ports)) => format!("{}:{ports}", host.trim_end_matches('.')),
+        None => format!("{}:443", decoded.trim_end_matches('.')),
+    }
+}
+
+/// `host:ports` split at the last colon when a port list follows it.
+fn port_split(input: &str) -> Option<(&str, &str)> {
+    let (host, ports) = input.rsplit_once(':')?;
+    is_ports(ports).then_some((host, ports))
+}
+
+fn is_ports(s: &str) -> bool {
+    !s.is_empty() && s.chars().all(|c| c.is_ascii_digit() || c == ',')
+}
+
+/// The TLS inspector's order: percent-decode, then bracket, then `host:port`. A bracketed
+/// input gives the address inside the brackets.
 fn tls_host(input: &str) -> Option<String> {
     let decoded = percent_decode_str(input).decode_utf8().ok()?;
     let input = decoded.trim();
-    if input.starts_with('[') {
-        return None;
+    if let Some(rest) = input.strip_prefix('[') {
+        let (addr, after) = rest.split_once(']')?;
+        let ports_ok = after.is_empty() || after.strip_prefix(':').is_some_and(is_ports);
+        return ports_ok.then(|| addr.to_string());
     }
-    match input.rfind(':') {
-        Some(colon) => {
-            let after = &input[colon + 1..];
-            let is_ports =
-                !after.is_empty() && after.chars().all(|c| c.is_ascii_digit() || c == ',');
-            is_ports.then(|| input[..colon].to_string())
-        }
-        None => Some(input.to_string()),
+    if input.contains(':') {
+        port_split(input).map(|(host, _)| host.to_string())
+    } else {
+        Some(input.to_string())
     }
 }
 
-/// The HTTP inspector's reading of the URL: `https://` assumed, a domain host only.
-fn http_host(input: &str) -> Option<String> {
+/// The HTTP inspector's reading of the URL: `https://` assumed when it names no scheme.
+fn http_url(input: &str) -> Option<Url> {
     let input = input.trim();
-    let url = if input.contains("://") {
+    if input.contains("://") {
         Url::parse(input)
     } else {
         Url::parse(&format!("https://{input}"))
     }
-    .ok()?;
-    match url.host()? {
+    .ok()
+}
+
+/// The HTTP inspector's host: a domain host only.
+fn http_host(input: &str) -> Option<String> {
+    match http_url(input)?.host()? {
         Host::Domain(domain) => Some(domain.to_string()),
         _ => None,
     }
+}
+
+/// A host the TLS and HTTP inspectors take: LDH labels, at least one dot.
+fn is_ldh_host(host: &str) -> bool {
+    host.contains('.')
+        && host.split('.').all(|label| {
+            !label.is_empty() && label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+        })
 }
 
 /// The registrable domain of a host name (Public Suffix List); `None` for a public suffix.

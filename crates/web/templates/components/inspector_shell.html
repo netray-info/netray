@@ -1,0 +1,12 @@
+{% import "components/query_input.html" as c %}
+{% macro inspector_shell(shell) %}
+<div class="inspector-shell" data-island="shell" data-tool="{{ shell.tool }}" data-field="{{ shell.field }}">
+{{ shell.tabs|safe }}
+{% call c::query_input(shell.query, shell.stream_url, shell.autostart, true) %}{% endcall %}
+{% if let Some(slot) = shell.slot %}{{ slot|safe }}{% endif %}
+<noscript><p>A live run needs JavaScript. Enable it, or read the guides.</p></noscript>
+<div id="inspect-result"><h1 class="visually-hidden">{{ shell.name }}</h1><ul class="inspector-examples">
+{% for example in shell.examples %}<li><a class="inspector-examples__chip" href="{{ example.href }}" data-example="{{ example.text }}">{{ example.text }}</a></li>
+{% endfor %}</ul></div>
+</div>
+{% endmacro %}

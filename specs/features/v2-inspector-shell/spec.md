@@ -138,13 +138,17 @@ Each requirement names the inventory rows or board rows it closes.
    DNS query name or of an email domain becomes `?q=<host>` for DNS, `?h=<host>:443` for TLS,
    `?url=https://<host>/` for HTTP, `?d=<registrable domain>` for email; IP takes an address
    target only. A non-ASCII host is carried in its UTS #46 form (`xn--…`), as
-   `netray_common::domain::validate` maps it. (9.49, 3.33, 6.7; boards 17/18)
+   `netray_common::domain::validate` maps it; TLS and HTTP get only a host name they take (letters,
+   digits and hyphens in dotted labels), so `_dmarc.example.com` leaves their tabs bare. A run's
+   stream re-renders the tabs for the posted target, so they follow a run started in the page.
+   (9.49, 3.33, 6.7; boards 17/18)
 4. **Query form.** A surface card with padding 18 px: the field label (12 px sans: "Query",
    "Host", "URL", "Domain", "Address"), the input 44 px tall in mono 16 px on the `bg` fill, a
-   clear button "×" inside the input's end that empties and focuses it (shown only when the input
-   holds text), and the submit button "Inspect" (44 px, 14 px weight 600, primary style). (9.51,
+   clear button "×" inside the input's end that empties and focuses it (shown by the island only
+   when the input holds text; the server renders it hidden, since it needs JavaScript), and the submit button "Inspect" (44 px, 14 px weight 600, primary style). (9.51,
    3.42, 4.4; boards 17/18)
-5. **Example chips.** Under the form while no run is shown, two to four example queries per tool
+5. **Example chips.** Under the form while no run is shown (in the result region a run or a notice
+   replaces; after a notice the form stays for the next query), two to four example queries per tool
    as links to the prefilled page; with JavaScript activating one fills the input and submits.
    (3.41, 4.2)
 6. **Run title, heading and back link.** A run's result starts with the run title "LIVE ·
@@ -152,7 +156,7 @@ Each requirement names the inventory rows or board rows it closes.
    the target as the job read it (`example.com:443`, the URL, the query, the domain, the address)
    at 32 px weight 650. On the same line as the run title, right-aligned, the back link "Back to
    the result of <domain> →" to `/<registrable domain>`, preceded by that domain's latest stored
-   grade letter when it has an entry; the route reads the grade with the history store's latest
+   grade letter when its latest entry has a letter grade (an incomplete entry shows none); the route reads the grade with the history store's latest
    entry, and no job reads or writes the store (v2-inspectors requirement 11 holds). (9.52, 9.53;
    boards 17/18)
 7. **Section headings.** Each result section is its own card with an h2 at 20 px weight 650; the
@@ -539,6 +543,10 @@ GIVEN the screenshots WHEN read beside board G THEN every finding is a `report.m
   2026-10-19).
 - Result-page help, shortcuts and copy as Markdown (1.11, 1.20, 1.21, 7.64) are built here, on the
   shared component, after `v2-result-fidelity` (drafting agent, 2026-10-19).
+- Phase 1 review: a notice keeps a visually hidden h1 naming the inspector; the grade read is
+  bounded by 500 ms (and the run's deadline) and a store error is logged and read as no entry; a modified click
+  on an example chip stays a link (implementer under the operator's autonomy mandate,
+  2026-10-20).
 - The Inspectors menu and the full footer of canvas v43 belong to the site-navigation feature
   (theme J); a reader's finding on G's chevron or footer is answered by this non-goal
   (implementer under the operator's autonomy mandate, 2026-10-20).
