@@ -214,7 +214,7 @@ When modifying API endpoints or adding features, verify:
 - [ ] Port limits respected (max 7 per request, 1-65535)
 - [ ] IP-per-hostname limit respected (max 10)
 - [ ] Timeouts enforced (5s per-handshake, 15s per-request)
-- [ ] Rate limiting applied with correct cost calculation (ports * inspected_ips)
+- [ ] Rate limiting applied with correct cost calculation: ports * (inspected_ips + probe_connections * probed_ips), one plan (`routes::plan_budget`); probes are capped, never refused
 - [ ] `AcceptAnyCert` verifier used only for inspection connections
 - [ ] STARTTLS targets pass the same target policy validation (RFC 1918 / loopback blocklist) as direct TLS targets
 - [ ] No application data sent after TLS handshake (handshake only, then close)

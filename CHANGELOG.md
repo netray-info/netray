@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-**Grades change (scoring profile v4).** Three new graded checks: `tls.legacy_versions` (SSLv3, TLS 1.0 or TLS 1.1 accepted fails), `tls.weak_suites` (RC4, 3DES, DES, export, NULL or anonymous suites fail; CBC or static RSA suites warn) and `http.coop` (a missing, `unsafe-none` or unrecognised Cross-Origin-Opener-Policy warns). Every domain's grade may change once; the first v4 run of each domain is recorded as a new history entry whose diff shows the three checks as added by release. The diff's grade split cannot attribute their effect to the profile: the stored v3 run never measured them, so it re-scores under v4 to its old grade, and a letter change they cause appears on the domain step beside the added-by-release rows that name its cause. A server that resets or closes the connection instead of answering a legacy-version probe with an alert, and accepts no other legacy version, leaves `tls.legacy_versions` unmeasured, so the TLS section is incomplete and the run gets no letter unless a hard-fail check failed.
+**Grades change (scoring profile v4).** Three new graded checks: `tls.legacy_versions` (SSLv3, TLS 1.0 or TLS 1.1 accepted fails), `tls.weak_suites` (RC4, 3DES, DES, export, NULL or anonymous suites fail; CBC or static RSA suites warn) and `http.coop` (a missing, `unsafe-none` or unrecognised Cross-Origin-Opener-Policy warns). Every domain's grade may change once; the first v4 run of each domain is recorded as a new history entry whose diff shows the three checks as added by release. The diff's grade split cannot attribute their effect to the profile: the stored v3 run never measured them, so it re-scores under v4 to its old grade, and a letter change they cause appears on the domain step beside the added-by-release rows that name its cause. A server that resets or closes the connection after a probe's ClientHello instead of answering with an alert (Windows SChannel refuses disabled versions this way) has refused that version or suite group: the evidence answers `closed` or `closed (reset)`, and `tls.legacy_versions` and `tls.weak_suites` grade it like an alert. A timeout, a partial answer before the close or a failure before the ClientHello was sent leaves that probe unanswered; the check is then unmeasured unless another probe decides it.
 
 ### Added
 
@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The ten R44 components, each an askama macro with its own stylesheet and view struct. The spectrum and trace keep the SDD's drawing rules.
   - The W5b logo, the favicon, the badge mark and the tagline partial.
   - A gate test refuses colours, radii, fonts and line widths outside the tokens, a component's classes outside its own files, and inline scripts or event handlers in templates.
+
+### Changed
+
+- **TLS probes are charged and bounded.** Probe connections (seven per probed address and port) are charged to the TLS rate limiters beside the handshakes. When they do not fit the burst, fewer addresses are probed, one kept before further handshakes, with the warning `rate limit: probing K of N addresses to stay within budget`; probes never cause a refusal. At the default burst of 10 on one port a host with more than three addresses is inspected on three. The handshake permit is released after the handshake, and probes wait for their own permits within the handshake timeout, so a hanging server no longer stalls queued inspections.
 
 ## [0.26.0] - 2026-10-14
 
