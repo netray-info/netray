@@ -187,6 +187,7 @@ async fn idle(uri: Uri) -> Response {
                 "/",
             ),
             query: query_view(None),
+            legend: crate::grade_legend::legend(),
         },
     )
 }
@@ -1570,4 +1571,5 @@ struct HistoryPage {
 struct IdlePage {
     frame: Frame,
     query: QueryInputView,
+    legend: Vec<(&'static str, &'static str, &'static str, &'static str)>,
 }

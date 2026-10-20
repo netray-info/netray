@@ -35,3 +35,13 @@
 ## Plan
 
 - G1: `templates/base.html` (footer), `src/pages/mod.rs` (`VERSION`), `static/pages.css` (desktop and phone rules), `src/entries/render.rs` (the gone page's inline sheet).
+
+## Phase 4 — Home grade legend
+
+## Groups
+
+- G1 (C1–C3): legend rows and the inspector line.
+
+## Plan
+
+- G1: `src/grade_legend.rs` (`legend`), `src/pages/result/mod.rs` (`IdlePage`), `templates/pages/idle.html`, `static/pages.css`.

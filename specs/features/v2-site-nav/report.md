@@ -119,3 +119,29 @@ Changed protected tests: `entries_gone.rs` (host names are read outside the site
 ### Behavioural verification
 
 skipped: router-level tests; desktop and phone values measured in headless Chromium by the reader (1280, 480 and 390 px match boards F, G and M); the live stack runs in Phase 7.
+
+## Phase 4 — Home grade legend
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R12 home legend: six rows A+ to F, letter in its grade tone, descriptor weight 600, meaning muted, from grade_legend; How scoring works link; inspector line adds Email | green | crates/web/tests/it/site_nav_legend.rs |
+| C2 | S / lists A+, A, B, C, D, F with excellent and ahead of most domains in A+, critical and fix today in F; links /guide/scoring | green | crates/web/tests/it/site_nav_legend.rs |
+| C3 | S / inspector line links /inspect/email | green | crates/web/tests/it/site_nav_legend.rs |
+
+Changed protected tests: `site_nav_legend.rs` (the legend's classes are `score-key`: the gate gives every `.grade-` selector to the grade component; the tagline is found as the page's paragraph, not the meta description).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 legend and inspector line | 2 | orchestrator | 0 | 0 |
+
+### Review
+
+No findings (reader: engineering and testing lenses).
+
+### Behavioural verification
+
+skipped: router-level test renders `/`; screenshots in Phase 7.

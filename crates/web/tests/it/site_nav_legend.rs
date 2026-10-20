@@ -120,24 +120,24 @@ async fn c1_the_home_legend_holds_six_rows_from_grade_legend() {
     assert_eq!(status, StatusCode::OK);
 
     let mut expected = String::from(
-        "<section class=\"grade-legend\" aria-labelledby=\"grade-legend-title\">\n\
-         <h2 id=\"grade-legend-title\">What the grades mean</h2>\n\
-         <dl class=\"grade-legend__rows\">\n",
+        "<section class=\"score-key\" aria-labelledby=\"score-key-title\">\n\
+         <h2 id=\"score-key-title\">What the grades mean</h2>\n\
+         <dl class=\"score-key__rows\">\n",
     );
     for (letter, tone, grade) in rows() {
         let (descriptor, meaning) = descriptor(grade).split_once(", ").unwrap();
         expected.push_str(&format!(
-            "<div class=\"grade-legend__row\" data-tone=\"{tone}\"><dt class=\"grade-legend__letter\">{letter}</dt><dd><span class=\"grade-legend__descriptor\">{descriptor}</span> <span class=\"grade-legend__meaning\">{meaning}</span></dd></div>\n"
+            "<div class=\"score-key__row\" data-tone=\"{tone}\"><dt class=\"score-key__letter\">{letter}</dt><dd><span class=\"score-key__descriptor\">{descriptor}</span> <span class=\"score-key__meaning\">{meaning}</span></dd></div>\n"
         ));
     }
     assert!(body.contains(&expected), "legend markup missing in {body}");
 
     let form_end = body.find("</form>").expect("no </form>");
     let section = body
-        .find("<section class=\"grade-legend\"")
+        .find("<section class=\"score-key\"")
         .expect("no legend");
     let tagline = body
-        .find("Every check of a domain, in one spectrum.")
+        .find("<p>Every check of a domain, in one spectrum.</p>")
         .expect("no tagline");
     assert!(form_end < section && section < tagline, "{body}");
 }
@@ -148,13 +148,13 @@ async fn c2_the_legend_lists_the_grades_and_links_the_scoring_guide() {
     let (_, _, body) = get(&app, "/").await;
 
     let start = body
-        .find("<section class=\"grade-legend\"")
+        .find("<section class=\"score-key\"")
         .expect("no legend");
     let end = start + body[start..].find("</section>").expect("legend unclosed");
     let legend = &body[start..end];
     let mut from = 0;
     for letter in ["A+", "A", "B", "C", "D", "F"] {
-        let needle = format!("<dt class=\"grade-legend__letter\">{letter}</dt>");
+        let needle = format!("<dt class=\"score-key__letter\">{letter}</dt>");
         let at = legend[from..]
             .find(&needle)
             .unwrap_or_else(|| panic!("{needle} missing or out of order in {legend}"));
@@ -196,21 +196,21 @@ async fn c3_the_inspector_line_links_email_beside_the_others() {
 fn c1_the_legend_styles_resolve_to_the_grade_tones() {
     let css = all_css().join("\n");
     let rows = [
-        (".grade-legend__letter", "color:var(--grade-tone)"),
+        (".score-key__letter", "color:var(--key-tone)"),
         (
-            ".grade-legend__row[data-tone=\"pass\"]",
-            "--grade-tone:var(--status-pass-text)",
+            ".score-key__row[data-tone=\"pass\"]",
+            "--key-tone:var(--status-pass-text)",
         ),
         (
-            ".grade-legend__row[data-tone=\"warn\"]",
-            "--grade-tone:var(--status-warn-text)",
+            ".score-key__row[data-tone=\"warn\"]",
+            "--key-tone:var(--status-warn-text)",
         ),
         (
-            ".grade-legend__row[data-tone=\"fail\"]",
-            "--grade-tone:var(--status-fail-text)",
+            ".score-key__row[data-tone=\"fail\"]",
+            "--key-tone:var(--status-fail-text)",
         ),
-        (".grade-legend__descriptor", "font-weight:600"),
-        (".grade-legend__meaning", "color:var(--color-muted)"),
+        (".score-key__descriptor", "font-weight:600"),
+        (".score-key__meaning", "color:var(--color-muted)"),
     ];
     for (selector, decl) in rows {
         assert!(
