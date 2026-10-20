@@ -174,7 +174,8 @@ fn md_fields(fields: &[(String, netray_model::evidence::Value)]) -> String {
 /// Escaped text that stands at the start of a line: a leading list marker (`-`, `+`, `1.`, `1)`)
 /// is escaped too, so the text never becomes a list.
 fn md_line(s: &str) -> String {
-    let out = md_escape(s);
+    // Leading whitespace (a newline becomes a space) never hides a marker from the check.
+    let out = md_escape(s.trim_start());
     if out.starts_with(['-', '+']) {
         return format!("\\{out}");
     }
