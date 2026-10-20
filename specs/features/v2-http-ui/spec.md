@@ -1,7 +1,8 @@
 # Spec: v2-http-ui
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-20
+Finished: 2026-10-21
 
 ## Goal
 
@@ -342,6 +343,9 @@ GIVEN `/inspect/http` at 390 px with the 4 kB policy WHEN measured THEN the docu
   design check's second TLS board (GDark) was refused "too many requests": the design stack now
   raises lens's `[api.tls]` limiters (`tests/acceptance/design/stack.sh`); `just design-check`
   exits 0 again (implementer under the operator's autonomy mandate, 2026-10-21).
+- Finish: the distilled entries (four CLAUDE.md bullets, one solutions note) are written without
+  the operator's confirmation, under the autonomy mandate; the operator may drop any of them
+  (implementer under the operator's autonomy mandate, 2026-10-21).
 - Board: none for the HTTP inspector; it follows board G's frame. Proposal for the operator: add an
   "HTTP inspector" board (CSP table, caching and isolation cells) to the canvas so later runs of
   `just design-check` measure it (drafting agent, 2026-10-20).
