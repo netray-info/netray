@@ -524,6 +524,8 @@ async fn do_inspect(
 pub struct InspectRequest {
     pub parsed: input::ParsedInput,
     pub ips: Vec<IpAddr>,
+    /// How many of `ips`, from the first, are probed after their handshake (the plan's charge).
+    pub probed: usize,
     pub warnings: Vec<String>,
     pub skipped_ips: Vec<String>,
     pub request_id: String,
@@ -570,16 +572,53 @@ pub fn filter_allowed(
     Ok(allowed_ips)
 }
 
-/// The addresses `budget` handshakes over `ports` ports cover (at least one): all of them if
-/// they fit, else representative ones with the cap-and-warn warning, and the skipped ones.
-pub fn cap_to_budget(
+/// The addresses an inspection covers within a rate-limit budget, how many of them (the first,
+/// in selection order) are probed, and what that costs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Plan {
+    pub ips: Vec<IpAddr>,
+    pub skipped: Vec<String>,
+    pub probed: usize,
+    pub cost: u32,
+}
+
+/// The counts of inspected and probed addresses out of `addresses` within `budget`: on each of
+/// `ports` ports an inspected address costs 1 and a probed one `probes` more. All of them when
+/// the whole cost fits; else, when one probed address fits on every port, as many inspected
+/// addresses as leave room for it and as many probed as the rest pays for; else at least one
+/// inspected address and none probed. With `probes` 0 every inspected address is probed.
+pub fn plan_counts(addresses: usize, ports: usize, budget: u32, probes: u32) -> (usize, usize) {
+    let ports = ports.max(1) as u32;
+    let total = addresses as u32;
+    if ports * total * (1 + probes) <= budget {
+        return (addresses, addresses);
+    }
+    if probes > 0 && budget >= ports * (1 + probes) {
+        let inspected = ((budget - ports * probes) / ports).min(total);
+        let probed = ((budget - ports * inspected) / (ports * probes)).min(inspected);
+        return (inspected as usize, probed as usize);
+    }
+    let inspected = (budget / ports).max(1).min(total.max(1)) as usize;
+    (inspected, if probes == 0 { inspected } else { 0 })
+}
+
+/// The cost of `inspected` addresses, `probed` of them probed, over `ports` ports.
+pub fn plan_cost(ports: usize, inspected: usize, probed: usize, probes: u32) -> u32 {
+    ports.max(1) as u32 * (inspected as u32 + probes * probed as u32)
+}
+
+/// The plan for `ips` over `ports` ports within `budget` (see `plan_counts`): representative
+/// addresses with the cap-and-warn warning when not all fit, and a warning when not every
+/// inspected address is probed.
+pub fn plan_budget(
     ips: &[IpAddr],
     ports: usize,
     budget: u32,
+    probes: u32,
     warnings: &mut Vec<String>,
-) -> (Vec<IpAddr>, Vec<String>) {
-    let ip_budget = (budget / ports as u32).max(1) as usize;
-    let (selected, skipped) = select_representative_ips(ips, ip_budget);
+) -> Plan {
+    let (inspected, probed) = plan_counts(ips.len(), ports, budget, probes);
+    let (selected, skipped) = select_representative_ips(ips, inspected);
     if !skipped.is_empty() {
         warnings.push(format!(
             "rate limit: inspecting {} of {} IPs to stay within budget",
@@ -587,7 +626,19 @@ pub fn cap_to_budget(
             selected.len() + skipped.len()
         ));
     }
-    (selected, skipped.iter().map(|ip| ip.to_string()).collect())
+    let probed = probed.min(selected.len());
+    if probed < selected.len() {
+        warnings.push(format!(
+            "rate limit: probing {probed} of {} addresses to stay within budget",
+            selected.len()
+        ));
+    }
+    Plan {
+        cost: plan_cost(ports, selected.len(), probed, probes),
+        ips: selected,
+        skipped: skipped.iter().map(|ip| ip.to_string()).collect(),
+        probed,
+    }
 }
 
 /// The inspection of `req.ips`: enrichment, CAA/TLSA/ECH, per-port handshakes, consistency,
@@ -600,6 +651,7 @@ pub async fn inspect(
     let InspectRequest {
         parsed,
         ips: inspected_ips,
+        probed,
         mut warnings,
         skipped_ips,
         request_id,
@@ -725,6 +777,7 @@ pub async fn inspect(
                         check_ct,
                         semaphore,
                         backend,
+                        probed,
                     },
                 )
                 .await
@@ -1053,6 +1106,8 @@ struct PortEnv {
     check_ct: bool,
     semaphore: Arc<tokio::sync::Semaphore>,
     backend: Arc<dyn TlsBackend>,
+    /// The addresses, from the first, whose probes the plan charged.
+    probed: usize,
 }
 
 /// Inspect a single port across all IPs.
@@ -1068,6 +1123,7 @@ async fn inspect_port(
         check_ct,
         semaphore,
         backend,
+        probed,
     } = env;
     let mut join_set = tokio::task::JoinSet::new();
 
@@ -1118,7 +1174,7 @@ async fn inspect_port(
                 Some(tls::ocsp::check_live_ocsp(&ocsp_url, &leaf_der, &issuer_der).await)
             };
             let probes = async {
-                match &version {
+                match version.as_ref().filter(|_| idx < probed) {
                     Some(version) => {
                         backend
                             .probe(ip, port, hostname.as_deref(), version, timeout)

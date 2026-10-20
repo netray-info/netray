@@ -44,3 +44,50 @@ C14 pass without the change because the module already reads any `Refused` outco
 skipped: the phase changes a library function; `probe_address` runs end to end against the
 in-process close and reset responders on 127.0.0.1 (C11, C12). A live target needs DNS, blocked
 locally.
+
+## Phase 2 — Probes are charged
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R4 probe_connections: live 7, stub 7 with canned probes, 0 without | green | crates/tls/tests/it/probe_budget.rs, crates/tls/tests/inspector.rs |
+| C2 | R5 one plan decides inspected and probed addresses for a budget | green | crates/tls/tests/it/probe_budget.rs |
+| C3 | R6 the inspector plans against the smaller burst and charges the planned cost once | green | crates/tls/tests/inspector.rs |
+| C4 | R7 the module plans against check_budget and its per-target burst and charges the plan | already_implemented | crates/tls/tests/it/module_limits.rs |
+| C5 | R8 the inspector job admission charges the one-address plan | green | crates/web/tests/it/inspect_tls_probe_cost.rs |
+| C6 | R9 inspect_port probes only the planned addresses after a successful handshake | green | crates/tls/tests/inspector.rs |
+| C7 | R12 SDD and crates/tls/CLAUDE.md state the cost | test-unwritable | prose: specs/sdd/v2.md §3.7, crates/tls/CLAUDE.md |
+| C8 | one address, one port, budget 10: inspected and probed at cost 8 | green | crates/tls/tests/it/probe_budget.rs |
+| C9 | two addresses, budget 10: both inspected, first probed, cost 9, probing 1 of 2 | green | crates/tls/tests/it/probe_budget.rs |
+| C10 | four addresses, budget 10: three inspected, one probed, inspecting 3 of 4 | green | crates/tls/tests/it/probe_budget.rs |
+| C11 | two ports, one address, budget 10: none probed, probing 0 of 1 | green | crates/tls/tests/it/probe_budget.rs |
+| C12 | zero probe connections: cap-and-warn as before | green | crates/tls/tests/it/probe_budget.rs |
+| C13 | probe_connections of live and stub backends | green | crates/tls/tests/it/probe_budget.rs, crates/tls/tests/inspector.rs |
+| C14 | inspector burst 10 with probes: the second inspection is rate limited | green | crates/tls/tests/inspector.rs |
+| C15 | inspector two addresses with probes: both handshaken, first probed, warning | green | crates/tls/tests/inspector.rs |
+| C16 | inspector burst 3, four ports: CostExceedsLimit 4 over 3, nothing charged | already_implemented | crates/tls/tests/inspector.rs |
+| C17 | module per_target_burst 2: two runs reach the policy, the third is rate limited | already_implemented | crates/tls/tests/it/module_limits.rs |
+| C18 | inspector job admission burst 10 with probes: the second admission is refused | green | crates/web/tests/it/inspect_tls_probe_cost.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 0 | implementer (plan in routes.rs, wired into inspector, module, jobs; coded directly) | 0 | 0 |
+
+### Review
+
+- AMENDMENT (repaired in phase): the inspector job's per-job limiter used the per-IP burst while
+  admission planned against the smaller burst, so with a smaller per-target burst the job ran
+  probes admission never charged; the job now plans against the smaller burst.
+- Everything else traced: the plan's three branches, the inspector's single charge (it also drops
+  the old double per-IP charge when per-target refused), the module's budget, inspect_port's
+  probed index.
+
+### Behavioural verification
+
+skipped: the entry points (`POST /api/v1/tls/inspect`, the inspect page, lens runs) need DNS for a
+live target, blocked locally; the inspector, the module and the job admission run end to end over
+the stub backend in `crates/tls/tests/inspector.rs`, `crates/tls/tests/it/module_limits.rs` and
+`crates/web/tests/it/inspect_tls_probe_cost.rs`.

@@ -194,6 +194,10 @@ GIVEN a probe semaphore permit held elsewhere for longer than the handshake time
   for them. That pre-dates this feature (v2-inspector-shell) and is bounded by the burst; making
   the job charge per address is deferred (implementer under the operator's autonomy mandate,
   2026-10-19).
+- Phase 2 review: the inspector job's own limiter now takes the smaller `[api.tls]` burst, the
+  budget its admission plans against, so a job never probes an address its admission did not
+  charge (was the per-IP burst alone: with a smaller per-target burst, admission charged 1 and the
+  job opened 8 connections) (implementer under the operator's autonomy mandate, 2026-10-19).
 - No global limiter is added: the TLS inspection has none to charge (implementer under the
   operator's autonomy mandate, 2026-10-19).
 - Probe concurrency reuses `max_concurrent_handshakes` as the number of addresses probing at once

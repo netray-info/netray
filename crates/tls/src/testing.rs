@@ -174,6 +174,15 @@ impl TlsBackend for StubTlsBackend {
         })
     }
 
+    /// Canned probes cost what the live backend's do; without them the stub probes nothing.
+    fn probe_connections(&self) -> u32 {
+        if self.probes.is_some() {
+            crate::tls::probe::ProbeKind::ALL.len() as u32
+        } else {
+            0
+        }
+    }
+
     fn probe<'a>(
         &'a self,
         ip: IpAddr,
