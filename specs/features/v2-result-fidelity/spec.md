@@ -1,7 +1,8 @@
 # Spec: v2-result-fidelity
 
-Status: Ready
+Status: Done
 Created: 2026-10-19
+Finished: 2026-10-20
 
 ## Goal
 
@@ -535,6 +536,8 @@ GIVEN the side-by-side images WHEN a reader compares them THEN every finding is 
 - Phase 8 visual reading: line labels set at line-height 1; no trace and no replay gutter for a single run (board FFirst), the figure then full width; the first-run ghost row drawn as board FFirst's waterfall row; the stepper greys the step that leads nowhere; the phone hides the feeds line and "· checks that pass" (board M); phone table cells do not wrap (implementer under the operator's autonomy mandate, 2026-10-20).
 
 - Final review: the score rounds down (rounding half up showed "90" under a B at 89.7, against requirement 5's no-contradiction rule); the hard-fail sentence carries the 3 px fail bar; the phone trace has no edge dates (board M); the swipe note appears only in a panel holding a table; an unstored or unrecorded run of a domain without history heads its diff box "This run" (implementer under the operator's autonomy mandate, 2026-10-20).
+
+- Finish entries (CLAUDE.md bullets, the solutions note, the check to build) written without an operator question under the mandate (implementer under the operator's autonomy mandate, 2026-10-20).
 
 ### Proposals for the operator
 

@@ -423,3 +423,7 @@ dialog open after Esc: false focus on share: share
 Accepted (operator decision, Decision log): `D3 · Analyzer — history (option 1+2), light/dark: history rows background-color` (board F's waterfall cells against the per-line trace). Every board has a side-by-side image under `target/design/`. The theme toggle and the footer of canvas v41 are built but not measured: the export (2026-10-19 14:47) predates them; their measurement waits for the operator's fresh export.
 
 Visual reading: an independent reader compared all eight side-by-sides (34 segments) and reported 16 findings (V1–V16 above); each is closed by a fix, as sample data, as specified, or as a proposal for the operator.
+
+### Checks to build
+
+- A file that `crates/web/islands/src/main.ts` imports or an askama template path names (`#[template(path = …)]`, `{% include %}`, `{% import %}`) is tracked by git: `tests/repo/test_tracked_sources.sh` (Phase 5's `tabs.ts` and two partials stayed untracked through `git add -u` and passed every local gate).

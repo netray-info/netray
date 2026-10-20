@@ -43,6 +43,8 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - Write no file into the worktree while `adlc verify` runs: its `cargo fmt --check` reads untracked files too and refutes the receipt.
 - `tests/repo/*` read `git ls-files`: stage new and deleted files before running them.
 - `just design-check` needs the private canvas: its export serves boards as sandboxed blob: iframes; reach them with Playwright's `contentFrame()`, never `iframe.contentDocument`.
+- A board's interpolated text sits in a `span.sc-interp`: select its parent with `:has(> span:text-is(…))`, and write a regex digit as `\\\\d` in the manifest's JSON text (Playwright's selector parser unescapes once more).
+- The design fixtures' stored grades must equal `score_run`'s, or the score guard hides the score on every gated page.
 - A Playwright test serving fixtures from its own process spawns children with async `spawn`: `spawnSync` blocks the event loop and the fixture server never answers.
 - A repo check over Cargo dependencies reads `cargo metadata`, never the TOML text: renames, dotted keys and inline tables escape a text scan.
 - The gate's clippy runs without `--all-targets`; a narrower command with `--all-targets` hits old test-code lints the gate never sees.
@@ -99,6 +101,8 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Narrowing a check moves its hard fail.** When a check stops failing on a condition, confirm the condition still reaches a hard fail or weight in the profile (`tls.hostname_match` left `chain_trusted`).
 - **Release notes trace to code.** Check each `CHANGELOG.md` claim against the code at the release commit, not against specs or the SDD (changelog-0-25-0: six wrong claims).
 - **report.md criteria statuses** are `green`, `already_implemented` or `test-unwritable`; any other keeps `adlc next` on implement. Drop a criterion whose scenario left the spec.
+- **A page never fetches `/badge/<domain>.svg` unasked**: lens starts a run for a stale head on that request; previews carry `data-src` until the dialog opens.
+- **The score under the letter goes through `views::score_number`**: rounding half up crosses a grade threshold, a plain floor loses exact integers to float error.
 - **Startup rejects are checked.** A new startup `.expect`/`panic!` on a config value needs a `validate()` rule and a `startup_rejects` row in `tests/repo/test_check_config.sh`.
 - **Data files are checked at startup, not by `--check-config`.** Data files named in config (lens's `[modules.ip]` GeoIP databases, as `netray ip`) are read at startup; the config check parses the table and its keys only.
 - **Layer order**, outermost first: concurrency limit, `request_id`, security headers, CORS, body limit, trace, compression — so preflights and 413s carry the request id and headers.
