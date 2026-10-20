@@ -88,7 +88,8 @@ fn view(entry: &Entry, protocol: Protocol, cache_control: &'static str) -> Respo
                 &format!("/r/{}/{}", entry.id, protocol.as_str()),
             ),
             domain: entry.domain.clone(),
-            home_href: String::new(),
+            // The re-check form posts to the domain's run route (requirement 25: `r` re-checks).
+            home_href: format!("/{}", utf8_percent_encode(&entry.domain, LOCATION_SET)),
             protocol: protocol.as_str(),
             section: Some(section),
             links: view_links(protocol, &entry.domain, &entry.run.blocks),

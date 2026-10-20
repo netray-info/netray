@@ -13,6 +13,14 @@ export function shell(el: HTMLElement): void {
   const storeKey = "netray.history." + tool;
   const words = (v: string | undefined): string[] => (v ?? "").split(" ").filter(Boolean);
   const types = words(el.dataset.suggestTypes);
+  // The autocomplete hook: a view names its provider in data-suggest; a provider returns the
+  // suggestions for the token at the caret. DNS is the one provider today.
+  const providers: Record<string, (tok: string) => string[]> = {
+    dns: (tok) =>
+      (tok[0] === "@" ? servers : tok[0] === "+" ? flags : types).filter((s) =>
+        s.toLowerCase().startsWith(tok),
+      ),
+  };
   const flags = words(el.dataset.suggestFlags);
   const servers = words(el.dataset.suggestServers).map((s) => "@" + s);
   let restoring = false;
@@ -77,11 +85,11 @@ export function shell(el: HTMLElement): void {
     const start = v.lastIndexOf(" ", caret - 1) + 1;
     const stop = v.indexOf(" ", caret);
     const tok = v.slice(start, caret).toLowerCase();
-    if (!el.dataset.suggest || start === 0 || start > caret || !tok) return close();
+    const provider = providers[el.dataset.suggest ?? ""];
+    if (!provider || start === 0 || start > caret || !tok) return close();
     span = [start, stop < 0 ? v.length : stop];
-    const pool = tok[0] === "@" ? servers : tok[0] === "+" ? flags : types;
     // Nothing preselected: Enter keeps submitting the typed query; Tab takes the first.
-    open("s", pool.filter((s) => s.toLowerCase().startsWith(tok)), false, -1);
+    open("s", provider(tok), false, -1);
   };
   const pick = (i: number): void => {
     const li = list?.children[i] as HTMLElement | undefined;

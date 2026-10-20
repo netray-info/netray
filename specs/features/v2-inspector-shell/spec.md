@@ -606,6 +606,12 @@ GIVEN the screenshots WHEN read beside board G THEN every finding is a `report.m
   component's own flag row and region label above and beside the band (one spectrum renderer;
   a band-only variant is a proposal for the operator) (implementer under the operator's autonomy
   mandate, 2026-10-20).
+- Final review: a fresh-head visit streams the head's export too; the autocomplete hook looks its
+  provider up by the view's name (DNS the one provider); Markdown escapes `&` and a leading list
+  marker; an evidence view carries the domain's re-check form, so `r` re-checks there. The back
+  link and the related-records box stay out of the G/GDark manifest while local DNS is blocked:
+  adding them on a machine that resolves is a proposal for the operator (implementer under the
+  operator's autonomy mandate, 2026-10-20).
 - The Inspectors menu and the full footer of canvas v43 belong to the site-navigation feature
   (theme J); a reader's finding on G's chevron or footer is answered by this non-goal
   (implementer under the operator's autonomy mandate, 2026-10-20).

@@ -140,8 +140,8 @@ fn sse_response(status: StatusCode, events: Vec<Event>) -> Response {
     secure((status, Sse::new(stream)).into_response())
 }
 
-/// The end fragments of the stored history, for a visit whose head is still fresh; the page
-/// already holds that head's export.
+/// The end fragments of the stored history, for a visit whose head is still fresh; the head's
+/// export comes with them, since the page may have been rendered from an older entry.
 fn stored_answer(domain: &str, entries: &[Entry], sse: bool) -> Response {
     if !sse {
         return see_other(domain);
@@ -156,7 +156,6 @@ fn stored_answer(domain: &str, entries: &[Entry], sse: bool) -> Response {
             let mut events: Vec<Event> = parts
                 .fragments()
                 .into_iter()
-                .filter(|(id, _)| id != "inspect-export")
                 .map(|(id, html)| fragment(&id, html))
                 .collect();
             events.push(end());

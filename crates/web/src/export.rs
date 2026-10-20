@@ -134,7 +134,7 @@ fn md_escape(s: &str) -> String {
     for c in s.chars() {
         match c {
             '\r' | '\n' => out.push(' '),
-            '\\' | '`' | '*' | '_' | '{' | '}' | '[' | ']' | '<' | '>' | '|' | '~' | '#' => {
+            '\\' | '`' | '*' | '_' | '{' | '}' | '[' | ']' | '<' | '>' | '|' | '~' | '#' | '&' => {
                 out.push('\\');
                 out.push(c);
             }
@@ -171,8 +171,22 @@ fn md_fields(fields: &[(String, netray_model::evidence::Value)]) -> String {
         .join(", ")
 }
 
+/// Escaped text that stands at the start of a line: a leading list marker (`-`, `+`, `1.`, `1)`)
+/// is escaped too, so the text never becomes a list.
+fn md_line(s: &str) -> String {
+    let out = md_escape(s);
+    if out.starts_with(['-', '+']) {
+        return format!("\\{out}");
+    }
+    let digits = out.chars().take_while(char::is_ascii_digit).count();
+    if digits > 0 && out[digits..].starts_with(['.', ')']) {
+        return format!("{}\\{}", &out[..digits], &out[digits..]);
+    }
+    out
+}
+
 fn md_list(items: impl Iterator<Item = String>) -> String {
-    items.map(|i| format!("- {}\n", md_escape(&i))).collect()
+    items.map(|i| format!("- {}\n", md_line(&i))).collect()
 }
 
 /// The Markdown of a stored entry on its result page: the grade, the score when the page shows
@@ -285,7 +299,7 @@ pub fn markdown(input: &ExportInput<'_>) -> String {
                 out.push_str(&md_list(nodes.into_iter().map(|n| md_fields(&n.fields))));
             }
             Shape::Text(text) => {
-                out.push_str(&md_escape(text));
+                out.push_str(&md_line(text));
                 out.push('\n');
             }
         }

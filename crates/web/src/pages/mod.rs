@@ -191,7 +191,7 @@ impl PageHelp {
         title: "Evidence view",
         what: "The checks of one protocol in a stored run and the evidence they read. Copy or download this protocol's checks and evidence.",
         keys: &[
-            (&["r"], "Check again, where the page offers it"),
+            (&["r"], "Check the domain again"),
             (&["j", "k"], "Next or previous check"),
             (&["?"], "Open this help"),
             (&["Esc"], "Close this help"),
