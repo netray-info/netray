@@ -37,6 +37,7 @@ fn failed(ip: &str, version: &str, code: &str, message: &str) -> IpInspectionRes
             message: message.to_string(),
         }),
         raw_certs: None,
+        probes: None,
     }
 }
 
@@ -100,6 +101,7 @@ fn succeeded(ip: &str, version: &str) -> IpInspectionResult {
         enrichment: None,
         error: None,
         raw_certs: None,
+        probes: None,
     }
 }
 

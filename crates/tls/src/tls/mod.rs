@@ -46,6 +46,10 @@ pub struct IpInspectionResult {
     #[serde(skip)]
     #[schema(ignore)]
     pub raw_certs: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
+    /// Protocol-version and suite-group probes of the address. Not serialized to JSON.
+    #[serde(skip)]
+    #[schema(ignore)]
+    pub probes: Option<probe::ProtocolProbes>,
 }
 
 /// Map a `connect::tls_handshake` error to the code `inspect_ip` reports.
@@ -105,6 +109,7 @@ pub async fn inspect_ip(
                 ct: None,
                 enrichment: None,
                 raw_certs,
+                probes: None,
                 error: None,
             }
         }
@@ -117,6 +122,7 @@ pub async fn inspect_ip(
             ct: None,
             enrichment: None,
             raw_certs: None,
+            probes: None,
             error: Some(InspectionError {
                 code: error_code(&*e).to_string(),
                 message: e.to_string(),

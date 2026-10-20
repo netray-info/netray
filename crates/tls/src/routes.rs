@@ -1085,6 +1085,12 @@ async fn inspect_port(
                 metrics::counter!("tlsight_handshake_errors_total").increment(1);
             }
 
+            let version = result
+                .tls
+                .as_ref()
+                .filter(|_| result.error.is_none())
+                .map(|t| t.version.clone());
+
             // Run validation if we got a chain
             if let Some(chain) = &result.chain {
                 let raw_certs = result.raw_certs.as_deref().unwrap_or(&[]);
@@ -1100,21 +1106,32 @@ async fn inspect_port(
                 if check_ct && let Some(leaf_der) = raw_certs.first() {
                     result.ct = validate::ct::extract_ct_info(leaf_der.as_ref());
                 }
-
-                // Live OCSP revocation check via AIA OCSP URL
-                let live_ocsp = if let (Some(ocsp_url), Some(leaf_der), Some(issuer_der)) = (
-                    chain.first().and_then(|c| c.ocsp_url.clone()),
-                    raw_certs.first().map(|c| c.as_ref().to_vec()),
-                    raw_certs.get(1).map(|c| c.as_ref().to_vec()),
-                ) {
-                    Some(tls::ocsp::check_live_ocsp(&ocsp_url, &leaf_der, &issuer_der).await)
-                } else {
-                    None
-                };
-                if let (Some(ocsp_result), Some(tls_params)) = (live_ocsp, result.tls.as_mut()) {
-                    tls_params.ocsp_live = Some(ocsp_result);
-                }
             }
+
+            // Live OCSP revocation check via AIA OCSP URL, beside the protocol probes
+            let live_ocsp = async {
+                let chain = result.chain.as_ref()?;
+                let raw_certs = result.raw_certs.as_deref().unwrap_or(&[]);
+                let ocsp_url = chain.first().and_then(|c| c.ocsp_url.clone())?;
+                let leaf_der = raw_certs.first().map(|c| c.as_ref().to_vec())?;
+                let issuer_der = raw_certs.get(1).map(|c| c.as_ref().to_vec())?;
+                Some(tls::ocsp::check_live_ocsp(&ocsp_url, &leaf_der, &issuer_der).await)
+            };
+            let probes = async {
+                match &version {
+                    Some(version) => {
+                        backend
+                            .probe(ip, port, hostname.as_deref(), version, timeout)
+                            .await
+                    }
+                    None => None,
+                }
+            };
+            let (live_ocsp, probes) = tokio::join!(live_ocsp, probes);
+            if let (Some(ocsp_result), Some(tls_params)) = (live_ocsp, result.tls.as_mut()) {
+                tls_params.ocsp_live = Some(ocsp_result);
+            }
+            result.probes = probes;
 
             (idx, result)
         });

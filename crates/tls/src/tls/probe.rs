@@ -244,6 +244,22 @@ pub struct ProtocolProbes {
     pub suites_static_rsa: ProbeOutcome,
 }
 
+impl ProtocolProbes {
+    /// The probes in evidence order, by key.
+    pub fn entries(&self) -> [(&'static str, &ProbeOutcome); 8] {
+        [
+            ("ssl3", &self.ssl3),
+            ("tls1_0", &self.tls1_0),
+            ("tls1_1", &self.tls1_1),
+            ("tls1_2", &self.tls1_2),
+            ("tls1_3", &self.tls1_3),
+            ("suites_insecure", &self.suites_insecure),
+            ("suites_cbc", &self.suites_cbc),
+            ("suites_static_rsa", &self.suites_static_rsa),
+        ]
+    }
+}
+
 fn push_u16(out: &mut Vec<u8>, v: u16) {
     out.extend_from_slice(&v.to_be_bytes());
 }

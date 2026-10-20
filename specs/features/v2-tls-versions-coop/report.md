@@ -42,3 +42,49 @@
 ### Behavioural verification
 
 skipped: the phase adds library functions only, exercised end to end against the in-process responder on 127.0.0.1; a live probe runs through the inspection in Phase 2.
+
+## Phase 2 — Probes in the inspection and the evidence
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R4 inspect_port probes after a successful handshake via TlsBackend::probe into a serde-skipped IpInspectionResult.probes; stub answers none unless canned | green | crates/tls/tests/inspector.rs |
+| C2 | R5 per-address tls.probes@addr:port with version and suite keys and their _answer; unanswered keys omitted | green | crates/tls/tests/it/probe_evidence.rs |
+| C3 | R6 per-port tls.protocols (qualified with several ports) aggregating agree, mixed or omitted, with forward_secrecy_all_suites; registered, not volatile | green | crates/tls/tests/it/probe_evidence.rs |
+| C4 | stub with canned probes, one address: tls.probes and tls.protocols present and the outcome validates | green | crates/tls/tests/it/probe_evidence.rs, crates/tls/tests/inspector.rs |
+| C5 | TLS 1.0 unanswered: no tls1_0 or tls1_0_answer in tls.probes, no tls1_0 in tls.protocols | green | crates/tls/tests/it/probe_evidence.rs |
+| C6 | two addresses differing on TLS 1.0: mixed; both disabled: disabled | green | crates/tls/tests/it/probe_evidence.rs |
+| C7 | forward_secrecy_all_suites false, true or absent | green | crates/tls/tests/it/probe_evidence.rs |
+| C8 | stub without canned probes: no tls.probes and no tls.protocols | green | crates/tls/tests/it/probe_evidence.rs, crates/tls/tests/inspector.rs |
+| C9 | two-port translate_ports: each outcome holds tls.protocols@port | green | crates/tls/tests/it/probe_evidence.rs |
+| C10 | failed handshake: no probe call; successful: one call with the negotiated version | green | crates/tls/tests/inspector.rs |
+| C11 | IpInspectionResult with probes serialises without a probes key | green | crates/tls/tests/it/probe_evidence.rs |
+| C12 | no volatile path names tls.probes or tls.protocols | green | crates/tls/tests/it/probe_evidence.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 1 | sonnet | 58877 | 93 |
+
+### Review
+
+- AMENDMENT (repaired in phase): SDD §3.7 tls row now states the probes and the two blocks.
+- DEFERRED: the handshake permit is held until the slowest probe ends; under contention with servers that never answer, queued inspections can reach the request timeout. Accepted for now (spec R4); revisit with production latency data.
+- DEFERRED: `/api/v1/tls/inspect` and V1 `/api/inspect` run the probes but serialise no probe data (serde-skipped); the inspector page and the domain run use them.
+- DEFERRED: `forward_secrecy_all_suites` reads the static-RSA probe only; static ECDH/DH suites (0xC031, 0x0031) are not offered by any probe.
+
+### Behavioural verification
+
+The Rust example binary path is blocked locally (Little Snitch per binary path; every probe timed out while the same host answered python). The ClientHellos `client_hello` builds, sent from python to 1.1.1.1:443 with SNI one.one.one.one, got:
+
+```
+ssl3              15 03 01 00 02 02 46  fatal alert protocol_version  -> refused
+tls1_0            15 03 01 00 02 02 28  fatal alert handshake_failure -> refused
+tls1_1            15 03 02 00 02 02 28  fatal alert handshake_failure -> refused
+tls1_2            16 03 03 00 5b 02 ...  ServerHello TLS 1.2         -> accepted
+suites_insecure   15 03 03 00 02 02 28  fatal alert handshake_failure -> refused
+suites_cbc        16 03 03 00 5b 02 ...  ServerHello                 -> accepted (ECDHE CBC)
+suites_static_rsa 15 03 03 00 02 02 28  fatal alert handshake_failure -> refused
+```
