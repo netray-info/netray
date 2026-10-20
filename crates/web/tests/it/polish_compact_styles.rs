@@ -13,6 +13,25 @@ fn static_dir() -> PathBuf {
 }
 
 /// Declaration blocks (whitespace squashed) whose selector list contains `selector`.
+/// A selector list split at its top-level commas only (`:is(th, td)` stays whole).
+fn top_level(list: &str) -> Vec<String> {
+    let (mut out, mut cur, mut depth) = (Vec::new(), String::new(), 0i32);
+    for c in list.chars() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            ',' if depth == 0 => {
+                out.push(std::mem::take(&mut cur));
+                continue;
+            }
+            _ => {}
+        }
+        cur.push(c);
+    }
+    out.push(cur);
+    out
+}
+
 fn blocks_in(css: &str, selector: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut rest = css;
@@ -20,9 +39,9 @@ fn blocks_in(css: &str, selector: &str) -> Vec<String> {
         let Some(close) = rest[open..].find('}') else {
             break;
         };
-        if squash(&rest[..open])
-            .split(',')
-            .any(|s| s == squash(selector))
+        if top_level(&squash(&rest[..open]))
+            .iter()
+            .any(|s| *s == squash(selector))
         {
             out.push(squash(&rest[open + 1..open + close]));
         }

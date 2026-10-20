@@ -192,6 +192,7 @@ fn row_of<'a>(panel: &'a str, address: &str) -> &'a str {
             r.contains(&format!("<td>{address}</td>"))
                 || r.contains(&format!("<strong>{address}</strong>"))
         })
+        .map(|r| r.split("</tr>").next().unwrap_or(r))
         .unwrap_or_else(|| panic!("row {address} missing: {panel}"))
 }
 
@@ -210,11 +211,11 @@ async fn c9_c18_the_ip_panel_lists_addresses_with_their_listings() {
         "{ip}"
     );
     let listed = row_of(ip, "192.0.2.10");
-    assert!(listed.ends_with("<td>tor</td></tr>"), "{listed}");
+    assert!(listed.ends_with("<td>tor</td>"), "{listed}");
     assert!(
         listed.contains("<td>AS64500</td><td>Example Networks</td><td>US</td><td>cloud</td>"),
         "{listed}"
     );
     let clean = row_of(ip, "198.51.100.10");
-    assert!(clean.ends_with("<td>none</td></tr>"), "{clean}");
+    assert!(clean.ends_with("<td>none</td>"), "{clean}");
 }

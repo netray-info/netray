@@ -183,6 +183,7 @@ mod polish_compact_dns;
 mod polish_compact_email_ip;
 mod polish_compact_feeds_live;
 mod polish_compact_http;
+mod polish_compact_review;
 mod polish_compact_styles;
 mod polish_compact_tls;
 mod result_branch_review;

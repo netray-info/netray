@@ -65,7 +65,7 @@ what the review found by eye.
    chain: # the 0-based index; Subject the `CN=` value of `subject`, else the whole subject;
    Issuer "self-signed" when `self_signed` is true, else the `CN=` value of `issuer`, else the
    whole issuer; Key the `key` value, with a trailing bit size dropped when the key type already
-   names its curve ("ECDSA P-256 256" reads "ECDSA P-256", "RSA 2048" stays); Not after the date
+   names its curve ("ECDSA P-256 256" reads "ECDSA P-256", "Ed25519 256" reads "Ed25519", "RSA 2048" stays); Not after the date
    part of `not_after`. The first row's Subject and Not after are strong. Without a chain block,
    the source is `tls.addresses`: caption "Addresses · <n> tested", columns Address, Port,
    Outcome, Message.
@@ -81,10 +81,12 @@ what the review found by eye.
    `x-content-type-options`, `referrer-policy`, `permissions-policy` (the headers the response
    checks judge), each with its `http.headers` value or "not sent"; without `http.headers` no row.
 8. **Email.** Source: `email.mx`, `email.spf`, `email.dmarc`, `email.mta_sts`, `email.tls_rpt`,
-   `email.dkim`, `email.bimi`. Caption "Mail records · <n> MX host[s]". Columns Record, Value; rows
+   `email.dkim`, `email.bimi`. Caption "Mail records · <n> MX host[s]", only "Mail records" without an
+   `email.mx` block (an unanswered MX lookup claims no count). Columns Record, Value; rows
    in that order, each only when its block is present: MX "<preference> <host>" joined by ", ";
-   SPF, DMARC, MTA-STS, TLS-RPT and BIMI their `record`; one DKIM row per key, "<selector>: <state>"
-   followed by ", <key type> <bits>" when known.
+   SPF, DMARC, MTA-STS, TLS-RPT and BIMI one row per `record` value (a repeated record is the fact
+   that fails its check); one DKIM row per key, "<selector>: <state>"
+   followed by ", <key type> <bits>" when known (an empty value is unknown).
 9. **IP.** Source: `ip.addresses`. Caption "Addresses · <n> address[es]". Columns Address, ASN,
    Org, Country, Network, Listed; Listed names the true flags among `spamhaus`, `c2`, `tor`,
    `vpn` joined by ", ", else "none"; an absent or empty cell stays empty.
