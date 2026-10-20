@@ -62,6 +62,10 @@ table=(
     "C1 two boards on one file slug|m.boards.push(JSON.parse(JSON.stringify(m.boards[0]))); m.boards[1].title = \"Result page light\"|2|boards[1];;result-page-light"
     "C1 duplicate accepted entry|m.accepted.push({...m.accepted[0]})|2|accepted[1];;duplicate"
     "C6 class motion|m.boards[0].elements[1].class = \"motion\"|2|card gap;;spacing;;typography;;colour"
+    "R14 state on a board|m.boards[0].state = \"long domain\"|0|"
+    "R14 two boards one title different states|m.boards[0].state = \"short domain\"; m.boards.push({...JSON.parse(JSON.stringify(m.boards[0])), state: \"long domain\"})|0|"
+    "R14 one title and state twice|m.boards[0].state = \"long domain\"; m.boards.push(JSON.parse(JSON.stringify(m.boards[0])))|2|boards[1];;result-page-light-long-domain"
+    "R14 empty state|m.boards[0].state = \"\"|2|state"
 )
 
 for row in "${table[@]}"; do
