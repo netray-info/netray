@@ -176,7 +176,12 @@ fn assert_help(html: &str, title: &str) {
         html.contains("class=\"inspector-help__open\""),
         "help button"
     );
-    assert_eq!(html.matches("<dialog").count(), 1, "one dialog");
+    // One help dialog (a stored entry also renders the share dialog).
+    assert_eq!(
+        html.matches(r#"id="inspector-help""#).count(),
+        1,
+        "one help dialog"
+    );
     assert!(html.contains("id=\"inspector-help\""), "dialog id");
     assert!(
         html.contains(&format!(">{title}</h2>")),
