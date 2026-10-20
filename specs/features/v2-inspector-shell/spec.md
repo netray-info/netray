@@ -355,7 +355,7 @@ band's `CheckResult`s through the evidence view's check-list function.
 ### Test Scenarios
 
 GIVEN a TLS run WHEN the stream ends THEN the band element precedes every part element in the result region.
-GIVEN the TLS band (21 lines at positions 11 to 31 in today's catalogue; board G shows 9 at 10–18) WHEN rendered THEN each line has its short and code and the caption reads "The TLS band of the spectrum, zoomed: the same 21 lines as positions TLS·11–31 on the result page.".
+GIVEN the TLS band (its lines and positions as the catalogue holds them; board G shows 9 at 10–18) WHEN rendered THEN each line has its short and code and the caption reads "The TLS band of the spectrum, zoomed: the same <n> lines as positions TLS·<a>–<b> on the result page.", n, a and b from the catalogue.
 GIVEN an HTTP run where `http.csp` warns with finding "style-src contains 'unsafe-inline'" WHEN the list renders THEN its row shows warn, the title, that finding, the fix hint and the guide link.
 GIVEN a TLS fixture with fixed statuses and findings WHEN rendered live and as the stored view THEN the check rows are identical.
 GIVEN a run with one fail and two warns WHEN the list heading renders THEN it reads "3 lines need attention" with "1 fail · 2 warn"; GIVEN all pass THEN "All <n> lines pass".

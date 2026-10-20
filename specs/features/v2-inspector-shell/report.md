@@ -86,7 +86,7 @@ left as typed input.
 | C2 | R9 Live check list: one check row per catalogue check of the band protocol, catalogue order, same function and partial as the stored view, heading counts | green | tests/it/shell_checks.rs |
 | C3 | R10 Same rows, same words: live list equals the stored view's rows for TLS and HTTP fixtures | green | tests/it/shell_same_rows.rs |
 | C4 | GIVEN a TLS run WHEN the stream ends THEN the band element precedes every part element | green | tests/it/shell_band.rs |
-| C5 | GIVEN the TLS band (21 lines, TLS·11–31) THEN each line has short and code and the caption names them | green | tests/it/shell_band.rs |
+| C5 | GIVEN the TLS band (count and positions from the catalogue) THEN each line has short and code and the caption names them | green | tests/it/shell_band.rs |
 | C6 | GIVEN an HTTP run where http.csp warns with a finding THEN its row shows warn, title, finding, fix hint, guide link | green | tests/it/shell_checks.rs |
 | C7 | GIVEN a TLS fixture WHEN rendered live and as the stored view THEN the check rows are identical | green | tests/it/shell_same_rows.rs |
 | C8 | GIVEN one fail and two warns THEN heading 3 lines need attention with 1 fail · 2 warn; all pass THEN All n lines pass | green | tests/it/shell_checks.rs |
