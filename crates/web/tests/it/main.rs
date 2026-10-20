@@ -280,6 +280,7 @@ mod views_same_markup;
 mod views_tls_addresses;
 mod views_tls_chain;
 mod views_tls_facts;
+mod views_tls_links;
 mod views_tls_nothing_lost;
 mod views_tls_port;
 mod views_tls_validity;

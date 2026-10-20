@@ -56,10 +56,7 @@ fn blocks(not_before: i64, not_after: i64) -> Vec<Block> {
         t("issuer", Value::Text("CN=Example CA".into())),
         t("not_before", Value::Time(rfc3339(not_before))),
         t("not_after", Value::Time(rfc3339(not_after))),
-        t(
-            "days_remaining",
-            Value::Int((not_after - now()).div_euclid(DAY)),
-        ),
+        t("days_remaining", Value::Int((not_after - now()) / DAY)),
         t("key", Value::Text("ECDSA P-256".into())),
         t("self_signed", Value::Bool(false)),
         t("expired", Value::Bool(not_after < now())),
