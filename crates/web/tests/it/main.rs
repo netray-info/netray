@@ -109,6 +109,7 @@ mod fidelity_review_p1;
 mod fidelity_review_p2;
 mod fidelity_review_p3;
 mod fidelity_review_p4;
+mod fidelity_review_p5;
 mod fidelity_run_title;
 mod fidelity_score;
 mod fidelity_since;
