@@ -57,15 +57,26 @@ fn badge_count(html: &str) -> usize {
 
 #[test]
 fn badges_read_family_eu_infra_and_true_flags() {
-    let html = html(&lookup("192.0.2.10", Some(true), Some("cloud"), &["tor", "vpn"]));
+    let html = html(&lookup(
+        "192.0.2.10",
+        Some(true),
+        Some("cloud"),
+        &["tor", "vpn"],
+    ));
     for (label, tone) in [("Tor", "fail"), ("VPN", "warn")] {
         assert!(html.contains(&badge(label, tone)), "{label}: {html}");
     }
     for label in ["IPv4", "EU", "cloud"] {
-        assert!(html.contains(&format!(">{label}</span>")), "{label}: {html}");
+        assert!(
+            html.contains(&format!(">{label}</span>")),
+            "{label}: {html}"
+        );
     }
     for absent in ["C2", "Spamhaus", "CINS", "IPv6", "non-EU"] {
-        assert!(!html.contains(&format!(">{absent}</span>")), "{absent}: {html}");
+        assert!(
+            !html.contains(&format!(">{absent}</span>")),
+            "{absent}: {html}"
+        );
     }
     assert_eq!(badge_count(&html), 5, "{html}");
 }
@@ -73,13 +84,19 @@ fn badges_read_family_eu_infra_and_true_flags() {
 #[test]
 fn badges_family_and_eu_variants() {
     let v6 = html(&lookup("2001:db8::1", Some(false), None, &[]));
-    assert!(v6.contains(">IPv6</span>") && v6.contains(">non-EU</span>"), "{v6}");
+    assert!(
+        v6.contains(">IPv6</span>") && v6.contains(">non-EU</span>"),
+        "{v6}"
+    );
     assert!(!v6.contains(">IPv4</span>"), "{v6}");
     assert_eq!(badge_count(&v6), 2, "{v6}");
 
     let unknown = html(&lookup("192.0.2.10", None, None, &[]));
     assert!(unknown.contains(">IPv4</span>"), "{unknown}");
-    assert!(!unknown.contains(">EU</span>") && !unknown.contains(">non-EU</span>"), "{unknown}");
+    assert!(
+        !unknown.contains(">EU</span>") && !unknown.contains(">non-EU</span>"),
+        "{unknown}"
+    );
     assert_eq!(badge_count(&unknown), 1, "{unknown}");
 }
 

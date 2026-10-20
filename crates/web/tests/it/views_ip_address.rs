@@ -38,9 +38,9 @@ fn copy_buttons(html: &str) -> Vec<&str> {
 
 fn has_hidden_copy(html: &str, text: &str) -> bool {
     let attr = format!("data-copy-text=\"{text}\"");
-    copy_buttons(html).iter().any(|tag| {
-        tag.contains(&attr) && tag.split_whitespace().any(|w| w == "hidden")
-    })
+    copy_buttons(html)
+        .iter()
+        .any(|tag| tag.contains(&attr) && tag.split_whitespace().any(|w| w == "hidden"))
 }
 
 #[test]

@@ -166,7 +166,10 @@ async fn posted_address_or_empty_input_looks_up_with_reverse_dns_and_links_back(
     let html = joined(&events);
     assert!(html.contains(r#"id="ev-ip.lookup""#), "{html}");
     assert!(html.contains("stub.example.com"), "{html}");
-    assert!(html.contains(r#"href="/inspect/ip">Show my address</a>"#), "{html}");
+    assert!(
+        html.contains(r#"href="/inspect/ip">Show my address</a>"#),
+        "{html}"
+    );
     for absent in ["TCP source port", "User agent", "Request headers"] {
         assert!(!html.contains(absent), "{absent}: {html}");
     }

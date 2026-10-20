@@ -4,11 +4,11 @@
 use std::net::IpAddr;
 
 use netray_engine::SectionOutcome;
+use netray_ip::IpLookup;
 use netray_ip::LookupOptions;
 use netray_ip::backend::Ifconfig;
 use netray_ip::module::{REGISTER, lookup_block, translate, translate_lookup};
 use netray_ip::testing::StubIpLookup;
-use netray_ip::IpLookup;
 use netray_model::Status;
 use netray_model::evidence::{BlockId, Shape, Value, validate};
 
@@ -42,10 +42,18 @@ async fn lookup_block_projects_the_stub_document() {
     validate("ip", &REGISTER, std::slice::from_ref(&block)).expect("block fits the register");
 
     let fields = fields_of(&block);
-    let get = |k: &str| fields.iter().find(|(key, _)| key == k).map(|(_, v)| v.clone());
+    let get = |k: &str| {
+        fields
+            .iter()
+            .find(|(key, _)| key == k)
+            .map(|(_, v)| v.clone())
+    };
     let text = |s: &str| Some(Value::Text(s.into()));
 
-    assert_eq!(get("address"), Some(Value::Addr(ADDR.parse::<IpAddr>().unwrap())));
+    assert_eq!(
+        get("address"),
+        Some(Value::Addr(ADDR.parse::<IpAddr>().unwrap()))
+    );
     assert_eq!(get("hostname"), text("stub.example.com"));
     assert_eq!(get("asn"), text("AS64496"));
     assert_eq!(get("cloud_provider"), text("aws"));

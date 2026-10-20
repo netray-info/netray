@@ -65,10 +65,7 @@ impl IpLookup for Recording {
         ip: IpAddr,
         options: LookupOptions,
     ) -> BoxFuture<'_, Result<Ifconfig, IpRefusal>> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(format!("lookup_with {ip}"));
+        self.calls.lock().unwrap().push(format!("lookup_with {ip}"));
         self.stub.lookup_with(ip, options)
     }
     fn lookup_caller_with<'a>(
@@ -155,7 +152,11 @@ async fn get_without_ip_renders_the_callers_run_with_private_no_store() {
     assert!(r.body.contains(r#"id="ev-ip.lookup""#), "{}", r.body);
     assert!(r.body.contains("stub.example.com"), "{}", r.body);
     assert!(r.body.contains(r#"id="inspect-band""#), "{}", r.body);
-    assert!(r.body.contains(r#"data-code="ip.reputation""#), "{}", r.body);
+    assert!(
+        r.body.contains(r#"data-code="ip.reputation""#),
+        "{}",
+        r.body
+    );
     assert!(!r.body.contains("data-share-key"), "{}", r.body);
     assert_eq!(r.headers[header::CACHE_CONTROL], "private, no-store");
 }
@@ -203,9 +204,5 @@ async fn get_without_an_ip_part_shows_unavailable_under_the_address() {
 
     assert_eq!(r.status, StatusCode::OK, "{}", r.body);
     assert!(r.body.contains(H1), "{}", r.body);
-    assert!(
-        r.body.contains("IP lookups are unavailable"),
-        "{}",
-        r.body
-    );
+    assert!(r.body.contains("IP lookups are unavailable"), "{}", r.body);
 }

@@ -98,6 +98,9 @@ async fn ip_get_renders_the_callers_card_without_javascript_and_keeps_copy_hidde
         .collect();
     assert!(!copies.is_empty(), "no copy button in the GET body: {html}");
     for tag in copies {
-        assert!(has_attr(tag, "hidden"), "copy button not hidden: <button{tag}>");
+        assert!(
+            has_attr(tag, "hidden"),
+            "copy button not hidden: <button{tag}>"
+        );
     }
 }

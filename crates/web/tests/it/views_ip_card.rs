@@ -72,7 +72,10 @@ fn lookup_fields() -> Vec<(String, Value)> {
         ("continent_code".into(), text("XA")),
         ("registered_country".into(), text("Registryland")),
         ("registered_country_iso".into(), text("RL")),
-        ("ua_raw".into(), text("ExampleAgent/1.0 (X11; <Test> & 'q')")),
+        (
+            "ua_raw".into(),
+            text("ExampleAgent/1.0 (X11; <Test> & 'q')"),
+        ),
         ("ua_browser".into(), text("ExampleBrowser")),
         ("ua_browser_version".into(), text("118.4")),
         ("ua_os".into(), text("ExampleOS")),
@@ -104,7 +107,10 @@ fn c17_ip_card_shows_every_value_and_refuses_an_unknown_key() {
     let fields = lookup_fields();
     let html = render(&block(fields.clone()), &ctx)
         .expect("the view must claim an ip.lookup block of registered keys");
-    assert!(html.contains("id=\"ev-ip.lookup\""), "anchor missing in: {html}");
+    assert!(
+        html.contains("id=\"ev-ip.lookup\""),
+        "anchor missing in: {html}"
+    );
 
     for (key, value) in &fields {
         let needle = match value {
