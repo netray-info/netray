@@ -153,12 +153,15 @@ async fn c1_c4_c5_band_is_under_the_h1_before_every_part_with_named_lines_and_ca
         "{result}"
     );
 
-    // C5: the TLS band is 21 lines at positions 11-31 in today's catalogue.
+    // C5: the TLS band's lines and positions come from the catalogue (21 at TLS·11–31 when the
+    // spec was written; the catalogue grows with new checks).
     let tls = catalogue().for_protocol(Protocol::Tls);
     let specs = tls.entries();
-    assert_eq!(specs.len(), 21);
-    assert_eq!(line_code(&specs[0].id).as_deref(), Some("TLS\u{b7}11"));
-    assert_eq!(line_code(&specs[20].id).as_deref(), Some("TLS\u{b7}31"));
+    assert!(specs.len() > 1);
+    let first = line_code(&specs[0].id).expect("first code");
+    let last = line_code(&specs[specs.len() - 1].id).expect("last code");
+    let from_pos = first.strip_prefix("TLS\u{b7}").expect("TLS tag");
+    let to_pos = last.strip_prefix("TLS\u{b7}").expect("TLS tag");
 
     // Each line, in catalogue order, with its short and its code.
     let mut from = result
@@ -176,12 +179,11 @@ async fn c1_c4_c5_band_is_under_the_h1_before_every_part_with_named_lines_and_ca
         from += at + want.len();
     }
 
-    assert!(
-        result.contains(
-            r#"<figcaption class="inspector-band__caption">The TLS band of the spectrum, zoomed: the same 21 lines as positions TLS·11–31 on the result page.</figcaption>"#
-        ),
-        "{result}"
+    let caption = format!(
+        "<figcaption class=\"inspector-band__caption\">The TLS band of the spectrum, zoomed: the same {} lines as positions TLS\u{b7}{from_pos}\u{2013}{to_pos} on the result page.</figcaption>",
+        specs.len()
     );
+    assert!(result.contains(&caption), "{caption} in {result}");
 }
 
 /// The last declaration of `prop` in the rule whose selector is exactly `selector`.
