@@ -102,8 +102,12 @@ GeoLite2 attribution follows GeoIP-derived data wherever it is rendered, as its 
    6.5)
 4. **Any address.** `?ip=X` keeps prefilling and autostarting (6.3); its job uses `lookup_with`
    with reverse DNS on and renders the same card without the caller-only parts (port, user agent,
-   headers). A POST with empty input (a re-run) uses `lookup_caller_with` with reverse DNS on. A
-   run of a given address shows a link "Show my address" to `/inspect/ip` in its head. (6.3, 6.6)
+   headers). A POST with empty input (a re-run) uses `lookup_caller_with` with reverse DNS on and
+   shows the caller as that request sees it: no port, user agent or headers, which only the page
+   load carries (the posted request is the island's fetch). The lookup with reverse DNS gets three
+   quarters of the time left before the deadline; past it the address is looked up without reverse
+   DNS, so a reverse zone that never answers costs the host name, never the card. A run of a given
+   address shows a link "Show my address" to `/inspect/ip` in its head. (6.3, 6.6)
 5. **Card replaces the table.** On the inspector the card is the IP view of `ip.lookup`
    (anchor `ev-ip.lookup`, so the check list's links land on it); it renders every value of the
    block (the nothing-lost rule of `v2-http-ui` requirement 3). The band and check list stay
@@ -268,6 +272,11 @@ GIVEN the IP inspector at 390 px WHEN measured THEN the document is not wider th
   `ip.addresses` and `ip.lookup` block and every inspector part with IP badges, all of which exist
   only when GeoIP data was there. The IP view claims `ip.addresses` to append it, keeping the
   generic block's markup (implementer under the operator's autonomy mandate, 2026-10-21).
+- Review of phase 1: a reverse zone that never answers would have timed out the whole run (the
+  PTR's own 5 s timeout equals the inspector's deadline); the reverse lookup now has a budget of
+  three quarters of the time left and falls back to a lookup without it (requirement 4). A re-run
+  with empty input is the caller as the island's fetch sees it, without port, user agent or headers
+  (requirement 4 amended) (implementer under the operator's autonomy mandate, 2026-10-21).
 - The explorer is always open: the IP view cannot tell the caller's card from a looked-up one
   by its block, and on both pages the commands are the point (implementer under the operator's
   autonomy mandate, 2026-10-21).

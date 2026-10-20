@@ -1,0 +1,4 @@
+<div class="ip-card"><div class="ip-card__address"><span class="ip-card__addr">{{ address }}</span><button type="button" class="inspector-copy" data-copy-text="{{ address }}" hidden>Copy</button></div>
+<div class="ip-card__host">{% if let Some(host) = host %}<span class="ip-card__hostname">{{ host.name }}</span><button type="button" class="inspector-copy" data-copy-text="{{ host.name }}" hidden>Copy</button><a class="ip-card__link" href="{{ host.dns_href }}">DNS</a><a class="ip-card__link" href="{{ host.tls_href }}">TLS</a>{% else %}<span class="ip-card__none">no reverse DNS</span>{% endif %}</div>
+<p class="ip-card__badges">{% for b in badges %}<span class="ip-badge" data-tone="{{ b.tone }}">{{ b.label }}</span>{% endfor %}</p>
+{% if let Some(grid) = grid %}<div class="ip-card__facts">{{ grid|safe }}</div>{% endif %}</div>

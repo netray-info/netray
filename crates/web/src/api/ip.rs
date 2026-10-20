@@ -158,8 +158,8 @@ fn cidr_answer(addr: IpAddr) -> Answer {
 /// The request's headers as the answers show them: filtered, and the `X-Forwarded-For` chain V1's
 /// structured `headers` carried.
 pub(super) struct Shown {
-    headers: Vec<(String, String)>,
-    xff: Vec<String>,
+    pub(super) headers: Vec<(String, String)>,
+    pub(super) xff: Vec<String>,
 }
 
 fn headers_answer(shown: &Shown) -> Answer {
@@ -601,7 +601,7 @@ pub(super) fn json_body<T>(body: Result<Json<T>, JsonRejection>) -> Result<T, V1
     }
 }
 
-fn shown_headers(state: &ApiState, headers: &HeaderMap) -> Shown {
+pub(super) fn shown_headers(state: &ApiState, headers: &HeaderMap) -> Shown {
     let xff = headers
         .get("x-forwarded-for")
         .and_then(|v| v.to_str().ok())

@@ -23,8 +23,9 @@ use axum::routing::get;
 pub use errors::{not_found, query_redirect, server_error};
 pub use evidence::{EvidenceDeps, evidence_router};
 pub use inspect::{
-    CachedDns, DnsResults, InspectConfig, InspectDeps, InspectLimits, InspectorJobs, Job, JobPart,
-    JobRequest, Refusal, SharedRuns, Tool, email_input, inspect_router, registrable_domain,
+    CachedDns, CallerRequest, DnsResults, InspectConfig, InspectDeps, InspectLimits, InspectorJobs,
+    Job, JobPart, JobRequest, Refusal, SharedRuns, Tool, email_input, inspect_router,
+    registrable_domain,
 };
 
 /// The speculation rules every page embeds; the CSP allows exactly their hash.

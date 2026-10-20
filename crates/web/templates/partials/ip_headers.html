@@ -1,0 +1,3 @@
+<details class="ip-headers"><summary class="ip-headers__summary">Show the request headers</summary>
+{% if hops.is_empty() %}<p class="ip-headers__none">no proxy hops</p>{% else %}<ol class="ip-headers__hops">{% for hop in hops %}<li class="ip-headers__hop">{{ hop }}</li>{% endfor %}</ol>{% endif %}
+<div class="ip-headers__scroll"><table class="ip-headers__table">{% for h in headers %}<tr><th class="ip-headers__name" scope="row">{{ h.name }}</th><td class="ip-headers__value">{{ h.value }}</td></tr>{% endfor %}</table></div></details>
