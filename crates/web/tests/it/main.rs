@@ -118,6 +118,7 @@ mod fidelity_review_p6;
 mod fidelity_review_p7;
 mod fidelity_run_title;
 mod fidelity_score;
+mod fidelity_score_number;
 mod fidelity_share;
 mod fidelity_since;
 mod fidelity_trace;
