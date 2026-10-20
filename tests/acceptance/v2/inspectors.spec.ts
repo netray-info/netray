@@ -215,9 +215,10 @@ for (const { tool, field } of INSPECTORS) {
   }
 }
 
-test('/inspect/email answers 404', async ({ request }) => {
+test('/inspect/email renders the email inspector', async ({ request }) => {
   const res = await request.get(`${lens}/inspect/email`);
-  expect(res.status()).toBe(404);
+  expect(res.status()).toBe(200);
+  expect(await res.text()).toContain('data-tool="email"');
 });
 
 // C7
