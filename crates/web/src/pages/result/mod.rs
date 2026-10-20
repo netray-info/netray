@@ -28,7 +28,7 @@ use netray_store::{Entry, HistoryStore, Recorded};
 use percent_encoding::utf8_percent_encode;
 
 use self::views::{Grouping, HardFailView, IssueGroup, Links};
-use super::errors::{LOCATION_SET, query_view, refused_page};
+use super::errors::{LOCATION_SET, query_view, refused_page, selectors_refused_page};
 use super::headers::secure;
 use super::{Frame, PageHelp, export_slot, page, query_redirect, server_error};
 use crate::api::DomainRuns;
@@ -276,7 +276,7 @@ async fn show(
     };
     let selectors = match selectors_of(request.uri()) {
         Ok(selectors) => selectors,
-        Err(reason) => return refused_page(&domain, &reason),
+        Err(reason) => return selectors_refused_page(&domain, &reason),
     };
     let entries = match state.store.entries(&domain).await {
         Ok(entries) => entries,
@@ -552,6 +552,8 @@ struct Parts {
     meta: String,
     nav: String,
     evidence: Vec<String>,
+    /// The email panel without the selector form, for the stream: its panels replace the page's.
+    email_fragment: String,
     passed: String,
     /// The stored entry's export slot, else the empty placeholder.
     export: String,
@@ -572,6 +574,11 @@ impl Parts {
             ("issues".to_string(), self.issues.as_str()),
         ];
         for (p, html) in PROTOCOLS.iter().zip(&self.evidence) {
+            let html = if *p == Protocol::Email {
+                &self.email_fragment
+            } else {
+                html
+            };
             out.push((format!("evidence-{}", p.as_str()), html.as_str()));
         }
         out.push(("evidence-nav".to_string(), self.nav.as_str()));
@@ -1319,6 +1326,22 @@ struct EvidencePart<'a> {
     protocol: &'static str,
     shown: bool,
     panel: &'a Option<evidence::PanelView>,
+    selector_form: Option<&'a str>,
+}
+
+#[derive(Template)]
+#[template(path = "partials/selector_form.html")]
+struct SelectorFormPart<'a> {
+    action: &'a str,
+    value: Option<&'a str>,
+}
+
+/// The form that runs `action`'s domain with custom DKIM selectors, `value` the list it holds.
+pub(crate) fn selector_form(action: &str, value: Option<&str>) -> Option<String> {
+    warn_render(
+        "selector-form",
+        trimmed(&SelectorFormPart { action, value }),
+    )
 }
 
 #[derive(Template)]
@@ -1420,19 +1443,50 @@ fn evidence_meta_part(recorded: bool) -> Option<String> {
     warn_render("evidence-meta", trimmed(&EvidenceMetaPart { recorded }))
 }
 
-fn evidence_part(protocol: Protocol, inner: &EvidenceInner) -> Option<String> {
+/// One protocol's panel; `selector_form` follows it in a panel of its own, outside the element
+/// the stream replaces.
+fn evidence_part(
+    protocol: Protocol,
+    inner: &EvidenceInner,
+    selector_form: Option<&str>,
+) -> Option<String> {
     warn_render(
         "evidence",
         trimmed(&EvidencePart {
             protocol: protocol.as_str(),
             shown: inner.shown,
             panel: &inner.panel,
+            selector_form,
         }),
     )
 }
 
-/// `selectors` is the recheck form's hidden `dkim_selectors` field; only the full page renders
-/// the header, so stream fragments pass `None`.
+/// `body` of a run with the custom DKIM `selectors` (normalised, comma-joined): it names them
+/// and that the run is not recorded.
+fn with_selectors(body: RunLineBody, selectors: Option<&str>) -> RunLineBody {
+    let Some(selectors) = selectors else {
+        return body;
+    };
+    let extend = |mut view: RunLineView| {
+        let noted = view.parts.iter().any(|p| p.contains(views::NOT_RECORDED));
+        view.parts.retain(|p| p != views::NOT_RECORDED);
+        view.parts
+            .push(format!("DKIM selectors {}", selectors.replace(',', ", ")));
+        if !noted || !view.parts.iter().any(|p| p.contains(views::NOT_RECORDED)) {
+            view.parts.push(views::NOT_RECORDED.to_string());
+        }
+        view
+    };
+    match body {
+        RunLineBody::Line(view) => RunLineBody::Line(extend(view)),
+        RunLineBody::Title(view) => RunLineBody::Title(extend(view)),
+        RunLineBody::Text(text) => RunLineBody::Line(extend(RunLineView { parts: vec![text] })),
+        refusal @ RunLineBody::Refusal { .. } => refusal,
+    }
+}
+
+/// `selectors` is the run's custom DKIM selector list (normalised): the recheck form's hidden
+/// field, the run line and the selector form's value.
 fn assemble(domain: &str, autostart: bool, shown: Shown, selectors: Option<&str>) -> Option<Parts> {
     let href = href_of(domain);
     let (trigger, trigger_label) = if shown.recheck {
@@ -1447,7 +1501,19 @@ fn assemble(domain: &str, autostart: bool, shown: Shown, selectors: Option<&str>
             trigger_label,
         }),
     )?;
-    let run_line = run_line_part(&shown.run_line)?;
+    // A stored entry shown under a selector page is not the selector run: the line says what is
+    // shown until that run ends, instead of relabelling the stored run.
+    let line = match selectors {
+        Some(list) if shown.recorded => RunLineBody::Line(RunLineView {
+            parts: vec![
+                format!("DKIM selectors {}", list.replace(',', ", ")),
+                views::NOT_RECORDED.to_string(),
+                "the stored run shows until this run ends".to_string(),
+            ],
+        }),
+        _ => with_selectors(shown.run_line, selectors),
+    };
+    let run_line = run_line_part(&line)?;
     let progress = progress_part("")?;
     let grade = warn_render(
         "result-grade",
@@ -1496,11 +1562,17 @@ fn assemble(domain: &str, autostart: bool, shown: Shown, selectors: Option<&str>
             clean: shown.clean,
         }),
     )?;
+    let form = selector_form(&format!("/{href}"), selectors)?;
     let evidence = PROTOCOLS
         .iter()
         .zip(&shown.evidence)
-        .map(|(p, inner)| evidence_part(*p, inner))
+        .map(|(p, inner)| evidence_part(*p, inner, (*p == Protocol::Email).then_some(&*form)))
         .collect::<Option<Vec<_>>>()?;
+    let email_fragment = PROTOCOLS
+        .iter()
+        .zip(&shown.evidence)
+        .find(|(p, _)| **p == Protocol::Email)
+        .and_then(|(p, inner)| evidence_part(*p, inner, None))?;
     let tabs = PROTOCOLS
         .iter()
         .zip(&shown.evidence)
@@ -1533,6 +1605,7 @@ fn assemble(domain: &str, autostart: bool, shown: Shown, selectors: Option<&str>
         meta,
         nav,
         evidence,
+        email_fragment,
         passed,
         export: EXPORT_PLACEHOLDER.to_string(),
     })

@@ -568,6 +568,19 @@ main td {
 .evidence-tabs[data-ready] .evidence-tabs__panel:not([data-shown]) {
   display: none;
 }
+.selector-panel {
+  padding: 0 18px var(--space-4);
+}
+.evidence-tabs[data-ready] .selector-panel:not([data-shown]) {
+  display: none;
+}
+.selector-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
 .evidence-tabs__caption {
   margin: 0;
   color: var(--color-muted);

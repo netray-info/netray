@@ -3,7 +3,7 @@
 {% block main %}
 <div data-island="page">
 <h1>Check a domain</h1>
-{% call c::query_input(query) %}{% endcall %}
+{% call c::query_input(query, "", false, false, true) %}{% endcall %}
 </div>
 <section class="score-key" aria-labelledby="score-key-title">
 <h2 id="score-key-title">What the grades mean</h2>

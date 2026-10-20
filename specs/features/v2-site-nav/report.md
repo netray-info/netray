@@ -145,3 +145,40 @@ No findings (reader: engineering and testing lenses).
 ### Behavioural verification
 
 skipped: router-level test renders `/`; screenshots in Phase 7.
+
+## Phase 5 — DKIM selector inputs and copy
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R13 home: details Custom DKIM selectors with input dkim_selectors, placeholder and hint in the idle form | green | crates/web/tests/it/site_nav_selectors.rs |
+| C2 | R14 email panel and email evidence views end with the form Check custom DKIM selectors, GET to /domain; prefilled on a selector run | green | crates/web/tests/it/site_nav_selectors.rs |
+| C3 | R15 selector run title names the selectors and not recorded; a bad list answers 400 titled Not a list of DKIM selectors | green | crates/web/tests/it/site_nav_selectors.rs |
+| C4 | S / holds the selectors details; /?d=example.com and dkim_selectors=s1,s2 answers 301 to the selector run | green | crates/web/tests/it/site_nav_selectors.rs |
+| C5 | S /example.com/email ends with the selectors form targeting /example.com | green | crates/web/tests/it/site_nav_selectors.rs |
+| C6 | S /example.com?dkim_selectors=s1,s2 prefills the email panel input and the run title names DKIM selectors s1, s2 and not recorded | green | crates/web/tests/it/site_nav_selectors.rs |
+| C7 | S /example.com?dkim_selectors=bad.sel answers 400 titled Not a list of DKIM selectors | green | crates/web/tests/it/site_nav_selectors.rs |
+
+C4's redirect half was already in place (v2-dkim-legacy-urls); its test guards it.
+
+Changed protected tests: `result_selectors.rs` (a plain page has no hidden selector field; the email tab's visible form has an empty input), the four island fixtures `result-fresh.html`, `result-stale.html`, `result-issues.html`, `result-trace.html` (regenerated: the email tab's selector panel).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 home input, selector forms, run line, refusal page | 1 | opus | 107467 | 483 |
+
+### Review
+
+| class | where | finding | disposition |
+|---|---|---|---|
+| BLOCKER | crates/web/src/pages/result/mod.rs:1479 | the stored head's title was relabelled as the unrecorded selector run | fixed: a page showing a stored entry under selectors reads "DKIM selectors … · not recorded · the stored run shows until this run ends" |
+| AMENDMENT | crates/web/src/pages/errors.rs:99 | the rule sentence dropped the specific reason (63 characters, non-ASCII) | repaired: the page adds "This one was refused: <reason>." |
+| NIT | crates/web/src/pages/result/mod.rs:1471 | "incomplete, not recorded" got a second "not recorded" | fixed |
+| NIT | crates/web/tests/it/result_selectors.rs:282 | protected test changed | trailer on the commit |
+
+### Behavioural verification
+
+skipped: router-level tests drive the GET page, the SSE run and the refusals through `pages::result::router`; the live stack runs in Phase 7.

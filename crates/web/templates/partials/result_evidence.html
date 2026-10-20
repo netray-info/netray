@@ -17,3 +17,4 @@
 {% endif %}
 {% endif %}
 </div>
+{% if let Some(form) = selector_form %}<div class="selector-panel" data-panel="{{ protocol }}"{% if shown %} data-shown{% endif %}>{{ form|safe }}</div>{% endif %}

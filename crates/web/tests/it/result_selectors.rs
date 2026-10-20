@@ -279,13 +279,22 @@ async fn c10_a_page_with_an_invalid_selector_list_answers_400() {
 }
 
 #[tokio::test]
-async fn c11_a_plain_page_has_no_selector_input() {
+async fn c11_a_plain_page_has_no_hidden_selector_field() {
     let (app, _runs, _dir) = app().await;
 
     let (status, _, body) = send(&app, get("/example.com")).await;
 
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert!(!body.contains(r#"name="dkim_selectors""#), "{body}");
+    // The recheck form carries no selectors; the email panel's visible selector form (spec
+    // v2-site-nav requirement 14) has an empty input.
+    assert!(
+        !recheck_form(&body).contains(r#"name="dkim_selectors""#),
+        "{body}"
+    );
+    assert!(
+        !body.contains(r#"type="hidden" name="dkim_selectors""#),
+        "{body}"
+    );
 }
 
 #[tokio::test]

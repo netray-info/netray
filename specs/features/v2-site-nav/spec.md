@@ -320,6 +320,10 @@ GIVEN no JavaScript WHEN `/`, `/tools` and `/example.com/email` render THEN the 
   mandate, 2026-10-19).
 - The menu island is registered as `nav-menu`: the gate reads the word `menu` as a CSS system
   colour (implementer under the operator's autonomy mandate, 2026-10-19).
+- The result page's selector form sits in its own `selector-panel` beside the email tab panel,
+  never in a streamed fragment: a stream that replaced the panel would drop the form, and a plain
+  run's stream must not carry selector copy (implementer under the operator's autonomy mandate,
+  2026-10-19).
 - Inspector links point at `/inspect/<tool>`, not at `<tool>.<apex>`: valid before and after the
   cutover and on every host (drafting agent, 2026-10-20).
 - `/tools` becomes the inspector index again and takes over the redirect v2-dkim-legacy-urls set

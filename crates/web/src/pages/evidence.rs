@@ -43,6 +43,7 @@ struct EvidencePage {
     links: Vec<ExploreLink>,
     help: PageHelp,
     export: Option<String>,
+    selector_form: Option<String>,
 }
 
 const PROTOCOLS: [Protocol; 5] = [
@@ -78,6 +79,15 @@ fn view(entry: &Entry, protocol: Protocol, cache_control: &'static str) -> Respo
     };
     let title = format!("{} · {}", entry.domain, protocol.as_str());
     let export = view_export(entry, protocol, &title);
+    let home_href = format!("/{}", utf8_percent_encode(&entry.domain, LOCATION_SET));
+    let selector_form = if protocol == Protocol::Email {
+        let Some(form) = super::result::selector_form(&home_href, None) else {
+            return server_error();
+        };
+        Some(form)
+    } else {
+        None
+    };
     page(
         StatusCode::OK,
         cache_control,
@@ -89,12 +99,13 @@ fn view(entry: &Entry, protocol: Protocol, cache_control: &'static str) -> Respo
             ),
             domain: entry.domain.clone(),
             // The re-check form posts to the domain's run route (requirement 25: `r` re-checks).
-            home_href: format!("/{}", utf8_percent_encode(&entry.domain, LOCATION_SET)),
+            home_href,
             protocol: protocol.as_str(),
             section: Some(section),
             links: view_links(protocol, &entry.domain, &entry.run.blocks),
             help: PageHelp::EVIDENCE,
             export,
+            selector_form,
         },
     )
 }
@@ -165,6 +176,7 @@ async fn latest(
                 links: Vec::new(),
                 help: PageHelp::EVIDENCE,
                 export: None,
+                selector_form: None,
             },
         ),
     }

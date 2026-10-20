@@ -8,7 +8,8 @@
 {{ section|safe }}
 {% for link in links %}<p><a class="evidence-view__explore" href="{{ link.href }}">{{ link.label }}</a></p>
 {% endfor %}
-{% include "partials/page_help.html" %}
+{% if let Some(form) = selector_form %}{{ form|safe }}
+{% endif %}{% include "partials/page_help.html" %}
 <form id="recheck" method="post" action="{{ home_href }}/run" hidden><input type="hidden" name="trigger" value="recheck"></form>
 </div>
 {% else %}

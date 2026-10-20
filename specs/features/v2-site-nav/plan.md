@@ -45,3 +45,13 @@
 ## Plan
 
 - G1: `src/grade_legend.rs` (`legend`), `src/pages/result/mod.rs` (`IdlePage`), `templates/pages/idle.html`, `static/pages.css`.
+
+## Phase 5 — DKIM selector inputs and copy
+
+## Groups
+
+- G1 (C1–C7): one group; the files overlap.
+
+## Plan
+
+- G1: `templates/components/query_input.html` (`selectors` parameter), `static/query_input.css`, `templates/pages/idle.html`, `templates/partials/selector_form.html`, `templates/partials/result_evidence.html` (sibling `selector-panel`), `src/pages/result/mod.rs` (`selector_form`, `with_selectors`, `email_fragment`), `src/pages/result/run.rs` (live selectors), `src/pages/errors.rs` (`selectors_refused_page`), `src/pages/evidence.rs` and `templates/pages/evidence.html`, `static/pages.css`.
