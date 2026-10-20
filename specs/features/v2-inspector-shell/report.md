@@ -177,3 +177,45 @@ query it set and ignores a popstate that keeps them, and loads an entry without 
 server. Amendments folded in: suggestions start unselected (Enter submits, Tab completes); an API
 DNS result without blocks shows a reason (Rule M); LRU wording in requirement 13 and the SDD.
 Tests: `tests/it/shell_review_p3.rs`, `islands/test/shell-review-p3.test.ts`.
+
+## Phase 4 — Help and keyboard
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R17 Help dialog: what the inspector does, syntax with examples, shortcut table, guide link; DNS adds resolvers, flags and types from the server tables; Esc and close button close, focus returns | green | tests/it/shell_help.rs, islands/test/shell-keys.test.ts |
+| C2 | R18 Keyboard shortcuts outside text fields; inside the input only Esc and the list keys act | green | islands/test/shell-keys.test.ts |
+| C3 | GIVEN any inspector WHEN ? is pressed outside the input THEN the help dialog opens with syntax, shortcut table and guide link | green | tests/it/shell_help.rs, islands/test/shell-keys.test.ts |
+| C4 | GIVEN the DNS help THEN it lists the resolvers, flags and record types from the DNS crate's tables | green | tests/it/shell_help.rs |
+| C5 | GIVEN the open dialog WHEN Esc is pressed THEN it closes and focus returns to the ? button | green | islands/test/shell-keys.test.ts |
+| C6 | GIVEN focus outside the input WHEN / is pressed THEN the input has focus; WHEN Ctrl+L THEN its text is selected | green | islands/test/shell-keys.test.ts |
+| C7 | GIVEN a finished run WHEN j is pressed twice THEN the second check row has focus; WHEN Enter THEN its guide link is followed | green | islands/test/shell-keys.test.ts |
+| C8 | GIVEN the TLS inspector WHEN l is pressed THEN the HTTP tab's link is followed | green | islands/test/shell-keys.test.ts |
+| C9 | GIVEN focus in the input WHEN r is typed THEN it is inserted and nothing re-runs | already_implemented | islands/test/shell-keys.test.ts |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 server | 1 | sonnet | 46692 | 64 |
+| G2 island | 1 | sonnet | 32665 | 27 |
+
+### Behavioural verification
+
+`curl -s http://127.0.0.1:18931/inspect/dns` (local lens): the tab row holds
+`<button type="button" class="inspector-help__open" aria-haspopup="dialog" aria-controls="inspector-help" aria-label="Help" hidden>`,
+the page holds a closed `<dialog class="inspector-help" id="inspector-help" …>` with
+`<li><code>@cloudflare</code>` among the resolvers and the guide link `/guide/record-types`.
+The keys are verified in `islands/test/shell-keys.test.ts` (happy-dom); a browser pass comes with
+Phase 9's screenshots.
+
+### Review
+
+Reader: 0 blockers. Amendments fixed and folded into requirement 18 (tests in
+`islands/test/shell-review-p4.test.ts`): `j`/`k` step from the item holding a focused link; `r`
+re-runs a shown run of an empty IP input; the help's fallback without `HTMLDialogElement` opens,
+closes and returns focus (`hasAttribute("open")`, the Close button no longer submits). Nits fixed:
+a closed help is `display: none` where the UA lacks `<dialog>`; Ctrl+Shift+L is left to the
+browser; checkboxes and radios no longer swallow shortcuts; Ctrl+L does nothing while the help is
+open.

@@ -116,3 +116,23 @@ G2: `crates/web/islands/src/shell.ts`: pushState on submit, popstate restore and
 `restoring` flag), replaceState to the share URL on stream end, copy link (clipboard or share sheet
 on a coarse pointer), history in `localStorage` (20, distinct, newest first, try/catch), the
 listbox with keys, and the DNS autocomplete over the root's `data-suggest*` lists.
+
+## Phase 4 — Help and keyboard
+
+### Groups
+
+G1 (server): C4 and the server halves of C1, C3 · G2 (island): C1, C2, C3, C5–C9.
+
+### Plan
+
+G1: `src/pages/inspect.rs` — `Tool::what`, `Tool::syntax`, `Tool::guide`; `HelpView` on
+`ShellView` (DNS lists split from the `SuggestView` strings, so the tables are read once);
+`components/inspector_shell.html` — the closed `dialog#inspector-help` after the result region
+(examples, static key table, DNS lists behind data checks, guide link, close form);
+`partials/inspect_tabs.html` — the hidden "?" button inside the nav (the tabs fragment replaces the
+nav); `static/inspector_shell.css` — dialog, backdrop, keys, lists (tokens only).
+
+G2: `islands/src/shell.ts` — unhide and open/close through the delegated click listener, focus
+back to "?" on `close`; one document keydown listener per mount (guarded by `isConnected`,
+ignoring text fields): `/`, Ctrl/Meta+L, `r`, `j`/`k` over check rows and evidence blocks, Enter on
+a check row to its guide, `h`/`l` over the tabs, `?`, Esc.

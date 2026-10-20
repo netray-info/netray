@@ -198,3 +198,104 @@
   color: var(--color-muted);
   font-size: var(--font-size-small);
 }
+.inspector-tabs .inspector-help__open {
+  margin-inline-start: auto;
+  min-width: 44px;
+  min-height: 44px;
+  background: transparent;
+  border: 0;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+  cursor: pointer;
+}
+.inspector-help__open:hover {
+  color: var(--color-ink);
+}
+.inspector-help__open[hidden] {
+  display: none;
+}
+.inspector-help:not([open]) {
+  display: none;
+}
+.inspector-help {
+  box-sizing: border-box;
+  width: min(640px, calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100vh - 2 * var(--space-4));
+  padding: var(--space-5);
+  overflow-y: auto;
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+.inspector-help::backdrop {
+  background: var(--color-bg);
+  opacity: 0.8;
+}
+.inspector-help h2 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-strong);
+}
+.inspector-help h3 {
+  margin: var(--space-4) 0 var(--space-2);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-strong);
+  letter-spacing: var(--font-tracking-caps);
+  text-transform: uppercase;
+}
+.inspector-help p {
+  margin: 0 0 var(--space-2);
+}
+.inspector-help__examples,
+.inspector-help__resolvers,
+.inspector-help__flags,
+.inspector-help__types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+}
+.inspector-help__keys {
+  border-collapse: collapse;
+  font-size: var(--font-size-small);
+}
+.inspector-help__keys th,
+.inspector-help__keys td {
+  padding: var(--space-1) var(--space-3) var(--space-1) 0;
+  text-align: start;
+  font-weight: inherit;
+  vertical-align: baseline;
+}
+.inspector-help kbd {
+  padding: 0 var(--space-1);
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+.inspector-help__guide {
+  margin-top: var(--space-4);
+}
+.inspector-help__close {
+  min-width: 44px;
+  min-height: 44px;
+  margin-top: var(--space-4);
+  padding: 0 var(--space-3);
+  background: transparent;
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  color: var(--color-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.inspector-help__close:hover {
+  color: var(--color-ink);
+}

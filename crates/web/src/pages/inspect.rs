@@ -136,6 +136,37 @@ impl Tool {
         }
     }
 
+    fn what(self) -> &'static str {
+        match self {
+            Tool::Dns => {
+                "Resolves a name live, with the record types, flags and resolvers of a dig query."
+            }
+            Tool::Tls => {
+                "Connects to a host and reads its certificate chain, protocol versions and ciphers."
+            }
+            Tool::Http => "Fetches a URL and reads its redirects, security headers and cookies.",
+            Tool::Ip => "Looks up an address: its network, location, reverse name and reputation.",
+        }
+    }
+
+    fn syntax(self) -> &'static str {
+        match self {
+            Tool::Dns => "A name, then optional record types, +flags and @resolvers.",
+            Tool::Tls => "A host, optionally with a port: example.com or example.com:443.",
+            Tool::Http => "A full URL, scheme included.",
+            Tool::Ip => "An IPv4 or IPv6 address.",
+        }
+    }
+
+    fn guide(self) -> (&'static str, &'static str) {
+        match self {
+            Tool::Dns => ("/guide/record-types", "Record types guide"),
+            Tool::Tls => ("/guide/tls-protocol", "TLS protocol guide"),
+            Tool::Http => ("/guide/security-headers", "Security headers guide"),
+            Tool::Ip => ("/guide/ip-enrichment", "IP enrichment guide"),
+        }
+    }
+
     fn placeholder(self) -> &'static str {
         match self {
             Tool::Dns => "example.com A",
@@ -408,6 +439,35 @@ struct ShellView {
     result: Option<String>,
     notice: Option<&'static str>,
     suggest: Option<SuggestView>,
+    help: HelpView,
+}
+
+/// The help dialog's per-tool content; the DNS lists are empty for the other tools.
+struct HelpView {
+    what: &'static str,
+    syntax: &'static str,
+    guide_href: &'static str,
+    guide_label: &'static str,
+    resolvers: Vec<String>,
+    flags: Vec<String>,
+    types: Vec<String>,
+}
+
+fn words(s: &str) -> Vec<String> {
+    s.split_whitespace().map(str::to_owned).collect()
+}
+
+fn help(tool: Tool, suggest: Option<&SuggestView>) -> HelpView {
+    let (guide_href, guide_label) = tool.guide();
+    HelpView {
+        what: tool.what(),
+        syntax: tool.syntax(),
+        guide_href,
+        guide_label,
+        resolvers: suggest.map(|s| words(&s.servers)).unwrap_or_default(),
+        flags: suggest.map(|s| words(&s.flags)).unwrap_or_default(),
+        types: suggest.map(|s| words(&s.types)).unwrap_or_default(),
+    }
 }
 
 /// The autocomplete tables of the DNS shell, each a space-separated list.
@@ -550,6 +610,7 @@ async fn show(
     .render() else {
         return server_error();
     };
+    let suggest = suggest(tool);
     let shell = ShellView {
         tool: name,
         field: tool.field(),
@@ -581,7 +642,8 @@ async fn show(
         slot,
         result,
         notice,
-        suggest: suggest(tool),
+        help: help(tool, suggest.as_ref()),
+        suggest,
     };
     page(
         status,

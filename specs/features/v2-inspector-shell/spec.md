@@ -242,7 +242,10 @@ Each requirement names the inventory rows or board rows it closes.
     selects it, `r` re-runs the current query, `j` and `k` move focus between check rows and
     evidence blocks, Enter on a focused check row follows its guide link, `h` and `l` move to the
     previous and next inspector tab, `?` opens the help, Esc closes the open dialog or list. Inside
-    the input only Esc and the list keys of requirements 15 and 16 act. (2.38, 3.37, 4.34, 6.22)
+    the input only Esc and the list keys of requirements 15 and 16 act. `j` and `k` step from the
+    item holding focus, also from a link inside it; `r` re-runs a shown run as asked (an empty IP
+    input included); checkboxes and radios are not text fields; while the help is open only Esc
+    acts. (2.38, 3.37, 4.34, 6.22)
 
 ### Export
 

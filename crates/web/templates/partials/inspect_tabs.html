@@ -1,3 +1,4 @@
 <nav class="inspector-tabs" id="inspector-tabs" aria-label="Inspectors">
 {% for tab in tabs %}<a class="inspector-tabs__tab" href="{{ tab.href }}"{% if tab.current %} aria-current="page"{% endif %}>{{ tab.label }}</a>
-{% endfor %}</nav>
+{% endfor %}<button type="button" class="inspector-help__open" aria-haspopup="dialog" aria-controls="inspector-help" aria-label="Help" hidden>?</button>
+</nav>

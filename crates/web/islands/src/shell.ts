@@ -177,7 +177,9 @@ export function shell(el: HTMLElement): void {
   const shareUrl = (): string | undefined =>
     el.querySelector<HTMLElement>("#inspect-share[data-share-url]")?.dataset.shareUrl;
   const unhide = (): void =>
-    el.querySelectorAll<HTMLElement>(".inspector-share__copy").forEach((b) => (b.hidden = false));
+    el
+      .querySelectorAll<HTMLElement>(".inspector-share__copy, .inspector-help__open")
+      .forEach((b) => (b.hidden = false));
   unhide();
   el.addEventListener("netray:stream-fragment", unhide);
   el.addEventListener("netray:stream-end", () => {
@@ -188,8 +190,106 @@ export function shell(el: HTMLElement): void {
     }
   });
 
+  const dialog = el.querySelector<HTMLDialogElement>("dialog.inspector-help");
+  // `hasAttribute`, not `.open`: a browser without HTMLDialogElement only has the attribute.
+  const isOpen = (): boolean => !!dialog?.hasAttribute("open");
+  const openHelp = (): void => {
+    if (!dialog || isOpen()) return;
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+  };
+  const closeHelp = (): void => {
+    if (!dialog || !isOpen()) return;
+    if (typeof dialog.close === "function") dialog.close();
+    else {
+      dialog.removeAttribute("open");
+      dialog.dispatchEvent(new Event("close"));
+    }
+  };
+  dialog?.addEventListener("close", () =>
+    el.querySelector<HTMLElement>(".inspector-help__open")?.focus(),
+  );
+
+  const step = (dir: number): void => {
+    const rows = [...document.querySelectorAll<HTMLElement>("#inspect-result .check-row, #inspect-result .evidence-block")];
+    // The item holding focus, also when focus sits on a link inside it.
+    const active = document.activeElement;
+    const at = rows.findIndex((row) => row === active || row.contains(active));
+    const next = rows[Math.max(0, Math.min(rows.length - 1, at + dir))];
+    if (!next) return;
+    next.setAttribute("tabindex", "-1");
+    next.focus();
+  };
+  const tab = (dir: number): void => {
+    const tabs = [...el.querySelectorAll<HTMLAnchorElement>("nav.inspector-tabs a.inspector-tabs__tab")];
+    const at = tabs.findIndex((a) => a.getAttribute("aria-current") === "page");
+    const next = tabs[at + dir];
+    if (at >= 0 && next) location.assign(next.getAttribute("href") ?? "");
+  };
+  document.addEventListener("keydown", (ev) => {
+    if (!el.isConnected) return;
+    const target = ev.target as HTMLElement | null;
+    // Text fields keep their keys; checkboxes, radios and buttons do not.
+    const text =
+      'input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]), textarea, select, [contenteditable]';
+    if (target?.closest(text)) return;
+    if (isOpen() && ev.key !== "Escape") return;
+    if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && ev.key.toLowerCase() === "l") {
+      ev.preventDefault();
+      input.focus();
+      input.select();
+      return;
+    }
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    if (ev.key === "Escape") {
+      if (isOpen()) closeHelp();
+      else close();
+      return;
+    }
+    switch (ev.key) {
+      case "/":
+        ev.preventDefault();
+        input.focus();
+        break;
+      case "r":
+        // A shown run re-runs as it was asked, an empty IP input (the caller's own address) too.
+        if (input.value.trim() || el.querySelector("#inspect-result .inspector-run__head")) form.requestSubmit();
+        break;
+      case "j":
+        step(1);
+        break;
+      case "k":
+        step(-1);
+        break;
+      case "Enter": {
+        const row = target?.closest(".check-row");
+        if (!row || target?.closest("a, button")) break;
+        const guide = [...row.querySelectorAll<HTMLAnchorElement>(".check-row__link")]
+          .reverse()
+          .find((a) => (a.textContent ?? "").trim().toLowerCase().startsWith("guide"));
+        const href = guide?.getAttribute("href");
+        if (href) location.assign(href);
+        break;
+      }
+      case "h":
+        tab(-1);
+        break;
+      case "l":
+        tab(1);
+        break;
+      case "?":
+        openHelp();
+        break;
+    }
+  });
+
   el.addEventListener("click", (ev) => {
     const target = ev.target as Element | null;
+    if (target?.closest(".inspector-help__open")) return openHelp();
+    if (target?.closest(".inspector-help__close")) {
+      ev.preventDefault();
+      return closeHelp();
+    }
     if (target?.closest(".inspector-share__copy")) {
       const u = shareUrl();
       const url = u ? location.origin + u : location.href;
