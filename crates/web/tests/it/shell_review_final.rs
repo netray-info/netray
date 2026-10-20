@@ -18,6 +18,8 @@ fn markdown_text_never_starts_a_list_or_an_entity() {
         ("+ x", r"\+ x"),
         ("1. first", r"1\. first"),
         ("&lt;b&gt;", r"\&lt;b\&gt;"),
+        ("\n- mode: enforce", r"\- mode: enforce"),
+        ("   1. first", r"1\. first"),
     ] {
         let blocks = [text_block(text)];
         let md = markdown(&ExportInput {
