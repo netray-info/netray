@@ -528,3 +528,131 @@ mod probe_cost {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// specs/features/v2-tls-probe-close Phase 3 (requirements 10, 11): the handshake permit is
+// released after the handshake; probes have their own permits and a deadline
+// ---------------------------------------------------------------------------
+
+mod probe_permits {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    use netray_model::Status;
+    use netray_tls::state::AppState;
+    use netray_tls::tls::probe::{ProbeOutcome, ProtocolProbes, Verdict};
+    use tokio::sync::Semaphore;
+
+    fn refused() -> ProbeOutcome {
+        ProbeOutcome {
+            verdict: Verdict::Refused,
+            version: None,
+            cipher_suite: None,
+            detail: "alert protocol_version".into(),
+        }
+    }
+
+    fn canned() -> ProtocolProbes {
+        ProtocolProbes {
+            ssl3: refused(),
+            tls1_0: refused(),
+            tls1_1: refused(),
+            tls1_2: refused(),
+            tls1_3: refused(),
+            suites_insecure: refused(),
+            suites_cbc: refused(),
+            suites_static_rsa: refused(),
+        }
+    }
+
+    /// One handshake and one probing address at a time, a 1 s handshake timeout.
+    fn state(stub: Arc<StubTlsBackend>) -> AppState {
+        let mut state = stub_state(stub);
+        let mut config = stub_config();
+        config.limits.handshake_timeout_secs = 1;
+        config.limits.max_concurrent_handshakes = 1;
+        state.config.store(Arc::new(config));
+        state.handshake_semaphore = Arc::new(Semaphore::new(1));
+        state.probe_semaphore = Arc::new(Semaphore::new(1));
+        state
+    }
+
+    #[tokio::test]
+    async fn a_hanging_probe_does_not_hold_the_handshake_permit() {
+        let (a, b) = (ip("93.184.215.14"), ip("93.184.215.15"));
+        let stub = Arc::new(
+            StubTlsBackend::new()
+                .with_host("example.com", vec![a, b])
+                .with_probes(canned())
+                .with_probe_delay(Duration::from_secs(10)),
+        );
+        let inspector = state(stub.clone()).inspector();
+        let start = Instant::now();
+        let resp = inspector
+            .inspect(&req("example.com", 443), caller(), &limits(), "rid".into())
+            .await
+            .expect("the inspection answers before the request timeout");
+        let elapsed = start.elapsed();
+        assert_eq!(stub.calls().len(), 2, "both handshakes ran");
+        assert!(resp.ports[0].ips.iter().all(|r| r.error.is_none()));
+        assert!(elapsed < Duration::from_millis(1800), "took {elapsed:?}");
+    }
+
+    #[tokio::test]
+    async fn probes_past_the_deadline_are_unanswered_timed_out() {
+        let stub = Arc::new(
+            StubTlsBackend::new()
+                .with_probes(canned())
+                .with_probe_delay(Duration::from_secs(10)),
+        );
+        let inspector = state(stub).inspector();
+        let start = Instant::now();
+        let resp = inspector
+            .inspect(&req("example.com", 443), caller(), &limits(), "rid".into())
+            .await
+            .expect("inspection answers");
+        assert!(start.elapsed() < Duration::from_millis(1800));
+        let probes = resp.ports[0].ips[0].probes.clone().expect("probes");
+        for (name, o) in [
+            ("ssl3", &probes.ssl3),
+            ("tls1_0", &probes.tls1_0),
+            ("tls1_1", &probes.tls1_1),
+            ("tls1_2", &probes.tls1_2),
+            ("suites_insecure", &probes.suites_insecure),
+            ("suites_cbc", &probes.suites_cbc),
+            ("suites_static_rsa", &probes.suites_static_rsa),
+        ] {
+            assert_eq!(o.verdict, Verdict::Unanswered, "{name}: {o:?}");
+            assert_eq!(o.detail, "timed out", "{name}: {o:?}");
+        }
+        assert_eq!(probes.tls1_3.verdict, Verdict::Accepted);
+        let SectionOutcome::Measured { checks, .. } = translate(&resp) else {
+            panic!("expected Measured");
+        };
+        let legacy = checks
+            .iter()
+            .find(|c| c.id.to_string() == "tls.legacy_versions")
+            .expect("legacy_versions");
+        assert_eq!(legacy.status, Status::Unmeasured);
+    }
+
+    #[tokio::test]
+    async fn waiting_for_a_probe_permit_counts_against_the_deadline() {
+        let stub = Arc::new(StubTlsBackend::new().with_probes(canned()));
+        let state = state(stub);
+        let _held = Arc::clone(&state.probe_semaphore)
+            .acquire_owned()
+            .await
+            .unwrap();
+        let inspector = state.inspector();
+        let start = Instant::now();
+        let resp = inspector
+            .inspect(&req("example.com", 443), caller(), &limits(), "rid".into())
+            .await
+            .expect("inspection answers");
+        assert!(start.elapsed() < Duration::from_millis(1800));
+        let probes = resp.ports[0].ips[0].probes.clone().expect("probes");
+        assert_eq!(probes.tls1_0.verdict, Verdict::Unanswered);
+        assert_eq!(probes.tls1_0.detail, "timed out");
+    }
+}
