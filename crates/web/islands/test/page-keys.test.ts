@@ -21,8 +21,8 @@ const RESULT =
   '<button type="button" class="inspector-export__download" data-export-action="csv" hidden>CSV</button>' +
   '<button type="button" class="inspector-export__download" data-export-action="json" hidden>JSON</button>' +
   '<span class="inspector-export__status" role="status"></span>' +
-  `<template data-export="markdown">${MD.replace(/\n/g, "&#10;")}</template>` +
-  '<template data-export="csv">section,item,field,value&#10;</template>' +
+  `<template data-export="markdown">${MD.replace(/\n/g, "\n")}</template>` +
+  '<template data-export="csv">section,item,field,value\n</template>' +
   '<template data-export="json">{}</template>' +
   "</div></section>" +
   '<dialog class="inspector-help" id="inspector-help"><h2>Result page</h2>' +

@@ -1,4 +1,5 @@
 
+<div class="result-page" data-island="page">
 <div id="result" class="result" data-state="fresh" data-domain="shop.example.com" data-island="recent">
 <header id="result-header" class="result-hero">
 <div id="result-grade" data-grade="C" data-date="2025-10-09">
@@ -20,6 +21,7 @@
 <form id="recheck" class="recheck" method="post" action="/shop.example.com/run" data-island="stream" data-stream-url="/shop.example.com/run">
 <button id="recheck-button" class="button button--primary" type="submit" name="trigger" value="recheck">Re-check now</button>
 </form>
+<button type="button" class="inspector-help__open" aria-haspopup="dialog" aria-controls="inspector-help" aria-label="Help" hidden>?</button>
 <div id="result-share"><a id="share" class="button button--secondary" href="/r/ENTRY0" data-island="share" aria-haspopup="dialog">Share</a><dialog id="share-dialog" class="share-dialog" aria-labelledby="share-dialog-title"><h2 id="share-dialog-title">Share and embed</h2><button type="button" class="share-dialog__close" aria-label="Close">&times;</button><div class="share-dialog__tabs" role="tablist"><button type="button" role="tab" class="marker share-dialog__tab" id="share-tab-snapshot" aria-selected="true" aria-controls="share-snapshot">Snapshot</button><button type="button" role="tab" class="marker share-dialog__tab" id="share-tab-rerun" aria-selected="false" aria-controls="share-rerun">Re-run link</button><button type="button" role="tab" class="marker share-dialog__tab" id="share-tab-badge" aria-selected="false" aria-controls="share-badge">Badge</button><button type="button" role="tab" class="marker share-dialog__tab" id="share-tab-card" aria-selected="false" aria-controls="share-card">Social card</button></div>
 <div role="tabpanel" id="share-snapshot" class="share-dialog__panel" aria-labelledby="share-tab-snapshot"><div class="share-dialog__row"><input id="share-snapshot-url" class="share-dialog__field" readonly value="https://netray.info/r/ENTRY0"><button type="button" class="button button--secondary share-dialog__copy" data-copy="share-snapshot-url" aria-live="polite">Copy</button></div></div>
 <div role="tabpanel" id="share-rerun" class="share-dialog__panel" aria-labelledby="share-tab-rerun" hidden><div class="share-dialog__row"><input id="share-rerun-url" class="share-dialog__field" readonly value="https://netray.info/shop.example.com"><button type="button" class="button button--secondary share-dialog__copy" data-copy="share-rerun-url" aria-live="polite">Copy</button></div></div>
@@ -891,6 +893,252 @@
 </section>
 <section id="evidence">
 <div class="section-head"><h2>Evidence</h2><p id="evidence-meta" class="evidence-meta">recorded with this run</p></div>
+<div class="inspector-export" id="inspect-export" data-filename="netray-shop.example.com-ENTRY0"><button type="button" class="inspector-export__copy" data-export-action="markdown" hidden>Copy Markdown</button><button type="button" class="inspector-export__download" data-export-action="csv" hidden>CSV</button><button type="button" class="inspector-export__download" data-export-action="json" hidden>JSON</button><span class="inspector-export__status" role="status" aria-live="polite"></span><template data-export="markdown"># shop.example.com
+
+Grade C · score 20 / 100
+
+## Open issues
+
+- WARN `dns.ns` Nameserver redundancy: The domain has fewer than two NS records.
+- FAIL `tls.chain_trusted` Chain trusted: The served certificate chain does not build to a trust anchor in the public trust stores.
+- WARN `http.hsts` HSTS: HTTPS responses carry no Strict-Transport-Security header, or one with a max-age below one year.
+- FAIL `email.spf` SPF: The domain&#39;s SPF record is missing or invalid, leaves out the addresses of MX hosts the domain operates itself, or lacks -all although the domain publishes a Null MX.
+- FAIL `ip.reputation` IP reputation: An address of the domain is listed by Spamhaus, flagged as a Tor exit node or a command-and-control server, or flagged as a VPN endpoint.
+
+## Checks
+
+| Code | Check | Status | Finding | Fix |
+|---|---|---|---|---|
+| `dns.dnssec` | DNSSEC signed | not\_tested |  |  |
+| `dns.dnskey_algorithm` | DNSKEY algorithm | not\_tested |  |  |
+| `dns.dnssec_rollover` | DNSSEC key rollover | not\_tested |  |  |
+| `dns.caa` | CAA records | not\_tested |  |  |
+| `dns.ns` | Nameserver redundancy | warn | The domain has fewer than two NS records. | Delegate the zone to at least two authoritative nameservers. |
+| `dns.ns_lame` | Lame delegation | not\_tested |  |  |
+| `dns.ns_delegation` | Delegation consistency | not\_tested |  |  |
+| `dns.cname_apex` | No CNAME at apex | not\_tested |  |  |
+| `dns.https_svcb` | HTTPS record | not\_tested |  |  |
+| `dns.ttl` | TTL range | not\_tested |  |  |
+| `tls.tls_reachable` | TLS reachable | not\_tested |  |  |
+| `tls.chain_trusted` | Chain trusted | fail | The served certificate chain does not build to a trust anchor in the public trust stores. | Install a certificate from a public CA together with its full intermediate chain. |
+| `tls.not_expired` | Certificate valid | not\_tested |  |  |
+| `tls.hostname_match` | Hostname match | not\_tested |  |  |
+| `tls.chain_complete` | Chain complete | not\_tested |  |  |
+| `tls.strong_signature` | Strong signature | not\_tested |  |  |
+| `tls.key_strength` | Key strength | not\_tested |  |  |
+| `tls.expiry_window` | Expiry window | not\_tested |  |  |
+| `tls.cert_lifetime` | Certificate lifetime | not\_tested |  |  |
+| `tls.san_quality` | SAN quality | not\_tested |  |  |
+| `tls.aia_reachability` | AIA reachable | not\_tested |  |  |
+| `tls.tls_version` | TLS version | not\_tested |  |  |
+| `tls.forward_secrecy` | Forward secrecy | not\_tested |  |  |
+| `tls.aead_cipher` | AEAD cipher | not\_tested |  |  |
+| `tls.legacy_versions` | Legacy protocol versions | not\_tested |  |  |
+| `tls.weak_suites` | Weak cipher suites | not\_tested |  |  |
+| `tls.ocsp_stapled` | OCSP stapling | not\_tested |  |  |
+| `tls.ct_logged` | CT logged | not\_tested |  |  |
+| `tls.caa_compliant` | CAA compliant | not\_tested |  |  |
+| `tls.dane_valid` | DANE valid | not\_tested |  |  |
+| `tls.consistency` | Multi-IP consistency | not\_tested |  |  |
+| `tls.alpn_consistency` | ALPN consistency | not\_tested |  |  |
+| `tls.ech_advertised` | ECH advertised | not\_tested |  |  |
+| `http.https_redirect` | HTTPS redirect | not\_tested |  |  |
+| `http.hsts` | HSTS | warn | HTTPS responses carry no Strict-Transport-Security header, or one with a max-age below one year. | Send Strict-Transport-Security with max-age=31536000 on all HTTPS responses. |
+| `http.cors` | CORS policy | not\_tested |  |  |
+| `http.cookie_secure` | Secure cookies | not\_tested |  |  |
+| `http.csp` | Content Security Policy | not\_tested |  |  |
+| `http.x_frame_options` | X-Frame-Options | not\_tested |  |  |
+| `http.x_content_type_options` | X-Content-Type-Options | not\_tested |  |  |
+| `http.referrer_policy` | Referrer-Policy | not\_tested |  |  |
+| `http.permissions_policy` | Permissions-Policy | not\_tested |  |  |
+| `http.coop` | Cross-Origin-Opener-Policy | not\_tested |  |  |
+| `http.deprecated_headers` | Deprecated headers | not\_tested |  |  |
+| `http.info_leakage` | Information leakage | not\_tested |  |  |
+| `http.caching` | Cache control | not\_tested |  |  |
+| `email.mx` | MX records | not\_tested |  |  |
+| `email.spf` | SPF | fail | The domain&#39;s SPF record is missing or invalid, leaves out the addresses of MX hosts the domain operates itself, or lacks -all although the domain publishes a Null MX. | Publish one SPF record that lists every server sending mail for the domain, including its own MX hosts that also send, and ends in -all, or \~all where the domain does not publish a Null MX. |
+| `email.dkim` | DKIM | not\_tested |  |  |
+| `email.dmarc` | DMARC | not\_tested |  |  |
+| `email.mta_sts` | MTA-STS | not\_tested |  |  |
+| `email.tls_rpt` | TLS-RPT | not\_tested |  |  |
+| `email.bimi` | BIMI | not\_tested |  |  |
+| `email.dane` | SMTP DANE | not\_tested |  |  |
+| `email.dnsbl` | DNS blocklists | not\_tested |  |  |
+| `email.fcrdns` | Forward-confirmed rDNS | not\_tested |  |  |
+| `ip.reputation` | IP reputation | fail | An address of the domain is listed by Spamhaus, flagged as a Tor exit node or a command-and-control server, or flagged as a VPN endpoint. | Investigate the flagged address, request delisting where the source offers it, or stop using the address for the service. |
+</template><template data-export="csv">section,item,field,value
+checks,dns.dnssec,status,not_tested
+checks,dns.dnssec,finding,
+checks,dns.dnssec,fix,
+checks,dns.dnskey_algorithm,status,not_tested
+checks,dns.dnskey_algorithm,finding,
+checks,dns.dnskey_algorithm,fix,
+checks,dns.dnssec_rollover,status,not_tested
+checks,dns.dnssec_rollover,finding,
+checks,dns.dnssec_rollover,fix,
+checks,dns.caa,status,not_tested
+checks,dns.caa,finding,
+checks,dns.caa,fix,
+checks,dns.ns,status,warn
+checks,dns.ns,finding,The domain has fewer than two NS records.
+checks,dns.ns,fix,Delegate the zone to at least two authoritative nameservers.
+checks,dns.ns_lame,status,not_tested
+checks,dns.ns_lame,finding,
+checks,dns.ns_lame,fix,
+checks,dns.ns_delegation,status,not_tested
+checks,dns.ns_delegation,finding,
+checks,dns.ns_delegation,fix,
+checks,dns.cname_apex,status,not_tested
+checks,dns.cname_apex,finding,
+checks,dns.cname_apex,fix,
+checks,dns.https_svcb,status,not_tested
+checks,dns.https_svcb,finding,
+checks,dns.https_svcb,fix,
+checks,dns.ttl,status,not_tested
+checks,dns.ttl,finding,
+checks,dns.ttl,fix,
+checks,tls.tls_reachable,status,not_tested
+checks,tls.tls_reachable,finding,
+checks,tls.tls_reachable,fix,
+checks,tls.chain_trusted,status,fail
+checks,tls.chain_trusted,finding,The served certificate chain does not build to a trust anchor in the public trust stores.
+checks,tls.chain_trusted,fix,Install a certificate from a public CA together with its full intermediate chain.
+checks,tls.not_expired,status,not_tested
+checks,tls.not_expired,finding,
+checks,tls.not_expired,fix,
+checks,tls.hostname_match,status,not_tested
+checks,tls.hostname_match,finding,
+checks,tls.hostname_match,fix,
+checks,tls.chain_complete,status,not_tested
+checks,tls.chain_complete,finding,
+checks,tls.chain_complete,fix,
+checks,tls.strong_signature,status,not_tested
+checks,tls.strong_signature,finding,
+checks,tls.strong_signature,fix,
+checks,tls.key_strength,status,not_tested
+checks,tls.key_strength,finding,
+checks,tls.key_strength,fix,
+checks,tls.expiry_window,status,not_tested
+checks,tls.expiry_window,finding,
+checks,tls.expiry_window,fix,
+checks,tls.cert_lifetime,status,not_tested
+checks,tls.cert_lifetime,finding,
+checks,tls.cert_lifetime,fix,
+checks,tls.san_quality,status,not_tested
+checks,tls.san_quality,finding,
+checks,tls.san_quality,fix,
+checks,tls.aia_reachability,status,not_tested
+checks,tls.aia_reachability,finding,
+checks,tls.aia_reachability,fix,
+checks,tls.tls_version,status,not_tested
+checks,tls.tls_version,finding,
+checks,tls.tls_version,fix,
+checks,tls.forward_secrecy,status,not_tested
+checks,tls.forward_secrecy,finding,
+checks,tls.forward_secrecy,fix,
+checks,tls.aead_cipher,status,not_tested
+checks,tls.aead_cipher,finding,
+checks,tls.aead_cipher,fix,
+checks,tls.legacy_versions,status,not_tested
+checks,tls.legacy_versions,finding,
+checks,tls.legacy_versions,fix,
+checks,tls.weak_suites,status,not_tested
+checks,tls.weak_suites,finding,
+checks,tls.weak_suites,fix,
+checks,tls.ocsp_stapled,status,not_tested
+checks,tls.ocsp_stapled,finding,
+checks,tls.ocsp_stapled,fix,
+checks,tls.ct_logged,status,not_tested
+checks,tls.ct_logged,finding,
+checks,tls.ct_logged,fix,
+checks,tls.caa_compliant,status,not_tested
+checks,tls.caa_compliant,finding,
+checks,tls.caa_compliant,fix,
+checks,tls.dane_valid,status,not_tested
+checks,tls.dane_valid,finding,
+checks,tls.dane_valid,fix,
+checks,tls.consistency,status,not_tested
+checks,tls.consistency,finding,
+checks,tls.consistency,fix,
+checks,tls.alpn_consistency,status,not_tested
+checks,tls.alpn_consistency,finding,
+checks,tls.alpn_consistency,fix,
+checks,tls.ech_advertised,status,not_tested
+checks,tls.ech_advertised,finding,
+checks,tls.ech_advertised,fix,
+checks,http.https_redirect,status,not_tested
+checks,http.https_redirect,finding,
+checks,http.https_redirect,fix,
+checks,http.hsts,status,warn
+checks,http.hsts,finding,&quot;HTTPS responses carry no Strict-Transport-Security header, or one with a max-age below one year.&quot;
+checks,http.hsts,fix,Send Strict-Transport-Security with max-age=31536000 on all HTTPS responses.
+checks,http.cors,status,not_tested
+checks,http.cors,finding,
+checks,http.cors,fix,
+checks,http.cookie_secure,status,not_tested
+checks,http.cookie_secure,finding,
+checks,http.cookie_secure,fix,
+checks,http.csp,status,not_tested
+checks,http.csp,finding,
+checks,http.csp,fix,
+checks,http.x_frame_options,status,not_tested
+checks,http.x_frame_options,finding,
+checks,http.x_frame_options,fix,
+checks,http.x_content_type_options,status,not_tested
+checks,http.x_content_type_options,finding,
+checks,http.x_content_type_options,fix,
+checks,http.referrer_policy,status,not_tested
+checks,http.referrer_policy,finding,
+checks,http.referrer_policy,fix,
+checks,http.permissions_policy,status,not_tested
+checks,http.permissions_policy,finding,
+checks,http.permissions_policy,fix,
+checks,http.coop,status,not_tested
+checks,http.coop,finding,
+checks,http.coop,fix,
+checks,http.deprecated_headers,status,not_tested
+checks,http.deprecated_headers,finding,
+checks,http.deprecated_headers,fix,
+checks,http.info_leakage,status,not_tested
+checks,http.info_leakage,finding,
+checks,http.info_leakage,fix,
+checks,http.caching,status,not_tested
+checks,http.caching,finding,
+checks,http.caching,fix,
+checks,email.mx,status,not_tested
+checks,email.mx,finding,
+checks,email.mx,fix,
+checks,email.spf,status,fail
+checks,email.spf,finding,&quot;The domain&#39;s SPF record is missing or invalid, leaves out the addresses of MX hosts the domain operates itself, or lacks -all although the domain publishes a Null MX.&quot;
+checks,email.spf,fix,&quot;Publish one SPF record that lists every server sending mail for the domain, including its own MX hosts that also send, and ends in -all, or ~all where the domain does not publish a Null MX.&quot;
+checks,email.dkim,status,not_tested
+checks,email.dkim,finding,
+checks,email.dkim,fix,
+checks,email.dmarc,status,not_tested
+checks,email.dmarc,finding,
+checks,email.dmarc,fix,
+checks,email.mta_sts,status,not_tested
+checks,email.mta_sts,finding,
+checks,email.mta_sts,fix,
+checks,email.tls_rpt,status,not_tested
+checks,email.tls_rpt,finding,
+checks,email.tls_rpt,fix,
+checks,email.bimi,status,not_tested
+checks,email.bimi,finding,
+checks,email.bimi,fix,
+checks,email.dane,status,not_tested
+checks,email.dane,finding,
+checks,email.dane,fix,
+checks,email.dnsbl,status,not_tested
+checks,email.dnsbl,finding,
+checks,email.dnsbl,fix,
+checks,email.fcrdns,status,not_tested
+checks,email.fcrdns,finding,
+checks,email.fcrdns,fix,
+checks,ip.reputation,status,fail
+checks,ip.reputation,finding,&quot;An address of the domain is listed by Spamhaus, flagged as a Tor exit node or a command-and-control server, or flagged as a VPN endpoint.&quot;
+checks,ip.reputation,fix,&quot;Investigate the flagged address, request delisting where the source offers it, or stop using the address for the service.&quot;
+</template><template data-export="json">{&quot;id&quot;:&quot;ENTRY0&quot;,&quot;domain&quot;:&quot;shop.example.com&quot;,&quot;created_at&quot;:1760000000,&quot;last_seen_at&quot;:1760000000,&quot;predecessor_id&quot;:null,&quot;profile_version&quot;:3,&quot;grade&quot;:&quot;C&quot;,&quot;engine_version&quot;:&quot;0.26.0&quot;,&quot;run&quot;:{&quot;profile_version&quot;:3,&quot;engine_version&quot;:&quot;0.26.0&quot;,&quot;evidence_schema_version&quot;:1,&quot;grade&quot;:&quot;C&quot;,&quot;complete&quot;:true,&quot;sections&quot;:[{&quot;protocol&quot;:&quot;dns&quot;,&quot;outcome&quot;:&quot;measured&quot;,&quot;reason&quot;:null},{&quot;protocol&quot;:&quot;tls&quot;,&quot;outcome&quot;:&quot;measured&quot;,&quot;reason&quot;:null},{&quot;protocol&quot;:&quot;http&quot;,&quot;outcome&quot;:&quot;measured&quot;,&quot;reason&quot;:null},{&quot;protocol&quot;:&quot;email&quot;,&quot;outcome&quot;:&quot;measured&quot;,&quot;reason&quot;:null},{&quot;protocol&quot;:&quot;ip&quot;,&quot;outcome&quot;:&quot;measured&quot;,&quot;reason&quot;:null}],&quot;checks&quot;:[{&quot;id&quot;:&quot;dns.ns&quot;,&quot;status&quot;:&quot;warn&quot;},{&quot;id&quot;:&quot;tls.chain_trusted&quot;,&quot;status&quot;:&quot;fail&quot;},{&quot;id&quot;:&quot;http.hsts&quot;,&quot;status&quot;:&quot;warn&quot;},{&quot;id&quot;:&quot;email.spf&quot;,&quot;status&quot;:&quot;fail&quot;},{&quot;id&quot;:&quot;ip.reputation&quot;,&quot;status&quot;:&quot;fail&quot;}],&quot;blocks&quot;:[]}}</template></div>
 <div class="evidence-tabs" data-island="tabs">
 <nav id="evidence-nav" class="evidence-tabs__nav" aria-label="Evidence views">
 <a class="evidence-tabs__tab marker" href="#evidence-dns" data-tab="dns">DNS</a>
@@ -962,4 +1210,19 @@
 </div>
 </section>
 <details id="passed" class="clean-bar" hidden></details>
+<dialog class="inspector-help" id="inspector-help" aria-labelledby="inspector-help-title">
+<h2 id="inspector-help-title">Result page</h2>
+<p class="inspector-help__what">The grade, the spectrum, the open issues and the evidence of the latest run of this domain. Copy or download the stored run from the Evidence section.</p>
+<h3>Keyboard</h3>
+<table class="inspector-help__keys"><tbody>
+<tr><th scope="row"><kbd>/</kbd></th><td>Focus the domain input</td></tr>
+<tr><th scope="row"><kbd>r</kbd></th><td>Check again</td></tr>
+<tr><th scope="row"><kbd>j</kbd> / <kbd>k</kbd></th><td>Next or previous open issue</td></tr>
+<tr><th scope="row"><kbd>?</kbd></th><td>Open this help</td></tr>
+<tr><th scope="row"><kbd>Esc</kbd></th><td>Close this help</td></tr>
+</tbody></table>
+<p class="inspector-help__guide"><a href="/guide/scoring">How the grade is scored &rarr;</a></p>
+<form method="dialog"><button class="inspector-help__close" value="close">Close</button></form>
+</dialog>
+</div>
 </div>
