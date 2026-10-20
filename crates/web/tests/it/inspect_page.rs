@@ -106,11 +106,13 @@ async fn c7_a_query_prefills_the_input_and_autostarts_without_starting_a_job() {
 }
 
 #[tokio::test]
-async fn c17_email_has_no_inspector_page() {
+async fn c17_an_unknown_inspector_has_no_page() {
+    // Email has its inspector page since v2-inspector-shell (requirement 24); a tool that is no
+    // inspector still answers the 404 page and starts nothing.
     let (app, stub) = app();
-    let (status, body) = get(&app, "/inspect/email").await;
+    let (status, body) = get(&app, "/inspect/smtp").await;
 
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert!(body.contains("<h1>Nothing here</h1>"), "{body}");
-    assert_no_job(&stub, "email");
+    assert_no_job(&stub, "smtp");
 }
