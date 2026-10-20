@@ -78,3 +78,25 @@ fn exports_keep_the_raw_key_and_values() {
         assert!(out.contains("a=1") && out.contains("b=2"), "in: {out}");
     }
 }
+
+#[test]
+fn a_lone_key_with_a_digit_suffix_is_a_literal_name() {
+    use netray_model::evidence::{Block, BlockId, Shape, Value};
+    use netray_web::components::evidence_block;
+    use netray_web::evidence::block_view;
+    let block = Block {
+        id: BlockId::parse("http.headers").unwrap(),
+        title: "Response headers".into(),
+        shape: Shape::Table {
+            key: "name".into(),
+            columns: vec!["name".into(), "value".into()],
+            rows: vec![vec![
+                Value::Text("x-trace#1".into()),
+                Value::Text("abc".into()),
+            ]],
+        },
+    };
+    let html = evidence_block(&block_view(&block)).unwrap();
+    assert!(html.contains(">x-trace#1<"), "{html}");
+    assert!(!html.contains(r#"data-key="x-trace"#), "{html}");
+}

@@ -58,7 +58,13 @@ fn fields_block_renders_typed_values_in_dd() {
     let view = block_view(&block);
     assert_eq!(view.id, "ev-ip.addresses");
     let html = evidence_block(&view).unwrap();
-    for (key, _, expected) in rows().into_iter().filter(|(k, _, _)| *k != "note") {
+    for (key, _, raw) in rows().into_iter().filter(|(k, _, _)| *k != "note") {
+        let expected = match key {
+            "on" => "yes".to_string(),
+            "off" => "no".to_string(),
+            "seen" => format!(r#"<time datetime="{raw}">2026-10-08 14:32 UTC</time>"#),
+            _ => raw.to_string(),
+        };
         let needle = format!("<dd>{expected}</dd>");
         assert!(
             html.contains(&needle),

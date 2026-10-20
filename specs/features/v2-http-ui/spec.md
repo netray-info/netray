@@ -109,7 +109,8 @@ Closes inventory rows 4.12, 4.23, 4.25, 4.26, 4.29, 4.30, 4.32 (finding "set-coo
    the parts; when the band ends with checks, every part that holds a claimed block is streamed
    again, so its views carry the check tones. A shared run renders with its stored checks. The
    same run renders the same view markup in the inspector, the evidence view and the live
-   "All evidence" details.
+   "All evidence" details, apart from the enrichment badges of an address, which only the
+   inspector's run carries.
 5. **Facts grid component.** A new component `facts_grid` (macro `templates/components/
    facts_grid.html`, stylesheet `static/facts_grid.css`, root class `facts-grid`; the component
    lists in `frontend-rules.md`, `component_files.rs` and `components.rs` amended): cells of a
@@ -128,8 +129,9 @@ Closes inventory rows 4.12, 4.23, 4.25, 4.26, 4.29, 4.30, 4.32 (finding "set-coo
    `datetime` holds the stored RFC 3339 value. A fields key ending `_ms` whose value is a duration
    is shown without the suffix. (4.12, 4.29 "localised")
 7. **Repeat suffix.** A table row's key cell or a fields key of the form `<key>#<n>` (n decimal
-   digits, SDD §3.7) displays as `<key>`; the full key stays in a `data-key` attribute and in the
-   exports. (4.32, finding "set-cookie")
+   digits, SDD §3.7) displays as `<key>` when the same block also holds `<key>`; the full key stays
+   in a `data-key` attribute and in the exports. A lone `<key>#<n>` is a literal name and shows as
+   stored. (4.32, finding "set-cookie")
 
 ### HTTP views
 
@@ -173,7 +175,7 @@ Closes inventory rows 4.12, 4.23, 4.25, 4.26, 4.29, 4.30, 4.32 (finding "set-coo
 ### Acceptance
 
 15. **No JavaScript.** Every view is server-rendered and complete without JavaScript; no island is
-    added or changed. (S7)
+    added; the shell's j/k navigation reaches a view as it reaches an evidence block. (S7)
 16. **Exports.** The exports (Markdown, CSV, JSON) keep the stored keys and raw values, repeat
     suffixes included; the views change only the page. (shell requirement 17)
 17. **Manifest rows.** The private manifest gains the rows that waited for the canvas v45 export
@@ -305,6 +307,16 @@ GIVEN `/inspect/http` at 390 px with the 4 kB policy WHEN measured THEN the docu
   since #44, so a view renders in the live "All evidence" details there, not in the tabs; COOP's
   graded check (#43) changed the isolation view (implementer under the operator's autonomy
   mandate, 2026-10-20).
+- The shell's j/k navigation (`islands/src/shell.ts`) selects `.protocol-view` beside
+  `.evidence-block`: a claimed block must stay reachable by keyboard, and a view cannot carry the
+  `evidence-block` class (gate rule 2). Found by the Phase 1 planner (implementer under the
+  operator's autonomy mandate, 2026-10-20).
+- Phase 1 review: a time before 1970 read as 1970-01-01 (the shared minute formatter clamps);
+  the display formatter now converts any RFC 3339 time itself. The repeat suffix is stripped only
+  when the block also holds the base key, so a literal header such as `x-trace#1` is never renamed;
+  a literal `set-cookie#2` beside repeated cookies stays indistinguishable from a repeat, as it is
+  in the stored data. Enrichment badges exist only in the inspector's run, so requirement 4's
+  "same markup" excludes them (implementer under the operator's autonomy mandate, 2026-10-20).
 - Board: none for the HTTP inspector; it follows board G's frame. Proposal for the operator: add an
   "HTTP inspector" board (CSP table, caching and isolation cells) to the canvas so later runs of
   `just design-check` measure it (drafting agent, 2026-10-20).

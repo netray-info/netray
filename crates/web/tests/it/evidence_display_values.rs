@@ -53,3 +53,14 @@ fn fields_block_renders_bool_as_yes() {
     assert!(html.contains("<dd>yes</dd>"), "{html}");
     assert!(!html.contains("true"), "{html}");
 }
+
+#[test]
+fn times_before_1970_and_with_an_offset_read_in_utc() {
+    for (raw, shown) in [
+        ("1960-01-01T00:00:00Z", "1960-01-01 00:00 UTC"),
+        ("1969-12-31T23:59:00Z", "1969-12-31 23:59 UTC"),
+        ("2024-01-01T01:30:00+02:00", "2023-12-31 23:30 UTC"),
+    ] {
+        assert_eq!(display_value(&Value::Time(raw.into())), shown, "{raw}");
+    }
+}

@@ -12,6 +12,6 @@
 {% for line in view.shared %}<p class="evidence-section__shared"><a href="{{ line.href }}">{{ line.title }}</a></p>
 {% endfor %}
 {% for block in view.blocks %}
-{% call evidence_block::evidence_block(block) %}{% endcall %}
+{% if let Some(html) = block.view %}{{ html|safe }}{% else %}{% call evidence_block::evidence_block(block.block) %}{% endcall %}{% endif %}
 {% endfor %}
 </section>

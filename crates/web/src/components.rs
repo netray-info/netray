@@ -1,4 +1,4 @@
-//! The ten R44 components of the V2 design system. Each is an askama macro under
+//! The eleven R44 components of the V2 design system. Each is an askama macro under
 //! `templates/components/` and a stylesheet under `static/`; the functions here render a macro
 //! from a view. Styling lives in CSS keyed on classes and `data-*` attributes, never in markup.
 
@@ -48,12 +48,15 @@ impl SegmentState {
     }
 }
 
-/// One value of an evidence block: its text, the inspector page it links to and its badges.
+/// One value of an evidence block: its text, the inspector page it links to and its badges;
+/// `datetime` holds the stored RFC 3339 value of a time, `key` the full key of a repeated key.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Cell {
     pub text: String,
     pub href: Option<String>,
     pub badges: Vec<Badge>,
+    pub datetime: Option<String>,
+    pub key: Option<String>,
 }
 
 impl From<String> for Cell {
@@ -554,6 +557,22 @@ pub struct EvidenceBlockView {
     pub shape: EvidenceShape,
 }
 
+/// One cell of a facts grid: a label over its values, shown as chips when `chips` is set, with
+/// the tone bar of `tone`.
+#[derive(Debug, Clone)]
+pub struct FactCell {
+    pub label: String,
+    pub values: Vec<Cell>,
+    pub chips: bool,
+    pub tone: Option<Tone>,
+}
+
+/// A grid of labelled facts.
+#[derive(Debug, Clone)]
+pub struct FactsGridView {
+    pub cells: Vec<FactCell>,
+}
+
 /// One change between two runs.
 #[derive(Debug, Clone)]
 pub struct DiffEntry {
@@ -691,4 +710,10 @@ component!(
     QueryInputTemplate,
     QueryInputView,
     "{% import \"components/query_input.html\" as c %}{% call c::query_input(view) %}{% endcall %}"
+);
+component!(
+    facts_grid,
+    FactsGridTemplate,
+    FactsGridView,
+    "{% import \"components/facts_grid.html\" as c %}{% call c::facts_grid(view) %}{% endcall %}"
 );

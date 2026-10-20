@@ -98,6 +98,7 @@ fn page_templates_extend_base_and_use_only_component_macros() {
     want.push("pages.css".to_string());
     // v2-inspector-shell requirement 1: the inspector shell macro brings its own stylesheet.
     want.push("inspector_shell.css".to_string());
+    want.push("facts_grid.css".to_string());
     want.sort();
     assert_eq!(sheets, want);
 }

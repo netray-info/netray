@@ -1,0 +1,4 @@
+<section class="protocol-view" id="ev-{{ id }}" data-block="{{ id }}"><h3 class="protocol-view__title">{{ title }}</h3>
+{{ body|safe }}
+{% if !feeds.is_empty() %}<p class="protocol-view__feeds">Feeds lines: {% for code in feeds %}{% if !loop.first %}, {% endif %}{{ code }}{% endfor %}</p>{% endif %}
+</section>

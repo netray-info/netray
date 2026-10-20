@@ -68,6 +68,8 @@ fn facts_grid_renders_cells_tone_chips_and_links() {
                 text: "192.0.2.1".into(),
                 href: Some("/192.0.2.1".into()),
                 badges: vec![],
+                datetime: None,
+                key: None,
             }],
             chips: false,
             tone: None,

@@ -4,7 +4,7 @@ use std::path::Path;
 
 use netray_web::gate::check;
 
-const COMPONENTS: [&str; 10] = [
+const COMPONENTS: [&str; 11] = [
     "grade",
     "run_line",
     "progress_ray",
@@ -15,6 +15,7 @@ const COMPONENTS: [&str; 10] = [
     "diff_block",
     "grouping_switch",
     "query_input",
+    "facts_grid",
 ];
 
 #[test]
