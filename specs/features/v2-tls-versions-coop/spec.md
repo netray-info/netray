@@ -238,6 +238,9 @@ GIVEN checkMeta.ts and the catalogue WHEN `test_checkmeta_catalogue.sh` runs THE
   instead of sending an alert (often Windows SChannel) leaves `tls.legacy_versions` unmeasured
   unless another legacy version was accepted, and the TLS section incomplete (implementer under
   the operator's autonomy mandate, 2026-10-19).
+  Amended by v2-tls-probe-close (operator, 2026-10-20, SDD S42): a close or reset with nothing
+  received after the ClientHello was written is `refused`, answered `closed` or `closed (reset)`;
+  a timeout, a partial answer before the close and a failure before the write stay unanswered.
 - All probes of an address run concurrently, at most seven connections, each bounded by the
   handshake timeout, and alongside the live OCSP check: the inspection gets at most one probe
   timeout longer, which keeps the domain run inside the TLS window. Browsers open six parallel

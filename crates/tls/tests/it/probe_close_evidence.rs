@@ -55,7 +55,12 @@ fn a_closed_refusal_is_disabled_with_answer_closed_and_legacy_versions_pass() {
     let Shape::Fields(fields) = &block.shape else {
         panic!("fields block");
     };
-    let get = |k: &str| fields.iter().find(|(key, _)| key == k).map(|(_, v)| v.clone());
+    let get = |k: &str| {
+        fields
+            .iter()
+            .find(|(key, _)| key == k)
+            .map(|(_, v)| v.clone())
+    };
     let text = |s: &str| Some(Value::Text(s.into()));
     assert_eq!(get("tls1_0"), text("disabled"));
     assert_eq!(get("tls1_0_answer"), text("closed"));

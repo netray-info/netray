@@ -110,7 +110,7 @@ GIVEN the text HTTP/1.1 400 or a timeout WHEN classified THEN the probe is unans
 GIVEN a connect failure WHEN classified THEN the probe is unanswered naming the connect failure.
 GIVEN a responder that reads the ClientHello and closes WHEN probe_address runs after a TLS 1.3 handshake THEN every probed kind is refused with detail closed and TLS 1.3 is enabled.
 GIVEN a responder that reads the ClientHello and resets WHEN probe_address runs THEN every probed kind is refused with detail closed (reset).
-GIVEN a responder that accepts and closes before reading anything on a STARTTLS port WHEN probed THEN the kind is unanswered.
+GIVEN a failure before the ClientHello was written (the STARTTLS upgrade or the write) WHEN classified THEN the probe is unanswered naming it.
 GIVEN canned probes where TLS 1.0 is refused with detail closed WHEN the module translates THEN tls.probes holds tls1_0 disabled with tls1_0_answer closed, and tls.legacy_versions passes when SSLv3 and TLS 1.1 are refused too.
 
 ## Phase 2 — Probes are charged
@@ -202,6 +202,17 @@ GIVEN a probe semaphore permit held elsewhere for longer than the handshake time
   timeout covering the wait and the probes; a probe cut by the deadline is unanswered `timed out`
   (Rule M). An inspection then takes at most two handshake timeouts plus queueing for the handshake
   permit alone (implementer under the operator's autonomy mandate, 2026-10-19).
+
+- Phase 1 review: a close at accept (a per-client connection limit closing the extra of the
+  seven concurrent probe connections before reading) is indistinguishable from a close after the
+  ClientHello: the write lands in the local send buffer either way, and the read sees EOF or a
+  reset with nothing received. Such a server reads as refusing the affected probes, and
+  `tls.legacy_versions` can pass where it was unmeasured. Accepted as the residual of the
+  operator's rule and stated in S42; serialising or retrying closed probes is deferred
+  (implementer under the operator's autonomy mandate, 2026-10-19).
+- Phase 1 review: the NotSent mapping (STARTTLS, write) is tested at `classify` only; STARTTLS
+  runs on 25 and 587, which a test cannot bind unprivileged (implementer under the operator's
+  autonomy mandate, 2026-10-19).
 
 ## Open decisions
 
