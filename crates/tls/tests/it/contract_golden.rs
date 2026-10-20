@@ -123,6 +123,7 @@ fn response() -> InspectResponse {
         enrichment: None,
         error: None,
         raw_certs: None,
+        probes: None,
     };
     let port_checks = vec![
         check(
@@ -246,6 +247,7 @@ fn failed_response(code: &str, message: &str) -> InspectResponse {
                 message: message.to_string(),
             }),
             raw_certs: None,
+            probes: None,
         })
         .collect();
     let quality = assess_port(

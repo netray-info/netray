@@ -9,8 +9,8 @@ use netray_web::spectrum::{Layout, LineTone, RunInput, SectionState, layout};
 
 const W: u32 = 1056;
 const EPS: f64 = 1e-9;
-/// The smallest v3 height with every check measured: 0.35 + 0.65 x 2/103 x 35 / 10 (tls `san_quality` and kin).
-const SMALLEST_ALL_PASS: f64 = 0.35 + 0.65 * 7.0 / 103.0;
+/// The smallest v4 height with every check measured: 0.35 + 0.65 x 2/111 x 35 / 10 (tls `san_quality` and kin).
+const SMALLEST_ALL_PASS: f64 = 0.35 + 0.65 * 7.0 / 111.0;
 
 /// A measured line's height for its weight share `x` of the run's largest: 0.35 + 0.65 x.
 fn lift(x: f64) -> f64 {
@@ -98,7 +98,7 @@ fn r10_shape_lines_groups_runs_sections() {
     let o2 = run(&[("dns.caa", Some(Status::Warn))]);
     let l = lay(&cur, &[o1, o2]);
 
-    assert_eq!(l.lines.len(), 54);
+    assert_eq!(l.lines.len(), 57);
     let mut expected = Vec::new();
     for p in [
         Protocol::Dns,
@@ -129,7 +129,7 @@ fn r10_shape_lines_groups_runs_sections() {
         Protocol::Email,
         Protocol::Ip,
     ];
-    let lens = [10, 21, 12, 10, 1];
+    let lens = [10, 23, 13, 10, 1];
     let mut first = 0;
     for (g, (p, n)) in l.groups.iter().zip(protos.iter().zip(lens)) {
         assert_eq!((g.first, g.len), (first, n));
@@ -143,8 +143,8 @@ fn r10_shape_lines_groups_runs_sections() {
     assert_eq!(l.runs[1].tones[caa], LineTone::Fail);
     assert_eq!(l.runs[2].tones[caa], LineTone::Warn);
     for r in &l.runs {
-        assert_eq!(r.tones.len(), 54);
-        assert_eq!(r.heights.len(), 54);
+        assert_eq!(r.tones.len(), 57);
+        assert_eq!(r.heights.len(), 57);
     }
     assert_eq!(l.runs[0].sections.len(), 5);
     assert_eq!(
@@ -270,10 +270,10 @@ fn r12_heights_normalised_muted_smallest() {
 fn c6_real_catalogue_boundaries() {
     let l = lay(&run(&[]), &[]);
     assert_eq!(l.lines[0].id, id("dns.dnssec"));
-    assert_eq!(l.lines[53].id, id("ip.reputation"));
-    let pitch = 1056.0 / 54.0;
+    assert_eq!(l.lines[56].id, id("ip.reputation"));
+    let pitch = 1056.0 / 57.0;
     assert!(near(l.pitch, pitch, EPS));
-    let want = [10.0, 31.0, 43.0, 53.0];
+    let want = [10.0, 33.0, 46.0, 56.0];
     assert_eq!(l.boundaries.len(), 4);
     for (b, n) in l.boundaries.iter().zip(want) {
         assert!(near(*b, n * pitch, EPS), "boundary {b} vs line {n}");
@@ -348,11 +348,11 @@ fn c11_all_pass_v3_heights() {
     let reach = h[at(&l, "tls.tls_reachable")];
     let csp = h[at(&l, "http.csp")];
     assert!(near(rep, 1.0, EPS));
-    assert!(near(reach, lift(10.0 / 103.0 * 35.0 / 10.0), EPS));
-    assert!(near(csp, lift(1.0 / 23.0 * 20.0 / 10.0), EPS));
-    // printed roundings: 1.00, 0.57, 0.41
-    assert!(near(reach, 0.571, 0.0005));
-    assert!(near(csp, 0.407, 0.0005));
+    assert!(near(reach, lift(10.0 / 111.0 * 35.0 / 10.0), EPS));
+    assert!(near(csp, lift(1.0 / 24.0 * 20.0 / 10.0), EPS));
+    // printed roundings: 1.00, 0.55, 0.40
+    assert!(near(reach, 0.555, 0.0005));
+    assert!(near(csp, 0.404, 0.0005));
 }
 
 #[test]

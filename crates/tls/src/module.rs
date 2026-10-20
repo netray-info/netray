@@ -23,6 +23,7 @@ use crate::input::{self, Target};
 use crate::quality::{self, HealthCheck, checks};
 use crate::routes::{self, CaaSource, InspectRequest, InspectResponse, PortResult};
 use crate::state::AppState;
+use crate::tls::probe::{ProbeOutcome, ProtocolProbes, Verdict};
 use crate::tls::{CertInfo, IpInspectionResult, TlsParams};
 use crate::validate::CheckStatus;
 
@@ -42,6 +43,8 @@ static CHECKS: LazyLock<Vec<CheckId>> = LazyLock::new(|| {
         "tls_version",
         "forward_secrecy",
         "aead_cipher",
+        "legacy_versions",
+        "weak_suites",
         "ct_logged",
         "ocsp_stapled",
         "caa_compliant",
@@ -66,6 +69,8 @@ pub const REGISTER: Register = Register {
         ("tls.addresses", ShapeKind::Table),
         ("tls.chain", ShapeKind::Chain),
         ("tls.handshake", ShapeKind::Fields),
+        ("tls.probes", ShapeKind::Fields),
+        ("tls.protocols", ShapeKind::Fields),
         ("tls.tlsa", ShapeKind::Records),
         ("tls.ct", ShapeKind::Table),
         ("tls.caa", ShapeKind::Records),
@@ -108,6 +113,35 @@ pub const REGISTER: Register = Register {
         ("tls.handshake", "ocsp_live_status", ValueType::Text),
         ("tls.handshake", "ocsp_live_revoked_at", ValueType::Time),
         ("tls.handshake", "ocsp_live_reason", ValueType::Text),
+        ("tls.probes", "ssl3", ValueType::Text),
+        ("tls.probes", "tls1_0", ValueType::Text),
+        ("tls.probes", "tls1_1", ValueType::Text),
+        ("tls.probes", "tls1_2", ValueType::Text),
+        ("tls.probes", "tls1_3", ValueType::Text),
+        ("tls.probes", "suites_insecure", ValueType::Text),
+        ("tls.probes", "suites_cbc", ValueType::Text),
+        ("tls.probes", "suites_static_rsa", ValueType::Text),
+        ("tls.probes", "ssl3_answer", ValueType::Text),
+        ("tls.probes", "tls1_0_answer", ValueType::Text),
+        ("tls.probes", "tls1_1_answer", ValueType::Text),
+        ("tls.probes", "tls1_2_answer", ValueType::Text),
+        ("tls.probes", "tls1_3_answer", ValueType::Text),
+        ("tls.probes", "suites_insecure_answer", ValueType::Text),
+        ("tls.probes", "suites_cbc_answer", ValueType::Text),
+        ("tls.probes", "suites_static_rsa_answer", ValueType::Text),
+        ("tls.protocols", "ssl3", ValueType::Text),
+        ("tls.protocols", "tls1_0", ValueType::Text),
+        ("tls.protocols", "tls1_1", ValueType::Text),
+        ("tls.protocols", "tls1_2", ValueType::Text),
+        ("tls.protocols", "tls1_3", ValueType::Text),
+        ("tls.protocols", "suites_insecure", ValueType::Text),
+        ("tls.protocols", "suites_cbc", ValueType::Text),
+        ("tls.protocols", "suites_static_rsa", ValueType::Text),
+        (
+            "tls.protocols",
+            "forward_secrecy_all_suites",
+            ValueType::Bool,
+        ),
         ("tls.tlsa", "owner", ValueType::Text),
         ("tls.tlsa", "type", ValueType::Text),
         ("tls.tlsa", "ttl", ValueType::Int),
@@ -288,11 +322,11 @@ impl Module for TlsModule {
     }
 }
 
-/// Maps port 443 (else the first port) onto all 21 `tls.<id>` checks and its blocks. Each
+/// Maps port 443 (else the first port) onto all 23 `tls.<id>` checks and its blocks. Each
 /// per-address check is measured on every address that completed a handshake and reports the
 /// worst of them; CAA, DANE and OCSP come once from the summary. A failed CAA, TLSA or HTTPS
 /// lookup makes its check `Unmeasured`, and so do the consistency checks when a timeout left
-/// fewer than two handshakes. Without any handshake the other 20 checks follow
+/// fewer than two handshakes. Without any handshake the other 22 checks follow
 /// `tls_reachable`: not applicable behind a Fail, `NotTested` or `Unmeasured` otherwise.
 pub fn translate(resp: &InspectResponse) -> SectionOutcome {
     translate_with_facts(resp, &[])
@@ -410,6 +444,32 @@ fn translate_port(
                 by_id.insert(name.to_string(), r);
             }
         }
+        let probed: Vec<(&IpInspectionResult, &ProtocolProbes)> = handshakes
+            .iter()
+            .filter_map(|r| Some((*r, r.probes.as_ref()?)))
+            .collect();
+        if !probed.is_empty() {
+            let protocols = qualified_block_id("tls.protocols", port.port, qualify);
+            for (name, judge) in [
+                (
+                    "legacy_versions",
+                    legacy_versions as fn(&str, &ProtocolProbes) -> (Status, Vec<String>),
+                ),
+                ("weak_suites", weak_suites),
+            ] {
+                let per: Vec<(&str, Status, Vec<String>)> = probed
+                    .iter()
+                    .map(|(r, p)| {
+                        let (status, findings) = judge(&r.ip, p);
+                        (r.ip.as_str(), status, findings)
+                    })
+                    .collect();
+                by_id.insert(
+                    name.to_string(),
+                    probe_check(name, &per, port.port, &protocols),
+                );
+            }
+        }
 
         let summary = &resp.summary.checks;
         let ocsp = summary.ocsp_stapled;
@@ -512,6 +572,112 @@ fn translate_port(
         .collect();
 
     SectionOutcome::Measured { checks, evidence }
+}
+
+fn status_rank(status: Status) -> u8 {
+    match status {
+        Status::Fail => 3,
+        Status::Unmeasured => 2,
+        Status::Warn => 1,
+        _ => 0,
+    }
+}
+
+/// The check over the probed addresses: the worst address status (fail, unmeasured, warn, pass)
+/// with the findings and `tls.probes` blocks of the addresses at it, plus `tls.protocols`; an
+/// unmeasured check references nothing.
+fn probe_check(
+    name: &str,
+    per: &[(&str, Status, Vec<String>)],
+    port: u16,
+    protocols: &BlockId,
+) -> CheckResult {
+    let status = per
+        .iter()
+        .map(|(_, s, _)| *s)
+        .max_by_key(|s| status_rank(*s))
+        .unwrap_or(Status::Pass);
+    let at_status = || per.iter().filter(|(_, s, _)| *s == status);
+    let mut r = result(
+        name,
+        status,
+        at_status().flat_map(|(_, _, f)| f.clone()).collect(),
+    );
+    if status != Status::Unmeasured {
+        r.evidence = at_status()
+            .filter_map(|(ip, _, _)| address_block_id("probes", ip, port))
+            .chain(std::iter::once(protocols.clone()))
+            .collect();
+    }
+    r
+}
+
+fn unanswered_findings(ip: &str, probes: &[(&str, &ProbeOutcome)]) -> Vec<String> {
+    probes
+        .iter()
+        .filter(|(_, o)| o.verdict == Verdict::Unanswered)
+        .map(|(name, o)| format!("{ip}: no answer to the {name} probe ({})", o.detail))
+        .collect()
+}
+
+/// SSLv3, TLS 1.0 and TLS 1.1 on one address: any accepted is a fail, all refused a pass.
+fn legacy_versions(ip: &str, probes: &ProtocolProbes) -> (Status, Vec<String>) {
+    let versions = [
+        ("SSLv3", &probes.ssl3),
+        ("TLS 1.0", &probes.tls1_0),
+        ("TLS 1.1", &probes.tls1_1),
+    ];
+    let accepted: Vec<&str> = versions
+        .iter()
+        .filter(|(_, o)| o.verdict == Verdict::Accepted)
+        .map(|(n, _)| *n)
+        .collect();
+    if !accepted.is_empty() {
+        return (
+            Status::Fail,
+            vec![format!("{ip}: accepts {}", accepted.join(", "))],
+        );
+    }
+    if versions.iter().all(|(_, o)| o.verdict == Verdict::Refused) {
+        return (Status::Pass, vec![]);
+    }
+    (Status::Unmeasured, unanswered_findings(ip, &versions))
+}
+
+/// The weak suite groups on one address: an accepted insecure group is a fail, an accepted CBC or
+/// static RSA group a warn.
+fn weak_suites(ip: &str, probes: &ProtocolProbes) -> (Status, Vec<String>) {
+    let suite = |o: &ProbeOutcome| o.cipher_suite.clone().unwrap_or_else(|| "unknown".into());
+    if probes.suites_insecure.verdict == Verdict::Accepted {
+        let finding = format!(
+            "{ip}: accepts insecure suite {}",
+            suite(&probes.suites_insecure)
+        );
+        return (Status::Fail, vec![finding]);
+    }
+    let groups = [
+        ("insecure suites", &probes.suites_insecure),
+        ("CBC suites", &probes.suites_cbc),
+        ("static RSA suites", &probes.suites_static_rsa),
+    ];
+    if probes.suites_insecure.verdict == Verdict::Unanswered {
+        return (Status::Unmeasured, unanswered_findings(ip, &groups));
+    }
+    let warns: Vec<String> = [
+        ("CBC", &probes.suites_cbc),
+        ("static RSA", &probes.suites_static_rsa),
+    ]
+    .iter()
+    .filter(|(_, o)| o.verdict == Verdict::Accepted)
+    .map(|(n, o)| format!("{ip}: accepts {n} suite {}", suite(o)))
+    .collect();
+    if !warns.is_empty() {
+        return (Status::Warn, warns);
+    }
+    if groups.iter().all(|(_, o)| o.verdict == Verdict::Refused) {
+        return (Status::Pass, vec![]);
+    }
+    (Status::Unmeasured, unanswered_findings(ip, &groups))
 }
 
 /// The OCSP, CAA and DANE verdicts of one port of several, which the response's summary judges
@@ -659,6 +825,7 @@ fn blocks(
             });
         }
     }
+    blocks.extend(probe_blocks(port, &handshakes, qualify));
     if resp.summary.checks.ct_logged != CheckStatus::Skip && !handshakes.is_empty() {
         blocks.push(ct_block(&handshakes, qualify.then_some(port.port)));
     }
@@ -684,6 +851,83 @@ fn blocks(
             shape: Shape::Records(caa),
         });
     }
+    blocks
+}
+
+/// `tls.probes` per probed address, then the port's `tls.protocols`: a probe the server left
+/// unanswered is omitted, addresses that differ read `mixed`.
+fn probe_blocks(
+    port: &PortResult,
+    handshakes: &[(IpAddr, &IpInspectionResult)],
+    qualify: bool,
+) -> Vec<Block> {
+    let probed: Vec<(&IpInspectionResult, &ProtocolProbes)> = handshakes
+        .iter()
+        .filter_map(|(_, r)| Some((*r, r.probes.as_ref()?)))
+        .collect();
+    let text = |k: &str, v: &str| (k.to_string(), EvValue::Text(v.to_string()));
+    let word = |key: &str, verdict: Verdict| match (key.starts_with("suites_"), verdict) {
+        (false, Verdict::Accepted) => Some("enabled"),
+        (false, Verdict::Refused) => Some("disabled"),
+        (true, Verdict::Accepted) => Some("accepted"),
+        (true, Verdict::Refused) => Some("refused"),
+        (_, Verdict::Unanswered) => None,
+    };
+    let mut blocks = Vec::new();
+    for (r, probes) in &probed {
+        let Some(id) = address_block_id("probes", &r.ip, port.port) else {
+            continue;
+        };
+        let mut fields = Fields::new();
+        for (key, outcome) in probes.entries() {
+            if let Some(value) = word(key, outcome.verdict) {
+                fields.push(text(key, value));
+                fields.push(text(&format!("{key}_answer"), &outcome.detail));
+            }
+        }
+        let addr = SocketAddr::new(r.ip.parse().expect("block id parsed it"), port.port);
+        blocks.push(Block {
+            id,
+            title: format!("Protocol probes {addr}"),
+            shape: Shape::Fields(fields),
+        });
+    }
+    if probed.is_empty() {
+        return blocks;
+    }
+    let mut fields = Fields::new();
+    for (i, (key, _)) in probed[0].1.entries().into_iter().enumerate() {
+        let values: Vec<Option<&str>> = probed
+            .iter()
+            .map(|(_, p)| word(key, p.entries()[i].1.verdict))
+            .collect();
+        if values.contains(&None) {
+            continue;
+        }
+        let first = values[0].expect("no unanswered value");
+        let all_equal = values.iter().all(|v| *v == Some(first));
+        fields.push(text(key, if all_equal { first } else { "mixed" }));
+    }
+    let static_rsa: Vec<Verdict> = probed
+        .iter()
+        .map(|(_, p)| p.suites_static_rsa.verdict)
+        .collect();
+    if static_rsa.contains(&Verdict::Accepted) {
+        fields.push((
+            "forward_secrecy_all_suites".to_string(),
+            EvValue::Bool(false),
+        ));
+    } else if static_rsa.iter().all(|v| *v == Verdict::Refused) {
+        fields.push((
+            "forward_secrecy_all_suites".to_string(),
+            EvValue::Bool(true),
+        ));
+    }
+    blocks.push(Block {
+        id: qualified_block_id("tls.protocols", port.port, qualify),
+        title: "Protocols and features".into(),
+        shape: Shape::Fields(fields),
+    });
     blocks
 }
 

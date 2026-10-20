@@ -86,7 +86,7 @@ fn two_ports_give_two_qualified_outcomes() {
     );
     for (port, outcome) in &outcomes {
         let (checks, blocks) = measured(outcome);
-        assert_eq!(checks.len(), 21, "port {port}");
+        assert_eq!(checks.len(), 23, "port {port}");
         let found = ids(outcome);
         assert!(
             found.contains(&format!("tls.addresses@{port}")),

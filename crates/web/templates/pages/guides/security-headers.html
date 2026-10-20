@@ -58,6 +58,17 @@ Content-Security-Policy: frame-ancestors 'self' https://trusted.example.com</cod
     <pre><code># Allow camera only for your own origin and a trusted video provider
 Permissions-Policy: camera=(self "https://video.example.com"), microphone=()</code></pre>
 
+    <h2>Cross-Origin-Opener-Policy</h2>
+    <p><code>Cross-Origin-Opener-Policy</code> (COOP) decides whether your page shares a browsing context group with the windows it opens and the windows that open it. Without it, a cross-origin popup or opener keeps a reference to your window object and can navigate it or probe it for cross-window leaks (XS-Leaks).</p>
+    <ul>
+      <li><strong><code>same-origin</code></strong>: only same-origin windows share the group. The recommended value.</li>
+      <li><strong><code>same-origin-allow-popups</code></strong>: as <code>same-origin</code>, but popups you open keep their opener. Use it when the site relies on payment or login popups.</li>
+      <li><strong><code>noopener-allow-popups</code></strong>: the page is always opened without an opener, and popups it opens keep theirs.</li>
+      <li><strong><code>unsafe-none</code></strong>: the default without the header; no isolation.</li>
+    </ul>
+    <pre><code>Cross-Origin-Opener-Policy: same-origin</code></pre>
+    <p>netray grades COOP; <code>Cross-Origin-Embedder-Policy</code> and <code>Cross-Origin-Resource-Policy</code> are shown in the evidence but not graded.</p>
+
     <h2>Recommended baseline header set</h2>
     <p>Every production web server should send at minimum these security headers on every response:</p>
     <pre><code>Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
@@ -65,6 +76,7 @@ X-Content-Type-Options: nosniff
 X-Frame-Options: DENY
 Referrer-Policy: strict-origin-when-cross-origin
 Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+Cross-Origin-Opener-Policy: same-origin
 Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; object-src 'none'</code></pre>
     <p>This baseline provides HTTPS enforcement, click-jacking prevention, MIME sniffing protection, referrer privacy, feature restriction, and a basic CSP. Adjust the CSP directives based on your application's actual resource needs.</p>
 
@@ -125,6 +137,6 @@ http:
 
   <section id="fix">
     <h2>How to fix this</h2>
-    <p>Add the missing security headers — at minimum <code>X-Content-Type-Options: nosniff</code>, <code>X-Frame-Options: DENY</code>, and a <code>Content-Security-Policy</code> — to reduce common browser-based attack surface.</p>
+    <p>Add the missing security headers — at minimum <code>X-Content-Type-Options: nosniff</code>, <code>X-Frame-Options: DENY</code>, a <code>Content-Security-Policy</code> and <code>Cross-Origin-Opener-Policy: same-origin</code> — to reduce common browser-based attack surface.</p>
   </section>
 {% endblock %}

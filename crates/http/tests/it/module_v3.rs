@@ -1,4 +1,4 @@
-// V2 catalogue Phase 3, requirement 3(b) (criterion C3): the HTTP module emits exactly the 12
+// V2 catalogue Phase 3, requirement 3(b) (criterion C3): the HTTP module emits exactly the 13
 // `http.*` catalogue IDs in every run. Same fixture and entry points as `module.rs`.
 
 use std::collections::BTreeSet;
@@ -42,14 +42,14 @@ fn variant(mutate: impl FnOnce(&mut Value)) -> InspectResponse {
 }
 
 #[test]
-fn http_module_emits_exactly_the_twelve_catalogue_ids() {
+fn http_module_emits_exactly_the_thirteen_catalogue_ids() {
     let want = catalogue_http_ids();
-    assert_eq!(want.len(), 12, "catalogue http.* IDs");
+    assert_eq!(want.len(), 13, "catalogue http.* IDs");
 
     let resp: InspectResponse = serde_json::from_str(SPECTRA_JSON).unwrap();
     let checks = measured(translate(&resp));
     let got: Vec<String> = checks.iter().map(|c| c.id.to_string()).collect();
-    assert_eq!(got.len(), 12, "each ID once: {got:?}");
+    assert_eq!(got.len(), 13, "each ID once: {got:?}");
     assert_eq!(
         got.iter().collect::<BTreeSet<_>>(),
         want.iter().collect::<BTreeSet<_>>(),
@@ -59,7 +59,7 @@ fn http_module_emits_exactly_the_twelve_catalogue_ids() {
     let cfg: ModuleConfig = toml::from_str("[inspect]\nrequest_timeout_secs = 5").unwrap();
     let module = HttpModule::new(cfg).expect("module builds");
     let declared: Vec<String> = module.checks().iter().map(|c| c.to_string()).collect();
-    assert_eq!(declared.len(), 12, "checks() each ID once: {declared:?}");
+    assert_eq!(declared.len(), 13, "checks() each ID once: {declared:?}");
     assert_eq!(
         declared.iter().collect::<BTreeSet<_>>(),
         want.iter().collect::<BTreeSet<_>>(),
@@ -128,7 +128,7 @@ fn http_redirect_limit_is_a_finding_on_https_redirect() {
         !ids.iter().any(|i| i == "http.redirect_limit"),
         "no http.redirect_limit: {ids:?}"
     );
-    assert_eq!(ids.len(), 12, "still the 12 catalogue IDs: {ids:?}");
+    assert_eq!(ids.len(), 13, "still the 13 catalogue IDs: {ids:?}");
 
     let c = find(&checks, "http.https_redirect");
     assert!(

@@ -1,0 +1,101 @@
+# Scoring profile v4: profile v3 plus tls.legacy_versions, tls.weak_suites and http.coop
+# (v2-tls-versions-coop, SDD §3.9).
+
+[meta]
+name = "v4"
+version = 4
+
+[sections.dns]
+weight = 20
+hard_fail = []
+
+[sections.dns.checks]
+dnssec            = 5
+caa               = 5
+ns                = 3
+ns_lame           = 5
+ns_delegation     = 3
+cname_apex        = 5
+https_svcb        = 2
+ttl               = 2
+dnskey_algorithm  = 3
+dnssec_rollover   = 2
+
+[sections.tls]
+weight = 35
+hard_fail = ["chain_trusted", "hostname_match", "not_expired", "tls_reachable"]
+
+[sections.tls.checks]
+tls_reachable = 10
+chain_trusted = 10
+not_expired = 10
+hostname_match = 10
+chain_complete = 5
+strong_signature = 5
+key_strength = 5
+expiry_window = 5
+cert_lifetime = 3
+san_quality = 2
+aia_reachability = 2
+tls_version = 5
+forward_secrecy = 5
+aead_cipher = 5
+legacy_versions = 5
+weak_suites = 3
+ocsp_stapled = 3
+ct_logged = 3
+caa_compliant = 5
+dane_valid = 3
+consistency = 3
+alpn_consistency = 2
+ech_advertised = 2
+
+[sections.http]
+weight = 20
+hard_fail = []
+
+[sections.http.checks]
+https_redirect         = 5
+hsts                   = 5
+cors                   = 3
+cookie_secure          = 2
+csp                    = 1
+x_frame_options        = 1
+x_content_type_options = 1
+referrer_policy        = 1
+permissions_policy     = 1
+coop                   = 1
+deprecated_headers     = 1
+info_leakage           = 1
+caching                = 1
+
+[sections.email]
+weight = 15
+hard_fail = []
+
+[sections.email.checks]
+spf     = 3
+dkim    = 3
+dmarc   = 4
+mx      = 2
+dnsbl   = 2
+fcrdns  = 1
+mta_sts = 2
+dane    = 2
+tls_rpt = 1
+bimi    = 2
+
+[sections.ip]
+weight = 10
+hard_fail = []
+
+[sections.ip.checks]
+reputation = 5
+
+[thresholds]
+"A+" = 97
+"A"  = 90
+"B"  = 75
+"C"  = 60
+"D"  = 40
+"F"  = 0

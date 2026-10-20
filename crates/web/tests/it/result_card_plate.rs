@@ -22,7 +22,7 @@ fn run_with(status_of: impl Fn(usize, &str) -> Status) -> Run {
         })
         .collect();
     Run {
-        profile_version: 3,
+        profile_version: 4,
         engine_version: "0.0.0".into(),
         evidence_schema_version: 1,
         grade: Grade::B,
@@ -70,7 +70,7 @@ fn c2_plate_holds_one_line_per_catalogue_id_and_labels_exactly_warn_and_fail() {
     let svg = card_plate(&card_layout(&run, None));
 
     let lines = codes(&svg, "plate__line");
-    assert_eq!(lines.len(), 54);
+    assert_eq!(lines.len(), 57);
     let ids: BTreeSet<String> = catalogue()
         .entries()
         .iter()

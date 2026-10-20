@@ -66,6 +66,9 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - Node 26 defines a global `localStorage` that shadows happy-dom's: an island test installs its own storage, as `islands/test/theme.test.ts`'s `useStorage` does.
 - A golden over live-run markup carries the wall clock: normalise it (`NOW` in `crates/web/tests/it/result_islands_fixtures.rs`), or the golden breaks at midnight.
 - `HistoryStore::sweep` always keeps the head's predecessor: a swept-predecessor test needs a third entry as head.
+- A profile version that only adds checks re-scores a stored run to its old grade (`score_section` skips unweighted ids): the diff's grade split puts their effect on the domain step.
+- Judge a new graded header in `crates/http/src/module.rs`, not by changing `inspect/security.rs`: spectra's V1 wire serialises each `security.*.status`.
+- A freshly built binary path (a cargo example) gets no network locally; replay its bytes from `python3` to check a live host.
 - Never put `|` in a `report.md` criteria cell, even in backticks: `adlc next` splits cells on it and keeps the phase open.
 
 The adlc working rules (receipt, baseline trailer, test changes, review) are in `AGENTS.md`.
