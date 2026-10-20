@@ -2,7 +2,7 @@
 // screenshots it and reads the computed values of the board's elements.
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { slug } from './manifest.mjs';
+import { boardName, boardSlug } from './manifest.mjs';
 
 export async function measurePage(browser, board, baseUrls, outDir) {
   const base = baseUrls[board.host];
@@ -51,9 +51,9 @@ export async function measurePage(browser, board, baseUrls, outDir) {
       }, el.properties);
     }
 
-    const screenshot = join(outDir, `${slug(board.title)}-page.png`);
+    const screenshot = join(outDir, `${boardSlug(board)}-page.png`);
     await page.screenshot({ path: screenshot, fullPage: true });
-    return { board: board.title, url, status, screenshot, colorScheme, theme, state, values };
+    return { board: boardName(board), url, status, screenshot, colorScheme, theme, state, values };
   } finally {
     await context.close();
   }

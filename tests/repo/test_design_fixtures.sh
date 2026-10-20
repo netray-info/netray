@@ -54,7 +54,9 @@ else:
     for r in rows:
         if r[2]["v"] != "ok":
             errs.append(f"address {r[0]['v']} outcome {r[2]['v']!r}, want ok")
-        key = f"{r[0]['v']}:443"
+        # Block qualifiers bracket an IPv6 address (SDD 3.7: `<module>.<name>@[<v6>]:<port>`).
+        addr = r[0]['v']
+        key = f"[{addr}]:443" if ":" in addr else f"{addr}:443"
         ch = blocks.get(f"tls.chain@{key}")
         if ch is None:
             errs.append(f"missing block tls.chain@{key}")
