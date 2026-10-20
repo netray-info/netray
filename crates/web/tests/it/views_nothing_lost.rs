@@ -59,9 +59,33 @@ fn text(s: &str) -> Value {
     Value::Text(s.into())
 }
 
-/// The rows of Phase 2; Phase 3 adds `http.caching`, `http.cdn` and `http.isolation` here.
+/// The rows of Phases 2 and 3.
 fn rows() -> Vec<Row> {
     vec![
+        Row::new("http.caching", |r| {
+            let fields = vec![
+                r.pair("directive", text("public")),
+                r.pair_shown_as("max_age", Value::Int(3600), "3600"),
+                r.pair("etag", text("W/\"abc\"")),
+                r.pair_shown_as("etag_weak", Value::Bool(true), "weak"),
+                r.pair_shown_as(
+                    "last_modified",
+                    Value::Time("2024-01-01T00:00:00Z".into()),
+                    "2024-01-01 00:00 UTC",
+                ),
+                r.pair("vary", text("Accept-Encoding")),
+                r.pair_shown_as("age", Value::Int(42), "42"),
+            ];
+            Shape::Fields(fields)
+        }),
+        Row::new("http.cdn", |r| {
+            let fields = vec![
+                r.pair("provider", text("Example CDN")),
+                r.pair("cache_status", text("HIT")),
+                r.pair("indicator", text("x-example-cache")),
+            ];
+            Shape::Fields(fields)
+        }),
         Row::new("http.csp", |r| {
             let fields = vec![
                 r.pair_shown_as("report_only", Value::Bool(true), "Report-Only"),
@@ -88,6 +112,17 @@ fn rows() -> Vec<Row> {
                 r.pair_shown_as("max_age", Value::Int(63_072_000), "63072000"),
                 r.pair("include_subdomains", Value::Bool(true)),
                 r.pair("preload", Value::Bool(true)),
+            ];
+            Shape::Fields(fields)
+        }),
+        Row::new("http.isolation", |r| {
+            let fields = vec![
+                r.pair("coop", text("same-origin")),
+                r.pair("coep", text("require-corp")),
+                r.pair("corp", text("same-site")),
+                r.pair_shown_as("missing", text("cross-origin-opener-policy"), "missing"),
+                r.pair_shown_as("missing", text("cross-origin-embedder-policy"), "missing"),
+                r.pair_shown_as("missing", text("cross-origin-resource-policy"), "missing"),
             ];
             Shape::Fields(fields)
         }),
