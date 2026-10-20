@@ -7,9 +7,10 @@
 {% block title %}{{ view.domain }} · {{ view.grade.letter }}{% endblock %}
 
 {% block meta %}
+<link rel="canonical" href="{{ frame.origin() }}{{ frame.canonical }}">
 <meta property="og:title" content="{{ view.domain }} · {{ view.grade.letter }}">
-<meta property="og:image" content="/r/{{ view.id }}/og.png">
-<meta property="og:url" content="/r/{{ view.id }}">
+<meta property="og:image" content="{{ frame.origin() }}/r/{{ view.id }}/og.png">
+<meta property="og:url" content="{{ frame.origin() }}/r/{{ view.id }}">
 {% endblock %}
 
 {% block main %}

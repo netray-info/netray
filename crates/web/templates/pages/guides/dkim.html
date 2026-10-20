@@ -110,6 +110,6 @@ dig +short TXT 202604._domainkey.example.com
 
   <section class="guide-tool">
     <h2>Check your domain's email security with netray</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://email.netray.info/", "domain", "example.com", "Check Email Security")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/email", "d", "example.com", "Check Email Security")) %}{% endcall %}
   </section>
 {% endblock %}

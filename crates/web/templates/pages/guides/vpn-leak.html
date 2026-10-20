@@ -48,7 +48,7 @@
 
   <section class="guide-tool">
     <h2>Check your current IP and network classification</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://ip.netray.info/", "ip", "Leave blank for your IP, or enter any IP", "Check my IP")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/ip", "ip", "Leave blank for your IP, or enter any IP", "Check my IP")) %}{% endcall %}
     <p class="guide-tool__hint">Shows your current IP, ASN, network type classification, and whether you appear as a VPN exit node.</p>
   </section>
 {% endblock %}

@@ -90,10 +90,13 @@ async fn sitemap_lists_the_served_entries_and_parses() {
         "https://netray.info/compare",
         "https://netray.info/status",
         "https://netray.info/privacy",
-        "https://ip.netray.info/",
-        "https://dns.netray.info/",
-        "https://tls.netray.info/",
-        "https://http.netray.info/",
+        "https://netray.info/tools",
+        "https://netray.info/api/v1/docs",
+        "https://netray.info/inspect/dns",
+        "https://netray.info/inspect/tls",
+        "https://netray.info/inspect/http",
+        "https://netray.info/inspect/email",
+        "https://netray.info/inspect/ip",
     ]
     .iter()
     .map(|s| s.to_string())

@@ -8,7 +8,7 @@
 {% for (category, guides) in categories %}<section>
 <h2>{{ category }}</h2>
 <ul>
-{% for g in guides %}<li><a href="https://netray.info/guide/{{ g.slug }}">{{ g.title }}</a> — {{ g.description }}</li>
+{% for g in guides %}<li><a href="/guide/{{ g.slug }}">{{ g.title }}</a> — {{ g.description }}</li>
 {% endfor %}</ul>
 </section>
 {% endfor %}</div>

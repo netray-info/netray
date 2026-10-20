@@ -77,7 +77,7 @@ pub enum Tool {
 }
 
 impl Tool {
-    const ALL: [Tool; 5] = [Tool::Dns, Tool::Tls, Tool::Http, Tool::Email, Tool::Ip];
+    pub(crate) const ALL: [Tool; 5] = [Tool::Dns, Tool::Tls, Tool::Http, Tool::Email, Tool::Ip];
 
     pub fn as_str(self) -> &'static str {
         match self {
@@ -142,7 +142,7 @@ impl Tool {
         match self {
             Tool::Dns => &["example.com A", "_dmarc.example.com TXT"],
             Tool::Tls => &["example.com", "netray.info"],
-            Tool::Http => &["https://example.com/", "https://netray.info/"],
+            Tool::Http => &["https://example.com/", "https://www.example.com/"],
             Tool::Email => &["example.com", "netray.info"],
             Tool::Ip => &["192.0.2.1", "2001:db8::1"],
         }
@@ -617,6 +617,8 @@ async fn show(
     let mut query = Query::<HashMap<String, String>>::try_from_uri(&uri)
         .map(|Query(q)| q)
         .unwrap_or_default();
+    // A blank `ip` asks for the visitor's own address (the guides' "Leave blank for your IP").
+    let own_ip = tool == Tool::Ip && query.get(tool.field()).is_some_and(|v| v.is_empty());
     let mut prefill = query.remove(tool.field()).filter(|v| !v.is_empty());
     let (mut status, mut result, mut notice) = (StatusCode::OK, None, None);
     if let Some(key) = query.remove("r") {
@@ -659,7 +661,7 @@ async fn show(
             submit: "Inspect".to_string(),
         },
         stream_url: format!("/inspect/{name}/run"),
-        autostart: prefill.is_some() && result.is_none(),
+        autostart: (prefill.is_some() || own_ip) && result.is_none(),
         tabs,
         examples: tool
             .examples()

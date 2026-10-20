@@ -74,7 +74,10 @@ async fn robots_is_lenss_own_with_lens_csp() {
             .unwrap()
             .starts_with("text/plain")
     );
-    assert_eq!(body, "User-agent: *\nAllow: /\n");
+    assert_eq!(
+        body,
+        "User-agent: *\nAllow: /\nSitemap: https://netray.info/sitemap.xml\n"
+    );
     assert_eq!(csp(&headers), LENS_CSP);
 }
 

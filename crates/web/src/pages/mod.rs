@@ -32,8 +32,6 @@ pub const SPECULATION_RULES: &str = r#"{"prerender":[{"where":{"or":[{"href_matc
 /// The one origin of the canonical link and of every absolute link a page offers to copy.
 pub(crate) const ORIGIN: &str = "https://netray.info";
 
-const ROBOTS: &str = "User-agent: *\nAllow: /\nSitemap: https://netray.info/sitemap.xml\n";
-
 /// The guides, compare, status, the sitemap and the static files under `/static`, plus the 301s
 /// of V1's site paths (`/compare/`, `/status/`, `/tools`; `/guide/<slug>.html` in `guides::show`).
 pub fn router() -> Router {
@@ -56,6 +54,11 @@ pub fn router() -> Router {
         ))
 }
 
+/// The body of `/robots.txt`: everything allowed, the sitemap at the origin.
+pub fn robots_body() -> String {
+    format!("User-agent: *\nAllow: /\nSitemap: {ORIGIN}/sitemap.xml\n")
+}
+
 /// `/robots.txt`.
 pub async fn robots() -> Response {
     headers::secure(
@@ -64,35 +67,19 @@ pub async fn robots() -> Response {
                 (CONTENT_TYPE, "text/plain; charset=utf-8"),
                 (CACHE_CONTROL, "public, max-age=3600"),
             ],
-            ROBOTS,
+            robots_body(),
         )
             .into_response(),
     )
 }
 
-/// `/sitemap.xml`: the pages this crate serves plus the entry pages and the inspector roots.
+/// `/sitemap.xml`: the pages this crate serves plus the entry pages and the inspector pages.
 async fn sitemap() -> Response {
-    let mut locs = vec![
-        "https://netray.info/".to_string(),
-        "https://netray.info/guide/".to_string(),
-    ];
-    locs.extend(
-        guides::GUIDES
-            .iter()
-            .map(|g| format!("https://netray.info/guide/{}", g.slug)),
-    );
-    locs.extend(
-        [
-            "https://netray.info/compare",
-            "https://netray.info/status",
-            "https://netray.info/privacy",
-            "https://ip.netray.info/",
-            "https://dns.netray.info/",
-            "https://tls.netray.info/",
-            "https://http.netray.info/",
-        ]
-        .map(str::to_string),
-    );
+    let mut paths = vec!["/".to_string(), "/guide/".to_string()];
+    paths.extend(guides::GUIDES.iter().map(|g| format!("/guide/{}", g.slug)));
+    paths.extend(["/compare", "/status", "/privacy", "/tools", "/api/v1/docs"].map(str::to_string));
+    paths.extend(Tool::ALL.map(|t| format!("/inspect/{}", t.as_str())));
+    let locs = paths.into_iter().map(|p| format!("{ORIGIN}{p}"));
     let mut xml = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
     );
@@ -129,7 +116,7 @@ impl Frame {
             title: title.to_string(),
             description: description.to_string(),
             canonical: canonical.to_string(),
-            og_image: "https://netray.info/static/og/landing.png".to_string(),
+            og_image: format!("{ORIGIN}/static/og/landing.png"),
             rules: SPECULATION_RULES,
         }
     }

@@ -48,7 +48,10 @@ async fn c1_every_absolute_url_is_built_from_the_apex_origin() {
         assert_eq!(subdomain_urls(&text), Vec::<String>::new(), "{path}");
         for (at, _) in text.match_indices("https://netray.info") {
             let rest = &text[at + "https://netray.info".len()..];
-            assert!(rest.starts_with('/'), "{path}: apex URL without a path at {at}");
+            assert!(
+                rest.starts_with('/'),
+                "{path}: apex URL without a path at {at}"
+            );
         }
     }
 }
@@ -57,13 +60,17 @@ async fn c1_every_absolute_url_is_built_from_the_apex_origin() {
 async fn c2_guide_links_and_forms_are_apex_relative() {
     let action = Regex::new(r#"<form[^>]*\saction="([^"]*)""#).unwrap();
     for g in guides::GUIDES {
-        let html = page(&format!("/guide/{}", g.slug)).await;
+        let html = without_canonical(&page(&format!("/guide/{}", g.slug)).await);
         assert!(
             !html.contains("href=\"https://netray.info"),
             "{}: absolute apex href",
             g.slug
         );
-        assert!(!html.contains("action=\"https://"), "{}: absolute action", g.slug);
+        assert!(
+            !html.contains("action=\"https://"),
+            "{}: absolute action",
+            g.slug
+        );
         for c in action.captures_iter(&html) {
             if let Some(tool) = c[1].strip_prefix("/inspect/") {
                 assert!(
@@ -81,8 +88,18 @@ async fn c2_guide_links_and_forms_are_apex_relative() {
 async fn c4_sitemap_lists_the_apex_pages_and_inspectors() {
     let l = locs(&page("/sitemap.xml").await);
     for p in [
-        "/", "/guide/", "/compare", "/status", "/privacy", "/tools", "/api/v1/docs",
-        "/inspect/dns", "/inspect/tls", "/inspect/http", "/inspect/email", "/inspect/ip",
+        "/",
+        "/guide/",
+        "/compare",
+        "/status",
+        "/privacy",
+        "/tools",
+        "/api/v1/docs",
+        "/inspect/dns",
+        "/inspect/tls",
+        "/inspect/http",
+        "/inspect/email",
+        "/inspect/ip",
     ] {
         let want = format!("https://netray.info{p}");
         assert!(l.contains(&want), "missing loc {want}");
@@ -95,7 +112,10 @@ async fn c4_sitemap_lists_the_apex_pages_and_inspectors() {
 async fn c5_csp_guide_is_canonical_and_its_form_goes_to_the_apex_inspector() {
     let html = page("/guide/csp").await;
     assert!(html.contains(r#"<link rel="canonical" href="https://netray.info/guide/csp">"#));
-    assert!(html.contains(r#"action="/inspect/http""#), "no /inspect/http form");
+    assert!(
+        html.contains(r#"action="/inspect/http""#),
+        "no /inspect/http form"
+    );
     assert_eq!(subdomain_urls(&html), Vec::<String>::new());
 }
 
@@ -105,20 +125,33 @@ async fn c6_sitemap_and_robots_use_the_apex_origin() {
     let l = locs(&xml);
     assert!(!l.is_empty());
     for u in &l {
-        assert!(u.starts_with("https://netray.info/"), "loc off the apex: {u}");
+        assert!(
+            u.starts_with("https://netray.info/"),
+            "loc off the apex: {u}"
+        );
     }
     for p in ["/tools", "/api/v1/docs", "/inspect/email"] {
-        assert!(l.contains(&format!("https://netray.info{p}")), "missing {p}");
+        assert!(
+            l.contains(&format!("https://netray.info{p}")),
+            "missing {p}"
+        );
     }
     let robots = page("/robots.txt").await;
-    assert!(robots.lines().any(|x| x == "Sitemap: https://netray.info/sitemap.xml"));
+    assert!(
+        robots
+            .lines()
+            .any(|x| x == "Sitemap: https://netray.info/sitemap.xml")
+    );
 }
 
 #[tokio::test]
 async fn c7_scoring_guide_links_the_inspectors_on_the_apex() {
     let html = page("/guide/scoring").await;
     for t in ["ip", "dns", "tls", "http"] {
-        assert!(html.contains(&format!("href=\"/inspect/{t}")), "no link to /inspect/{t}");
+        assert!(
+            html.contains(&format!("href=\"/inspect/{t}")),
+            "no link to /inspect/{t}"
+        );
     }
     assert_eq!(subdomain_urls(&html), Vec::<String>::new());
 }
@@ -130,14 +163,29 @@ async fn c8_dkim_guide_form_posts_a_domain_to_the_email_inspector() {
         .find(r#"action="/inspect/email""#)
         .expect("a form with action=/inspect/email");
     let end = html[start..].find("</form>").expect("form closed") + start;
-    assert!(html[start..end].contains(r#"name="d""#), "no input name=d in the form");
+    assert!(
+        html[start..end].contains(r#"name="d""#),
+        "no input name=d in the form"
+    );
 }
 
 #[tokio::test]
 async fn c9_guide_index_links_guides_apex_relative() {
-    let html = page("/guide/").await;
+    let html = without_canonical(&page("/guide/").await);
     for g in guides::GUIDES {
-        assert!(html.contains(&format!("href=\"/guide/{}\"", g.slug)), "{}", g.slug);
+        assert!(
+            html.contains(&format!("href=\"/guide/{}\"", g.slug)),
+            "{}",
+            g.slug
+        );
     }
     assert!(!html.contains("href=\"https://netray.info/guide/"));
+}
+
+/// `html` without its canonical link, the one absolute apex href a page carries.
+fn without_canonical(html: &str) -> String {
+    Regex::new(r#"<link rel="canonical" href="[^"]*">"#)
+        .unwrap()
+        .replace(html, "")
+        .into_owned()
 }

@@ -55,7 +55,7 @@
 
   <section class="guide-tool">
     <h2>See what your IP reveals</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://ip.netray.info/", "ip", "Leave blank for your IP, or enter any IP", "Look up")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/ip", "ip", "Leave blank for your IP, or enter any IP", "Look up")) %}{% endcall %}
     <p class="guide-tool__hint">Returns geolocation, ASN, network type, cloud provider, VPN/proxy status, and threat intelligence.</p>
   </section>
 

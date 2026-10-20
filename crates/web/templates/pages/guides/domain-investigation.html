@@ -58,17 +58,17 @@
 
   <section class="guide-tool">
     <h2>Inspect a suspicious domain's TLS certificate</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://tls.netray.info/", "h", "example.com", "Inspect")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/tls", "h", "example.com", "Inspect")) %}{% endcall %}
     <p class="guide-tool__hint">Inspects TLS certificate chain, SANs, issuer, and multi-IP consistency — useful for domain investigation.</p>
   </section>
 
   <section class="guide-tool">
     <h2>Check your site's HTTP headers with the HTTP inspector</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://http.netray.info/", "url", "https://example.com", "Inspect Headers")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/http", "url", "https://example.com", "Inspect Headers")) %}{% endcall %}
   </section>
 
   <section class="guide-tool">
     <h2>Check your domain's email authentication with netray</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://email.netray.info/", "domain", "example.com", "Check Email Security")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/email", "d", "example.com", "Check Email Security")) %}{% endcall %}
   </section>
 {% endblock %}
