@@ -356,7 +356,7 @@ fn dnsbl_query(target: &str, zone: &str) -> String {
 
 /// Rebuilds the email section from its `email.*` blocks: an offline resolver seeded with what
 /// the blocks recorded, the recorded MTA-STS policy served from a loopback listener, the
-/// module's inspection with the DKIM rows' selectors, then `translate`. A block the module
+/// module's inspection without caller selectors, as a recorded run has none, then `translate`. A block the module
 /// writes on every answered lookup fails that lookup when absent; a name a present block does
 /// not record answers with a definite empty answer.
 pub async fn from_evidence(domain: &str, blocks: &[Block]) -> SectionOutcome {
@@ -609,11 +609,9 @@ pub async fn from_evidence(domain: &str, blocks: &[Block]) -> SectionOutcome {
         dns = dns.with_ips(&name, ips);
     }
 
-    let selectors: Vec<String> = selectors
-        .into_iter()
-        .map(|(s, _)| s)
-        .take(config.dkim.max_user_selectors)
-        .collect();
+    // A recorded run carries no caller selectors (lens records only selector-less runs), so the
+    // module probes its own candidates; a row under any other selector is not reproduced.
+    let user_selectors: Vec<String> = Vec::new();
     let dns = Arc::new(dns);
     let mut fetch = OutboundFetch::new(500, Arc::new(FetchResolver(dns.clone())));
     // 127.0.0.1 stands in for the policy host's public address; its certificate is self-signed.
@@ -626,7 +624,7 @@ pub async fn from_evidence(domain: &str, blocks: &[Block]) -> SectionOutcome {
     let (tx, mut rx) = mpsc::channel::<SseEvent>(64);
     tokio::spawn(run_all_checks(
         domain.to_string(),
-        selectors,
+        user_selectors,
         Arc::new(config),
         dns.clone(),
         dns,

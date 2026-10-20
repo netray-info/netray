@@ -154,3 +154,14 @@ Two web tests asserted the old hand-made values (MX trailing dot, DKIM state `va
 
 `just design-check` against the private manifest: `0 open deviation(s), 0 stale accepted entries`
 (seeded 7 fixtures). The manifest is unchanged.
+
+## Review fixes
+
+The range review (review.md, f22cbe6e..06750cd2) found two blockers, both fixed on this branch:
+the email rebuild passed the DKIM rows' selectors as caller selectors, which a recorded run never
+has (fixtures now keep their key under `default`); the TLS rebuild denied a lone self-signed
+certificate its anchor, failing `tls.chain_complete` where the module passes. Regression tests:
+`email_from_evidence_finds_only_keys_under_selectors_the_module_probes`,
+`a_lone_self_signed_certificate_is_untrusted_but_complete` (red before the fix, green after). The
+fixtures also carry an empty `dns.rrsig` block (a minor of both readers). `just design-check`: 0
+open after the regeneration.

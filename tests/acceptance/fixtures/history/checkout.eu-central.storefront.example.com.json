@@ -59,6 +59,7 @@
         "evidence": [
           "dns.dnskey",
           "dns.ds",
+          "dns.rrsig",
           "dns.nsec",
           "dns.nsec3"
         ]
@@ -122,6 +123,7 @@
           "dns.ds",
           "dns.nsec",
           "dns.nsec3",
+          "dns.rrsig",
           "dns.soa",
           "dns.svcb",
           "dns.txt"
@@ -904,6 +906,14 @@
         }
       },
       {
+        "id": "dns.rrsig",
+        "title": "RRSIG",
+        "shape": {
+          "kind": "records",
+          "data": []
+        }
+      },
+      {
         "id": "dns.soa",
         "title": "SOA",
         "shape": {
@@ -1248,11 +1258,11 @@
               [
                 {
                   "t": "text",
-                  "v": "mail#1"
+                  "v": "default#1"
                 },
                 {
                   "t": "text",
-                  "v": "mail"
+                  "v": "default"
                 },
                 {
                   "t": "text",

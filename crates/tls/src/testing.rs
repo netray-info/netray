@@ -431,14 +431,15 @@ fn ct_of(blocks: &[Block], ip: IpAddr) -> Option<CtInfo> {
     })
 }
 
-/// What the stored chain says about itself: trusted and at an anchor when in issuer order, ending
-/// self-signed and led by a leaf that is not; expiry from `days_remaining` and the run time `now`.
+/// What the stored chain says about itself: trusted when in issuer order, ending self-signed and
+/// led by a leaf that is not; at an anchor also when any certificate is self-signed; expiry from `days_remaining` and the run time `now`.
 fn validation_of(chain: &[CertInfo], hostname: &str, now: DateTime<Utc>) -> ValidationResult {
     let mut v = validate_chain(chain, Some(hostname), &rustls::RootCertStore::empty(), &[]);
     let issued_leaf = chain.len() >= 2 && chain.first().is_some_and(|l| !l.is_self_signed);
     let anchored = v.chain_order_correct && v.terminates_at_self_signed && issued_leaf;
     v.chain_trusted = anchored;
-    v.ends_at_anchor = anchored;
+    // `validate_chain` already holds a chain with a self-signed certificate as at an anchor.
+    v.ends_at_anchor = v.ends_at_anchor || anchored;
     v.chain_trust_reason = (!anchored).then(|| {
         if issued_leaf {
             "chain is out of order or does not end self-signed".to_string()
