@@ -1,6 +1,6 @@
 //! Property test of the spectrum layout over the real catalogue and profile (V2 spec
 //! v2-spectrum, requirement 13, criteria C4, C17): requirement 8's claims (a)-(g) on every
-//! run's labels, plus 54 lines, heights, shared x and the Fixed set.
+//! run's labels, plus 57 lines, heights, shared x and the Fixed set.
 use netray_engine::catalogue::catalogue;
 use netray_engine::profile::Profiles;
 use netray_model::{CheckId, Protocol, Status};
@@ -12,7 +12,7 @@ use proptest::prelude::*;
 use std::collections::BTreeMap;
 
 const TOL: f64 = 1e-6;
-const LINES: usize = 54;
+const LINES: usize = 57;
 const PROTOCOLS: [Protocol; 5] = [
     Protocol::Dns,
     Protocol::Tls,
@@ -227,7 +227,7 @@ proptest! {
         let l = layout(&cur, std::slice::from_ref(&old), catalogue(), w).expect("lines");
         let l2 = layout(&cur, std::slice::from_ref(&old), catalogue(), w + extra).expect("lines");
 
-        // exactly 54 lines, one entry per run, plate and pitch of requirement 2
+        // exactly 57 lines, one entry per run, plate and pitch of requirement 2
         prop_assert_eq!(l.lines.len(), LINES);
         prop_assert_eq!(l.runs.len(), 2);
         let min = 8.0;

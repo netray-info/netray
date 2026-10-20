@@ -3,7 +3,7 @@
 //! 0.24.0 snapshot still renders.
 //!
 //! The run is the module goldens through `POST /api/check` (as `engine_run.rs`); the HTTP module
-//! is wrapped so its twelve v3 checks have known statuses (a weight-5 warn, a failing `csp`).
+//! is wrapped so its thirteen v4 checks have known statuses (a weight-5 warn, a failing `csp`).
 //! The expected grade is `netray_engine::score` over the events of a second run on the same
 //! registry.
 
@@ -33,7 +33,7 @@ use serde_json::{Value, json};
 use tokio::sync::mpsc;
 use tower::ServiceExt;
 
-const HTTP_IDS: [&str; 12] = [
+const HTTP_IDS: [&str; 13] = [
     "https_redirect",
     "hsts",
     "cors",
@@ -43,12 +43,13 @@ const HTTP_IDS: [&str; 12] = [
     "x_content_type_options",
     "referrer_policy",
     "permissions_policy",
+    "coop",
     "deprecated_headers",
     "info_leakage",
     "caching",
 ];
 
-/// The golden HTTP module with its checks replaced by the twelve v3 HTTP checks:
+/// The golden HTTP module with its checks replaced by the thirteen v4 HTTP checks:
 /// `https_redirect` (weight 5) warns, `csp` fails, the rest pass.
 struct FixedHttp(Box<dyn Module>);
 

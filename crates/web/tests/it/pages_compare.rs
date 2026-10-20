@@ -332,21 +332,20 @@ fn compare_rows_cover_every_v1_row_and_every_v1_unsupported_row_has_no_checks() 
 #[test]
 fn generated_cells_claim_no_more_than_the_checks_judge() {
     let rows = pages::compare::rows();
-    // The TLS inspector negotiates TLS 1.2 or 1.3 only and probes no other version, so no
-    // check sees a deprecated protocol: not done.
+    // The TLS inspector probes SSLv3, TLS 1.0 and TLS 1.1 with hand-built ClientHellos
+    // (v2-tls-versions-coop) but not SSLv2: partial, judged by the legacy-versions check.
     let protocols = rows
         .iter()
         .find(|r| r.label == "Protocol versions (deprecated detection)")
         .expect("protocol versions row");
-    assert_eq!(
-        protocols.netray().symbol,
-        "\u{2717}",
-        "protocol versions: not done"
-    );
+    assert_eq!(protocols.netray().symbol, "~", "protocol versions: partial");
     assert_eq!(
         protocols.checks,
-        Some(vec![]),
-        "protocol versions: no check"
+        Some(vec![
+            "tls.legacy_versions".to_string(),
+            "tls.tls_version".to_string()
+        ]),
+        "protocol versions: judged by the legacy-versions and version checks"
     );
     for label in [
         "SOA record",

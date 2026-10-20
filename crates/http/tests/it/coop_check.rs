@@ -141,8 +141,8 @@ fn translation_emits_thirteen_checks_with_coop() {
         ids,
         [
             "http.caching",
-            "http.coop",
             "http.cookie_secure",
+            "http.coop",
             "http.cors",
             "http.csp",
             "http.deprecated_headers",

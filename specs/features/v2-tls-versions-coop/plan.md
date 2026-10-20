@@ -30,3 +30,18 @@ G1:
 - `crates/tls/src/routes.rs` `inspect_port`: after a handshake without error, run `backend.probe` with `tls.version` concurrently with the live OCSP check (`tokio::join!`), inside the held permit; store into `result.probes`.
 - `crates/tls/src/testing.rs`: `with_probes`, `with_failed_handshake`, `probe_calls`.
 - `crates/tls/src/module.rs`: `REGISTER` gains `tls.probes` and `tls.protocols` (fields) with the 8 value keys, 8 `_answer` keys (probes) and `forward_secrecy_all_suites` (protocols, bool); `blocks()` pushes one `tls.probes@<addr>:<port>` per handshake with probes and one `tls.protocols` (qualified by port when `qualify`) when any handshake has probes.
+
+## Phase 3 — Checks, catalogue and profile v4
+
+## Groups
+
+- G1: C5, C6, C20-C23 (`crates/engine/catalogue/checks.toml`, `crates/engine/profiles/v4.toml`, `lock.toml`, `crates/engine/src/profile.rs`, `checkMeta.ts`, `compare.toml`, the security-headers guide).
+- G2: C1-C3, C8-C17 (`crates/tls/src/module.rs`).
+- G3: C4, C18, C19 (`crates/http/src/module.rs`).
+- C7 is prose (SDD, CHANGELOG).
+
+## Plan
+
+G1: three `[[check]]` tables after `tls.aead_cipher` and `http.permissions_policy`; `v4.toml` = v3 + `legacy_versions = 5`, `weak_suites = 3`, `coop = 1`; lock entry; `Profiles::all` embeds v3 and v4, `current()` the highest version.
+G2: `CHECKS` gains the two ids after `aead_cipher`; `translate_port` judges them per probed address and over addresses (fail, unmeasured, warn, pass), referencing `tls.probes@` blocks and `tls.protocols`.
+G3: `CHECKS` gains `coop` after `permissions_policy`; `check_result` judges it from `security.coop.value` after the probe override; `references` gives `http.headers` and `http.isolation`.

@@ -271,6 +271,24 @@ GIVEN checkMeta.ts and the catalogue WHEN `test_checkmeta_catalogue.sh` runs THE
   unrecognized_name or close_notify say nothing about the offered version or suite, so they leave
   the probe unanswered (Rule M) (implementer under the operator's autonomy mandate, 2026-10-19).
 
+- Phase 3 review: COOP is judged in the HTTP module from the received value
+  (`coop_verdict`), not by changing the V1 security report, so spectra's V1 wire keeps its
+  presence-only COOP verdict (spec non-goal). The token before `;` is matched without trimming
+  around it (a structured-field token), so `same-origin ;` warns as browsers ignore it; a second
+  header line is not seen (deferred: the V1 report keeps the first line only) (implementer under
+  the operator's autonomy mandate, 2026-10-19).
+- Phase 3 fallout: the island test fixtures under `crates/web/islands/test/fixtures` and the
+  catalogue positions in `crates/web/islands/test/issues.test.ts` are regenerated test data the
+  new catalogue ids force; no island source changed. The acceptance history fixtures gain the
+  three ids as `not_applicable` "not reported" (they stay v3 runs) because
+  `history_fixtures` holds every catalogue id in each. The compare page's "Protocol versions"
+  row now claims partial coverage through `tls.legacy_versions` and `tls.tls_version` (no SSLv2
+  probe) (implementer under the operator's autonomy mandate, 2026-10-19).
+- Lens goldens: `http.coop` warns in every fixture (the spectra fixture carries no COOP header),
+  each score drops about 0.6 points and no letter changes; `tls.legacy_versions` and
+  `tls.weak_suites` are "not reported" there (fixtures carry no probes) (implementer under the
+  operator's autonomy mandate, 2026-10-19).
+
 ## Open decisions
 
 None.

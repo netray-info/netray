@@ -1,7 +1,7 @@
 {
   "summary": {
     "grade": "F",
-    "score": 53.1,
+    "score": 52.6,
     "overall": "fail",
     "complete": true,
     "sections": {
@@ -156,6 +156,10 @@
           "verdict": "skip"
         },
         {
+          "name": "coop",
+          "verdict": "warn"
+        },
+        {
           "name": "deprecated_headers",
           "verdict": "skip"
         },
@@ -235,6 +239,14 @@
         },
         {
           "name": "aead_cipher",
+          "verdict": "skip"
+        },
+        {
+          "name": "legacy_versions",
+          "verdict": "skip"
+        },
+        {
+          "name": "weak_suites",
           "verdict": "skip"
         },
         {

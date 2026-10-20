@@ -1,5 +1,6 @@
 // V2 http checks, Phase 2: the `http.cdn` and `http.isolation` evidence blocks (R10, R11).
-// Both are context only: no check references them.
+// `http.cdn` is context only: no check references it. `http.isolation` is referenced by
+// `http.coop` alone (v2-tls-versions-coop, requirement 10).
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
@@ -79,13 +80,16 @@ fn values(f: &[(String, Ev)], key: &str) -> Vec<String> {
 }
 
 fn assert_no_check_references(checks: &[CheckResult], id: &str) {
-    for c in checks {
-        assert!(
-            !c.evidence.iter().any(|b| b.to_string() == id),
-            "check {} references {id}",
-            c.id
-        );
-    }
+    assert_only_checks_reference(checks, id, &[]);
+}
+
+fn assert_only_checks_reference(checks: &[CheckResult], id: &str, want: &[&str]) {
+    let referencing: Vec<String> = checks
+        .iter()
+        .filter(|c| c.evidence.iter().any(|b| b.to_string() == id))
+        .map(|c| c.id.to_string())
+        .collect();
+    assert_eq!(referencing, want, "checks referencing {id}");
 }
 
 #[test]
@@ -117,7 +121,7 @@ fn isolation_block_carries_values_and_missing_headers() {
             "cross-origin-resource-policy"
         ]
     );
-    assert_no_check_references(&checks, "http.isolation");
+    assert_only_checks_reference(&checks, "http.isolation", &["http.coop"]);
 
     let (checks, blocks) = run(&[
         ("cross-origin-opener-policy", "same-origin"),
@@ -130,5 +134,5 @@ fn isolation_block_carries_values_and_missing_headers() {
     assert_eq!(values(iso, "coep"), vec!["require-corp"]);
     assert_eq!(values(iso, "corp"), vec!["same-site"]);
     assert!(values(iso, "missing").is_empty());
-    assert_no_check_references(&checks, "http.isolation");
+    assert_only_checks_reference(&checks, "http.isolation", &["http.coop"]);
 }

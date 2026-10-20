@@ -88,7 +88,7 @@ fn current_profile_serialises_name_version_sections_thresholds() {
     let mut keys: Vec<&str> = obj.keys().map(String::as_str).collect();
     keys.sort();
     assert_eq!(keys, ["name", "sections", "thresholds", "version"]);
-    assert_eq!(v["version"], json!(3));
+    assert_eq!(v["version"], json!(4));
     let thresholds = v["thresholds"].as_array().unwrap();
     assert_eq!(thresholds[0]["grade"], json!("A+"));
     assert!(thresholds[0]["min"].is_u64());

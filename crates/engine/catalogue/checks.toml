@@ -319,6 +319,32 @@ guide = "/guide/tls-protocol"
 short = "AEAD"
 
 [[check]]
+id = "tls.legacy_versions"
+protocol = "tls"
+title = "Legacy protocol versions"
+finding = "The server accepts SSLv3, TLS 1.0 or TLS 1.1 when a client offers nothing newer."
+impact = "Deprecated protocol versions lack modern protections and let an attacker who can interfere with the connection exploit known weaknesses such as POODLE and BEAST."
+fix_hint = "Disable SSLv3, TLS 1.0 and TLS 1.1 and allow only TLS 1.2 and TLS 1.3."
+fix_owner = "web_server"
+severity = "high"
+source = "RFC 8996"
+guide = "/guide/tls-protocol"
+short = "Legacy"
+
+[[check]]
+id = "tls.weak_suites"
+protocol = "tls"
+title = "Weak cipher suites"
+finding = "The server accepts a broken cipher suite (RC4, 3DES, DES, export, NULL or anonymous), or a CBC suite or a static RSA key exchange without forward secrecy."
+impact = "Broken suites can be decrypted or forged; CBC suites are prone to padding-oracle attacks, and static RSA key exchange lets a later key compromise decrypt recorded traffic."
+fix_hint = "Allow only ECDHE suites with AES-GCM or ChaCha20-Poly1305 for TLS 1.2, and remove RC4, 3DES, DES, export, NULL, anonymous, CBC and static RSA suites."
+fix_owner = "web_server"
+severity = "medium"
+source = "RFC 9325"
+guide = "/guide/tls-protocol"
+short = "Suites"
+
+[[check]]
 id = "tls.ocsp_stapled"
 protocol = "tls"
 title = "OCSP stapling"
@@ -527,6 +553,19 @@ severity = "low"
 source = "W3C Permissions Policy"
 guide = "/guide/security-headers"
 short = "Perms"
+
+[[check]]
+id = "http.coop"
+protocol = "http"
+title = "Cross-Origin-Opener-Policy"
+finding = "Responses carry no Cross-Origin-Opener-Policy header, or one set to unsafe-none, an unrecognised value or a value not readable as text."
+impact = "Pages the site opens, or pages that open it, share a browsing context group with it and can reach its window object, which enables cross-window attacks such as XS-Leaks."
+fix_hint = "Send Cross-Origin-Opener-Policy: same-origin, or same-origin-allow-popups when the site relies on popups such as payment or login windows."
+fix_owner = "web_server"
+severity = "low"
+source = "HTML Living Standard"
+guide = "/guide/security-headers"
+short = "COOP"
 
 [[check]]
 id = "http.deprecated_headers"
