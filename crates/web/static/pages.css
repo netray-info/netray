@@ -328,6 +328,73 @@ main td {
   font-size: var(--font-size-label);
   font-weight: var(--font-weight-regular);
 }
+#evidence {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.evidence-meta {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+}
+.evidence-tabs {
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: var(--color-surface);
+}
+.evidence-tabs__nav {
+  display: flex;
+  flex-wrap: wrap;
+  border-bottom: var(--line-hair) solid var(--color-line);
+}
+.evidence-tabs__tab {
+  padding: 12px 18px 12px 24px;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-regular);
+  letter-spacing: 0.1em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+.evidence-tabs__tab[aria-current="true"] {
+  color: var(--color-ink);
+  font-weight: var(--font-weight-bold);
+}
+.evidence-tabs__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) 18px;
+}
+.evidence-tabs[data-ready] .evidence-tabs__panel:not([data-shown]) {
+  display: none;
+}
+.evidence-tabs__links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+}
+.evidence-tabs__feeds {
+  flex: 1 1 auto;
+  margin: 0;
+}
+.evidence-tabs__reason {
+  margin: 0;
+  color: var(--color-muted);
+}
+.evidence-tabs__panel table {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+}
+.evidence-tabs__swipe {
+  display: none;
+}
 .clean-bar {
   padding: 0 var(--space-4);
   border: var(--line-hair) solid var(--color-line);
@@ -498,6 +565,17 @@ main td {
   display: none;
 }
 @media (max-width: 480px) {
+  .evidence-tabs__swipe {
+    display: block;
+    margin: 0;
+    color: var(--color-muted);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-label);
+  }
+  .evidence-tabs__panel table {
+    display: block;
+    overflow-x: auto;
+  }
   #spectrum-stepper {
     display: flex;
     justify-content: space-between;

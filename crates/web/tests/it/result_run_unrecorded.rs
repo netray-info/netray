@@ -259,6 +259,7 @@ async fn a_failed_history_re_read_after_a_stored_record_ends_as_the_recorded_ent
     assert!(issues.contains(&want), "{want} missing in {issues}");
     for p in ["dns", "tls", "http", "email", "ip"] {
         let html = last(&fragments, &format!("evidence-{p}"));
-        assert!(!html.contains("href="), "coverage link in {html}");
+        let want = format!(r#"href="/r/{UNSTORED_ID}/{p}""#);
+        assert!(html.contains(&want), "{want} missing in {html}");
     }
 }

@@ -867,21 +867,75 @@
 
 </section>
 <section id="evidence">
-<h2>Evidence</h2>
-<div id="evidence-dns">
+<div class="section-head"><h2>Evidence</h2><p id="evidence-meta" class="evidence-meta">recorded with this run</p></div>
+<div class="evidence-tabs" data-island="tabs">
+<nav id="evidence-nav" class="evidence-tabs__nav" aria-label="Evidence views">
+<a class="evidence-tabs__tab marker" href="#evidence-dns" data-tab="dns">DNS</a>
+<a class="evidence-tabs__tab marker" href="#evidence-tls" data-tab="tls" aria-current="true">TLS</a>
+<a class="evidence-tabs__tab marker" href="#evidence-http" data-tab="http">HTTP</a>
+<a class="evidence-tabs__tab marker" href="#evidence-email" data-tab="email">Email</a>
+<a class="evidence-tabs__tab marker" href="#evidence-ip" data-tab="ip">IP</a>
+</nav>
+<div id="evidence-dns" class="evidence-tabs__panel" data-panel="dns">
+
+
+
+
+<div class="evidence-tabs__links">
+
+<a class="evidence-tabs__all" href="/r/ENTRY0/dns">All evidence →</a>
+<a class="evidence-tabs__explore" href="/inspect/dns?q=shop.example.com">Open in the DNS inspector →</a>
+</div>
 
 </div>
-<div id="evidence-tls">
+<div id="evidence-tls" class="evidence-tabs__panel" data-panel="tls" data-shown>
+
+
+
+
+<div class="evidence-tabs__links">
+
+<a class="evidence-tabs__all" href="/r/ENTRY0/tls">All evidence →</a>
+<a class="evidence-tabs__explore" href="/inspect/tls?h=shop.example.com:443">Open in the TLS inspector →</a>
+</div>
 
 </div>
-<div id="evidence-http">
+<div id="evidence-http" class="evidence-tabs__panel" data-panel="http">
+
+
+
+
+<div class="evidence-tabs__links">
+
+<a class="evidence-tabs__all" href="/r/ENTRY0/http">All evidence →</a>
+<a class="evidence-tabs__explore" href="/inspect/http?url=https%3A%2F%2Fshop.example.com%2F">Open in the HTTP inspector →</a>
+</div>
 
 </div>
-<div id="evidence-email">
+<div id="evidence-email" class="evidence-tabs__panel" data-panel="email">
+
+
+
+
+<div class="evidence-tabs__links">
+
+<a class="evidence-tabs__all" href="/r/ENTRY0/email">All evidence →</a>
+<a class="evidence-tabs__explore" href="/inspect/dns?q=shop.example.com%20MX">Open in the DNS inspector →</a>
+</div>
 
 </div>
-<div id="evidence-ip">
+<div id="evidence-ip" class="evidence-tabs__panel" data-panel="ip">
 
+
+
+
+<div class="evidence-tabs__links">
+
+<a class="evidence-tabs__all" href="/r/ENTRY0/ip">All evidence →</a>
+<a class="evidence-tabs__explore" href="/inspect/dns?q=shop.example.com%20A">Open in the DNS inspector →</a>
+</div>
+
+</div>
 </div>
 </section>
 <details id="passed" class="clean-bar" hidden></details>

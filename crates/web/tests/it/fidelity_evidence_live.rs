@@ -189,9 +189,7 @@ async fn c6_an_incomplete_live_run_fills_the_evidence_tab_panels() {
             .find(|e| e.0 == "fragment" && e.1 == id)
             .unwrap_or_else(|| panic!("fragment {id} missing in {events:?}"))
             .2;
-        let open = format!(
-            r#"<div id="{id}" class="evidence-tabs__panel" data-panel="{p}""#
-        );
+        let open = format!(r#"<div id="{id}" class="evidence-tabs__panel" data-panel="{p}""#);
         assert!(html.starts_with(&open), "{p}: {html}");
         if p == "email" {
             assert!(!html.contains(r#"class="evidence-block""#), "{p}: {html}");

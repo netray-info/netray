@@ -55,3 +55,15 @@ G1: C1, C3–C8, C10–C15 (C2, C9 already in place) · G2: C16 (design-check)
 G1 — `partials/result_issues.html`: head row `.section-head.section-head--split` with the h2, `.attention-meta` ("f fail · w warn") and the visible switch (Owner, Severity, Protocol); groups as cards `.issue-group` with `.issue-group__head` (`.issue-group__label` h3, `.issue-group__count` "n lines"/"1 line"). `components/check_row.html` + `static/check_row.css`: side column (`.check-row__side`: bar, severity word, line code) and content column (title, since, body, fix, `.check-row__meta` "Protocol · source" with "evidence →" and "guide →" links); the evidence views, inspectors and `/r/<id>` keep working with the same macro (their views supply the new fields). `static/grouping_switch.css`: unboxed tabs, 36 px, mono label size, bottom rule, pressed ink bold with the marker. `views::since_text(statuses, first_run_no)` replaces the month-day since in the result page. `partials/result_passed.html`: `details#passed.clean-bar` with the summary bar; the coverage line leaves `#evidence` (its links return in Phase 5's tabs). `pages.css`: `#result` flex column with `gap: var(--space-9)`, `.attention-meta`, clean bar. Island fixtures regenerated; `issues.ts` keeps grouping working with the new markup (its tests stay green).
 
 G2 — `just design-check` with the phase 4 manifest elements.
+
+## Phase 5 — Evidence section
+
+### Groups
+
+G1: C1–C6 (one group: the evidence partial, its view, the tabs island and stylesheet) · G2: C7 (design-check)
+
+### Plan
+
+G1 — `templates/pages/result.html` and `partials/result_evidence.html`: the head row (`.section-head`, h2 "Evidence", `.evidence-meta`), the card `.evidence-tabs[data-island="tabs"]` with the nav of five tab links (`#evidence-<p>`, `data-tab`, `marker`, `aria-current` on the current) and five panels `div#evidence-<p>.evidence-tabs__panel[data-panel]` (the stream ids), the current one `data-shown`. `crates/web/src/pages/result/mod.rs` (`EvidenceInner` and the stored/live/unrecorded paths): per panel the protocol's blocks through the evidence_block component, `.evidence-tabs__feeds` ("Feeds lines: <code> <short> · …" for the lines whose checks reference the panel's blocks), `.evidence-tabs__all` to `/r/<id>/<p>` (stored only), `.evidence-tabs__explore` from `explore::view_link`, `.evidence-tabs__reason` for an unmeasured or not-applicable section; the current tab: TLS when TLS has a non-pass line, else the first protocol with one, else DNS. Live fragments render the same panel element. `islands/src/tabs.ts` registered as "tabs": data-ready on mount, click and arrow keys switch `data-shown`/`aria-current`, re-show the current panel after a stream fragment. CSS (a section in `pages.css`): card, nav rule, tab font and marker, panel padding, `[data-ready]` hiding of non-current panels, phone table scroll and "← swipe the table". Island fixtures regenerated.
+
+G2 — `just design-check` with the phase 5 manifest elements.

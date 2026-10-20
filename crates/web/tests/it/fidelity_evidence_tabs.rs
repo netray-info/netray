@@ -23,9 +23,10 @@ const DOMAIN: &str = "example.com";
 const T: i64 = 1_800_000_000;
 const PROTOCOLS: [&str; 5] = ["dns", "tls", "http", "email", "ip"];
 
-const HEAD: &str = r#"<div class="section-head"><h2>Evidence</h2><p class="evidence-meta">recorded with this run</p></div>"#;
+const HEAD: &str = r#"<div class="section-head"><h2>Evidence</h2><p id="evidence-meta" class="evidence-meta">recorded with this run</p></div>"#;
 const TABS: &str = r#"<div class="evidence-tabs" data-island="tabs">"#;
-const NAV: &str = r#"<nav class="evidence-tabs__nav" aria-label="Evidence views">"#;
+const NAV: &str =
+    r#"<nav id="evidence-nav" class="evidence-tabs__nav" aria-label="Evidence views">"#;
 
 struct StubRuns;
 
@@ -181,7 +182,16 @@ async fn c1_c2_a_stored_entry_renders_the_evidence_card() {
             )),
             "{name}: no explore link"
         );
-        assert!(panel.contains(&link.label), "{name}: explore label");
+        // The board's wording names the inspector the link opens: email and IP open DNS.
+        let tool = match *name {
+            "tls" => "TLS",
+            "http" => "HTTP",
+            _ => "DNS",
+        };
+        assert!(
+            panel.contains(&format!("Open in the {tool} inspector →")),
+            "{name}: explore label"
+        );
     }
     let tls = panel(&body, "tls");
     let code =
@@ -274,7 +284,7 @@ fn the_evidence_tabs_styles_resolve_to_the_board_values() {
             ".evidence-tabs",
             "border:var(--line-hair)solidvar(--color-line)",
         ),
-        (".evidence-tabs", "border-radius:2px"),
+        (".evidence-tabs", "border-radius:var(--radius-max)"),
         (".evidence-tabs", "background:var(--color-surface)"),
         (".evidence-tabs__tab", "font-family:var(--font-mono)"),
         (".evidence-tabs__tab", "font-size:var(--font-size-label)"),

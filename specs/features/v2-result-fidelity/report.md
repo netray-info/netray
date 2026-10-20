@@ -241,3 +241,45 @@ The desktop boards report no open row (C16). Side-by-side of board F light: head
 | AMENDMENT | "0 lines clean" without a run | repaired: the bar is hidden |
 | DEFERRED | evidence section without links until Phase 5 | Phase 5 |
 | NIT | protocol group label "email" | fixed: "Email" |
+
+## Phase 5 — Evidence section
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R35 Evidence section between the open issues and the clean bar: h2 "Evidence" with mono meta "recorded with this run", a bordered card with tabs DNS, TLS, HTTP, EMAIL, IP (mono 12 px uppercase, marker on the current tab), per tab a panel with the protocol's evidence blocks, "Feeds lines: code short[ · …]", "All evidence →" to /r/id/protocol and the explore-live link; unmeasured or not applicable sections show their reason; TLS current when TLS has a non-pass line, else the first protocol with one, else DNS; without JavaScript every panel in order with tabs as in-page links; a small island switches panels by data attribute; an incomplete live run fills the same tabs; at phone width a too-wide table scrolls inside the panel with "← swipe the table" | green | crates/web/tests/it/fidelity_evidence_tabs.rs |
+| C2 | GIVEN a stored entry WHEN rendered without JavaScript THEN the Evidence h2 is followed by five tab links and five panels in protocol order, each with its blocks, a feeds line, "All evidence →" to /r/id/protocol and its explore-live link | green | crates/web/tests/it/fidelity_evidence_tabs.rs |
+| C3 | GIVEN a run whose only non-pass lines are TLS WHEN rendered THEN the TLS tab carries the marker and its panel is shown | green | crates/web/tests/it/fidelity_evidence_tabs.rs |
+| C4 | GIVEN an IP section not applicable WHEN its panel renders THEN it shows the reason | green | crates/web/tests/it/fidelity_evidence_tabs.rs |
+| C5 | GIVEN the tabs island WHEN the HTTP tab is activated THEN only the HTTP panel carries the shown attribute and the island wrote no style | green | crates/web/islands/test/tabs.test.ts |
+| C6 | GIVEN an incomplete live run WHEN its sections stream THEN the panels fill from the fragments | green | crates/web/tests/it/fidelity_evidence_live.rs |
+| C7 | GIVEN boards F and M WHEN just design-check runs THEN no row names the evidence heading, tabs, panel table, feeds line or inspector link | green | design-check |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 evidence tabs, panels, island | 6 (over budget; one test row needed `var(--radius-max)`, the gate refuses a literal radius; the explore label follows the board, by the orchestrator) | sonnet | 129952 | 392 |
+| G2 design-check | run by the orchestrator | n/a | n/a | n/a |
+| review fixes | 3 | sonnet | 87362 | 226 |
+
+### Behavioural verification
+
+`just design-check` (manifest netray-ops d1695df: evidence meta, card, nav rule, current tab, panel, feeds, explore link, table on the six desktop boards):
+
+```
+D3 · Mobile result — light (Play: ‹ › and tap lines): 2 deviation(s)
+2 open deviation(s), 0 stale accepted entries
+```
+
+The desktop boards report no open row (C7; board M's evidence rows come with Phase 6's phone manifest). Side-by-side of board F light: the Evidence head row, the tab card with TLS current, the panel's blocks, the feeds line, "All evidence →" and "Open in the TLS inspector →". The panel is much longer than the board's single chain table (every block of the protocol): a proposal for the operator.
+
+### Reader
+
+| class | finding | disposition |
+|---|---|---|
+| BLOCKER | after a streamed run the stale nav overrode the new current tab | fixed: the nav is an end fragment; island test |
+| BLOCKER | in-page links into hidden panels went nowhere | fixed: the island opens the target's tab on click, hash change and the initial hash |
+| NIT | "recorded with this run" on unrecorded states | fixed: shown only for a stored entry, streamed |
+| NIT | weakened explore label check | fixed by the orchestrator: the label names the inspector per protocol |

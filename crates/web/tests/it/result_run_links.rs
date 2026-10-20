@@ -254,7 +254,8 @@ async fn c10_c12_evidence_links_follow_the_recording() {
             assert!(issues.contains(&want), "{want} missing in {issues}");
             for p in ["dns", "tls", "http", "email", "ip"] {
                 let html = html_of(end, &format!("evidence-{p}"));
-                assert!(!html.contains("href="), "coverage link in {html}");
+                let want = format!(r#"href="/r/{id}/{p}""#);
+                assert!(html.contains(&want), "{want} missing in {html}");
             }
 
             let get = f

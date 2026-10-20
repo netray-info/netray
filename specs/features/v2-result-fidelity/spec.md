@@ -525,9 +525,11 @@ GIVEN the side-by-side images WHEN a reader compares them THEN every finding is 
 
 - Phase 4: owner labels start with a capital ("Your DNS provider") as the board draws them, the words otherwise unchanged (SDD amended); the check row carries `data-check` with its id on its main column. Review: the since text reads all stored entries, and none when the run's place is unknown; the clean bar counts pass and not-applicable lines only and is hidden without a run; heading, meta and groups count the same listed rows; groups sort fail first and follow their first row, as board F; the switch stays hidden until the island can work it (S7); the phone half of requirement 31 moves to Phase 6; until Phase 5 the evidence section holds no links (implementer under the operator's autonomy mandate, 2026-10-20).
 
+- Phase 5: the explore link reads "Open in the <TOOL> inspector →" after the board, the tool taken from the link's inspector path (email and IP open the DNS inspector); an unmeasured section without a stored reason reads "timed out, nothing measured" or "incomplete, nothing measured" (implementer under the operator's autonomy mandate, 2026-10-20).
+
 ### Proposals for the operator
 
-None yet.
+- Evidence tab content (board F, "adjust canvas" or "deliberately different"): each tab renders every evidence block of its protocol through the shared renderer (Decision log), so the TLS tab of a two-address domain holds two chains, two handshakes, CT and CAA, much longer than the board's single chain table. Options: keep (complete evidence, the board's table is a sample), or a compact first block per protocol with "All evidence →" for the rest (needs module knowledge in the web crate or a summary field per block).
 
 ## Open decisions
 

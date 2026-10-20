@@ -4,6 +4,7 @@ import { issues } from "./issues";
 import { recent } from "./recent";
 import { spectrum } from "./spectrum";
 import { status } from "./status";
+import { tabs } from "./tabs";
 import { stream } from "./stream";
 import { theme } from "./theme";
 
@@ -36,6 +37,7 @@ register("issues", issues);
 register("recent", recent);
 register("spectrum", spectrum);
 register("status", status);
+register("tabs", tabs);
 register("theme", theme);
 
 mount(document);

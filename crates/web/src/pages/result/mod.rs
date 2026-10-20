@@ -33,8 +33,9 @@ use super::headers::secure;
 use super::{Frame, page, query_redirect, server_error};
 use crate::api::DomainRuns;
 use crate::components::{
-    self, CheckRowView, DiffBlockView, GradeView, GroupingOption, GroupingSwitchView,
-    QueryInputView, RunLineView, SpectrumGutter, SpectrumRunGrades, SpectrumView, Tone,
+    self, CheckRowView, DiffBlockView, EvidenceShape, GradeView, GroupingOption,
+    GroupingSwitchView, QueryInputView, RunLineView, SpectrumGutter, SpectrumRunGrades,
+    SpectrumView, Tone,
 };
 use crate::entries::view::{grade_letter, grade_tone};
 use crate::evidence;
@@ -390,10 +391,69 @@ enum RunLineBody {
     },
 }
 
-/// What one protocol's evidence element holds.
-enum EvidenceInner {
-    Empty,
-    Section(String),
+/// What one protocol's tab panel holds; `shown` marks the panel of the current tab.
+struct EvidenceInner {
+    shown: bool,
+    panel: Option<evidence::PanelView>,
+}
+
+/// The panels before any run: empty, the DNS tab current.
+fn empty_panels() -> Vec<EvidenceInner> {
+    PROTOCOLS
+        .iter()
+        .map(|p| EvidenceInner {
+            shown: *p == Protocol::Dns,
+            panel: None,
+        })
+        .collect()
+}
+
+/// The current tab of `run`: TLS when TLS has a line that is not passing, else the first
+/// protocol with one, else DNS.
+fn current_protocol(run: &Run) -> Protocol {
+    let open = |p: Protocol| {
+        run.checks
+            .iter()
+            .any(|c| c.id.protocol() == p && matches!(c.status, Status::Warn | Status::Fail))
+    };
+    if open(Protocol::Tls) {
+        return Protocol::Tls;
+    }
+    PROTOCOLS
+        .iter()
+        .copied()
+        .find(|p| open(*p))
+        .unwrap_or(Protocol::Dns)
+}
+
+/// One panel per protocol over `run`; `entry_id` is the stored entry the "All evidence" links
+/// name.
+fn panels(run: &Run, domain: &str, entry_id: Option<&str>) -> Vec<EvidenceInner> {
+    let current = current_protocol(run);
+    PROTOCOLS
+        .iter()
+        .map(|p| EvidenceInner {
+            shown: *p == current,
+            panel: Some(evidence::panel(run, *p, domain, entry_id)),
+        })
+        .collect()
+}
+
+fn tab_label(protocol: Protocol) -> &'static str {
+    match protocol {
+        Protocol::Dns => "DNS",
+        Protocol::Tls => "TLS",
+        Protocol::Http => "HTTP",
+        Protocol::Email => "Email",
+        Protocol::Ip => "IP",
+    }
+}
+
+/// One tab link of the evidence card.
+struct TabView {
+    protocol: &'static str,
+    label: &'static str,
+    current: bool,
 }
 
 /// Everything the page shows apart from the frame, before it is rendered into parts.
@@ -416,6 +476,7 @@ struct Shown {
     clean: usize,
     passed: Vec<CheckRowView>,
     evidence: Vec<EvidenceInner>,
+    recorded: bool,
     recheck: bool,
 }
 
@@ -439,7 +500,8 @@ impl Shown {
             groups: Vec::new(),
             clean: 0,
             passed: Vec::new(),
-            evidence: PROTOCOLS.iter().map(|_| EvidenceInner::Empty).collect(),
+            evidence: empty_panels(),
+            recorded: false,
             recheck: false,
         }
     }
@@ -458,6 +520,8 @@ struct Parts {
     spectrum: String,
     diff: String,
     issues: String,
+    meta: String,
+    nav: String,
     evidence: Vec<String>,
     passed: String,
 }
@@ -479,6 +543,8 @@ impl Parts {
         for (p, html) in PROTOCOLS.iter().zip(&self.evidence) {
             out.push((format!("evidence-{}", p.as_str()), html.as_str()));
         }
+        out.push(("evidence-nav".to_string(), self.nav.as_str()));
+        out.push(("evidence-meta".to_string(), self.meta.as_str()));
         out.push(("passed".to_string(), self.passed.as_str()));
         if self.recheck {
             out.push(("recheck-button".to_string(), self.button.as_str()));
@@ -895,7 +961,8 @@ fn stored_shown(
         ),
         clean: views::clean_count(&entry.run, cat),
         passed: views::passed_checks(&entry.run, cat),
-        evidence: PROTOCOLS.iter().map(|_| EvidenceInner::Empty).collect(),
+        evidence: panels(&entry.run, &entry.domain, Some(&entry.id)),
+        recorded: true,
         recheck: true,
     })
 }
@@ -918,20 +985,6 @@ fn done_figure(domain: &str, done: &Run, grade: Grade, entries: &[Entry]) -> Opt
     )
 }
 
-/// One evidence section per protocol over `done`.
-fn done_evidence(done: &Run, run_line: impl Fn() -> RunLineView) -> Option<Vec<EvidenceInner>> {
-    PROTOCOLS
-        .iter()
-        .map(|p| {
-            warn_render(
-                "evidence",
-                evidence::render_section(&evidence::section(done, *p, run_line())),
-            )
-            .map(EvidenceInner::Section)
-        })
-        .collect()
-}
-
 /// What a finished run of `domain` that was not stored shows: `done` the run, `entries` the
 /// history before it, `recorded` the store's `NotStored` answer.
 fn not_stored_shown(
@@ -952,7 +1005,6 @@ fn not_stored_shown(
         legend,
         ..
     } = done_figure(domain, done, grade, entries)?;
-    let evidence = done_evidence(done, evidence::incomplete_run_line)?;
     let diff = views::recorded_diff_view(recorded, entries.first(), cat);
     Some(Shown {
         grade: Some(grade_view(grade, None)),
@@ -972,7 +1024,8 @@ fn not_stored_shown(
         groups: views::issues(done, cat, Links::Live, Grouping::Owner, &BTreeMap::new()),
         clean: views::clean_count(done, cat),
         passed: views::passed_checks(done, cat),
-        evidence,
+        evidence: panels(done, domain, None),
+        recorded: false,
         recheck: true,
     })
 }
@@ -987,7 +1040,6 @@ fn unrecorded_shown(domain: &str, done: &Run, entries: &[Entry]) -> Option<Shown
         legend,
         ..
     } = done_figure(domain, done, done.grade, entries)?;
-    let evidence = done_evidence(done, evidence::live_run_line)?;
     Some(Shown {
         grade: Some(grade_view(done.grade, None)),
         date: Some(views::run_date(now())),
@@ -1008,7 +1060,8 @@ fn unrecorded_shown(domain: &str, done: &Run, entries: &[Entry]) -> Option<Shown
         groups: views::issues(done, cat, Links::Live, Grouping::Owner, &BTreeMap::new()),
         clean: views::clean_count(done, cat),
         passed: views::passed_checks(done, cat),
-        evidence,
+        evidence: panels(done, domain, None),
+        recorded: false,
         recheck: true,
     })
 }
@@ -1160,7 +1213,20 @@ struct IssuesPart<'a> {
 #[template(path = "partials/result_evidence.html")]
 struct EvidencePart<'a> {
     protocol: &'static str,
-    inner: &'a EvidenceInner,
+    shown: bool,
+    panel: &'a Option<evidence::PanelView>,
+}
+
+#[derive(Template)]
+#[template(path = "partials/result_evidence_nav.html")]
+struct EvidenceNavPart {
+    tabs: Vec<TabView>,
+}
+
+#[derive(Template)]
+#[template(path = "partials/result_evidence_meta.html")]
+struct EvidenceMetaPart {
+    recorded: bool,
 }
 
 #[derive(Template)]
@@ -1246,12 +1312,17 @@ fn issues_part(groups: &[IssueGroup]) -> Option<String> {
     )
 }
 
+fn evidence_meta_part(recorded: bool) -> Option<String> {
+    warn_render("evidence-meta", trimmed(&EvidenceMetaPart { recorded }))
+}
+
 fn evidence_part(protocol: Protocol, inner: &EvidenceInner) -> Option<String> {
     warn_render(
         "evidence",
         trimmed(&EvidencePart {
             protocol: protocol.as_str(),
-            inner,
+            shown: inner.shown,
+            panel: &inner.panel,
         }),
     )
 }
@@ -1328,6 +1399,17 @@ fn assemble(domain: &str, autostart: bool, shown: Shown, selectors: Option<&str>
         .zip(&shown.evidence)
         .map(|(p, inner)| evidence_part(*p, inner))
         .collect::<Option<Vec<_>>>()?;
+    let tabs = PROTOCOLS
+        .iter()
+        .zip(&shown.evidence)
+        .map(|(p, inner)| TabView {
+            protocol: p.as_str(),
+            label: tab_label(*p),
+            current: inner.shown,
+        })
+        .collect();
+    let nav = warn_render("evidence-nav", trimmed(&EvidenceNavPart { tabs }))?;
+    let meta = evidence_meta_part(shown.recorded)?;
     Some(Parts {
         header,
         hard_fail,
@@ -1346,6 +1428,8 @@ fn assemble(domain: &str, autostart: bool, shown: Shown, selectors: Option<&str>
         )?,
         diff,
         issues: issues_part(&shown.groups)?,
+        meta,
+        nav,
         evidence,
         passed,
     })

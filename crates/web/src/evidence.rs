@@ -12,6 +12,7 @@ use crate::components::{
     TreeItem,
 };
 use crate::entries::view::{epoch_days_to_ymd, status_tone};
+use crate::explore::{ExploreLink, view_link};
 use crate::pages::result::views::{line_code, meta_text};
 
 /// The display text of a value: text and time verbatim, a duration in milliseconds.
@@ -294,6 +295,77 @@ fn build_section(
         rows,
         blocks,
         shared,
+    }
+}
+
+/// One line a protocol's blocks feed, "TLS·11 Trust".
+#[derive(Debug, Clone)]
+pub struct PanelFeed {
+    pub code: Option<String>,
+    pub short: String,
+}
+
+/// What one protocol's tab panel on the result page holds.
+#[derive(Debug, Clone)]
+pub struct PanelView {
+    pub blocks: Vec<EvidenceBlockView>,
+    pub feeds: Vec<PanelFeed>,
+    pub all_href: Option<String>,
+    pub explore: ExploreLink,
+    pub reason: Option<String>,
+}
+
+/// The tab panel of `protocol` over `run`: its blocks, the lines they feed, the link to the
+/// entry's view (`entry_id` of a stored entry) and the explore-live link of `domain`.
+pub fn panel(run: &Run, protocol: Protocol, domain: &str, entry_id: Option<&str>) -> PanelView {
+    let owner = protocol.as_str();
+    let mut feeds: Vec<PanelFeed> = Vec::new();
+    for spec in catalogue().entries() {
+        let feeds_owner = run
+            .checks
+            .iter()
+            .find(|c| c.id == spec.id)
+            .is_some_and(|c| c.evidence.iter().any(|bid| bid.module() == owner));
+        if feeds_owner {
+            feeds.push(PanelFeed {
+                code: line_code(&spec.id),
+                short: spec.short.clone(),
+            });
+        }
+    }
+    let reason = run
+        .sections
+        .iter()
+        .find(|s| s.protocol == protocol && s.outcome != SectionKind::Measured)
+        .map(|s| match (&s.reason, &s.outcome) {
+            (Some(reason), _) => reason.clone(),
+            (None, SectionKind::TimedOut) => "timed out, nothing measured".to_string(),
+            (None, _) => "incomplete, nothing measured".to_string(),
+        });
+    PanelView {
+        blocks: run
+            .blocks
+            .iter()
+            .filter(|b| b.id.module() == owner)
+            .map(block_view)
+            .collect(),
+        feeds,
+        all_href: entry_id.map(|id| href(id, protocol, None)),
+        explore: {
+            // The board's wording: the inspector the live view opens in ("Open in the TLS inspector").
+            let link = view_link(protocol, domain);
+            let tool = link
+                .href
+                .strip_prefix("/inspect/")
+                .and_then(|rest| rest.split('?').next())
+                .unwrap_or("")
+                .to_uppercase();
+            ExploreLink {
+                label: format!("Open in the {tool} inspector"),
+                ..link
+            }
+        },
+        reason,
     }
 }
 
