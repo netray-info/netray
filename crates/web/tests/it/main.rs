@@ -235,6 +235,7 @@ mod shell_headings;
 mod shell_help;
 mod shell_links;
 mod shell_nojs;
+mod shell_pages;
 mod shell_review_p1;
 mod shell_review_p2;
 mod shell_review_p3;
