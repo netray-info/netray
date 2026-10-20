@@ -3,9 +3,11 @@
 
 use askama::Template;
 use netray_engine::catalogue::catalogue;
+use netray_model::CheckResult;
+use netray_model::evidence::EVIDENCE_SCHEMA_VERSION;
 use netray_model::evidence::{Block, BlockId, Fields, Node, Shape, Value};
-use netray_model::run::{Run, SectionKind};
-use netray_model::{Protocol, Status};
+use netray_model::run::{Run, RunCheck, SectionKind};
+use netray_model::{Grade, Protocol, Status};
 
 use crate::components::{
     CheckRowView, EvidenceBlockView, EvidenceShape, Field, RecordRow, RunLineView, TableColumn,
@@ -193,6 +195,39 @@ pub fn entry_section(
     )
 }
 
+/// The check rows of a live run that is not stored: one per catalogue check of `protocol`, built
+/// by the stored view's row builder, with every block link on the same page.
+pub fn live_rows(checks: &[CheckResult], blocks: &[Block], protocol: Protocol) -> Vec<EvidenceRow> {
+    let run = Run {
+        profile_version: 0,
+        engine_version: String::new(),
+        evidence_schema_version: EVIDENCE_SCHEMA_VERSION,
+        grade: Grade::Incomplete,
+        complete: false,
+        sections: Vec::new(),
+        checks: checks
+            .iter()
+            .map(|c| RunCheck {
+                id: c.id.clone(),
+                status: c.status,
+                findings: c.findings.clone(),
+                // Only blocks this page shows: a link to a block that is not here leads nowhere.
+                evidence: c
+                    .evidence
+                    .iter()
+                    .filter(|bid| blocks.iter().any(|b| &b.id == *bid))
+                    .cloned()
+                    .collect(),
+            })
+            .collect(),
+        blocks: blocks.to_vec(),
+    };
+    build_section(&run, protocol, RunLineView { parts: vec![] }, |bid| {
+        format!("#ev-{bid}")
+    })
+    .rows
+}
+
 fn owner_protocol(bid: &BlockId) -> Option<Protocol> {
     [
         Protocol::Dns,
@@ -264,7 +299,7 @@ fn build_section(
                 body,
                 fix: flagged.then(|| spec.fix_hint.clone()),
                 meta: Some(meta_text(spec)),
-                evidence_href: None,
+                evidence_href: links.first().map(|l: &BlockLink| l.href.clone()),
                 guide_href: Some(spec.guide.clone()),
             },
             links,

@@ -24,7 +24,7 @@ use futures::stream::{BoxStream, FuturesUnordered};
 use netray_common::ip_extract::IpExtractor;
 use netray_engine::profile::Profiles;
 use netray_model::evidence::Block;
-use netray_model::{CheckResult, Grade, Protocol};
+use netray_model::{CheckResult, Grade, Protocol, Status};
 use percent_encoding::{percent_decode_str, utf8_percent_encode};
 use serde::de::{Deserialize, Deserializer};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
@@ -37,7 +37,8 @@ use super::{Frame, not_found, page, server_error};
 use crate::client::client_ip;
 use crate::components::{self, QueryInputView, RunLineView, SpectrumView};
 use crate::entries::view::grade_letter;
-use crate::evidence::{block_view, live_run_title};
+use crate::evidence::{EvidenceRow, block_view, live_rows, live_run_title};
+use crate::pages::result::views::line_code;
 use crate::spectrum::{RunInput, layout};
 use crate::stream::{end, fragment};
 
@@ -402,8 +403,18 @@ struct PartFragment {
 #[derive(Template)]
 #[template(path = "partials/inspect_band.html")]
 struct BandFragment {
-    html: Option<String>,
+    band: Option<BandView>,
     text: String,
+}
+
+/// The band region of a finished run: the zoomed plate, its named lines and the live check list.
+struct BandView {
+    spectrum: String,
+    lines: Vec<(String, String)>,
+    caption: String,
+    heading: String,
+    meta: Option<String>,
+    rows: Vec<EvidenceRow>,
 }
 
 #[derive(Template)]
@@ -664,6 +675,7 @@ struct Run {
     queue: VecDeque<Event>,
     labels: Vec<String>,
     deadline: Instant,
+    blocks: Vec<Block>,
     band: Option<(Protocol, BandChecks)>,
     ended: bool,
 }
@@ -691,13 +703,81 @@ fn part_event(n: usize, label: &str, result: Result<Vec<Block>, String>) -> Opti
     Some(fragment(&format!("inspect-part-{n}"), &html))
 }
 
-fn band_event(protocol: Protocol, result: Result<Vec<CheckResult>, String>) -> Option<Event> {
-    let (html, text) = match result.and_then(|checks| band_html(protocol, &checks)) {
-        Ok(html) => (Some(html), String::new()),
+fn band_event(
+    protocol: Protocol,
+    blocks: &[Block],
+    result: Result<Vec<CheckResult>, String>,
+) -> Option<Event> {
+    let (band, text) = match result.and_then(|checks| band_view(protocol, &checks, blocks)) {
+        Ok(band) => (Some(band), String::new()),
         Err(text) => (None, text),
     };
-    let html = (BandFragment { html, text }).render().ok()?;
+    let html = (BandFragment { band, text }).render().ok()?;
     Some(fragment(BAND_ID, &html))
+}
+
+fn band_view(
+    protocol: Protocol,
+    checks: &[CheckResult],
+    blocks: &[Block],
+) -> Result<BandView, String> {
+    let spectrum = band_html(protocol, checks)?;
+    let specs = netray_engine::catalogue::catalogue().for_protocol(protocol);
+    let specs = specs.entries();
+    let lines: Vec<(String, String)> = specs
+        .iter()
+        .map(|spec| (spec.short.clone(), line_code(&spec.id).unwrap_or_default()))
+        .collect();
+    let caption = match (lines.first(), lines.last()) {
+        (Some((_, first)), Some((_, last))) => {
+            let (tag, from) = first.split_once('\u{b7}').unwrap_or((first, ""));
+            let to = last.split_once('\u{b7}').map_or("", |(_, n)| n);
+            if lines.len() == 1 {
+                format!(
+                    "The {tag} band of the spectrum, zoomed: the same line as position {first} on the result page."
+                )
+            } else {
+                format!(
+                    "The {tag} band of the spectrum, zoomed: the same {} lines as positions {tag}\u{b7}{from}\u{2013}{to} on the result page.",
+                    lines.len()
+                )
+            }
+        }
+        _ => String::new(),
+    };
+    let status_of = |spec: &netray_engine::catalogue::CheckSpec| {
+        checks.iter().find(|c| c.id == spec.id).map(|c| c.status)
+    };
+    let count = |want: Status| specs.iter().filter(|s| status_of(s) == Some(want)).count();
+    let (fails, warns, passes) = (
+        count(Status::Fail),
+        count(Status::Warn),
+        count(Status::Pass),
+    );
+    let (heading, meta) = match fails + warns {
+        0 if passes == specs.len() && passes == 1 => ("The line passes".to_string(), None),
+        0 if passes == specs.len() => (format!("All {passes} lines pass"), None),
+        0 => (
+            "No line needs attention".to_string(),
+            Some(format!("{} not measured", specs.len() - passes)),
+        ),
+        1 => (
+            "1 line needs attention".to_string(),
+            Some(format!("{fails} fail \u{b7} {warns} warn")),
+        ),
+        n => (
+            format!("{n} lines need attention"),
+            Some(format!("{fails} fail \u{b7} {warns} warn")),
+        ),
+    };
+    Ok(BandView {
+        spectrum,
+        lines,
+        caption,
+        heading,
+        meta,
+        rows: live_rows(checks, blocks, protocol),
+    })
 }
 
 fn band_html(protocol: Protocol, checks: &[CheckResult]) -> Result<String, String> {
@@ -775,6 +855,7 @@ fn stream_job(
         .collect(),
         labels,
         deadline,
+        blocks: Vec::new(),
         band: job.band,
         ended: false,
     };
@@ -792,7 +873,7 @@ fn stream_job(
                         .await
                         .unwrap_or_else(|_| Err("timed out".to_string()));
                     run.queue.push_back(
-                        band_event(protocol, result)
+                        band_event(protocol, &run.blocks, result)
                             .unwrap_or_else(|| fragment(BAND_ID, "render failed")),
                     );
                     continue;
@@ -803,6 +884,9 @@ fn stream_job(
             match timeout_at(run.deadline, run.pending.next()).await {
                 Ok(Some((n, result))) => {
                     run.waiting.remove(&n);
+                    if let Ok(blocks) = &result {
+                        run.blocks.extend(blocks.iter().cloned());
+                    }
                     let event = part_event(n, &run.labels[n], result)
                         .unwrap_or_else(|| fragment(&format!("inspect-part-{n}"), "render failed"));
                     return Some((Ok(event), run));

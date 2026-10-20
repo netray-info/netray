@@ -584,7 +584,17 @@ impl InspectJobs {
                         let outcome = (&mut run.0)
                             .await
                             .map_err(|e| format!("the DNS band failed: {e}"))?;
-                        measured(outcome).map(|(_, checks)| checks)
+                        // The band judges the registrable domain; the page shows the queried
+                        // name's records, so the checks link none of them.
+                        measured(outcome).map(|(_, checks)| {
+                            checks
+                                .into_iter()
+                                .map(|c| CheckResult {
+                                    evidence: Vec::new(),
+                                    ..c
+                                })
+                                .collect()
+                        })
                     }),
                     Some((band_tx, module, domain, req.deadline)),
                 ),

@@ -75,3 +75,46 @@ read is bounded (500 ms) and logged on failure.
 Second reader: 0 blockers. Amendment (a notice replaces the chips) answered in requirement 5.
 Deferred: the EMAIL tab answers 404 until Phase 7. Nits (IP h1 as typed, TLS port list as typed)
 left as typed input.
+
+## Phase 2 — Band position and live check list
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R8 Band directly under the h1 before every part; each line named by catalogue short and line code; caption names the band, count and positions | green | tests/it/shell_band.rs |
+| C2 | R9 Live check list: one check row per catalogue check of the band protocol, catalogue order, same function and partial as the stored view, heading counts | green | tests/it/shell_checks.rs |
+| C3 | R10 Same rows, same words: live list equals the stored view's rows for TLS and HTTP fixtures | green | tests/it/shell_same_rows.rs |
+| C4 | GIVEN a TLS run WHEN the stream ends THEN the band element precedes every part element | green | tests/it/shell_band.rs |
+| C5 | GIVEN the TLS band (21 lines, TLS·11–31) THEN each line has short and code and the caption names them | green | tests/it/shell_band.rs |
+| C6 | GIVEN an HTTP run where http.csp warns with a finding THEN its row shows warn, title, finding, fix hint, guide link | green | tests/it/shell_checks.rs |
+| C7 | GIVEN a TLS fixture WHEN rendered live and as the stored view THEN the check rows are identical | green | tests/it/shell_same_rows.rs |
+| C8 | GIVEN one fail and two warns THEN heading 3 lines need attention with 1 fail · 2 warn; all pass THEN All n lines pass | green | tests/it/shell_checks.rs |
+| C9 | GIVEN a DNS query for www.example.com THEN the list holds the DNS checks of example.com | green | tests/it/shell_checks.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1+G2 (one coder, G1 first) | 1 | sonnet | 74885 | 136 |
+| review fixes (shell_review_p2) | 1 | orchestrator (four small edits) | 0 | 0 |
+
+### Behavioural verification
+
+Local lens, `curl -s -X POST --data-urlencode "url=https://1.1.1.1/" http://127.0.0.1:18931/inspect/http/run`:
+fragment order `inspect-result`, `inspector-tabs`, `inspect-part-0`, `inspect-band`; the start
+fragment holds `#inspect-band` before `#inspect-part-0`; the band fragment's caption reads "The HTTP
+band of the spectrum, zoomed: the same 12 lines as positions HTTP·32–43 on the result page.", the
+Checks heading "No line needs attention" with "12 not measured" (the probes time out locally: the
+sandbox blocks most outbound traffic), each row's body the probe's finding ("HTTPS probe: timed out
+after 10s").
+
+### Review
+
+Reader: 1 blocker (the live list linked blocks the page does not show; the DNS band linked the
+queried name's records although it judges the registrable domain), fixed: `live_rows` keeps only
+links to blocks on the page and the DNS job's band carries no evidence links
+(`tests/it/shell_review_p2.rs`). Amendments folded into requirements 8 and 9: singular wording for
+a one-line band; band line names wrap between words and the band scrolls inside its column.
+Deferred: the email band's caption says MAIL (the line-code tag) while the plate says EMAIL;
+Phase 7 settles it with the email inspector.

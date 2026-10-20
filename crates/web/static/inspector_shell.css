@@ -105,3 +105,45 @@
   font-size: var(--font-size-h2);
   font-weight: 650;
 }
+.inspector-band {
+  margin: 0;
+}
+.inspector-band__lines {
+  display: flex;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+}
+.inspector-band__line {
+  display: flex;
+  flex: 1 0 0;
+  flex-direction: column;
+  min-width: min-content;
+  gap: var(--space-1);
+  text-align: center;
+}
+.inspector-band__short {
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+.inspector-band__code {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-band-code);
+}
+.inspector-band__caption {
+  margin-top: var(--space-3);
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+}
+.inspector-checks .inspector-checks__title {
+  display: inline;
+  margin: 0;
+}
+.inspector-checks__meta {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}

@@ -176,8 +176,11 @@ Each requirement names the inventory rows or board rows it closes.
    tone, title, the job's findings as body (the catalogue `finding` for a warn or fail without
    findings), the catalogue `fix_hint` for warn and fail, the guide link, and links to the blocks
    it references on this page (`#ev-<block id>`). Its heading reads "<n> lines need attention"
-   with "<f> fail · <w> warn", or "All <n> lines pass". A DNS job's list is the DNS checks of the
-   queried name's registrable domain (S29); the IP list is the reputation check. (4.17, 3.11,
+   ("1 line needs attention") with "<f> fail · <w> warn", "All <n> lines pass" ("The line passes"
+   for one line) when every line passes, or "No line needs attention" with "<k> not measured" when nothing warns or fails but
+   some lines did not pass. A DNS job's list is the DNS checks of the
+   queried name's registrable domain (S29) and links none of the page's blocks (they are the
+   queried name's); a row links only blocks the page shows. The IP list is the reputation check. (4.17, 3.11,
    3.12)
 10. **Same rows, same words.** For one input, the live list and the stored `/<domain>/<protocol>`
     view of a run with the same statuses and findings render the same rows with the same text; a
@@ -350,7 +353,7 @@ band's `CheckResult`s through the evidence view's check-list function.
 ### Test Scenarios
 
 GIVEN a TLS run WHEN the stream ends THEN the band element precedes every part element in the result region.
-GIVEN the TLS band of nine lines at positions 10 to 18 WHEN rendered THEN each line has its short and code and the caption reads "The TLS band of the spectrum, zoomed: the same 9 lines as positions TLS·10–18 on the result page.".
+GIVEN the TLS band (21 lines at positions 11 to 31 in today's catalogue; board G shows 9 at 10–18) WHEN rendered THEN each line has its short and code and the caption reads "The TLS band of the spectrum, zoomed: the same 21 lines as positions TLS·11–31 on the result page.".
 GIVEN an HTTP run where `http.csp` warns with finding "style-src contains 'unsafe-inline'" WHEN the list renders THEN its row shows warn, the title, that finding, the fix hint and the guide link.
 GIVEN a TLS fixture with fixed statuses and findings WHEN rendered live and as the stored view THEN the check rows are identical.
 GIVEN a run with one fail and two warns WHEN the list heading renders THEN it reads "3 lines need attention" with "1 fail · 2 warn"; GIVEN all pass THEN "All <n> lines pass".

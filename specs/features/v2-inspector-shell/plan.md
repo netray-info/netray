@@ -47,3 +47,28 @@ Existing tests expected to change (orchestrator, `ADLC-Test-Change`): `inspect_p
 holds the hidden h1), `inspect_review.rs` and `inspect_review_second.rs` and `inspect_backlink.rs`
 (the back link moves from the page into the start fragment; tabs add carried links),
 `shell_headings.rs` (20 px is a token, the gate refuses a font-size literal).
+
+## Phase 2 — Band position and live check list
+
+### Groups
+
+G1: C3, C7 · G2: C1, C2, C4, C5, C6, C8, C9 (G2 depends on G1).
+
+### Plan
+
+G1: `crates/web/src/evidence.rs` — `build_section` sets the row's `evidence_href` to its first block
+link (the link sits inside the check-row article in both views); new
+`live_rows(checks, blocks, protocol)` wraps the live checks and blocks in a transient `Run` and
+returns `build_section(..).rows` with same-page links.
+
+G2: `partials/inspect_start.html` — the band placeholder moves directly under the h1.
+`src/pages/inspect.rs` — the stream state collects every part's blocks; `band_event` builds a band
+view: spectrum, lines (catalogue short and `line_code`), caption (tag and positions from the first
+and last code), rows from `evidence::live_rows`, heading counts. `partials/inspect_band.html` —
+`figure.inspector-band` with lines and caption, then `section.inspector-checks` with the check-row
+macro and the block-link loop. `static/inspector_shell.css` — band line and checks rules (11 px and
+10 px tokens).
+
+Heading wording: "<n> lines need attention" ("1 line needs attention") with "<f> fail · <w> warn";
+"All <n> lines pass" when every line passes; "No line needs attention" with "<k> not measured"
+when nothing warns or fails but some lines are unmeasured, not applicable or not tested.
