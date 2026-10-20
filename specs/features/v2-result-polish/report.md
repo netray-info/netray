@@ -64,3 +64,36 @@ Reader over the phase diff: 5 blockers, 2 amendments, 1 nit; all repaired in thi
 | NIT | swipe note after the disclosure | swipe note right after the table; the disclosure after the links line |
 
 Edge-case tests for the repairs: `crates/web/tests/it/polish_compact_review.rs`.
+
+## Phase 2 — Hero: descriptor, run title, long domains
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R11 the descriptor stays and does not set the grade block's width; it wraps | green | crates/web/tests/it/polish_hero.rs |
+| C2 | R12 at 1280 px every fixture's run title is one line tall | test-unwritable | design-check (run title height rows, Phase 3) |
+| C3 | R13 the h1 has a break point after every dot and no other; overflow-wrap anywhere as last resort on both widths | green | crates/web/tests/it/polish_hero.rs |
+| C4 | S the descriptor stylesheet: width 0 and min-width 100 % | green | crates/web/tests/it/polish_hero.rs |
+| C5 | S the long domain renders with wbr after each dot | green | crates/web/tests/it/polish_hero.rs |
+| C6 | S `#result-header h1` carries overflow-wrap anywhere on desktop and phone | green | crates/web/tests/it/polish_hero.rs |
+| C7 | S the first-visit run title is one line at 1280 px in the design stack | test-unwritable | design-check (Phase 3) |
+
+C2 and C7 are layout facts a cargo test cannot see: the design check measures them (Phase 3 adds the run title height rows).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 (C1, C3–C6) | 0 | orchestrator (three CSS and template lines) | 0 | 0 |
+
+### Review
+
+| class | finding | repair |
+|---|---|---|
+| BLOCKER | a hyphen is a browser break point: "checkout.my-" / "company…" at 390 px, punycode "xn--mnchen-" too | each label with its dot is an inline-block box (`.result-hero__label`); measured in Chromium: "checkout." / "my-company." / "example.com"; a 50-character label still wraps inside its box, no page scroll (R13 amended) |
+| DEFERRED | the `/r/<id>` entry page and the history page h1 carry no break points | outside R13 (the result hero); a later page feature |
+
+### Behavioural verification
+
+`just design-check`: 0 open deviations. First visit at 1280 px: the run title "RUN 1 · … · 54 CHECKS · PROFILE 3 · CACHED · FIRST RUN" is one line, the descriptor wraps under the score in two lines. Board M at 390 px: "shop.example.com" on one line beside the grade.

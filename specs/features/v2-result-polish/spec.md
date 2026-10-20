@@ -102,7 +102,8 @@ what the review found by eye.
 12. **Run title on one line.** At 1280 px the run title of every stored state the fixtures hold,
     "… · CACHED · FIRST RUN" included, is one line (its box is one line height tall).
 13. **Long domains.** The h1 offers a break point after every dot of the domain (`<wbr>`) and no
-    other; a label wider than the line still breaks inside itself as the last resort
+    other: each label with its dot is one inline-block box, so a hyphen is no break point either; a
+    label wider than the line still breaks inside its box as the last resort
     (`overflow-wrap: anywhere`), on the phone and on the desktop.
 
 ### Design gate
@@ -216,7 +217,7 @@ carries it; `partials/result_evidence.html` renders it; `pages.css` styles it.
 - The TLS table shows the band port's first chain; differing chains are named in the caption rather than drawn twice (implementer under the operator's autonomy mandate, 2026-10-20).
 - A run without a stored entry has no evidence view to link: its blocks stay reachable in a closed `details` disclosure instead of the link, so an incomplete run loses no evidence and no JavaScript is needed (implementer under the operator's autonomy mandate, 2026-10-20).
 - Run title (item 3): the descriptor stops widening the grade block, which gives the title column the width for "… · CACHED · FIRST RUN"; the title is not shortened and no part is dropped (implementer under the operator's autonomy mandate, 2026-10-20).
-- Long domains (item 4): break points after the dots (`<wbr>`), keeping board M's `overflow-wrap: anywhere` as the last resort for a single label wider than the line, on both widths; no font scaling, which would put the h1 off the board's 40 and 26 px (implementer under the operator's autonomy mandate, 2026-10-20).
+- Long domains (item 4): break points after the dots (`<wbr>`), each label an inline-block box so a hyphen (browsers break after one) is none (review of Phase 2), keeping board M's `overflow-wrap: anywhere` as the last resort for a single label wider than the line, on both widths; no font scaling, which would put the h1 off the board's 40 and 26 px (implementer under the operator's autonomy mandate, 2026-10-20).
 - Gate blind spots (item 5): a manifest board `state` lets one canvas board measure several page states; the panel's "no full evidence block" rule is an element whose page selector only matches a compact panel, and the one-line run title is a height row; a wrap point is not measurable, so the long-domain states also serve the side-by-side reading (implementer under the operator's autonomy mandate, 2026-10-20).
 
 ## Open decisions

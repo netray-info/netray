@@ -135,7 +135,7 @@ fn grade_descriptor_does_not_widen_the_grade_block() {
 async fn long_domain_h1_breaks_after_each_dot() {
     let body = page(LONG).await;
     assert!(
-        body.contains("<h1>checkout.<wbr>eu-central.<wbr>storefront.<wbr>example.<wbr>com</h1>"),
+        body.contains("<h1><span class=\"result-hero__label\">checkout.</span><wbr><span class=\"result-hero__label\">eu-central.</span><wbr><span class=\"result-hero__label\">storefront.</span><wbr><span class=\"result-hero__label\">example.</span><wbr><span class=\"result-hero__label\">com</span></h1>"),
         "h1 not broken at dots: {body}"
     );
     assert!(body.contains(&format!(r#"data-domain="{LONG}""#)));
@@ -145,7 +145,7 @@ async fn long_domain_h1_breaks_after_each_dot() {
 async fn short_domain_h1_breaks_after_the_dot() {
     let body = page("example.com").await;
     assert!(
-        body.contains("<h1>example.<wbr>com</h1>"),
+        body.contains("<h1><span class=\"result-hero__label\">example.</span><wbr><span class=\"result-hero__label\">com</span></h1>"),
         "h1 not broken at dot: {body}"
     );
 }

@@ -295,6 +295,13 @@ main td {
   font-weight: var(--font-weight-strong);
   letter-spacing: var(--font-tracking-display);
   line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+/* One label is one atomic box: the h1 breaks between labels (after a dot), never at a hyphen;
+   a label wider than the line still wraps inside its own box (v2-result-polish R13). */
+.result-hero__label {
+  display: inline-block;
+  max-width: 100%;
 }
 .hard-fail {
   margin: 0;

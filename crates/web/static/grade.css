@@ -29,6 +29,9 @@
   font-weight: var(--font-weight-bold);
 }
 .grade__descriptor {
+  /* Wraps under the score instead of widening the grade block (the run title needs the width). */
+  width: 0;
+  min-width: 100%;
   color: var(--color-muted);
   font-family: var(--font-mono);
   font-size: var(--font-size-caption);

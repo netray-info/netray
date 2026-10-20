@@ -115,7 +115,9 @@ fn headings(body: &str) -> Vec<(u8, String)> {
     let tag = regex::Regex::new(r"(?s)<[^>]*>").unwrap();
     re.captures_iter(body)
         .map(|c| {
-            let text = tag.replace_all(&c[2], " ");
+            // The domain's label boxes and break points add no space (v2-result-polish R13).
+            let inner = c[2].replace(r#"</span><wbr><span class="result-hero__label">"#, "");
+            let text = tag.replace_all(&inner, " ");
             let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
             (c[1].parse().unwrap(), text)
         })
