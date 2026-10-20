@@ -251,6 +251,7 @@ mod shell_shared_dns;
 mod shell_store_readonly;
 mod shell_suggest;
 mod shell_tabs;
+mod site_nav_links;
 mod spectrum_catalogue_props;
 mod spectrum_component;
 mod spectrum_layout;
