@@ -229,6 +229,7 @@ mod shell_form;
 mod shell_frame;
 mod shell_header;
 mod shell_headings;
+mod shell_help;
 mod shell_nojs;
 mod shell_review_p1;
 mod shell_review_p2;
