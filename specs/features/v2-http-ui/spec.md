@@ -338,6 +338,10 @@ GIVEN `/inspect/http` at 390 px with the 4 kB policy WHEN measured THEN the docu
   fragment (`views_same_markup.rs`), so that measurement stands for it. A machine that reaches the
   network can repeat it on `/inspect/http` (proposal for the operator) (implementer under the
   operator's autonomy mandate, 2026-10-21).
+- After merging main (v2-tls-probe-close, #48, charges a TLS run its probe connections), the
+  design check's second TLS board (GDark) was refused "too many requests": the design stack now
+  raises lens's `[api.tls]` limiters (`tests/acceptance/design/stack.sh`); `just design-check`
+  exits 0 again (implementer under the operator's autonomy mandate, 2026-10-21).
 - Board: none for the HTTP inspector; it follows board G's frame. Proposal for the operator: add an
   "HTTP inspector" board (CSP table, caching and isolation cells) to the canvas so later runs of
   `just design-check` measure it (drafting agent, 2026-10-20).

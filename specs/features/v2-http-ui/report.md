@@ -235,3 +235,6 @@ policy on `/inspect/http`, which a timed-out local run never showed (re-scoped a
 limitation logged). Reader minors: the nothing-lost needles for `issue_count` and the HSTS flags
 could not fail; they now read "2 issues" and distinct yes/no values.
 
+After merging origin/main (c3e20895): `just design-check` reported 11 class-1 rows on GDark, the
+TLS run refused "too many requests" (probe connections are charged since #48); with the design
+stack's `[api.tls]` limiters raised it exits 0: `0 open deviation(s), 0 stale accepted entries`.
