@@ -78,7 +78,8 @@ the request timeout.
 8. The inspector job's admission charges `[api.tls]` the planned cost of one address on every
    requested port (with the backend's probe connections) instead of the port count.
 9. `inspect_port` probes as many addresses as the plan charged: the first, in selection order,
-   whose handshake succeeded, after the port's handshakes have returned.
+   whose handshake succeeded. An address knows its slot once the earlier addresses still running
+   can no longer change it; its probe deadline runs from its own handshake.
 10. The handshake permit is released when the handshake returns, before validation, live OCSP and
     probes.
 11. Probes of one address take a permit of a separate probe semaphore (`AppState`, size
@@ -206,10 +207,13 @@ GIVEN a probe semaphore permit held elsewhere for longer than the handshake time
   backend's own join (implementer under the operator's autonomy mandate, 2026-10-19).
 - Final review (BLOCKER, fixed): the probe slot was bound to the first planned address before
   its handshake, so a failed first handshake left no address probed and the two checks not
-  applicable. `inspect_port` now runs the port's handshakes first and gives the charged slots to
-  the first addresses whose handshake succeeded; probes and live OCSP start when the port's
-  handshakes have returned, which adds at most one handshake timeout before them (implementer
-  under the operator's autonomy mandate, 2026-10-19).
+  applicable. `inspect_port` now gives the charged slots to the first addresses whose handshake
+  succeeded. A first fix waited for all of the port's handshakes before any probe or live OCSP;
+  the second review pass showed a SYN-dropping first address then pushed lens's TLS section past
+  its 15 s window. Each address now waits only for earlier addresses that can still change its
+  slot, live OCSP never waits, and the probe deadline runs from the address's own handshake, so
+  waiting costs probe time (the probes come back unanswered `timed out`), never inspection time
+  (implementer under the operator's autonomy mandate, 2026-10-19).
 - Final review (minor): the module's probe charge is not reached by an offline test (the only
   offline module target is a blocked address); deferred (implementer under the operator's
   autonomy mandate, 2026-10-19).

@@ -1102,6 +1102,52 @@ fn starttls_protocol_for_port(port: u16) -> Option<String> {
     }
 }
 
+/// The handshake outcome of each address of a port, in selection order: which addresses get the
+/// charged probe slots.
+struct SlotBoard {
+    /// `None` while the handshake runs, then whether it succeeded.
+    done: std::sync::Mutex<Vec<Option<bool>>>,
+    changed: tokio::sync::Notify,
+}
+
+impl SlotBoard {
+    fn new(addresses: usize) -> Self {
+        Self {
+            done: std::sync::Mutex::new(vec![None; addresses]),
+            changed: tokio::sync::Notify::new(),
+        }
+    }
+
+    fn finish(&self, idx: usize, succeeded: bool) {
+        self.done.lock().expect("slot board lock")[idx] = Some(succeeded);
+        self.changed.notify_waiters();
+    }
+
+    /// Whether the address at `idx`, whose handshake succeeded, is among the first `slots`
+    /// successes: decided as soon as the earlier addresses that are still running can no longer
+    /// change the answer.
+    async fn claim(&self, idx: usize, slots: usize) -> bool {
+        loop {
+            let changed = self.changed.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            {
+                let done = self.done.lock().expect("slot board lock");
+                let earlier = &done[..idx];
+                let succeeded = earlier.iter().filter(|d| **d == Some(true)).count();
+                let running = earlier.iter().filter(|d| d.is_none()).count();
+                if succeeded >= slots {
+                    return false;
+                }
+                if succeeded + running < slots {
+                    return true;
+                }
+            }
+            changed.await;
+        }
+    }
+}
+
 /// How long past its own timeout a backend's probes may take before their answers are dropped:
 /// `probe_address` returns only after its per-probe timers, started after the call, fire.
 const PROBE_GRACE: Duration = Duration::from_millis(250);
@@ -1136,14 +1182,21 @@ async fn inspect_port(
         backend,
         probed,
     } = env;
-    // Stage 1: the handshakes, each under a handshake permit held for the handshake only.
+    // The probe slots the plan charged go to the first addresses, in selection order, whose
+    // handshake succeeded. An address knows its slot once every earlier address has finished its
+    // handshake; its probe deadline runs from its own handshake, so waiting on a slow earlier
+    // address costs probe time, never the inspection's.
+    let slots = Arc::new(SlotBoard::new(ips.len()));
     let mut join_set = tokio::task::JoinSet::new();
     for (idx, &ip) in ips.iter().enumerate() {
         let semaphore = Arc::clone(&semaphore);
+        let probe_semaphore = Arc::clone(&probe_semaphore);
         let trust_store = Arc::clone(&trust_store);
         let backend = Arc::clone(&backend);
+        let slots = Arc::clone(&slots);
         let hostname = hostname.map(|h| h.to_string());
         join_set.spawn(async move {
+            // The handshake permit covers the handshake only.
             let mut result = {
                 let _permit = semaphore.acquire().await.ok();
                 backend
@@ -1153,6 +1206,13 @@ async fn inspect_port(
             if result.error.is_some() {
                 metrics::counter!("tlsight_handshake_errors_total").increment(1);
             }
+            let version = result
+                .tls
+                .as_ref()
+                .filter(|_| result.error.is_none())
+                .map(|t| t.version.clone());
+            slots.finish(idx, version.is_some());
+            let deadline = tokio::time::Instant::now() + timeout;
 
             // Run validation if we got a chain
             if let Some(chain) = &result.chain {
@@ -1170,34 +1230,7 @@ async fn inspect_port(
                     result.ct = validate::ct::extract_ct_info(leaf_der.as_ref());
                 }
             }
-            (idx, ip, result)
-        });
-    }
-    let mut handshaken: Vec<(usize, IpAddr, tls::IpInspectionResult)> =
-        join_set.join_all().await.into_iter().collect();
-    handshaken.sort_by_key(|(idx, _, _)| *idx);
 
-    // The probe slots the plan charged go to the first addresses, in selection order, whose
-    // handshake succeeded: a failed handshake passes its slot on.
-    let mut slots = probed;
-    let mut join_set = tokio::task::JoinSet::new();
-    for (idx, ip, mut result) in handshaken {
-        let version = result
-            .tls
-            .as_ref()
-            .filter(|_| result.error.is_none())
-            .map(|t| t.version.clone());
-        let version = match version {
-            Some(v) if slots > 0 => {
-                slots -= 1;
-                Some(v)
-            }
-            _ => None,
-        };
-        let probe_semaphore = Arc::clone(&probe_semaphore);
-        let backend = Arc::clone(&backend);
-        let hostname = hostname.map(|h| h.to_string());
-        join_set.spawn(async move {
             // Live OCSP revocation check via AIA OCSP URL, beside the protocol probes
             let live_ocsp = async {
                 let chain = result.chain.as_ref()?;
@@ -1208,23 +1241,29 @@ async fn inspect_port(
                 Some(tls::ocsp::check_live_ocsp(&ocsp_url, &leaf_der, &issuer_der).await)
             };
             // The probes take a probe permit; the wait and the probes together are bounded by
-            // the handshake timeout: the wait by the deadline, the probes by the time left, which
-            // each probe enforces itself, so answers that arrived are kept. Past the deadline
-            // every kind the address would have probed is unanswered (Rule M). The grace only
-            // backstops a backend that overruns its own timeout.
+            // the handshake timeout from the end of the handshake: the slot and permit waits by
+            // the deadline, the probes by the time left, which each probe enforces itself, so
+            // answers that arrived are kept. Past the deadline every kind the address would have
+            // probed is unanswered (Rule M). The grace only backstops a backend that overruns
+            // its own timeout.
             let probes = async {
                 let version = version.as_ref()?;
+                if !slots.claim(idx, probed).await {
+                    return None;
+                }
                 let timed_out = || {
                     (backend.probe_connections() > 0)
                         .then(|| tls::probe::ProtocolProbes::unanswered(version, "timed out"))
                 };
-                let deadline = tokio::time::Instant::now() + timeout;
                 let Ok(_permit) =
                     tokio::time::timeout_at(deadline, probe_semaphore.acquire()).await
                 else {
                     return timed_out();
                 };
                 let left = deadline.saturating_duration_since(tokio::time::Instant::now());
+                if left.is_zero() {
+                    return timed_out();
+                }
                 let run = backend.probe(ip, port, hostname.as_deref(), version, left);
                 tokio::time::timeout(left + PROBE_GRACE, run)
                     .await
