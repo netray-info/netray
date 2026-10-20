@@ -708,3 +708,112 @@ mod probe_deadline_keeps_answers {
         assert_eq!(resp.ports[0].ips[0].probes, Some(canned));
     }
 }
+
+// specs/features/v2-tls-probe-close final review: the probe slots go to the first addresses whose
+// handshake succeeded, and two probed addresses behind one handshake permit run side by side.
+mod probe_slots {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    use netray_tls::security::rate_limit::{Quotas, Scopes};
+    use netray_tls::tls::probe::{ProbeOutcome, ProtocolProbes, Verdict};
+    use tokio::sync::Semaphore;
+
+    fn refused() -> ProbeOutcome {
+        ProbeOutcome {
+            verdict: Verdict::Refused,
+            version: None,
+            cipher_suite: None,
+            detail: "alert protocol_version".into(),
+        }
+    }
+
+    fn canned() -> ProtocolProbes {
+        ProtocolProbes {
+            ssl3: refused(),
+            tls1_0: refused(),
+            tls1_1: refused(),
+            tls1_2: refused(),
+            tls1_3: refused(),
+            suites_insecure: refused(),
+            suites_cbc: refused(),
+            suites_static_rsa: refused(),
+        }
+    }
+
+    fn limiter(burst: u32) -> RateLimitState {
+        RateLimitState::scoped(
+            &Quotas {
+                per_ip_per_minute: burst,
+                per_ip_burst: burst,
+                per_target_per_minute: burst,
+                per_target_burst: burst,
+            },
+            Scopes {
+                metrics_prefix: "tlsight",
+                per_ip: "per_ip",
+                per_target: "per_target",
+            },
+        )
+    }
+
+    #[tokio::test]
+    async fn a_failed_first_handshake_passes_its_probe_slot_on() {
+        let (bad, good) = (ip("93.184.215.14"), ip("93.184.215.15"));
+        let stub = Arc::new(
+            StubTlsBackend::new()
+                .with_host("example.com", vec![bad, good])
+                .with_failed_handshake(bad)
+                .with_probes(canned()),
+        );
+        let resp = stub_state(stub.clone())
+            .inspector()
+            .inspect(
+                &req("example.com", 443),
+                caller(),
+                &limiter(10),
+                "rid".into(),
+            )
+            .await
+            .expect("inspection answers");
+        let probed: Vec<IpAddr> = stub.probe_calls().iter().map(|(ip, _, _)| *ip).collect();
+        assert_eq!(probed, vec![good]);
+        let good_res = resp.ports[0]
+            .ips
+            .iter()
+            .find(|r| r.ip == good.to_string())
+            .unwrap();
+        assert_eq!(good_res.probes, Some(canned()));
+    }
+
+    #[tokio::test]
+    async fn two_probed_addresses_do_not_wait_on_each_others_probes_for_the_handshake() {
+        let (a, b) = (ip("93.184.215.14"), ip("93.184.215.15"));
+        let stub = Arc::new(
+            StubTlsBackend::new()
+                .with_host("example.com", vec![a, b])
+                .with_probes(canned())
+                .with_probe_delay(Duration::from_secs(10)),
+        );
+        let mut state = stub_state(stub.clone());
+        let mut config = stub_config();
+        config.limits.handshake_timeout_secs = 1;
+        state.config.store(Arc::new(config));
+        state.handshake_semaphore = Arc::new(Semaphore::new(1));
+        state.probe_semaphore = Arc::new(Semaphore::new(2));
+        let start = Instant::now();
+        state
+            .inspector()
+            .inspect(
+                &req("example.com", 443),
+                caller(),
+                &limiter(100),
+                "rid".into(),
+            )
+            .await
+            .expect("inspection answers");
+        let elapsed = start.elapsed();
+        assert_eq!(stub.probe_calls().len(), 2, "both addresses are probed");
+        assert!(elapsed < Duration::from_millis(1800), "took {elapsed:?}");
+    }
+}
