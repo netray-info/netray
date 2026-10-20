@@ -164,9 +164,10 @@ async fn c7_c20_sections_are_cards_with_h2_and_the_idle_h1_is_hidden_and_named()
     );
     let h2css = rules(|s| s.contains(".inspector-section") && s.ends_with("h2"));
     assert!(
-        h2css
-            .iter()
-            .any(|d| d.contains("font-size: 20px") && d.contains("font-weight: 650")),
+        h2css.iter().any(|d| (d.contains("font-size: 20px")
+            || d.contains("font-size: var(--font-size-h2)"))
+            && d.contains("font-weight: 650")
+            && netray_web::tokens::CSS.contains("--font-size-h2: 20px")),
         "no 20px/650 section h2 rule: {h2css:?}"
     );
 
