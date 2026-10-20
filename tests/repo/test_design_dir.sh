@@ -21,7 +21,7 @@ grep -qF 'netray.info checkout' "$rules" || fail "$rules does not name the netra
 
 # R3: neither names the old location.
 for old in netray-ops specs/netray/design; do
-  grep -qF -- "$old" <<<"$recipe" && fail "design-check still names '$old'"
+  grep -qF -- "$old" justfile && fail "justfile still names '$old'"
   grep -qF -- "$old" "$rules" && fail "$rules still names '$old'"
 done
 
