@@ -127,6 +127,9 @@
     font-size: var(--font-size-body);
   }
   .check-row__meta {
+    align-items: center;
+    column-gap: 14px;
+    row-gap: 0;
     font-size: var(--font-size-label);
   }
   .check-row__link {

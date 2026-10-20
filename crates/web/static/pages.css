@@ -565,30 +565,25 @@ main td {
 }
 .first-run__row {
   display: flex;
+  gap: 1px;
+  align-items: center;
   height: 10px;
 }
 .first-run__cell {
   position: relative;
   flex: 1;
 }
-.first-run__cell::before {
-  content: "";
-  position: absolute;
-  inset-block: 0;
-  left: 50%;
-  width: var(--line-hair);
+/* Board FFirst: one waterfall row, a pass a 1 px hairline across its cell, warn and fail a block. */
+.first-run__cell {
+  height: 100%;
   background: var(--status-untested-mark);
-  transform: translateX(-50%);
 }
-.first-run__cell[data-tone="pass"]::before { background: var(--status-pass-hair); }
-.first-run__cell[data-tone="warn"]::before {
-  width: var(--line-pass);
-  background: var(--status-warn-mark);
+.first-run__cell[data-tone="pass"] {
+  height: var(--line-hair);
+  background: var(--status-pass-hair);
 }
-.first-run__cell[data-tone="fail"]::before {
-  width: var(--line-pass);
-  background: var(--status-fail-mark);
-}
+.first-run__cell[data-tone="warn"] { background: var(--status-warn-mark); }
+.first-run__cell[data-tone="fail"] { background: var(--status-fail-mark); }
 .first-run__dashed {
   box-sizing: border-box;
   height: 10px;
@@ -601,7 +596,9 @@ main td {
 @media (max-width: 480px) {
   /* Board M draws no legend under the trace and no counts beside the attention heading. */
   .legend-row,
-  .attention-meta {
+  .attention-meta,
+  .evidence-tabs__feeds,
+  .clean-bar__label {
     display: none;
   }
   .page-header {
@@ -725,6 +722,10 @@ main td {
     gap: var(--space-2);
     margin-block-start: 14px;
   }
+  #spectrum-stepper button:disabled {
+    color: var(--color-line);
+    cursor: default;
+  }
   #spectrum-stepper button {
     min-width: 44px;
     min-height: 44px;
@@ -748,6 +749,9 @@ main td {
   .evidence-tabs__panel table {
     display: block;
     overflow-x: auto;
+  }
+  .evidence-tabs__panel :is(th, td) {
+    white-space: nowrap;
   }
   .evidence-tabs__tab {
     display: inline-flex;

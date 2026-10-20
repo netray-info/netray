@@ -143,7 +143,7 @@ describe("spectrum island (requirement 17)", () => {
     for (const m of muts) {
       if (m.type === "attributes") {
         const name = m.attributeName as string;
-        expect(name === "class" || name === "hidden" || name.startsWith("aria-") || name.startsWith("data-"), name).toBe(true);
+        expect(name === "class" || name === "hidden" || name === "disabled" || name.startsWith("aria-") || name.startsWith("data-"), name).toBe(true);
       } else {
         expect(slot(m.target), `${m.type} on ${(m.target as Element).nodeName}`).toBe(true);
       }

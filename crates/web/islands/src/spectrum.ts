@@ -82,6 +82,7 @@ export function spectrum(el: HTMLElement): void {
     }
   };
 
+  let bounds = (): void => {};
   const render = (): void => {
     const shown = hovered ?? pinned ?? 0;
     const replaying = shown !== 0;
@@ -153,6 +154,7 @@ export function spectrum(el: HTMLElement): void {
             : rest(hint),
       );
     }
+    bounds();
   };
 
   const release = (): void => {
@@ -211,7 +213,16 @@ export function spectrum(el: HTMLElement): void {
     });
   }
 
-  for (const button of el.querySelectorAll("#spectrum-stepper [data-step]")) {
+  const steppers = [...el.querySelectorAll<HTMLButtonElement>("#spectrum-stepper [data-step]")];
+  // Board M greys out the step that leads nowhere: newer on the latest run, older on the oldest.
+  bounds = (): void => {
+    const at = pinned ?? 0;
+    for (const button of steppers) {
+      const step = Number.parseInt(button.getAttribute("data-step") ?? "0", 10);
+      button.disabled = step < 0 ? at <= 0 : at >= oldest;
+    }
+  };
+  for (const button of steppers) {
     button.addEventListener("click", () => {
       const step = Number.parseInt(button.getAttribute("data-step") ?? "0", 10);
       const next = Math.max(0, Math.min(oldest, (pinned ?? 0) + step));
@@ -220,6 +231,7 @@ export function spectrum(el: HTMLElement): void {
       render();
     });
   }
+  bounds();
 
   render();
 }

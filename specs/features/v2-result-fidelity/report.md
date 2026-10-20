@@ -383,3 +383,43 @@ dialog open after Esc: false focus on share: share
 |---|---|---|
 | BLOCKER | the badge preview in the closed dialog fetched /badge on every page view, and lens starts a run for a stale head | fixed: previews load when the dialog opens; tests |
 | AMENDMENT | an open dialog replaced by the stream left focus on the body | repaired: the new Share link takes focus; island test |
+
+## Phase 8 — Design gate and visual reading
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R42 Design gate: the private manifest names the elements of requirements 1–40 on the eight boards; the waterfall rows of board F accepted by the operator's decision; `just design-check` exits 0 with no open and no stale accepted row | green | design-check |
+| C2 | R43 Visual reading: a reader with no part in the build compares every side-by-side image and finds no missing, extra or misordered element besides the theme-H additions; each finding is a report row and is closed | green | visual reading |
+| C3 | GIVEN the manifest's eight boards and the seeded fixtures WHEN just design-check runs THEN it exits 0, prints "0 open deviation(s), 0 stale accepted entries" and every board has a side-by-side image | green | design-check |
+| C4 | GIVEN board F light and dark WHEN just design-check runs THEN the "history rows" value rows are listed under Accepted with the operator's decision as reason | green | design-check |
+| C5 | GIVEN the side-by-side images WHEN a reader compares them THEN every finding is a report row and none stays open | green | visual reading |
+| V1 | visual reading: F, FTrace, FFirst line labels overlapped (DKIM over DMARC) | green | visual reading (fixed: labels line-height 1, so rows 14 px apart no longer collide) |
+| V2 | visual reading: F evidence-kind rows in the since list | green | visual reading (sample data: no record changed in the fixture) |
+| V3 | visual reading: F, FFirst evidence panel without the board's one-line summary caption | green | visual reading (proposal for the operator: evidence tab content) |
+| V4 | visual reading: F, FFirst evidence block order (addresses first, chain per address, empty CAA block) | green | visual reading (proposal for the operator: evidence tab content) |
+| V5 | visual reading: F, FFirst, M extra "All evidence →" link | green | visual reading (required by requirement 35, V1 behaviour) |
+| V6 | visual reading: FFirst extra one-row trace, gutter and caption | green | visual reading (fixed: no trace and no gutter without a history of two runs; the figure takes the full width) |
+| V7 | visual reading: FFirst run title wraps | green | visual reading (consequence of the specified profile and cached parts) |
+| V8 | visual reading: FFirst ghost strip drawn as vertical ticks | green | visual reading (fixed: one waterfall row, pass a hairline across its cell, warn and fail blocks) |
+| V9 | visual reading: M domain breaks mid-word | green | visual reading (sample data: the board's overflow-wrap anywhere with a longer domain) |
+| V10 | visual reading: M newer step not greyed on the latest run | green | visual reading (fixed: steps that lead nowhere are disabled; island test) |
+| V11 | visual reading: M hint touches the stepper | green | visual reading (fixed: 10 px) |
+| V12 | visual reading: M item links on their own line | green | visual reading (fixed: inline after the meta) |
+| V13 | visual reading: M addresses table rows of uneven height | green | visual reading (fixed: phone table cells do not wrap; the table scrolls) |
+| V14 | visual reading: M key-value values wrap mid-token, swipe note far from the table | green | visual reading (proposal for the operator: evidence tab content) |
+| V15 | visual reading: M extra feeds line | green | visual reading (fixed: hidden at phone width, as board M) |
+| V16 | visual reading: M extra "· checks that pass" | green | visual reading (fixed: hidden at phone width, as board M) |
+
+### Behavioural verification
+
+`just design-check` over the eight boards (manifest netray-ops: F, FDark, FFirst, FFirstDark, FTrace, FTraceDark, M, MDark):
+
+```
+0 open deviation(s), 0 stale accepted entries
+```
+
+Accepted (operator decision, Decision log): `D3 · Analyzer — history (option 1+2), light/dark: history rows background-color` (board F's waterfall cells against the per-line trace). Every board has a side-by-side image under `target/design/`. The theme toggle and the footer of canvas v41 are built but not measured: the export (2026-10-19 14:47) predates them; their measurement waits for the operator's fresh export.
+
+Visual reading: an independent reader compared all eight side-by-sides (34 segments) and reported 16 findings (V1–V16 above); each is closed by a fix, as sample data, as specified, or as a proposal for the operator.

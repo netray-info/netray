@@ -5,7 +5,7 @@
 {% if stepper %}
 <div id="spectrum-stepper">
 <button type="button" data-step="1" aria-label="older run">&lsaquo;</button>
-{% if let Some(n) = legend.newest %}{% call spectrum::stepper_box(n) %}{% endcall %}{% endif %}<button type="button" data-step="-1" aria-label="newer run">&rsaquo;</button>
+{% if let Some(n) = legend.newest %}{% call spectrum::stepper_box(n) %}{% endcall %}{% endif %}<button type="button" data-step="-1" aria-label="newer run" disabled>&rsaquo;</button>
 </div>
 {% call spectrum::stepper_hint() %}{% endcall %}
 {% endif %}

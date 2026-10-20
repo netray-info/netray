@@ -531,6 +531,8 @@ GIVEN the side-by-side images WHEN a reader compares them THEN every finding is 
 
 - Phase 7: `#result-share` becomes a `div` (a dialog cannot sit in a `p`); one canonical origin const feeds the canonical link and every snippet; the badge style query is lens's `style=for-the-badge`. Review: the previews load only when the dialog opens (a badge request on a stale head starts a run in lens), and a share dialog replaced by the stream hands focus to the new Share link (implementer under the operator's autonomy mandate, 2026-10-20).
 
+- Phase 8 visual reading: line labels set at line-height 1; no trace and no replay gutter for a single run (board FFirst), the figure then full width; the first-run ghost row drawn as board FFirst's waterfall row; the stepper greys the step that leads nowhere; the phone hides the feeds line and "· checks that pass" (board M); phone table cells do not wrap (implementer under the operator's autonomy mandate, 2026-10-20).
+
 ### Proposals for the operator
 
 - Phone legend and section grades (board M): board M draws no legend under the trace and no section grades on the axis, so at phone width the legend is hidden and the region grades are visually hidden (kept for screen readers; the narrow regions have no room). Options: keep (board M), or show the legend and grades on the phone too (requirement 16 and 18 read without a phone exception).

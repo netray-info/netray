@@ -822,14 +822,14 @@ pub(crate) fn figure_parts(
     };
     let label = format!("Check results of {domain}");
     let newest = rows.first()?;
-    let mut view = SpectrumView::from_layout(&layout, &label, 0)
-        .with_grades(&newest.grades)
-        .with_gutter(SpectrumGutter {
+    let mut view = SpectrumView::from_layout(&layout, &label, 0).with_grades(&newest.grades);
+    // Board FFirst draws no trace and no replay gutter: both need a history of two runs.
+    if rows.len() > 1 {
+        view = view.with_gutter(SpectrumGutter {
             run: newest.no,
             date: views::run_date(newest.created_at),
             grade: grade_letter(newest.grade).to_string(),
         });
-    if rows.len() > 1 {
         view = view.with_run_grades(
             rows.iter()
                 .enumerate()
@@ -850,10 +850,14 @@ pub(crate) fn figure_parts(
         })
         .collect();
     let table_href = stored.then(|| format!("/{}/history", href_of(domain)));
-    let trace = warn_render(
-        "trace",
-        components::trace(&views::trace_view(&layout, &inputs, table_href)),
-    )?;
+    let trace = if rows.len() > 1 {
+        warn_render(
+            "trace",
+            components::trace(&views::trace_view(&layout, &inputs, table_href)),
+        )?
+    } else {
+        String::new()
+    };
     let legend = Legend {
         fixed: if rows.len() > 1 {
             rows.iter().map(|row| row.fixed.clone()).collect()
