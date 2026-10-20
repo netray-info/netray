@@ -3219,6 +3219,7 @@ dependencies = [
  "httpdate",
  "jsonschema",
  "metrics",
+ "moka",
  "netray-common",
  "netray-dns",
  "netray-email",

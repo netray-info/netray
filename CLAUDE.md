@@ -66,6 +66,8 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - Adding a field to a protected test's struct literal still needs `ADLC-Test-Change`: the gate's tamper check flags any change.
 - lens reads every `LENS_*` variable as a config key, `LENS_EXTRA` included: `acceptance-local` unsets it after building lens's env row.
 - Node 26 defines a global `localStorage` that shadows happy-dom's: an island test installs its own storage, as `islands/test/theme.test.ts`'s `useStorage` does.
+- The colour gate reads any island-test string holding `;` as CSS: write a newline in test markup as `\n`, never `&#10;` (`field` became a colour).
+- Island fixture goldens embed server text verbatim: keep it LF; a CRLF golden turns into LF on commit and fails CI.
 - A golden over live-run markup carries the wall clock: normalise it (`NOW` in `crates/web/tests/it/result_islands_fixtures.rs`), or the golden breaks at midnight.
 - `HistoryStore::sweep` always keeps the head's predecessor: a swept-predecessor test needs a third entry as head.
 - A profile version that only adds checks re-scores a stored run to its old grade (`score_section` skips unweighted ids): the diff's grade split puts their effect on the domain step.
@@ -140,6 +142,7 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **A purity guard is an allowlist.** `tests/repo/test_spectrum_module.sh` admits named imports, std paths and macros; a blocklist of I/O names let print macros and `std::process` through.
 - **The spectrum follows the grade.** `spectrum::layout` mutes a section with a weighted unmeasured check and sums M over the profile, as `scoring.rs` does; change both together.
 - **No `Router` word in `crates/web/src` outside `entries/`, `pages/`, `api/`**, comments included: `tests/repo/test_web_crate.sh` greps the text.
+- **`pages/inspect.rs` and `pages/inspect/` name no module crate** (`tests/it/inspect_seam.rs`): reach module data through `api::jobs` helpers or a seam trait (`DnsResults`).
 - **Inspector parts stream in completion order**: a test reads each part's own `inspect-part-<n>` fragment, never stream order, and a bare `handshake` also matches `tls.handshake@` ids.
 - **Page tests assert a component by its markup** (`class="diff-block"`), never the bare class name: netray-web's pages inline every component stylesheet.
 - **A new table inside `main` inherits `main th, main td`** (muted cells, a bottom rule): override colour and borders in its own rules.

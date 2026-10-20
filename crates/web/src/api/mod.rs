@@ -39,6 +39,7 @@ pub use error::V1Error;
 use ip::{AddressField, CallerField, Format};
 pub use ip_host::ip_host;
 pub use jobs::InspectJobs;
+pub(crate) use reads::entry_json;
 pub(crate) use runs::wants_event_stream;
 pub use runs::{
     DomainRefusal, DomainRuns, RefusalReason, RunEvent, RunEvents, RunRefusal, RunStart, RunTrigger,

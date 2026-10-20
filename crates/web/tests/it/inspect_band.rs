@@ -150,7 +150,15 @@ async fn c5_band_streams_after_the_parts_and_before_end() {
             .expect("part fragment");
         assert!(part < band, "{ids:?}");
     }
-    assert_eq!(events.len(), band + 2, "{ids:?}");
+    // After the band: the share fragment of a shareable run (v2-inspector-shell requirement 12),
+    // the export fragment (requirement 19), then `end`.
+    assert_eq!(ids.get(band + 1).copied(), Some("inspect-share"), "{ids:?}");
+    assert_eq!(
+        ids.get(band + 2).copied(),
+        Some("inspect-export"),
+        "{ids:?}"
+    );
+    assert_eq!(events.len(), band + 4, "{ids:?}");
     assert_eq!(events.last().unwrap().0, "end");
 }
 

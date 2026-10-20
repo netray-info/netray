@@ -33,8 +33,8 @@ fn a_partial_table_keeps_the_other_defaults() {
 fn unknown_keys_are_refused() {
     let nested = toml::from_str::<InspectConfig>("[tls]\nfoo = 1").unwrap_err();
     assert!(nested.to_string().contains("foo"), "{nested}");
-    let top = toml::from_str::<InspectConfig>("[email]\nmax_concurrent = 1").unwrap_err();
-    assert!(top.to_string().contains("email"), "{top}");
+    let top = toml::from_str::<InspectConfig>("[smtp]\nmax_concurrent = 1").unwrap_err();
+    assert!(top.to_string().contains("smtp"), "{top}");
 }
 
 #[test]

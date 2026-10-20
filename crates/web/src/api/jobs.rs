@@ -8,9 +8,11 @@ use futures::FutureExt;
 use futures::future::BoxFuture;
 use netray_dns::parser::ParsedQuery;
 use netray_dns::{
-    DnsAuthCompareResult, DnsCompareResult, DnsDnssecResult, DnsErrorEvent, DnsJob, DnsJobEvent,
-    DnsQueryResult, DnsRefusal, DnsTraceResult, DnssecRequest, TraceRequest, blocks,
+    DnsAuthCompareResult, DnsCachedResult, DnsCompareResult, DnsDnssecResult, DnsErrorEvent,
+    DnsJob, DnsJobEvent, DnsQueryResult, DnsRefusal, DnsResultCache, DnsTraceResult, DnssecRequest,
+    TraceRequest, blocks,
 };
+use netray_email::{EmailInspectRequest, EmailRefusal};
 use netray_engine::{Domain, Facts, Module, RunContext, SectionOutcome};
 use netray_model::evidence::Block;
 use netray_model::{CheckResult, Protocol};
@@ -18,11 +20,16 @@ use netray_tls::input::Target;
 use netray_tls::security::rate_limit::{Quotas, Scopes};
 
 use super::dns::DNS_OFF;
+use super::email::EMAIL_OFF;
 use super::error::V1Error;
 use super::inspectors::{HTTP_OFF, TLS_OFF};
 use super::ip::charge;
 use super::state::ApiState;
-use crate::pages::{InspectorJobs, Job, JobPart, JobRequest, Refusal, Tool, registrable_domain};
+use crate::evidence::{Badge, BadgeTone};
+use crate::pages::{
+    CachedDns, DnsResults, InspectorJobs, Job, JobPart, JobRequest, Refusal, Tool,
+    registrable_domain,
+};
 
 const NO_STARTTLS: &str = "STARTTLS for IMAP and FTP is not supported";
 const IP_OFF: &str = "IP lookups are unavailable";
@@ -200,11 +207,13 @@ const UNFINISHED: &str = "the job ended before it finished";
 
 /// A part that awaits its started job, collects it and maps the result to blocks. A job with
 /// no block, or no answer that failed or did not finish, is the part's error, never an empty
-/// part; a job that answered and failed shows its blocks and its errors (Rule M).
+/// part; a job that answered and failed shows its blocks and its errors (Rule M). A finished
+/// job is stored in the result cache under the share key, when the run has one.
 fn dns_part<E: DnsJobEvent>(
     label: &str,
     started: tokio::sync::oneshot::Receiver<DnsJob<E>>,
     to_blocks: fn(&E::Collected) -> Vec<Block>,
+    store: Option<(DnsResultCache, String, String)>,
 ) -> JobPart
 where
     E::Collected: Ended,
@@ -214,6 +223,18 @@ where
         output: Box::pin(async move {
             let job = started.await.map_err(|_| "not started".to_string())?;
             let collected = job.collect().await;
+            if let Some((cache, key, query)) = store
+                && collected.ended().2
+            {
+                cache
+                    .insert(DnsCachedResult {
+                        key,
+                        mode: E::MODE.to_owned(),
+                        query,
+                        result: collected.clone().into(),
+                    })
+                    .await;
+            }
             let mut blocks = to_blocks(&collected);
             let (empty, errors, done) = collected.ended();
             if blocks.is_empty() || (empty && (!errors.is_empty() || !done)) {
@@ -396,6 +417,43 @@ impl InspectJobs {
         ))
     }
 
+    fn start_email(&self, req: JobRequest) -> Result<Job, String> {
+        let inspect = self
+            .state
+            .email_inspect()
+            .ok_or_else(|| EMAIL_OFF.to_string())?
+            .clone();
+        let (domain, dkim_selectors) = crate::pages::email_input(&req.input);
+        let request = EmailInspectRequest {
+            domain,
+            dkim_selectors,
+        };
+        self.state.email_limiter().prune_if_due();
+        let events = match inspect.inspect(
+            &request,
+            req.client,
+            self.state.email_limiter(),
+            self.state.email_slots(),
+        ) {
+            Ok(events) => events,
+            Err(EmailRefusal::RateLimited { retry_after_secs }) => {
+                return Ok(Job::new(Vec::new()).with_gate(Box::pin(async move {
+                    Err(Refusal::RateLimited(Duration::from_secs(retry_after_secs)))
+                })));
+            }
+            Err(other) => return Err(other.to_string()),
+        };
+        Ok(job(
+            "inspection",
+            Protocol::Email,
+            Box::pin(async move {
+                let events: Vec<netray_email::quality::types::SseEvent> =
+                    futures::StreamExt::collect::<Vec<_>>(events).await;
+                measured(netray_email::module::translate(&events))
+            }),
+        ))
+    }
+
     fn start_ip(&self, req: JobRequest) -> Result<Job, String> {
         let ip = self
             .state
@@ -533,35 +591,39 @@ impl InspectJobs {
             .map(str::to_ascii_lowercase)
             .collect();
         let flagged = |name: &str| flags.iter().any(|f| f == name);
+        let store = req
+            .share_key
+            .clone()
+            .map(|key| (self.state.dns_results().clone(), key, req.input.clone()));
 
         let (part, start) = if flagged("trace") {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("trace", rx, blocks::trace_blocks),
+                dns_part("trace", rx, blocks::trace_blocks, store),
                 DnsStart::Trace(tx),
             )
         } else if parsed.dnssec || flagged("dnssec") {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("dnssec", rx, blocks::dnssec_blocks),
+                dns_part("dnssec", rx, blocks::dnssec_blocks, store),
                 DnsStart::Dnssec(tx),
             )
         } else if flagged("compare") {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("compare", rx, blocks::compare_blocks),
+                dns_part("compare", rx, blocks::compare_blocks, store),
                 DnsStart::Compare(tx),
             )
         } else if flagged("auth") {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("authcompare", rx, blocks::authcompare_blocks),
+                dns_part("authcompare", rx, blocks::authcompare_blocks, store),
                 DnsStart::AuthCompare(tx),
             )
         } else {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("query", rx, blocks::query_blocks),
+                dns_part("query", rx, blocks::query_blocks, store),
                 DnsStart::Query(tx),
             )
         };
@@ -584,7 +646,17 @@ impl InspectJobs {
                         let outcome = (&mut run.0)
                             .await
                             .map_err(|e| format!("the DNS band failed: {e}"))?;
-                        measured(outcome).map(|(_, checks)| checks)
+                        // The band judges the registrable domain; the page shows the queried
+                        // name's records, so the checks link none of them.
+                        measured(outcome).map(|(_, checks)| {
+                            checks
+                                .into_iter()
+                                .map(|c| CheckResult {
+                                    evidence: Vec::new(),
+                                    ..c
+                                })
+                                .collect()
+                        })
                     }),
                     Some((band_tx, module, domain, req.deadline)),
                 ),
@@ -604,13 +676,62 @@ impl InspectJobs {
     }
 }
 
+impl InspectJobs {
+    /// A fresh key for a run's share link, in the DNS result cache's key shape.
+    pub(crate) fn share_key() -> String {
+        DnsResultCache::fresh_key()
+    }
+
+    pub(crate) fn is_share_key(key: &str) -> bool {
+        netray_dns::is_key(key)
+    }
+
+    /// The DNS shell's autocomplete tables, each space-separated: the record types, the flags
+    /// with their `+`, the provider and group names.
+    pub(crate) fn dns_tables() -> (String, String, String) {
+        let types = netray_dns::record_types()
+            .record_types
+            .into_iter()
+            .map(|t| t.name)
+            .collect::<Vec<_>>()
+            .join(" ");
+        let flags = netray_dns::parser::FLAGS
+            .iter()
+            .map(|f| format!("+{f}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let catalogue = netray_dns::server_catalogue();
+        let servers = catalogue
+            .providers
+            .iter()
+            .map(|p| p.name().to_string())
+            .chain(catalogue.groups.into_iter().map(|g| g.name))
+            .collect::<Vec<_>>()
+            .join(" ");
+        (types, flags, servers)
+    }
+}
+
+impl DnsResults for DnsResultCache {
+    fn result<'a>(&'a self, key: &'a str) -> BoxFuture<'a, Option<CachedDns>> {
+        Box::pin(async move {
+            let cached = self.get(key).await?;
+            Some(CachedDns {
+                blocks: cached.result.blocks(),
+                query: cached.query,
+                mode: cached.mode,
+            })
+        })
+    }
+}
+
 impl InspectorJobs for InspectJobs {
     fn admit(&self, tool: Tool, client: IpAddr, input: &str) -> Result<(), Duration> {
         match tool {
             Tool::Tls => self.admit_tls(client, input),
             Tool::Http => self.admit_http(client, input),
             Tool::Ip => self.admit_ip(client, input),
-            Tool::Dns => Ok(()),
+            Tool::Dns | Tool::Email => Ok(()),
         }
     }
 
@@ -619,7 +740,67 @@ impl InspectorJobs for InspectJobs {
             Tool::Tls => self.start_tls(req),
             Tool::Http => self.start_http(req),
             Tool::Ip => self.start_ip(req),
+            Tool::Email => self.start_email(req),
             Tool::Dns => self.start_dns(req),
         }
     }
+
+    fn enrich(&self, addrs: Vec<IpAddr>) -> BoxFuture<'static, Vec<(IpAddr, Vec<Badge>)>> {
+        let Some(ip) = self.state.ip_lookup().cloned() else {
+            return Box::pin(async { Vec::new() });
+        };
+        let mut unique: Vec<IpAddr> = Vec::new();
+        for addr in addrs {
+            if !unique.contains(&addr) {
+                unique.push(addr);
+            }
+        }
+        Box::pin(async move {
+            let lookups = unique.into_iter().map(|addr| {
+                let ip = ip.clone();
+                async move { (addr, ip.lookup(addr).await) }
+            });
+            futures::future::join_all(lookups)
+                .await
+                .into_iter()
+                .filter_map(|(addr, found)| {
+                    let badges = badges(&found.ok()?.network);
+                    (!badges.is_empty()).then_some((addr, badges))
+                })
+                .collect()
+        })
+    }
+}
+
+/// The badges of a looked-up address: organisation, network type, then the threat flags.
+fn badges(network: &netray_ip::backend::Network) -> Vec<Badge> {
+    let muted = |label: &str| Badge {
+        label: label.to_string(),
+        tone: BadgeTone::Muted,
+    };
+    let mut out: Vec<Badge> = network.org.iter().map(|org| muted(org)).collect();
+    out.extend(
+        // The infrastructure, apart from the threat classification `network_type` holds.
+        match network.infra_type.as_str() {
+            "cloud" => Some("cloud"),
+            "datacenter" => Some("hosting"),
+            "residential" => Some("residential"),
+            _ => None,
+        }
+        .map(muted),
+    );
+    for (flag, label, tone) in [
+        (network.is_tor, "Tor", BadgeTone::Fail),
+        (network.is_vpn, "VPN", BadgeTone::Warn),
+        (network.is_spamhaus, "Spamhaus", BadgeTone::Fail),
+        (network.is_c2, "C2", BadgeTone::Fail),
+    ] {
+        if flag {
+            out.push(Badge {
+                label: label.to_string(),
+                tone,
+            });
+        }
+    }
+    out
 }

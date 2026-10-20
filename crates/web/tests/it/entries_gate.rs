@@ -96,6 +96,8 @@ fn page_templates_extend_base_and_use_only_component_macros() {
     sheets.sort();
     let mut want: Vec<String> = SHEETS.iter().map(|s| format!("{s}.css")).collect();
     want.push("pages.css".to_string());
+    // v2-inspector-shell requirement 1: the inspector shell macro brings its own stylesheet.
+    want.push("inspector_shell.css".to_string());
     want.sort();
     assert_eq!(sheets, want);
 }

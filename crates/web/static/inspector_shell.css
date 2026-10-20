@@ -1,0 +1,447 @@
+.page-inspector {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.page-inspector__sep {
+  color: var(--color-muted);
+}
+.page-inspector__name {
+  color: var(--color-ink);
+  font-size: var(--font-size-inspector);
+  font-weight: 650;
+}
+.inspector-shell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.inspector-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: -10px 0 12px;
+  border-bottom: var(--line-hair) solid var(--color-line);
+}
+.inspector-tabs__tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 8px 14px 8px 20px;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+  letter-spacing: var(--font-tracking-caps);
+  text-decoration: none;
+  text-transform: uppercase;
+}
+.inspector-tabs__tab[aria-current="page"] {
+  color: var(--color-ink);
+  font-weight: 700;
+}
+/* The marker of the current inspector: a bar left of the label, down to the rule (board G). */
+.inspector-tabs__tab[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 6px;
+  bottom: -1px;
+  width: var(--line-marker);
+  background: var(--color-ink);
+}
+.inspector-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.inspector-examples__chip {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  text-decoration: none;
+}
+.inspector-examples__chip:hover {
+  color: var(--color-ink);
+}
+.inspector-run__head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+/* Back link, share and export sit together at the end of the run title's line. */
+.inspector-run__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-inline-start: auto;
+}
+.inspector-run__target {
+  margin: 0;
+  font-size: var(--font-size-target);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.inspector-backlink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+  text-decoration: none;
+}
+.inspector-backlink:hover {
+  color: var(--color-ink);
+}
+.inspector-backlink__grade {
+  color: var(--color-ink);
+  font-weight: var(--font-weight-bold);
+}
+/* A section's h2 stands above its content; the evidence blocks are the cards (board G). */
+.inspector-section {
+  margin-top: 32px;
+}
+.inspector-section > h2::first-letter {
+  text-transform: uppercase;
+}
+.inspector-section h2 {
+  margin: 0 0 12px;
+  font-size: var(--font-size-h2);
+  font-weight: 650;
+}
+/* The band scrolls inside its column when its named lines need more room than the page gives. */
+.inspector-band {
+  margin: 0;
+  overflow-x: auto;
+}
+.inspector-band__inner {
+  width: max-content;
+  min-width: 100%;
+}
+.inspector-band__lines {
+  display: grid;
+  grid-auto-columns: minmax(40px, 1fr);
+  grid-auto-flow: column;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.inspector-band__line {
+  display: flex;
+  flex-direction: column;
+  min-width: min-content;
+  gap: 0;
+  padding: 0 2px;
+  text-align: center;
+}
+.inspector-band__short {
+  /* centred on its column, free to spread over its neighbours'; alternate lines use two rows */
+  display: flex;
+  justify-content: center;
+  width: 0;
+  margin: 0 auto;
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  line-height: 16px;
+  white-space: nowrap;
+}
+/* Even lines put their code on the codes' row and their name on a third row below. */
+.inspector-band__line:nth-child(even) {
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+  padding-top: 16px;
+}
+.inspector-band__line[data-tone="warn"] .inspector-band__short {
+  color: var(--status-warn-text);
+  font-weight: 700;
+}
+.inspector-band__line[data-tone="fail"] .inspector-band__short {
+  color: var(--status-fail-text);
+  font-weight: 700;
+}
+.inspector-band__code {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-band-code);
+  line-height: 16px;
+}
+.inspector-band__caption {
+  margin-top: var(--space-3);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+}
+.inspector-checks .inspector-checks__title {
+  display: inline;
+  margin: 0;
+}
+.inspector-checks__meta {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+.inspector-share__copy {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-max);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.inspector-share__copy:hover {
+  color: var(--color-ink);
+}
+.inspector-share__copy[hidden] {
+  display: none;
+}
+.inspector-export {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.inspector-export__copy,
+.inspector-export__download {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-max);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.inspector-export__copy:hover,
+.inspector-export__download:hover {
+  color: var(--color-ink);
+}
+.inspector-export__copy[hidden],
+.inspector-export__download[hidden] {
+  display: none;
+}
+.inspector-export__copy:disabled,
+.inspector-export__download:disabled {
+  color: var(--color-muted);
+  cursor: default;
+  opacity: 0.5;
+}
+.inspector-export__status {
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+}
+.inspector-suggest {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  margin: var(--space-1) 0 0;
+  padding: var(--space-1) 0;
+  background: var(--color-surface);
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  list-style: none;
+}
+.inspector-suggest[hidden] {
+  display: none;
+}
+.inspector-suggest [role="option"] {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  cursor: pointer;
+}
+.inspector-suggest [role="option"][aria-selected="true"] {
+  background: var(--color-bg);
+}
+.inspector-notice {
+  margin: 0 0 var(--space-3);
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+}
+.inspector-tabs .inspector-help__open {
+  margin-inline-start: auto;
+  min-width: 44px;
+  min-height: 44px;
+  background: transparent;
+  border: 0;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+  cursor: pointer;
+}
+.inspector-help__open:hover {
+  color: var(--color-ink);
+}
+.inspector-help__open[hidden] {
+  display: none;
+}
+.inspector-help:not([open]) {
+  display: none;
+}
+.inspector-help {
+  box-sizing: border-box;
+  width: min(640px, calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100vh - 2 * var(--space-4));
+  padding: var(--space-5);
+  overflow-y: auto;
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+.inspector-help::backdrop {
+  background: var(--color-bg);
+  opacity: 0.8;
+}
+.inspector-help h2 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-strong);
+}
+.inspector-help h3 {
+  margin: var(--space-4) 0 var(--space-2);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-strong);
+  letter-spacing: var(--font-tracking-caps);
+  text-transform: uppercase;
+}
+.inspector-help p {
+  margin: 0 0 var(--space-2);
+}
+.inspector-help__examples,
+.inspector-help__resolvers,
+.inspector-help__flags,
+.inspector-help__types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+}
+.inspector-help__keys {
+  border-collapse: collapse;
+  font-size: var(--font-size-small);
+}
+.inspector-help__keys th,
+.inspector-help__keys td {
+  padding: var(--space-1) var(--space-3) var(--space-1) 0;
+  text-align: start;
+  font-weight: inherit;
+  vertical-align: baseline;
+}
+.inspector-help kbd {
+  padding: 0 var(--space-1);
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+.inspector-help__guide {
+  margin-top: var(--space-4);
+}
+.inspector-help__close {
+  min-width: 44px;
+  min-height: 44px;
+  margin-top: var(--space-4);
+  padding: 0 var(--space-3);
+  background: transparent;
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  color: var(--color-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.inspector-help__close:hover {
+  color: var(--color-ink);
+}
+.inspector-related {
+  margin-top: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  border: var(--line-hair) dashed var(--color-line);
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+}
+.inspector-related__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-inline-start: var(--space-2);
+  color: var(--color-ink);
+}
+/* The DNS builder's choices: each label is the tap target of its checkbox or radio. */
+.inspector-shell fieldset label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  margin-inline-end: var(--space-3);
+}
+
+/* The DNS builder continues the input card. */
+.inspector-shell fieldset {
+  margin: 0;
+  padding: 12px 18px;
+  border: var(--line-hair) solid var(--color-line);
+  border-top: 0;
+  background: var(--color-surface);
+  font-size: var(--font-size-small);
+}
+.inspector-shell fieldset legend {
+  float: left;
+  width: 100%;
+  margin-bottom: var(--space-2);
+  color: var(--color-muted);
+  font-size: var(--font-size-label);
+}
+@media (max-width: 480px) {
+  .inspector-tabs__tab {
+    min-height: 44px;
+  }
+  .page-inspector__sep {
+    display: none;
+  }
+  /* The tab row keeps one line and scrolls inside, so the help button stays in it. */
+  .inspector-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .inspector-run__actions {
+    margin-inline-start: 0;
+  }
+}
+.inspector-shell fieldset select {
+  min-height: 44px;
+}

@@ -50,9 +50,13 @@ async fn get(uri: &str) -> String {
 
 /// (event name, id, html) per event.
 async fn post(body: &str) -> Vec<(String, String, String)> {
+    post_to("tls", body).await
+}
+
+async fn post_to(tool: &str, body: &str) -> Vec<(String, String, String)> {
     let resp = app()
         .oneshot(
-            Request::post("/inspect/tls/run")
+            Request::post(format!("/inspect/{tool}/run"))
                 .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
                 .body(Body::from(body.to_owned()))
                 .unwrap(),
@@ -81,47 +85,53 @@ async fn post(body: &str) -> Vec<(String, String, String)> {
     events
 }
 
-/// The `inspect-backlink` fragment of a stream, after the first `inspect-result` fragment.
+/// The back link of a stream: the `inspector-backlink` anchor of the start fragment (the first
+/// `inspect-result` fragment), or "" when it has none (v2-inspector-shell requirement 6).
 fn backlink_html(events: &[(String, String, String)]) -> String {
-    let first = events
+    let start = events
         .iter()
-        .position(|e| e.1 == "inspect-result")
-        .expect("an inspect-result fragment");
-    events[first + 1..]
-        .iter()
-        .find(|e| e.0 == "fragment" && e.1 == "inspect-backlink")
+        .find(|e| e.1 == "inspect-result")
         .map(|e| e.2.clone())
-        .unwrap_or_default()
+        .expect("an inspect-result fragment");
+    match start.find(r#"class="inspector-backlink""#) {
+        Some(at) => {
+            let from = start[..at].rfind("<a").unwrap_or(at);
+            let to = start[at..].find("</a>").map_or(start.len(), |e| at + e + 4);
+            start[from..to].to_string()
+        }
+        None => String::new(),
+    }
 }
 
 #[tokio::test]
 async fn backlink_follows_the_posted_target() {
     let page = get("/inspect/tls").await;
     assert!(
-        page.contains(r#"id="inspect-backlink""#),
+        !page.contains("inspect-backlink") && !page.contains("inspector-backlink"),
         "GET page: {page}"
     );
 
     let html = backlink_html(&post("h=www.example.com").await);
-    assert!(html.contains(r#"id="inspect-backlink""#), "{html}");
     assert!(html.contains(r#"href="/example.com""#), "{html}");
 
     let html = backlink_html(&post("h=192.0.2.1").await);
-    assert!(html.contains(r#"id="inspect-backlink""#), "{html}");
-    assert!(!html.contains("href"), "{html}");
+    assert!(html.is_empty(), "{html}");
 }
 
 #[tokio::test]
 async fn backslash_ends_the_https_authority() {
+    let events = post_to("http", "url=https://bank.example.com%5C@evil.example/").await;
+    let html = backlink_html(&events);
+    assert!(html.contains(r#"href="/example.com""#), "{html}");
     let page = get("/inspect/http?url=https://bank.example.com%5C@evil.example/").await;
-    assert!(page.contains(r#"href="/example.com""#), "{page}");
     assert!(!page.contains("/evil.example"), "{page}");
+    assert!(!html.contains("evil.example"), "{html}");
 }
 
 #[tokio::test]
 async fn percent_encoded_port_is_decoded_before_the_split() {
-    let page = get("/inspect/tls?h=www.example.com%253A443").await;
-    assert!(page.contains(r#"href="/example.com""#), "{page}");
+    let html = backlink_html(&post("h=www.example.com%253A443").await);
+    assert!(html.contains(r#"href="/example.com""#), "{html}");
 }
 
 #[test]

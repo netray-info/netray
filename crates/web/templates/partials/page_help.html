@@ -1,0 +1,10 @@
+<dialog class="inspector-help" id="inspector-help" aria-labelledby="inspector-help-title">
+<h2 id="inspector-help-title">{{ help.title }}</h2>
+<p class="inspector-help__what">{{ help.what }}</p>
+<h3>Keyboard</h3>
+<table class="inspector-help__keys"><tbody>
+{% for (keys, text) in help.keys.iter() %}<tr><th scope="row">{% for key in keys.iter() %}{% if !loop.first %} / {% endif %}<kbd>{{ key }}</kbd>{% endfor %}</th><td>{{ text }}</td></tr>
+{% endfor %}</tbody></table>
+<p class="inspector-help__guide"><a href="/guide/scoring">How the grade is scored &rarr;</a></p>
+<form method="dialog"><button class="inspector-help__close" value="close">Close</button></form>
+</dialog>

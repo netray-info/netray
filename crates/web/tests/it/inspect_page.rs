@@ -78,7 +78,7 @@ async fn c1_each_inspector_page_renders_the_form_without_starting_a_job() {
             "{tool}: no input {field}"
         );
         assert!(
-            body.contains(r#"<div id="inspect-result"></div>"#),
+            body.contains(r#"<div id="inspect-result"><h1 class="visually-hidden">"#),
             "{tool}: {body}"
         );
         assert!(body.contains("<noscript>"), "{tool}: no noscript notice");
@@ -99,18 +99,20 @@ async fn c7_a_query_prefills_the_input_and_autostarts_without_starting_a_job() {
     assert!(body.contains(r#"value="example.com:443""#), "{body}");
     assert!(body.contains(r#"data-stream-autostart="load""#), "{body}");
     assert!(
-        body.contains(r#"<div id="inspect-result"></div>"#),
+        body.contains(r#"<div id="inspect-result"><h1 class="visually-hidden">"#),
         "{body}"
     );
     assert_no_job(&stub, "tls prefill");
 }
 
 #[tokio::test]
-async fn c17_email_has_no_inspector_page() {
+async fn c17_an_unknown_inspector_has_no_page() {
+    // Email has its inspector page since v2-inspector-shell (requirement 24); a tool that is no
+    // inspector still answers the 404 page and starts nothing.
     let (app, stub) = app();
-    let (status, body) = get(&app, "/inspect/email").await;
+    let (status, body) = get(&app, "/inspect/smtp").await;
 
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert!(body.contains("<h1>Nothing here</h1>"), "{body}");
-    assert_no_job(&stub, "email");
+    assert_no_job(&stub, "smtp");
 }

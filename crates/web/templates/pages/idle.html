@@ -1,8 +1,10 @@
 {% extends "base.html" %}
 {% import "components/query_input.html" as c %}
 {% block main %}
+<div data-island="page">
 <h1>Check a domain</h1>
 {% call c::query_input(query) %}{% endcall %}
+</div>
 <p>{% include "partials/tagline.html" %}</p>
 <p>One run covers the DNS, TLS, HTTP, email and IP setup of a domain and keeps the history of its results.</p>
 <p>Try <a href="/example.com">example.com</a> or <a href="/netray.info">netray.info</a>.</p>

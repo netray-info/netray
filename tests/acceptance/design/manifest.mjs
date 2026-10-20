@@ -12,7 +12,7 @@ const DEFAULT_FIXTURES = 'tests/acceptance/fixtures/history';
 const TOP = { required: [], optional: ['export', 'fixtures', 'boards', 'accepted'] };
 const BOARD = {
   required: ['title', 'host', 'path', 'width', 'theme', 'elements'],
-  optional: ['target', 'state'],
+  optional: ['target', 'state', 'wait'],
 };
 const ELEMENT = { required: ['name', 'board', 'page', 'class', 'properties'], optional: [] };
 const ACCEPTED = { required: ['board', 'element', 'property', 'reason'], optional: [] };
@@ -79,7 +79,7 @@ function checkBoard(board, index) {
   const where = `boards[${index}]`;
   if (!isObject(board)) throw new ManifestError(`${where}: must be an object`);
   checkKeys(board, BOARD, where);
-  for (const key of ['title', 'host', 'path', 'theme', 'target', 'state']) checkString(board, key, where);
+  for (const key of ['title', 'host', 'path', 'theme', 'target', 'state', 'wait']) checkString(board, key, where);
   if (!HOSTS.includes(board.host)) {
     throw new ManifestError(`${where}: host "${board.host}" is not one of ${HOSTS.join(', ')}`);
   }

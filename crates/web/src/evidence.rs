@@ -3,14 +3,16 @@
 
 use askama::Template;
 use netray_engine::catalogue::catalogue;
+use netray_model::CheckResult;
+use netray_model::evidence::EVIDENCE_SCHEMA_VERSION;
 use netray_model::evidence::{Block, BlockId, Fields, Node, Shape, Value};
-use netray_model::run::{Run, SectionKind};
-use netray_model::{Protocol, Status};
+use netray_model::run::{Run, RunCheck, SectionKind};
+use netray_model::{Grade, Protocol, Status};
 
 use crate::compact::{CompactView, compact};
 use crate::components::{
-    CheckRowView, EvidenceBlockView, EvidenceShape, Field, RecordRow, RunLineView, TableColumn,
-    TreeItem,
+    Cell, CheckRowView, EvidenceBlockView, EvidenceShape, Field, RecordRow, RunLineView,
+    TableColumn, TreeItem,
 };
 use crate::entries::view::{epoch_days_to_ymd, status_tone};
 use crate::explore::{ExploreLink, view_link};
@@ -27,12 +29,56 @@ pub fn format_value(value: &Value) -> String {
     }
 }
 
-fn fields(pairs: &Fields) -> Vec<Field> {
+/// A short labelled chip beside a value, in a status tone.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Badge {
+    pub label: String,
+    pub tone: BadgeTone,
+}
+
+/// The tone of a badge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BadgeTone {
+    Muted,
+    Warn,
+    Fail,
+}
+
+impl BadgeTone {
+    /// The `data-tone` value.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            BadgeTone::Muted => "muted",
+            BadgeTone::Warn => "warn",
+            BadgeTone::Fail => "fail",
+        }
+    }
+}
+
+/// What a value carries beside its text: a link and badges.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Decoration {
+    pub href: Option<String>,
+    pub badges: Vec<Badge>,
+}
+
+/// The decoration of a value of a block, by the block, the value's key and the value.
+pub type Decorate<'a> = &'a dyn Fn(&BlockId, &str, &Value) -> Option<Decoration>;
+
+fn cell(id: &BlockId, key: &str, value: &Value, decorate: Decorate<'_>) -> Cell {
+    let text = format_value(value);
+    match decorate(id, key, value) {
+        Some(Decoration { href, badges }) => Cell { text, href, badges },
+        None => Cell::from(text),
+    }
+}
+
+fn fields(id: &BlockId, pairs: &Fields, decorate: Decorate<'_>) -> Vec<Field> {
     pairs
         .iter()
         .map(|(key, value)| Field {
             key: key.clone(),
-            value: format_value(value),
+            value: cell(id, key, value, decorate),
         })
         .collect()
 }
@@ -52,15 +98,27 @@ fn flatten(node: &Node, depth: u8, out: &mut Vec<TreeItem>) {
 
 /// The view of a block; `feeds` is left empty for the caller.
 pub fn block_view(block: &Block) -> EvidenceBlockView {
+    block_view_with(block, &|_, _, _| None)
+}
+
+/// The view of a block with each value decorated by `decorate`; the key of a record value is
+/// its field (`owner`, `rtype`, `ttl`, `data`), of a table value its column, of a field its key.
+pub fn block_view_with(block: &Block, decorate: Decorate<'_>) -> EvidenceBlockView {
+    let id = &block.id;
     let shape = match &block.shape {
         Shape::Records(records) => EvidenceShape::Records(
             records
                 .iter()
                 .map(|r| RecordRow {
-                    owner: format_value(&r.owner),
-                    rtype: format_value(&r.rtype),
-                    ttl: format_value(&r.ttl),
-                    data: format_value(&r.data),
+                    owner: cell(id, "owner", &r.owner, decorate),
+                    rtype: cell(id, "rtype", &r.rtype, decorate),
+                    ttl: cell(id, "ttl", &r.ttl, decorate),
+                    data: cell(
+                        id,
+                        &format!("data:{}", format_value(&r.rtype)),
+                        &r.data,
+                        decorate,
+                    ),
                 })
                 .collect(),
         ),
@@ -74,16 +132,29 @@ pub fn block_view(block: &Block) -> EvidenceBlockView {
                 .collect(),
             rows: rows
                 .iter()
-                .map(|row| row.iter().map(format_value).collect())
+                .map(|row| {
+                    columns
+                        .iter()
+                        .map(String::as_str)
+                        .chain(std::iter::repeat(""))
+                        .zip(row)
+                        .map(|(column, value)| cell(id, column, value, decorate))
+                        .collect()
+                })
                 .collect(),
         },
-        Shape::Chain(links) => EvidenceShape::Chain(links.iter().map(fields).collect()),
+        Shape::Chain(links) => EvidenceShape::Chain(
+            links
+                .iter()
+                .map(|link| fields(id, link, decorate))
+                .collect(),
+        ),
         Shape::Tree(root) => {
             let mut items = Vec::new();
             flatten(root, 0, &mut items);
             EvidenceShape::Tree(items)
         }
-        Shape::Fields(pairs) => EvidenceShape::Fields(fields(pairs)),
+        Shape::Fields(pairs) => EvidenceShape::Fields(fields(id, pairs, decorate)),
         Shape::Text(text) => EvidenceShape::Text(text.clone()),
     };
     EvidenceBlockView {
@@ -115,11 +186,23 @@ pub fn incomplete_run_line() -> RunLineView {
     }
 }
 
-/// The run line of a live inspector run: not stored.
-pub fn live_run_line() -> RunLineView {
+/// The run title of a live inspector run started at `now` (Unix seconds): not stored.
+pub fn live_run_title(now: i64) -> RunLineView {
     RunLineView {
-        parts: vec!["live".to_string(), "not recorded".to_string()],
+        parts: vec![
+            "live".to_string(),
+            format!("{} UTC", crate::pages::result::views::utc_minute(now)),
+            "not recorded".to_string(),
+        ],
     }
+}
+
+/// The run title of a shared inspector run started at `started` (Unix seconds), when known.
+pub fn shared_run_title(started: Option<i64>) -> RunLineView {
+    let mut parts = vec!["shared".to_string()];
+    parts.extend(started.map(|t| format!("{} UTC", crate::pages::result::views::utc_minute(t))));
+    parts.push("not recorded".to_string());
+    RunLineView { parts }
 }
 
 /// The entry-view URL of a protocol, with the anchor of a block when one is given.
@@ -188,6 +271,39 @@ pub fn entry_section(
             None => format!("#ev-{bid}"),
         },
     )
+}
+
+/// The check rows of a live run that is not stored: one per catalogue check of `protocol`, built
+/// by the stored view's row builder, with every block link on the same page.
+pub fn live_rows(checks: &[CheckResult], blocks: &[Block], protocol: Protocol) -> Vec<EvidenceRow> {
+    let run = Run {
+        profile_version: 0,
+        engine_version: String::new(),
+        evidence_schema_version: EVIDENCE_SCHEMA_VERSION,
+        grade: Grade::Incomplete,
+        complete: false,
+        sections: Vec::new(),
+        checks: checks
+            .iter()
+            .map(|c| RunCheck {
+                id: c.id.clone(),
+                status: c.status,
+                findings: c.findings.clone(),
+                // Only blocks this page shows: a link to a block that is not here leads nowhere.
+                evidence: c
+                    .evidence
+                    .iter()
+                    .filter(|bid| blocks.iter().any(|b| &b.id == *bid))
+                    .cloned()
+                    .collect(),
+            })
+            .collect(),
+        blocks: blocks.to_vec(),
+    };
+    build_section(&run, protocol, RunLineView { parts: vec![] }, |bid| {
+        format!("#ev-{bid}")
+    })
+    .rows
 }
 
 fn owner_protocol(bid: &BlockId) -> Option<Protocol> {
@@ -261,19 +377,20 @@ fn build_section(
                 body,
                 fix: flagged.then(|| spec.fix_hint.clone()),
                 meta: Some(meta_text(spec)),
-                evidence_href: None,
+                evidence_href: links.first().map(|l: &BlockLink| l.href.clone()),
                 guide_href: Some(spec.guide.clone()),
             },
             links,
         });
     }
 
+    let decorate = crate::links::decorate(&[]);
     let blocks = run
         .blocks
         .iter()
         .filter(|b| b.id.module() == owner)
         .map(|b| {
-            let mut view = block_view(b);
+            let mut view = block_view_with(b, &decorate);
             for (bid, short) in &feeds {
                 if **bid == b.id && !view.feeds.contains(short) {
                     view.feeds.push(short.clone());
@@ -357,12 +474,13 @@ pub fn panel(run: &Run, protocol: Protocol, domain: &str, entry_id: Option<&str>
             (None, SectionKind::TimedOut) => "timed out, nothing measured".to_string(),
             (None, _) => "incomplete, nothing measured".to_string(),
         });
+    let decorate = crate::links::decorate(&[]);
     PanelView {
         blocks: run
             .blocks
             .iter()
             .filter(|b| b.id.module() == owner)
-            .map(block_view)
+            .map(|b| block_view_with(b, &decorate))
             .collect(),
         compact,
         feeds,

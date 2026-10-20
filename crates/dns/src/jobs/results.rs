@@ -30,6 +30,20 @@ pub enum DnsCachedJob {
     Check(DnsCheckResult),
 }
 
+impl DnsCachedJob {
+    /// The evidence blocks of the result, as the job's own mapping builds them.
+    pub fn blocks(&self) -> Vec<Block> {
+        match self {
+            Self::Query(r) => super::blocks::query_blocks(r),
+            Self::Compare(r) => super::blocks::compare_blocks(r),
+            Self::AuthCompare(r) => super::blocks::authcompare_blocks(r),
+            Self::Trace(r) => super::blocks::trace_blocks(r),
+            Self::Dnssec(r) => super::blocks::dnssec_blocks(r),
+            Self::Check(c) => c.blocks.clone(),
+        }
+    }
+}
+
 /// One check of the section; findings and evidence are always present, empty or not.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct DnsCheckEntry {

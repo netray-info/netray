@@ -4,6 +4,8 @@
 
 use askama::Template;
 
+use crate::evidence::Badge;
+
 /// The visual tone of a mark; not a check status, which belongs to `netray-model`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tone {
@@ -46,20 +48,43 @@ impl SegmentState {
     }
 }
 
+/// One value of an evidence block: its text, the inspector page it links to and its badges.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Cell {
+    pub text: String,
+    pub href: Option<String>,
+    pub badges: Vec<Badge>,
+}
+
+impl From<String> for Cell {
+    fn from(text: String) -> Self {
+        Cell {
+            text,
+            ..Cell::default()
+        }
+    }
+}
+
+impl From<&str> for Cell {
+    fn from(text: &str) -> Self {
+        Cell::from(text.to_string())
+    }
+}
+
 /// A DNS record row of an evidence block.
 #[derive(Debug, Clone)]
 pub struct RecordRow {
-    pub owner: String,
-    pub rtype: String,
-    pub ttl: String,
-    pub data: String,
+    pub owner: Cell,
+    pub rtype: Cell,
+    pub ttl: Cell,
+    pub data: Cell,
 }
 
 /// A key and its value.
 #[derive(Debug, Clone)]
 pub struct Field {
     pub key: String,
-    pub value: String,
+    pub value: Cell,
 }
 
 /// A table column header; `key` marks the column whose value identifies a row.
@@ -101,7 +126,7 @@ pub enum EvidenceShape {
     Records(Vec<RecordRow>),
     Table {
         columns: Vec<TableColumn>,
-        rows: Vec<Vec<String>>,
+        rows: Vec<Vec<Cell>>,
     },
     Chain(Vec<Vec<Field>>),
     Tree(Vec<TreeItem>),

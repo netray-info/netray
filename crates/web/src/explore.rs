@@ -6,7 +6,7 @@ use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 
 use crate::evidence::format_value;
 
-const COMPONENT: &AsciiSet = &NON_ALPHANUMERIC
+pub(crate) const COMPONENT: &AsciiSet = &NON_ALPHANUMERIC
     .remove(b'-')
     .remove(b'.')
     .remove(b'_')

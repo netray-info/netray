@@ -68,6 +68,10 @@
 .page-footer a:hover {
   color: var(--color-ink);
 }
+.page-nav a[aria-current="page"] {
+  color: var(--color-ink);
+  font-weight: 600;
+}
 .theme-toggle {
   padding: 0;
   border: 0;
@@ -958,4 +962,46 @@ main td {
   max-width: 100%;
   height: auto;
   border: var(--line-hair) solid var(--color-line);
+}
+.evidence-view__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+}
+.result-hero__actions .inspector-help__open,
+.evidence-view__tools .inspector-help__open {
+  min-width: 44px;
+  min-height: 44px;
+  background: transparent;
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+  cursor: pointer;
+}
+#evidence > .inspector-export {
+  margin: var(--space-2) 0 0;
+}
+/* A check row's links to its blocks: small, under the row's text column. */
+.evidence-section__link {
+  display: inline-block;
+  margin: 0 var(--space-3) var(--space-2) 116px;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+}
+.evidence-section__link + .evidence-section__link {
+  margin-left: 0;
+}
+/* Tap targets at phone width (v2-inspector-shell R29). */
+@media (max-width: 480px) {
+  .evidence-section__link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin-left: 0;
+  }
 }

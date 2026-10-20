@@ -30,7 +30,7 @@ use percent_encoding::utf8_percent_encode;
 use self::views::{Grouping, HardFailView, IssueGroup, Links};
 use super::errors::{LOCATION_SET, query_view, refused_page};
 use super::headers::secure;
-use super::{Frame, page, query_redirect, server_error};
+use super::{Frame, PageHelp, export_slot, page, query_redirect, server_error};
 use crate::api::DomainRuns;
 use crate::components::{
     self, CheckRowView, DiffBlockView, EvidenceShape, GradeView, GroupingOption,
@@ -39,6 +39,7 @@ use crate::components::{
 };
 use crate::entries::view::{grade_letter, grade_tone};
 use crate::evidence;
+use crate::export::{self, ExportInput};
 use crate::spectrum::{self, RunInput};
 
 /// The handler a request for a segment that is not a domain goes to.
@@ -340,6 +341,32 @@ fn full_page(
     result_page(status, cache_control, domain, state_word, parts)
 }
 
+/// The export slot a run's export fragment fills.
+const EXPORT_PLACEHOLDER: &str =
+    r#"<div class="inspector-export" id="inspect-export" hidden></div>"#;
+
+/// The export slot of a stored entry: its grade, the score the page shows and every check.
+fn entry_export(entry: &Entry) -> Option<String> {
+    let shown = entry_score(entry).and_then(|score| shown_score(entry, &score));
+    let checks = export::checks_of(&entry.run);
+    let errors = export::section_errors(&entry.run, &PROTOCOLS);
+    let input = ExportInput {
+        target: &entry.domain,
+        title: &[],
+        band: Some((&PROTOCOLS, &checks)),
+        blocks: &entry.run.blocks,
+        errors: &errors,
+    };
+    export_slot(
+        format!("netray-{}-{}", export::slug(&entry.domain), entry.id),
+        Some((
+            export::entry_markdown(&entry.domain, entry.grade, shown, &checks),
+            export::csv(&input),
+            crate::api::entry_json(entry),
+        )),
+    )
+}
+
 /// The result page around rendered `parts`.
 fn result_page(
     status: StatusCode,
@@ -360,6 +387,7 @@ fn result_page(
             state: state_word,
             domain: domain.to_string(),
             parts,
+            help: PageHelp::RESULT,
         },
     )
 }
@@ -524,6 +552,8 @@ struct Parts {
     nav: String,
     evidence: Vec<String>,
     passed: String,
+    /// The stored entry's export slot, else the empty placeholder.
+    export: String,
 }
 
 impl Parts {
@@ -546,6 +576,7 @@ impl Parts {
         out.push(("evidence-nav".to_string(), self.nav.as_str()));
         out.push(("evidence-meta".to_string(), self.meta.as_str()));
         out.push(("passed".to_string(), self.passed.as_str()));
+        out.push(("inspect-export".to_string(), self.export.as_str()));
         if self.recheck {
             out.push(("recheck-button".to_string(), self.button.as_str()));
         }
@@ -589,7 +620,11 @@ fn stored_parts(
     if let Some(run_line) = run_line {
         shown.run_line = run_line;
     }
-    assemble(domain, autostart, shown, selectors)
+    let mut parts = assemble(domain, autostart, shown, selectors)?;
+    if let Some(export) = entries.first().and_then(entry_export) {
+        parts.export = export;
+    }
+    Some(parts)
 }
 
 fn grade_view(grade: Grade, score: Option<u8>) -> GradeView {
@@ -1498,6 +1533,7 @@ fn assemble(domain: &str, autostart: bool, shown: Shown, selectors: Option<&str>
         nav,
         evidence,
         passed,
+        export: EXPORT_PLACEHOLDER.to_string(),
     })
 }
 
@@ -1517,6 +1553,7 @@ struct ResultPage {
     domain: String,
     state: &'static str,
     parts: Parts,
+    help: PageHelp,
 }
 
 #[derive(Template)]

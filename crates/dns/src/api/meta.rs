@@ -93,6 +93,12 @@ pub struct ServerInfo {
     configs: Vec<ServerConfigInfo>,
 }
 
+impl ServerInfo {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct ServerConfigInfo {
     /// Human-readable string representation (e.g. "udp:1.1.1.1:53,name=Cloudflare 1").

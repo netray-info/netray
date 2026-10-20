@@ -16,11 +16,11 @@
 <body>
 {% block header %}<header class="page-header">
 <a href="/"><img src="/static/logo.svg" alt="netray"></a>
-<span class="page-tagline">{% include "partials/header_tagline.html" %}</span>
+{% block header_inspector %}{% endblock %}{% block header_tagline %}<span class="page-tagline">{% include "partials/header_tagline.html" %}</span>{% endblock %}
 <details class="page-menu">
 <summary class="page-menu__button" aria-label="Menu"><span class="page-menu__bar"></span><span class="page-menu__bar"></span><span class="page-menu__bar"></span></summary>
 <nav class="page-nav">
-<a href="/inspect/dns">Inspectors</a>
+{% block nav_inspectors %}<a href="/inspect/dns">Inspectors</a>{% endblock %}
 <a href="/guide/">Guides</a>
 <a href="/api/v1/docs">API</a>
 <a href="/status">Status</a>

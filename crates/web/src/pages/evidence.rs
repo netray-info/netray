@@ -12,17 +12,19 @@ use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use netray_model::Protocol;
+use netray_model::evidence::Block;
 use netray_store::{Entry, HistoryStore};
 use percent_encoding::utf8_percent_encode;
 
 use super::errors::LOCATION_SET;
 use super::headers::secure;
-use super::{Frame, not_found, page, server_error};
+use super::{Frame, PageHelp, export_slot, not_found, page, server_error};
 use crate::entries::V1Lookup;
 use crate::entries::render::gone;
 use crate::entries::well_formed;
 use crate::evidence::{entry_section, render_section};
 use crate::explore::{ExploreLink, view_links};
+use crate::export::{self, ExportInput};
 
 #[derive(Clone)]
 pub struct EvidenceDeps {
@@ -39,6 +41,8 @@ struct EvidencePage {
     protocol: &'static str,
     section: Option<String>,
     links: Vec<ExploreLink>,
+    help: PageHelp,
+    export: Option<String>,
 }
 
 const PROTOCOLS: [Protocol; 5] = [
@@ -73,6 +77,7 @@ fn view(entry: &Entry, protocol: Protocol, cache_control: &'static str) -> Respo
         return server_error();
     };
     let title = format!("{} · {}", entry.domain, protocol.as_str());
+    let export = view_export(entry, protocol, &title);
     page(
         StatusCode::OK,
         cache_control,
@@ -83,11 +88,47 @@ fn view(entry: &Entry, protocol: Protocol, cache_control: &'static str) -> Respo
                 &format!("/r/{}/{}", entry.id, protocol.as_str()),
             ),
             domain: entry.domain.clone(),
-            home_href: String::new(),
+            // The re-check form posts to the domain's run route (requirement 25: `r` re-checks).
+            home_href: format!("/{}", utf8_percent_encode(&entry.domain, LOCATION_SET)),
             protocol: protocol.as_str(),
             section: Some(section),
             links: view_links(protocol, &entry.domain, &entry.run.blocks),
+            help: PageHelp::EVIDENCE,
+            export,
         },
+    )
+}
+
+/// The export slot of one protocol of a stored entry: its checks, its blocks and the entry.
+fn view_export(entry: &Entry, protocol: Protocol, target: &str) -> Option<String> {
+    let checks = export::checks_of(&entry.run);
+    let blocks: Vec<Block> = entry
+        .run
+        .blocks
+        .iter()
+        .filter(|b| b.id.module() == protocol.as_str())
+        .cloned()
+        .collect();
+    let errors = export::section_errors(&entry.run, &[protocol]);
+    let input = ExportInput {
+        target,
+        title: &[],
+        band: Some((&[protocol], &checks)),
+        blocks: &blocks,
+        errors: &errors,
+    };
+    export_slot(
+        format!(
+            "netray-{}-{}-{}",
+            export::slug(&entry.domain),
+            protocol.as_str(),
+            entry.id
+        ),
+        Some((
+            export::markdown(&input),
+            export::csv(&input),
+            crate::api::entry_json(entry),
+        )),
     )
 }
 
@@ -122,6 +163,8 @@ async fn latest(
                 protocol: protocol.as_str(),
                 section: None,
                 links: Vec::new(),
+                help: PageHelp::EVIDENCE,
+                export: None,
             },
         ),
     }

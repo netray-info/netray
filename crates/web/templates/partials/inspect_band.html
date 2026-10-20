@@ -1,3 +1,18 @@
+{% import "components/check_row.html" as check_row %}
 <div id="inspect-band">
-{% if let Some(html) = html %}{{ html|safe }}{% else %}<p>{{ text }}</p>{% endif %}
+{% if let Some(band) = band %}<figure class="inspector-band">
+<div class="inspector-band__inner">
+{{ band.spectrum|safe }}
+<ol class="inspector-band__lines">{% for (short, code, tone) in band.lines %}<li class="inspector-band__line" data-tone="{{ tone }}"><span class="inspector-band__short">{{ short }}</span> <span class="inspector-band__code">{{ code }}</span></li>{% endfor %}</ol>
+</div>
+<figcaption class="inspector-band__caption">{{ band.caption }}</figcaption>
+</figure>
+<section class="inspector-section inspector-checks" id="inspect-checks">
+<h2 class="inspector-checks__title">{{ band.heading }}</h2>{% if let Some(meta) = band.meta %} <span class="inspector-checks__meta">{{ meta }}</span>{% endif %}
+{% for row in band.rows %}
+{% call check_row::check_row(row.check) %}{% endcall %}
+{% for link in row.links %}<a class="evidence-section__link" href="{{ link.href }}">{{ link.label }}</a>
+{% endfor %}
+{% endfor %}
+</section>{% else %}<p>{{ text }}</p>{% endif %}
 </div>

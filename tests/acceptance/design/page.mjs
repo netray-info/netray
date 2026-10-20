@@ -26,6 +26,11 @@ export async function measurePage(browser, board, baseUrls, outDir) {
     const page = await context.newPage();
     const response = await page.goto(url, { waitUntil: 'load' });
     const status = response?.status() ?? null;
+    // A board whose page fills in after load (an inspector's live run) names the selector that
+    // marks the finished state; a page that never reaches it is measured as it stands.
+    if (board.wait) {
+      await page.waitForSelector(board.wait, { timeout: 60000 }).catch(() => {});
+    }
     await page.evaluate(() =>
       document.fonts.ready.then(
         () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
