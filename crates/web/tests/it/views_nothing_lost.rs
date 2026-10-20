@@ -119,10 +119,15 @@ fn rows() -> Vec<Row> {
             let fields = vec![
                 r.pair("coop", text("same-origin")),
                 r.pair("coep", text("require-corp")),
+                r.pair_shown_as("missing", text("cross-origin-resource-policy"), "missing"),
+            ];
+            Shape::Fields(fields)
+        }),
+        // A header is either received or missing: the second row covers `corp`.
+        Row::new("http.isolation", |r| {
+            let fields = vec![
                 r.pair("corp", text("same-site")),
                 r.pair_shown_as("missing", text("cross-origin-opener-policy"), "missing"),
-                r.pair_shown_as("missing", text("cross-origin-embedder-policy"), "missing"),
-                r.pair_shown_as("missing", text("cross-origin-resource-policy"), "missing"),
             ];
             Shape::Fields(fields)
         }),
@@ -153,19 +158,13 @@ fn c13_claimed_blocks_show_every_registered_value() {
         decorate: &decorate,
         feeds: &feeds,
     };
+    let mut covered: std::collections::BTreeMap<String, BTreeSet<String>> = Default::default();
     for row in rows() {
         let id = row.block.id.to_string();
-
-        let registered: BTreeSet<String> = register
-            .keys
-            .iter()
-            .filter(|(block, _, _)| *block == id)
-            .map(|(_, key, _)| key.to_string())
-            .collect();
-        assert_eq!(
-            row.keys, registered,
-            "{id}: fixture must hold every registered key"
-        );
+        covered
+            .entry(id.clone())
+            .or_default()
+            .extend(row.keys.iter().cloned());
 
         let html = render(&row.block, &ctx)
             .unwrap_or_else(|| panic!("{id}: the view must claim a block of registered keys"));
@@ -175,5 +174,18 @@ fn c13_claimed_blocks_show_every_registered_value() {
                 "{id}: {needle:?} missing in: {html}"
             );
         }
+    }
+    // The rows of one block together hold every registered key.
+    for (id, keys) in covered {
+        let registered: BTreeSet<String> = register
+            .keys
+            .iter()
+            .filter(|(block, _, _)| *block == id)
+            .map(|(_, key, _)| key.to_string())
+            .collect();
+        assert_eq!(
+            keys, registered,
+            "{id}: fixtures must hold every registered key"
+        );
     }
 }

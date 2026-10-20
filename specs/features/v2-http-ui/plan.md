@@ -75,3 +75,20 @@ or `pages.css`). C2, C4, C9, C10 already pass (the HSTS view of Phase 1).
    `templates/partials/csp_view.html`; `server` (Fields claim on the eight keys, facts grid with
    labels, `protocol-view__note` "Inspection took <display duration>", no tone).
 4. `pages/views/mod.rs`: a tree claim helper if needed beside `claim`.
+
+## Phase 3 — Caching, CDN and isolation views
+
+### Groups
+
+G1: C1–C12 (one group: `pages/views/http.rs` and `pages.css`). C4 and C12 already pass (exports
+never read the views).
+
+### Plan
+
+1. `pages/views/http.rs`: `caching` (claim on the seven keys; cells Cache-Control chips, max-age
+   via `seconds`, ETag plus "weak", Last-Modified through the evidence cell for the `<time>`, Vary
+   chips, Age via `seconds`; "not set"; an empty block renders `protocol-view__empty` "No caching
+   headers"), `cdn` (Provider, Cache status when present, Indicators chips when any), `isolation`
+   (three fixed cells; COOP toned by `http.coop`; COEP and CORP value plus "present" or "missing",
+   no tone; `protocol-view__note` "COEP and CORP are not part of the grade.").
+2. `pages.css`: `.protocol-view__empty` (muted).

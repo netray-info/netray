@@ -109,3 +109,26 @@ fn c10_a_block_with_an_unknown_key_is_not_claimed() {
     let b = block(vec![("coop", "same-origin"), ("rp", "x")]);
     assert_eq!(render_with(&b, None), None);
 }
+
+#[test]
+fn a_header_both_received_and_missing_is_not_claimed() {
+    use netray_model::evidence::{Block, BlockId, Shape, Value};
+    use netray_web::pages::views::{ViewContext, render};
+    let block = Block {
+        id: BlockId::parse("http.isolation").unwrap(),
+        title: "Cross-origin isolation".into(),
+        shape: Shape::Fields(vec![
+            ("coop".into(), Value::Text("same-origin".into())),
+            (
+                "missing".into(),
+                Value::Text("cross-origin-opener-policy".into()),
+            ),
+        ]),
+    };
+    let ctx = ViewContext {
+        statuses: &[],
+        decorate: &|_, _, _| None,
+        feeds: &[],
+    };
+    assert!(render(&block, &ctx).is_none());
+}

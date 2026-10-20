@@ -1031,6 +1031,11 @@ main td {
   color: var(--color-muted);
   font-size: var(--font-size-caption);
 }
+.protocol-view__empty {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+}
 .protocol-view__feeds {
   margin: var(--space-3) 0 0;
   color: var(--color-muted);

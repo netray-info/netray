@@ -153,9 +153,10 @@ Closes inventory rows 4.12, 4.23, 4.25, 4.26, 4.29, 4.30, 4.32 (finding "set-coo
     display duration of `inspection_ms`, no colour. A stored `response_ms` is not claimed (generic
     block, labelled "response"). (4.12, operator decision)
 11. **Caching view.** `http.caching` renders as a facts grid "Caching": Cache-Control directives
-    (chips in received order), max-age (as requirement 9), ETag (the value; a weak ETag adds the
-    word "weak"), Last-Modified (requirement 6), Vary (chips), Age (as requirement 9). An absent
-    fact reads "not set"; an empty block reads the one line "No caching headers". (4.29)
+    (chips in the stored order, plus `max-age=<n>` when the block holds one; "none recorded" when it
+    holds neither), max-age (as requirement 9), ETag (the value; a weak ETag adds the word
+    "weak"), Last-Modified (requirement 6), Vary (chips), Age (as requirement 9). Another absent
+    fact reads "not set"; an empty block reads the one line "No caching headers recorded". (4.29)
 12. **CDN view.** `http.cdn` renders as a facts grid "CDN": provider, cache status (when
     received), indicators (header names as chips). Without the block nothing renders. (4.30)
 13. **Isolation view.** `http.isolation` renders as a facts grid "Cross-origin isolation" with
@@ -239,7 +240,7 @@ GIVEN the CSP, HSTS and server fixtures with every registered key WHEN the nothi
 
 GIVEN Cache-Control `public, max-age=3600, must-revalidate`, ETag `W/"abc"`, Last-Modified 2024-01-01, Vary `Accept-Encoding, Accept-Language`, Age 42 WHEN the caching view renders THEN it shows chips public and must-revalidate, max-age "1 h (3600 s)", ETag `W/"abc"` with "weak", "2024-01-01 00:00 UTC", two Vary chips and Age "42 s".
 GIVEN `http.caching` with only an ETag WHEN rendered THEN Last-Modified, Vary and Age read "not set".
-GIVEN an empty `http.caching` WHEN rendered THEN one line reads "No caching headers".
+GIVEN an empty `http.caching` WHEN rendered THEN one line reads "No caching headers recorded".
 GIVEN `http.cdn` with provider Cloudflare, cache status HIT and two indicators WHEN rendered THEN the grid shows all three facts; GIVEN no block THEN no CDN view.
 GIVEN `http.isolation` with coop `same-origin`, two missing and the `http.coop` check passing WHEN rendered THEN COOP shows "same-origin" with `data-tone="pass"`, COEP and CORP show "missing" without a tone, and the note "COEP and CORP are not part of the grade." follows.
 GIVEN `http.isolation` with corp `same-site` WHEN rendered THEN CORP shows "same-site" and "present".
@@ -317,6 +318,15 @@ GIVEN `/inspect/http` at 390 px with the 4 kB policy WHEN measured THEN the docu
   a literal `set-cookie#2` beside repeated cookies stays indistinguishable from a repeat, as it is
   in the stored data. Enrichment badges exist only in the inspector's run, so requirement 4's
   "same markup" excludes them (implementer under the operator's autonomy mandate, 2026-10-20).
+- Phase 3 review: the backend keeps six named Cache-Control directives in a fixed order and no
+  trace of other directives, Expires or Pragma, so the view shows the stored order, adds a
+  `max-age=<n>` chip when the block holds a max-age, and says "none recorded" and "No caching headers
+  recorded" rather than claiming a header was absent. Age reads in whole units as max-age does.
+  An isolation block holding a header both received and missing, or an unknown name under
+  `missing`, is not claimed. Proposal for a backend follow-up: record every Cache-Control directive
+  in received order, and an unreadable COOP/COEP/CORP value apart from a missing one (today both
+  are `missing`, while the COOP check's finding names the non-ASCII value) (implementer under the
+  operator's autonomy mandate, 2026-10-20).
 - Board: none for the HTTP inspector; it follows board G's frame. Proposal for the operator: add an
   "HTTP inspector" board (CSP table, caching and isolation cells) to the canvas so later runs of
   `just design-check` measure it (drafting agent, 2026-10-20).

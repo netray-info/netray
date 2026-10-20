@@ -110,3 +110,73 @@ Local lens from this worktree, seeded history; `curl -s http://127.0.0.1:18431/r
 ```
 
 The fixtures hold no `http.csp` block; the CSP view is pinned by `views_http_csp.rs`.
+
+## Phase 3 — Caching, CDN and isolation views
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R11 caching view: directives as chips, max-age, ETag with weak, Last-Modified, Vary, Age, not set, empty line | green | crates/web/tests/it/views_http_caching.rs |
+| C2 | R12 CDN view: provider, cache status, indicators as chips; none without the block | green | crates/web/tests/it/views_http_cdn.rs |
+| C3 | R13 isolation view: COOP with the http.coop tone, COEP and CORP present or missing without tone, the note | green | crates/web/tests/it/views_http_isolation.rs |
+| C4 | R16 exports keep stored keys and raw values | already_implemented | crates/web/tests/it/views_http_export.rs |
+| C5 | S the full caching example reads chips, 1 h (3600 s), W/"abc" weak, 2024-01-01 00:00 UTC, two Vary chips, 42 s | green | crates/web/tests/it/views_http_caching.rs |
+| C6 | S caching with only an ETag reads not set for Last-Modified, Vary and Age | green | crates/web/tests/it/views_http_caching.rs |
+| C7 | S an empty http.caching reads No caching headers | green | crates/web/tests/it/views_http_caching.rs |
+| C8 | S CDN with provider, cache status and two indicators shows all; no block no view | green | crates/web/tests/it/views_http_cdn.rs |
+| C9 | S isolation with coop same-origin, two missing and a passing check reads pass, missing, missing and the note | green | crates/web/tests/it/views_http_isolation.rs |
+| C10 | S isolation with corp same-site reads same-site and present | green | crates/web/tests/it/views_http_isolation.rs |
+| C11 | S nothing lost for caching, CDN and isolation fixtures | green | crates/web/tests/it/views_nothing_lost.rs |
+| C12 | S the JSON export keeps max_age 3600 and etag_weak true | already_implemented | crates/web/tests/it/views_http_export.rs |
+
+
+C4 and C12 passed on the baseline: the exports never read the views.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 2 | sonnet | 50295 | 87 |
+
+### Review
+
+| class | finding | disposition |
+|---|---|---|
+| BLOCKER | Age printed plain seconds, not whole units as requirement 9 | fixed: `seconds()`; test `age_reads_in_the_largest_whole_unit_and_max_age_alone_proves_cache_control` |
+| BLOCKER | Cache-Control read "not set" beside a recorded max-age | fixed: a `max-age=<n>` chip; same test |
+| AMENDMENT | the block records six directives only, so "not set" and "No caching headers" overclaim | requirement 11 amended: "none recorded", "No caching headers recorded"; backend follow-up proposed |
+| AMENDMENT | the backend stores directives in a fixed order, not the received one | requirement 11 amended: stored order |
+| DEFERRED | an unreadable COOP/COEP/CORP value is stored as missing | backend follow-up proposal in the Decision log |
+| NIT | an empty COEP/CORP value reads ", present" | kept: the backend stores the empty value as received |
+| NIT | protected tests changed | trailers on the phase commit |
+
+The nothing-lost fixture for `http.isolation` held every header both received and missing, which
+the backend never writes; it is two consistent rows now, and such a block is refused by the view.
+
+### Behavioural verification
+
+Local lens from this worktree, seeded history; `curl -s http://127.0.0.1:18431/shop.example.com/http`
+(before the review fixes; Age and Cache-Control changed after):
+
+```
+<h3 class="protocol-view__title">Caching</h3> … Cache-Control: public · max-age: 5 min (300 s) · ETag: not set · Last-Modified: <time datetime="2026-10-13T20:08:28Z">2026-10-13 20:08 UTC</time> · Vary: not set · Age: 9 s … Feeds lines: Caching
+<h3 class="protocol-view__title">CDN</h3> … Provider: Generic CDN · Cache status: HIT · Indicators: x-cache
+<h3 class="protocol-view__title">Cross-origin isolation</h3> … COOP same-origin (data-tone="pass") · COEP missing · CORP missing · "COEP and CORP are not part of the grade." … Feeds lines: COOP
+```
+
+## Phase 4 — Slim band, manifest rows and design gate
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R14 the inspector band renders the plate only: no label band, no axis, no region word; 96 px plate | open | |
+| C2 | R17 the manifest holds the descriptor and All evidence rows | open | |
+| C3 | R18 design-check exits 0 and the reader's findings beside board G are closed | open | |
+| C4 | S a finished inspector band holds the plate and line names and no label band, axis or region label | open | |
+| C5 | S the result page's spectrum keeps its label band and axis | open | |
+| C6 | S the slim plate is 96 px tall | open | |
+| C7 | S design-check exits 0 with the descriptor and All evidence rows measured | open | |
+| C8 | S every finding of the reading beside board G is a report row and none stays open | open | |
+| C9 | S /inspect/http at 390 px with the 4 kB policy is not wider than the viewport | open | |
