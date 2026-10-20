@@ -1,7 +1,8 @@
 # Spec: v2-tls-probe-close
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-20
+Finished: 2026-10-20
 
 ## Goal
 
@@ -239,6 +240,11 @@ GIVEN a probe semaphore permit held elsewhere for longer than the handshake time
 - Phase 1 review: the NotSent mapping (STARTTLS, write) is tested at `classify` only; STARTTLS
   runs on 25 and 587, which a test cannot bind unprivileged (implementer under the operator's
   autonomy mandate, 2026-10-19).
+
+- Finish: three CLAUDE.md bullets (no outer timeout at the inner deadline; probe slots per address,
+  no barrier; no edits to another feature's documents); no solutions note, no check to build: each
+  lesson is a judgement no fixed pattern catches (implementer under the operator's autonomy
+  mandate, 2026-10-19).
 
 ## Open decisions
 
