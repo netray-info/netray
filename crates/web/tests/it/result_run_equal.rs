@@ -264,7 +264,7 @@ fn last<'a>(fragments: &'a [(String, String)], id: &str) -> &'a str {
         .1
 }
 
-const END_IDS: [&str; 16] = [
+const END_IDS: [&str; 17] = [
     "result-grade",
     "run-line",
     "progress",
