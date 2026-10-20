@@ -1,7 +1,8 @@
 # Spec: v2-tls-versions-coop
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-20
+Finished: 2026-10-20
 
 ## Goal
 
@@ -289,6 +290,11 @@ GIVEN checkMeta.ts and the catalogue WHEN `test_checkmeta_catalogue.sh` runs THE
 - Lens goldens: `http.coop` warns in every fixture (the spectra fixture carries no COOP header),
   each score drops about 0.6 points and no letter changes; `tls.legacy_versions` and
   `tls.weak_suites` are "not reported" there (fixtures carry no probes) (implementer under the
+  operator's autonomy mandate, 2026-10-19).
+
+- Finish: three CLAUDE.md bullets (a profile that only adds checks re-scores a stored run to its
+  old grade; judge a new graded header in the module, not in spectra's V1 scorer; a new binary
+  path has no network locally); no solutions note, no check to build (implementer under the
   operator's autonomy mandate, 2026-10-19).
 
 ## Open decisions
