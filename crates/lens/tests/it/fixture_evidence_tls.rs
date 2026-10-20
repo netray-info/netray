@@ -184,3 +184,34 @@ async fn rebuild_is_a_fixpoint() {
     );
     assert_eq!(run(&domain, &again).await, first);
 }
+
+/// Review of the range: a lone self-signed certificate is not trusted, but its chain ends at a
+/// self-signed certificate, so `tls.chain_complete` passes as in the module.
+#[tokio::test]
+async fn a_lone_self_signed_certificate_is_untrusted_but_complete() {
+    let (domain, mut blocks) = load();
+    for b in blocks.iter_mut().filter(|b| is_chain(b)) {
+        if let Shape::Chain(items) = &mut b.shape {
+            items.truncate(1);
+            let subject = items[0]
+                .iter()
+                .find(|(k, _)| k == "subject")
+                .map(|(_, v)| v.clone())
+                .unwrap();
+            for f in items[0].iter_mut() {
+                match f.0.as_str() {
+                    "issuer" => f.1 = subject.clone(),
+                    "self_signed" => f.1 = Value::Bool(true),
+                    "position" => f.1 = Value::Text("leaf_self_signed".into()),
+                    _ => {}
+                }
+            }
+            if !items[0].iter().any(|(k, _)| k == "self_signed") {
+                items[0].push(("self_signed".into(), Value::Bool(true)));
+            }
+        }
+    }
+    let outcome = run(&domain, &blocks).await;
+    assert_eq!(status(&outcome, "tls.chain_trusted"), Status::Fail);
+    assert_eq!(status(&outcome, "tls.chain_complete"), Status::Pass);
+}

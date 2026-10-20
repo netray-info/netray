@@ -151,3 +151,19 @@ async fn email_from_evidence_is_a_fixpoint() {
     let second = netray_email::testing::from_evidence(DOMAIN, &email).await;
     assert_eq!(first, second);
 }
+
+/// Review of the range: a recorded run carries no caller selectors, so a key under a selector
+/// the module does not probe on its own (`mail`) is not found, while `default` is.
+#[tokio::test]
+async fn email_from_evidence_finds_only_keys_under_selectors_the_module_probes() {
+    let mut blocks = base_blocks();
+    block_mut(&mut blocks, "email.dkim")["shape"]["data"]["rows"] = json!([[
+        {"t": "text", "v": "mail#1"},
+        {"t": "text", "v": "mail"},
+        {"t": "text", "v": "ok"},
+        {"t": "text", "v": "rsa"},
+        {"t": "text", "v": "2048"}
+    ]]);
+    let mail = check_of(blocks, "email.dkim").await;
+    assert_ne!(mail.status, Status::Pass, "{mail:?}");
+}
