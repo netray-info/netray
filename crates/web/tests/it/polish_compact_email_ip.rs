@@ -119,12 +119,12 @@ async fn c8_the_email_panel_lists_the_mail_records() {
     in_order(
         email,
         &[
-            "<td>MX</td><td>10 mx1.shop.example.com.</td>",
+            "<td>MX</td><td>10 mx1.shop.example.com</td>",
             "<td>SPF</td><td>v=spf1 mx -all</td>",
             "<td>DMARC</td><td>v=DMARC1;p=reject;sp=reject;adkim=s;aspf=s</td>",
             "<td>MTA-STS</td><td>v=STSv1; id=20261018</td>",
             "<td>TLS-RPT</td><td>v=TLSRPTv1; rua=mailto:tlsrpt@shop.example.com</td>",
-            "<td>DKIM</td><td>mail: valid, rsa 2048</td>",
+            "<td>DKIM</td><td>default: ok, rsa 2048</td>",
         ],
     );
     assert!(
@@ -142,7 +142,7 @@ async fn c17_a_sparse_email_run_keeps_the_present_rows_in_order() {
         !id.starts_with("email.") || keep.contains(&id)
     });
     for c in v["checks"].as_array_mut().unwrap() {
-        if let Some(refs) = c["evidence"].as_array_mut() {
+        if let Some(refs) = c.get_mut("evidence").and_then(|e| e.as_array_mut()) {
             refs.retain(|r| {
                 let id = r.as_str().unwrap();
                 !id.starts_with("email.") || keep.contains(&id)
@@ -161,7 +161,7 @@ async fn c17_a_sparse_email_run_keeps_the_present_rows_in_order() {
             "<td>MX</td>",
             "<td>SPF</td>",
             "<td>DMARC</td><td>v=DMARC1;p=reject;sp=reject;adkim=s;aspf=s</td>",
-            "<td>DKIM</td><td>mail: valid, rsa 2048</td>",
+            "<td>DKIM</td><td>default: ok, rsa 2048</td>",
         ],
     );
     for absent in ["<td>MTA-STS</td>", "<td>TLS-RPT</td>", "<td>BIMI</td>"] {

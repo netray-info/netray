@@ -51,6 +51,7 @@ const BLOCK_LINKS: Partial<Record<Protocol, string[]>> = {
     '/inspect/dns?q=example.com.%20DS',
     '/inspect/dns?q=example.com.%20NSEC',
     '/inspect/dns?q=example.com%20NSEC3',
+    '/inspect/dns?q=example.com%20RRSIG',
     '/inspect/dns?q=example.com.%20SOA',
     '/inspect/dns?q=example.com%20SVCB',
     '/inspect/dns?q=example.com.%20TXT',

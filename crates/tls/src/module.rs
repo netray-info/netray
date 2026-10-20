@@ -336,12 +336,21 @@ pub fn translate(resp: &InspectResponse) -> SectionOutcome {
 /// `dns.caa` when it was judged from them, else TLS's own `tls.caa` or the chains, and
 /// `ech_advertised` references the facts' `dns.https`.
 pub fn translate_with_facts(resp: &InspectResponse, facts: &[BlockId]) -> SectionOutcome {
+    translate_with_facts_at(resp, facts, Utc::now())
+}
+
+/// [`translate_with_facts`] judging a certificate's expiry against `now`.
+pub(crate) fn translate_with_facts_at(
+    resp: &InspectResponse,
+    facts: &[BlockId],
+    now: DateTime<Utc>,
+) -> SectionOutcome {
     let port = resp
         .ports
         .iter()
         .find(|p| p.port == 443)
         .or_else(|| resp.ports.first());
-    translate_port(resp, port, facts, false, true)
+    translate_port(resp, port, facts, false, true, now)
 }
 
 /// One outcome per inspected port, in the response's port order: each port is judged like
@@ -362,7 +371,7 @@ pub fn translate_ports(resp: &InspectResponse) -> Vec<(u16, SectionOutcome)> {
                 .map(|p| {
                     (
                         p.port,
-                        translate_port(resp, Some(p), &[], true, p.port == band),
+                        translate_port(resp, Some(p), &[], true, p.port == band, Utc::now()),
                     )
                 })
                 .collect()
@@ -410,6 +419,7 @@ fn translate_port(
     facts: &[BlockId],
     qualify: bool,
     host_wide: bool,
+    now: DateTime<Utc>,
 ) -> SectionOutcome {
     let ips = port.map_or(&[][..], |p| p.ips.as_slice());
     let handshakes: Vec<&IpInspectionResult> = ips.iter().filter(|r| r.error.is_none()).collect();
@@ -548,7 +558,7 @@ fn translate_port(
     };
     let caa_from_facts = caa_judged_from_facts(resp, facts);
     let evidence = port.map_or_else(Vec::new, |port| {
-        blocks(resp, port, caa_from_facts, qualify, host_wide)
+        blocks(resp, port, caa_from_facts, qualify, host_wide, now)
     });
     let checks = tls_checks()
         .iter()
@@ -798,6 +808,7 @@ fn blocks(
     caa_from_facts: bool,
     qualify: bool,
     host_wide: bool,
+    now: DateTime<Utc>,
 ) -> Vec<Block> {
     let mut blocks = vec![addresses_block(port, qualify)];
     let dns = resp.dns.as_ref();
@@ -814,7 +825,7 @@ fn blocks(
             blocks.push(Block {
                 id,
                 title: format!("Certificate chain {qualifier}"),
-                shape: Shape::Chain(chain.iter().map(cert_fields).collect()),
+                shape: Shape::Chain(chain.iter().map(|c| cert_fields(c, now)).collect()),
             });
         }
         if let (Some(tls), Some(id)) = (&r.tls, address_block_id("handshake", &r.ip, port.port)) {
@@ -1005,7 +1016,7 @@ fn records(rtype: &str, answered: &[AnsweredRecord]) -> Vec<EvRecord> {
 }
 
 /// A certificate's fields; one `sans` entry per SAN, times only when they read as a timestamp.
-fn cert_fields(cert: &CertInfo) -> Fields {
+fn cert_fields(cert: &CertInfo, now: DateTime<Utc>) -> Fields {
     let text = |k: &str, v: &str| (k.to_string(), EvValue::Text(v.to_string()));
     let mut fields = vec![
         text("position", &cert.position),
@@ -1048,7 +1059,7 @@ fn cert_fields(cert: &CertInfo) -> Fields {
         // `is_expired` truncates to whole days: a certificate lapsed hours ago is expired too.
         let lapsed = DateTime::parse_from_rfc3339(&cert.not_after)
             .or_else(|_| DateTime::parse_from_str(&cert.not_after, "%b %e %H:%M:%S %Y %:z"))
-            .is_ok_and(|t| t < Utc::now());
+            .is_ok_and(|t| t < now);
         fields.push((
             "expired".to_string(),
             EvValue::Bool(cert.is_expired || lapsed),
