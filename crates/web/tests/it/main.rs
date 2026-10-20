@@ -108,6 +108,7 @@ mod fidelity_phone_rows;
 mod fidelity_regions;
 mod fidelity_replay_markup;
 mod fidelity_result_header;
+mod fidelity_review_final;
 mod fidelity_review_p1;
 mod fidelity_review_p2;
 mod fidelity_review_p3;
