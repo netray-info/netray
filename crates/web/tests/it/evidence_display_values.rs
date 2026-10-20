@@ -15,7 +15,13 @@ fn fields(pairs: Vec<(&str, Value)>) -> String {
 
 #[test]
 fn display_value_formats_durations() {
-    for (ms, expected) in [(77, "77 ms"), (1234, "1.2 s"), (125_000, "2 min 5 s")] {
+    for (ms, expected) in [
+        (77, "77 ms"),
+        (1234, "1.2 s"),
+        (59_960, "59.9 s"),
+        (60_000, "1 min 0 s"),
+        (125_000, "2 min 5 s"),
+    ] {
         assert_eq!(display_value(&Value::Duration(ms)), expected, "{ms} ms");
     }
 }

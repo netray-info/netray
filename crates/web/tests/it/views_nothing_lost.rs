@@ -89,7 +89,8 @@ fn rows() -> Vec<Row> {
         Row::new("http.csp", |r| {
             let fields = vec![
                 r.pair_shown_as("report_only", Value::Bool(true), "Report-Only"),
-                r.pair("issue_count", Value::Int(2)),
+                // The count reads in the view's words; a bare "2" would also match an escaped entity.
+                r.pair_shown_as("issue_count", Value::Int(2), "2 issues"),
                 r.pair("issue", text("Missing base-uri directive")),
                 r.pair("issue", text("object-src allows <object> & 'unsafe-eval'")),
             ];
@@ -110,8 +111,9 @@ fn rows() -> Vec<Row> {
         Row::new("http.hsts", |r| {
             let fields = vec![
                 r.pair_shown_as("max_age", Value::Int(63_072_000), "63072000"),
+                // Different values, so a dropped cell cannot hide behind the other's text.
                 r.pair("include_subdomains", Value::Bool(true)),
-                r.pair("preload", Value::Bool(true)),
+                r.pair("preload", Value::Bool(false)),
             ];
             Shape::Fields(fields)
         }),

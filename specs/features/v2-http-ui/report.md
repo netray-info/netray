@@ -179,7 +179,7 @@ Local lens from this worktree, seeded history; `curl -s http://127.0.0.1:18431/s
 | C6 | S the slim plate is 96 px tall | green | crates/web/tests/it/inspect_band_slim.rs |
 | C7 | S design-check exits 0 with the descriptor and All evidence rows measured | green | design-check |
 | C8 | S every finding of the reading beside board G is a report row and none stays open | green | reading below |
-| C9 | S /inspect/http at 390 px with the 4 kB policy is not wider than the viewport | green | scratchpad shots.mjs, measured below |
+| C9 | S /inspect/http at 390 px with the 4 kB policy is not wider than the viewport | green | measured on the evidence view `/csp.example.com/http` (8 kB policy, 390 px wide) and on `/inspect/http` (390 px wide); a live HTTP run is blocked locally, and the inspector renders the same view fragment (`views_same_markup.rs`) |
 
 ### Visual reading beside board G
 
@@ -226,3 +226,12 @@ untoned grids indent against the card's note and feeds lines, so only a toned gr
 (AMENDMENT).
 
 The CSP table of 124 sources wraps between source elements inside its card at 390 px.
+
+### Final review
+
+Spec reader majors, both held and fixed after the reading: a duration of 59 950 to 59 999 ms read
+"1 min 0 s" (now "59.9 s", boundary case in `evidence_display_values.rs`); C9 claimed the 4 kB
+policy on `/inspect/http`, which a timed-out local run never showed (re-scoped above, the
+limitation logged). Reader minors: the nothing-lost needles for `issue_count` and the HSTS flags
+could not fail; they now read "2 issues" and distinct yes/no values.
+

@@ -333,6 +333,11 @@ GIVEN `/inspect/http` at 390 px with the 4 kB policy WHEN measured THEN the docu
   evidence view's frame, the generic blocks and block order belong to other features and are
   closed here as not this feature's, with proposals for the operator (report.md, V9 to V14)
   (implementer under the operator's autonomy mandate, 2026-10-20).
+- Final review: the 390 px width with a long policy is measured on the evidence view; a live HTTP
+  inspector run is blocked locally (the probes time out), and the inspector renders the same view
+  fragment (`views_same_markup.rs`), so that measurement stands for it. A machine that reaches the
+  network can repeat it on `/inspect/http` (proposal for the operator) (implementer under the
+  operator's autonomy mandate, 2026-10-21).
 - Board: none for the HTTP inspector; it follows board G's frame. Proposal for the operator: add an
   "HTTP inspector" board (CSP table, caching and isolation cells) to the canvas so later runs of
   `just design-check` measure it (drafting agent, 2026-10-20).

@@ -81,8 +81,9 @@ fn display_duration(ms: u64) -> String {
     if ms < 1_000 {
         return format!("{ms} ms");
     }
-    let tenths = (ms + 50) / 100;
-    if tenths < 600 {
+    if ms < 60_000 {
+        // Rounded to a tenth, but never up to "60.0 s": below a minute reads in seconds.
+        let tenths = ((ms + 50) / 100).min(599);
         return format!("{}.{} s", tenths / 10, tenths % 10);
     }
     let secs = (ms + 500) / 1_000;
