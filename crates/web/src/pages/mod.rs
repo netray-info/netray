@@ -11,6 +11,7 @@ mod inspect;
 mod jsonld;
 pub mod result;
 mod status;
+pub mod views;
 
 use askama::Template;
 use axum::Router;

@@ -1,0 +1,40 @@
+.facts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px 28px;
+  margin: 0;
+}
+.facts-grid__cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.facts-grid[data-toned] .facts-grid__cell {
+  /* in a grid with a toned cell every cell keeps the bar's slot, so the cells align */
+  padding-inline-start: var(--space-2);
+  border-inline-start: var(--line-marker) solid transparent;
+}
+.facts-grid__cell[data-tone="pass"] { border-inline-start-color: var(--status-pass-mark); }
+.facts-grid__cell[data-tone="warn"] { border-inline-start-color: var(--status-warn-mark); }
+.facts-grid__cell[data-tone="fail"] { border-inline-start-color: var(--status-fail-mark); }
+.facts-grid__label {
+  color: var(--color-muted);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-label);
+}
+.facts-grid__value {
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-bold);
+  overflow-wrap: anywhere;
+}
+.facts-grid__chip {
+  display: inline-block;
+  margin: 0 var(--space-1) var(--space-1) 0;
+  padding: 0 var(--space-1);
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  font-family: var(--font-mono);
+}

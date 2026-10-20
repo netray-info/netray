@@ -20,7 +20,7 @@ pub const OWNERSHIP_RULE: u8 = 2;
 pub const SCRIPT_RULE: u8 = 3;
 
 /// The R44 components; a component's CSS class is its name with `_` turned into `-`.
-const COMPONENTS: [&str; 10] = [
+const COMPONENTS: [&str; 11] = [
     "grade",
     "run_line",
     "progress_ray",
@@ -31,6 +31,7 @@ const COMPONENTS: [&str; 10] = [
     "diff_block",
     "grouping_switch",
     "query_input",
+    "facts_grid",
 ];
 
 const COLOUR_FUNCTIONS: [&str; 11] = [

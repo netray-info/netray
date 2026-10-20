@@ -26,8 +26,9 @@ definition, this file the pointer.
   privacy pages override `styles` with one inline `<style>` and `header` and `scripts` with
   nothing (spec v2-pages, requirement 32), so they carry no navigation, script or island; the
   footer stays shared: `crates/web/tests/it/entries_frame.rs`.
-- **Components exist once.** The ten components (`grade`, `run_line`, `progress_ray`, `spectrum`,
-  `trace`, `check_row`, `evidence_block`, `diff_block`, `grouping_switch`, `query_input`) are a
+- **Components exist once.** The eleven components (`grade`, `run_line`, `progress_ray`,
+  `spectrum`, `trace`, `check_row`, `evidence_block`, `diff_block`, `grouping_switch`,
+  `query_input`, `facts_grid`) are a
   macro in `templates/components/<name>.html` plus a stylesheet `static/<name>.css` each:
   `crates/web/tests/it/component_files.rs`, `crates/web/tests/it/component_gate.rs`; each renders its
   root class and its view's values: `crates/web/tests/it/components.rs`.

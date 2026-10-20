@@ -41,6 +41,13 @@
   border-radius: var(--radius-max);
   box-sizing: border-box;
 }
+.spectrum[data-slim] .spectrum__plate {
+  height: var(--spectrum-band-plate-height);
+}
+.spectrum__guide {
+  stroke: var(--color-grid);
+  stroke-width: var(--line-hair);
+}
 .spectrum__boundary {
   stroke: var(--color-grid);
   stroke-width: var(--line-hair);

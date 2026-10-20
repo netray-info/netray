@@ -1,6 +1,7 @@
-{% macro spectrum(view, live) %}
-<div class="spectrum">
+{% macro spectrum(view, live, slim) %}
+<div class="spectrum"{% if slim %} data-slim{% endif %}>
   <div class="spectrum__box" style="--spectrum-lines: {{ view.line_count }}">
+    {%- if !slim %}
     <div class="spectrum__label-band" style="height: {{ view.band_height() }}">
       {% for set in view.label_sets %}
       <div class="spectrum__labels" data-run="{{ set.run }}"{% if set.shown %} data-shown{% endif %}>
@@ -13,7 +14,12 @@
       </div>
       {% endfor %}
     </div>
+    {%- endif %}
     <svg class="spectrum__plate" role="img" aria-label="{{ view.label }}">
+      {%- if slim %}
+      <line class="spectrum__guide" x1="0" x2="100%" y1="33%" y2="33%" />
+      <line class="spectrum__guide" x1="0" x2="100%" y1="66%" y2="66%" />
+      {%- endif %}
       {% for band in view.bands %}
       <g id="band-{{ band.protocol }}" data-protocol="{{ band.protocol }}"{% if band.is_live(live) %} data-live{% endif %}>
         {% if let Some(b) = band.boundary_pct() %}<line class="spectrum__boundary" x1="{{ b }}%" x2="{{ b }}%" y1="0" y2="100%" />{% endif %}
@@ -34,6 +40,7 @@
       </g>
       {% endfor %}
     </svg>
+    {%- if !slim %}
     <div class="spectrum__targets">
       {% for band in view.bands %}
       {% if let Some(first) = band.runs.first() %}
@@ -54,6 +61,7 @@
     {% for set in view.run_grades %}
     <span class="spectrum__region-grades" data-run="{{ set.run }}" hidden>{% for (protocol, letter) in set.grades %}<span data-protocol="{{ protocol }}">{{ letter }}</span>{% endfor %}</span>
     {% endfor %}
+    {%- endif %}
   </div>
 </div>
 {% if let Some(g) = view.gutter %}

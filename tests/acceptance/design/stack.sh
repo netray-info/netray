@@ -8,6 +8,8 @@
 # lens runs with a cache ttl of 315360000 s (ten years): larger than any seeded fixture's age (up to 14 days),
 # so every stored state is fresh and the result page renders it without starting a live run, and below
 # moka's maximum ttl. A client budget of 0 admits no fresh run at all, so a visit can never start one.
+# The TLS inspector's limiters are raised: a run is charged its probe connections (v2-tls-probe-close),
+# and the light and dark boards inspect the same target seconds apart from one client.
 
 design_stack_up() {
     local tmp=$1 fixtures=$2
@@ -21,7 +23,7 @@ design_stack_up() {
 
     # sub | crate dir | config | bind var | metrics bind var | extra env (see the justfile's acceptance-local)
     local rows=(
-      "lens|lens|lens.dev.toml|LENS_SERVER__BIND|LENS_SERVER__METRICS_BIND|LENS_SNAPSHOTS__DB_PATH=$tmp/snapshots.db LENS_HISTORY__DB_PATH=$tmp/history.db LENS_CACHE__TTL_SECONDS=315360000 LENS_ADMISSION__CLIENT_BUDGET_PER_HOUR=0"
+      "lens|lens|lens.dev.toml|LENS_SERVER__BIND|LENS_SERVER__METRICS_BIND|LENS_SNAPSHOTS__DB_PATH=$tmp/snapshots.db LENS_HISTORY__DB_PATH=$tmp/history.db LENS_CACHE__TTL_SECONDS=315360000 LENS_ADMISSION__CLIENT_BUDGET_PER_HOUR=0 LENS_API__TLS__PER_IP_BURST=200 LENS_API__TLS__PER_IP_PER_MINUTE=600 LENS_API__TLS__PER_TARGET_BURST=200 LENS_API__TLS__PER_TARGET_PER_MINUTE=600"
       "dns|dns|prism.dev.toml|NETRAY_DNS_SERVER__BIND|NETRAY_DNS_SERVER__METRICS_BIND|"
       "tls|tls|tlsight.dev.toml|NETRAY_TLS_SERVER__BIND|NETRAY_TLS_SERVER__METRICS_BIND|NETRAY_TLS_VALIDATION__CUSTOM_CA_DIR=$tmp/custom_cas"
       "http|http|spectra.dev.toml|NETRAY_HTTP_SERVER__BIND|NETRAY_HTTP_SERVER__METRICS_BIND|"

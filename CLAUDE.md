@@ -139,6 +139,10 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Crate docs** point at the root verbs and `netray <subcommand>`, never at per-crate build commands.
 - **Deployment policy wording** lives only in `CONTRIBUTING.md`; `tests/repo/test_no_self_host.sh` rejects it anywhere else outside history.
 - **askama 0.16 closes every `{% call %}` with `{% endcall %}`**; without it the component macro does not compile.
+- **askama 0.16 escapes `'&<>"` as `&#39;` `&#38;` `&#60;` `&#62;` `&#34;`**: a test over rendered text compares that form.
+- **Pages show values through `evidence::display_value`**; `format_value` stays raw for exports, compact tables, links and explore.
+- **A protocol view (`crates/web/src/pages/views/`) claims a block only when it renders every key**; each view adds `views_nothing_lost.rs` rows with distinct display texts.
+- **The CSS gate refuses literal font sizes and colours**: add a token to `crates/web/tokens.json` (build.rs emits the variable).
 - **An optional element in a golden-tested template opens with `{%- if %}`**, so the markup without it stays byte-identical (`result_header.html`'s `dkim_selectors` field).
 - **A `base.html` block default compiles against every child**: put frame-struct fields only inside blocks a struct-less child overrides (v2-entries' pages override `meta`).
 - **Stub a third-party API with a body captured from the live endpoint**, never the shape the code reads (status island: the event feed answers `results`, not `data`).
