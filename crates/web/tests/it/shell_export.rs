@@ -369,7 +369,12 @@ async fn c6_json_export_has_target_checks_and_blocks_in_the_model_serialisation(
     let obj = v.as_object().unwrap();
     let mut keys = obj.keys().map(String::as_str).collect::<Vec<_>>();
     keys.sort_unstable();
-    assert_eq!(keys, ["blocks", "checks", "target"]);
+    assert_eq!(keys, ["blocks", "checks", "errors", "target"]);
+    assert_eq!(
+        obj["errors"],
+        serde_json::json!([]),
+        "a run without a failed part"
+    );
     let blocks: Vec<Block> = serde_json::from_value(v["blocks"].clone()).unwrap();
     assert_eq!(blocks, stub_blocks());
     let checks: Vec<CheckResult> = serde_json::from_value(v["checks"].clone()).unwrap();
