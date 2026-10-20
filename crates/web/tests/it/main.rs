@@ -153,6 +153,7 @@ mod inspect_ip_caller;
 mod inspect_ip_headers;
 mod inspect_ip_jobs;
 mod inspect_ip_nojs;
+mod inspect_ip_slow_ptr;
 mod inspect_limits;
 mod inspect_no_store;
 mod inspect_no_store_real;
