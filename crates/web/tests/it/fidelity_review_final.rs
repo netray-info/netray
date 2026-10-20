@@ -33,8 +33,8 @@ fn the_score_is_rounded_down() {
     ))
     .unwrap();
     assert!(
-        src.contains("overall_percentage.floor()"),
-        "score rounds down"
+        src.contains("views::score_number("),
+        "the score goes through score_number"
     );
     assert!(
         !src.contains("overall_percentage.round()"),

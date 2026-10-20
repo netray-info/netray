@@ -633,6 +633,32 @@ pub fn history_sentence(points: &[(i64, Status)]) -> String {
         .join(" \u{00b7} ")
 }
 
+/// The score shown under the letter `grade`: the percentage rounded down, so it never reaches
+/// the next grade's integer threshold (89.7 shows 89 under B), with a guard against float error
+/// in the engine's division (an exact 80 that arrives as 79.999… shows 80). The number stays
+/// below the threshold of the grade above `grade`, so it never contradicts the letter; a
+/// hard-failed run (grade F whatever the score) shows its number as it is.
+pub fn score_number(
+    percentage: f64,
+    grade: Grade,
+    hard_failed: bool,
+    thresholds: &[(Grade, u32)],
+) -> u8 {
+    let n = (percentage + 1e-9).floor().clamp(0.0, 100.0) as u32;
+    if hard_failed {
+        return n as u8;
+    }
+    let above = thresholds
+        .iter()
+        .position(|(g, _)| *g == grade)
+        .and_then(|i| i.checked_sub(1))
+        .map(|i| thresholds[i].1);
+    match above {
+        Some(upper) if upper > 0 => n.min(upper - 1) as u8,
+        _ => n as u8,
+    }
+}
+
 /// The history sentence of every catalogue line over `points` (oldest first), as (check id,
 /// sentence) in catalogue order; a run that lacks a check counts as `not_tested` for it.
 pub fn history_sentences(points: &[(i64, &Run)]) -> Vec<(String, String)> {

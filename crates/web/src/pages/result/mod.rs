@@ -625,8 +625,13 @@ fn shown_score(entry: &Entry, score: &Score) -> Option<u8> {
     if !entry.run.complete || !score.complete {
         return None;
     }
-    // Rounded down: a grade starts at an integer threshold, so 89.7 shows 89 under B, never 90.
-    Some(score.overall_percentage.floor().clamp(0.0, 100.0) as u8)
+    let profile = Profiles::get(entry.profile_version)?;
+    Some(views::score_number(
+        score.overall_percentage,
+        entry.grade,
+        !score.hard_fail_checks.is_empty(),
+        &profile.thresholds,
+    ))
 }
 
 /// The banner of the finished run `done` shown under the letter `shown`, scored under its own
