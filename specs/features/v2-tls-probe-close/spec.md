@@ -87,8 +87,7 @@ the request timeout.
     kind the address would have sent is `unanswered` `timed out`, and TLS 1.2 and 1.3 keep their
     handshake-derived values.
 12. SDD `specs/sdd/v2.md` states the close rule as a decision row refining S34 and S41 and amends
-    S41 and §3.7 (probes, cost, permits), in the same commit as the code; the decision log of
-    v2-tls-versions-coop carries amendment notes on its close, cost and permit decisions;
+    S41 and §3.7 (probes, cost, permits), in the same commit as the code; this spec's decision log supersedes v2-tls-versions-coop's close, cost and permit decisions;
     `CHANGELOG.md` `[Unreleased]` names the grade change; `crates/tls/CLAUDE.md` states the cost.
 
 ## Phase 1 — A close is a refusal
@@ -203,6 +202,10 @@ GIVEN a probe semaphore permit held elsewhere for longer than the handshake time
   (Rule M). An inspection then takes at most two handshake timeouts plus queueing for the handshake
   permit alone (implementer under the operator's autonomy mandate, 2026-10-19).
 
+- The v2-tls-versions-coop decision log is not edited: adlc judges one feature per branch and a
+  change to another feature's documents stops `adlc next`. Its close, cost and permit decisions
+  are superseded by this spec's decision log and SDD S42, which name them (implementer under the
+  operator's autonomy mandate, 2026-10-19).
 - Phase 1 review: a close at accept (a per-client connection limit closing the extra of the
   seven concurrent probe connections before reading) is indistinguishable from a close after the
   ClientHello: the write lands in the local send buffer either way, and the read sees EOF or a
