@@ -388,3 +388,143 @@ mod probes_phase2 {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// specs/features/v2-tls-probe-close Phase 2 (requirements 4, 6, 9): probe connections are
+// charged; probes are capped, never refused
+// ---------------------------------------------------------------------------
+
+mod probe_cost {
+    use super::*;
+    use netray_tls::backend::TlsBackend;
+    use netray_tls::security::rate_limit::{Quotas, Scopes};
+    use netray_tls::tls::probe::{ProbeOutcome, ProtocolProbes, Verdict};
+
+    fn refused() -> ProbeOutcome {
+        ProbeOutcome {
+            verdict: Verdict::Refused,
+            version: None,
+            cipher_suite: None,
+            detail: "alert protocol_version".into(),
+        }
+    }
+
+    fn canned() -> ProtocolProbes {
+        ProtocolProbes {
+            ssl3: refused(),
+            tls1_0: refused(),
+            tls1_1: refused(),
+            tls1_2: refused(),
+            tls1_3: refused(),
+            suites_insecure: refused(),
+            suites_cbc: refused(),
+            suites_static_rsa: refused(),
+        }
+    }
+
+    /// Per-IP burst `burst`, refilled one per minute; per-target out of the way.
+    fn limiter(burst: u32) -> RateLimitState {
+        RateLimitState::scoped(
+            &Quotas {
+                per_ip_per_minute: 1,
+                per_ip_burst: burst,
+                per_target_per_minute: 100,
+                per_target_burst: 100,
+            },
+            Scopes {
+                metrics_prefix: "tlsight",
+                per_ip: "per_ip",
+                per_target: "per_target",
+            },
+        )
+    }
+
+    #[test]
+    fn the_stub_costs_probe_connections_only_with_canned_probes() {
+        assert_eq!(StubTlsBackend::new().probe_connections(), 0);
+        assert_eq!(
+            StubTlsBackend::new()
+                .with_probes(canned())
+                .probe_connections(),
+            7
+        );
+    }
+
+    #[tokio::test]
+    async fn one_probed_address_charges_eight() {
+        let stub = Arc::new(StubTlsBackend::new().with_probes(canned()));
+        let inspector = stub_state(stub).inspector();
+        let limits = limiter(10);
+        inspector
+            .inspect(&req("example.com", 443), caller(), &limits, "rid".into())
+            .await
+            .expect("the first inspection fits the burst");
+        let second = inspector
+            .inspect(&req("example.com", 443), caller(), &limits, "rid".into())
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(second, TlsRefusal::RateLimited { .. }),
+            "the first charged 8 of 10: {second:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn two_addresses_probe_only_the_first_with_a_warning() {
+        let (a, b) = (ip("93.184.215.14"), ip("93.184.215.15"));
+        let stub = Arc::new(
+            StubTlsBackend::new()
+                .with_host("example.com", vec![a, b])
+                .with_probes(canned()),
+        );
+        let inspector = stub_state(stub.clone()).inspector();
+        let resp = inspector
+            .inspect(
+                &req("example.com", 443),
+                caller(),
+                &limiter(10),
+                "rid".into(),
+            )
+            .await
+            .expect("inspection answers");
+        let handshaken: Vec<IpAddr> = stub.calls().iter().map(|(ip, _, _)| *ip).collect();
+        assert_eq!(handshaken.len(), 2);
+        assert!(handshaken.contains(&a) && handshaken.contains(&b));
+        let probed: Vec<IpAddr> = stub.probe_calls().iter().map(|(ip, _, _)| *ip).collect();
+        assert_eq!(probed, vec![a]);
+        assert!(
+            resp.warnings
+                .iter()
+                .any(|w| w == "rate limit: probing 1 of 2 addresses to stay within budget"),
+            "{:?}",
+            resp.warnings
+        );
+    }
+
+    #[tokio::test]
+    async fn ports_beyond_the_burst_are_refused_up_front_and_charge_nothing() {
+        let stub = Arc::new(StubTlsBackend::new().with_probes(canned()));
+        let inspector = stub_state(stub.clone()).inspector();
+        let limits = limiter(3);
+        let request = TlsInspectRequest {
+            host: "example.com".into(),
+            port: None,
+            ports: Some(vec![443, 8443, 993, 995]),
+        };
+        let err = inspector
+            .inspect(&request, caller(), &limits, "rid".into())
+            .await
+            .unwrap_err();
+        match err {
+            TlsRefusal::InvalidInput(message) => {
+                assert!(message.contains('4') && message.contains('3'), "{message}");
+            }
+            other => panic!("expected InvalidInput, got {other:?}"),
+        }
+        assert!(stub.calls().is_empty());
+        assert!(
+            limits.check_cost(caller(), "example.com", 3).is_ok(),
+            "nothing was charged"
+        );
+    }
+}

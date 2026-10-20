@@ -25,6 +25,7 @@ mod module_v3;
 mod port_results_table;
 mod probe_address;
 mod probe_alerts;
+mod probe_budget;
 mod probe_checks;
 mod probe_classify;
 mod probe_client_hello;
