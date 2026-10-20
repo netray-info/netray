@@ -19,6 +19,8 @@ enum Mode {
     Silent,
     /// Reads the ClientHello, then resets the connection.
     Reset,
+    /// Reads the ClientHello, then closes the connection (FIN) without a byte.
+    Close,
 }
 
 const LOCALHOST: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
@@ -81,6 +83,13 @@ async fn responder(mode: Mode) -> (u16, Arc<AtomicUsize>) {
                         // caveat is irrelevant for a zero timeout.
                         #[allow(deprecated)]
                         s.set_linger(Some(Duration::ZERO)).unwrap();
+                        drop(s);
+                    }
+                    Mode::Close => {
+                        let _ = read_hello(&mut s).await;
+                        let _ = s.shutdown().await;
+                        // Keep the read half open briefly so the FIN, not an RST, ends the probe.
+                        tokio::time::sleep(Duration::from_millis(200)).await;
                         drop(s);
                     }
                     Mode::LegacyOnly => {
@@ -161,18 +170,29 @@ async fn silent_server_times_out_every_probe_concurrently() {
     );
 }
 
+// v2-tls-probe-close, C12: a reset after the ClientHello is the server's refusal (was
+// unanswered under v2-tls-versions-coop).
 #[tokio::test]
-async fn reset_connection_is_unanswered_never_refused() {
+async fn reset_after_the_hello_is_refused_closed_reset() {
     let (port, _) = responder(Mode::Reset).await;
     let p = probe_address(LOCALHOST, port, None, "TLSv1.3", Duration::from_secs(5)).await;
 
     for (name, o) in probed(&p).into_iter().chain([("tls1_2", &p.tls1_2)]) {
-        assert_eq!(o.verdict, Verdict::Unanswered, "{name}");
-        let d = o.detail.to_lowercase();
-        assert!(
-            d.contains("reset") || d.contains("closed"),
-            "{name}: {}",
-            o.detail
-        );
+        assert_eq!(o.verdict, Verdict::Refused, "{name}: {o:?}");
+        assert_eq!(o.detail, "closed (reset)", "{name}: {o:?}");
     }
+}
+
+// v2-tls-probe-close, C11: a close (FIN) after the ClientHello is the server's refusal.
+#[tokio::test]
+async fn close_after_the_hello_is_refused_closed() {
+    let (port, count) = responder(Mode::Close).await;
+    let p = probe_address(LOCALHOST, port, None, "TLSv1.3", Duration::from_secs(5)).await;
+
+    for (name, o) in probed(&p).into_iter().chain([("tls1_2", &p.tls1_2)]) {
+        assert_eq!(o.verdict, Verdict::Refused, "{name}: {o:?}");
+        assert_eq!(o.detail, "closed", "{name}: {o:?}");
+    }
+    assert_eq!(p.tls1_3.verdict, Verdict::Accepted);
+    assert_eq!(count.load(Ordering::SeqCst), 7);
 }
