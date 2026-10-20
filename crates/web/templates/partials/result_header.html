@@ -2,7 +2,7 @@
 {{ grade|safe }}
 <div class="result-hero__title">
 {{ run_line|safe }}
-<h1>{% for label in domain.split('.') %}{% if !loop.first %}<wbr>{% endif %}<span class="result-hero__label">{{ label }}{% if !loop.last %}.{% endif %}</span>{% endfor %}</h1>
+{% let display = crate::idn::unicode(domain) %}<h1>{% for label in display.as_deref().unwrap_or(domain).split('.') %}{% if !loop.first %}<wbr>{% endif %}<span class="result-hero__label">{{ label }}{% if !loop.last %}.{% endif %}</span>{% endfor %}{% if display.is_some() %} <span class="idn-alabel">{{ domain }}</span>{% endif %}</h1>
 {{ progress|safe }}
 </div>
 <div class="result-hero__actions">

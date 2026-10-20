@@ -77,8 +77,17 @@ fn view(entry: &Entry, protocol: Protocol, cache_control: &'static str) -> Respo
     let Ok(section) = render_section(&section) else {
         return server_error();
     };
-    let title = format!("{} · {}", entry.domain, protocol.as_str());
-    let export = view_export(entry, protocol, &title);
+    let title = format!(
+        "{} · {}",
+        crate::idn::title(&entry.domain),
+        protocol.as_str()
+    );
+    // The export keeps the A-label (requirement 16); only the page title shows the Unicode form.
+    let export = view_export(
+        entry,
+        protocol,
+        &format!("{} · {}", entry.domain, protocol.as_str()),
+    );
     let home_href = format!("/{}", utf8_percent_encode(&entry.domain, LOCATION_SET));
     let selector_form = if protocol == Protocol::Email {
         let Some(form) = super::result::selector_form(&home_href, None) else {

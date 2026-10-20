@@ -182,3 +182,37 @@ Changed protected tests: `result_selectors.rs` (a plain page has no hidden selec
 ### Behavioural verification
 
 skipped: router-level tests drive the GET page, the SSE run and the refusals through `pages::result::router`; the live stack runs in Phase 7.
+
+## Phase 6 — IDN display
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R16 one display function; result h1, history, evidence views and /r/id headings show the Unicode form with the A-label beside it; title starts unicode (a-label); URLs, canonical, exports and API keep the A-label | green | crates/web/tests/it/site_nav_idn.rs |
+| C2 | R17 the recent island shows the display form the server wrote, keyed by the A-label | green | crates/web/islands/test/recent-idn.test.ts |
+| C3 | S display function: xn--bcher-kva.example gives bücher.example; example.com and an undecodable xn-- label give nothing | green | crates/web/tests/it/site_nav_idn.rs |
+| C4 | S /xn--bcher-kva.example h1 shows both forms, title starts with both, canonical only the A-label | green | crates/web/tests/it/site_nav_idn.rs |
+| C5 | S /xn--bcher-kva.example/email and /r/id headings show both forms | green | crates/web/tests/it/site_nav_idn.rs |
+| C6 | S the result page carries the display form for the recent island; the island stores and lists both forms linking /xn--bcher-kva.example | green | crates/web/islands/test/recent-idn.test.ts |
+
+Changed protected tests: `site_nav_idn.rs` (rustfmt only).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 display function, headings, titles, recent island | 1 | orchestrator | 0 | 0 |
+
+### Review
+
+| class | where | finding | disposition |
+|---|---|---|---|
+| AMENDMENT | crates/web/src/pages/evidence.rs:85 | the evidence view's Markdown export took the Unicode title | repaired: the export target is the A-label |
+| NIT | crates/web/src/pages/evidence.rs:172 | the no-entry evidence view keeps the A-label alone | kept: a sentence, not a domain heading |
+| NIT | crates/web/templates/pages/entry.html:11 | og:title differs between /r/<id> (A-label) and the frame pages (both forms) | kept: neither shows the Unicode form alone |
+| NIT | crates/web/tests/it/site_nav_idn.rs:82 | rustfmt on a protected test | trailer on the commit |
+
+### Behavioural verification
+
+skipped: router-level tests over a stored `xn--bcher-kva.example` entry; screenshots in Phase 7.

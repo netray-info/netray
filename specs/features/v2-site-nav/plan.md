@@ -55,3 +55,13 @@
 ## Plan
 
 - G1: `templates/components/query_input.html` (`selectors` parameter), `static/query_input.css`, `templates/pages/idle.html`, `templates/partials/selector_form.html`, `templates/partials/result_evidence.html` (sibling `selector-panel`), `src/pages/result/mod.rs` (`selector_form`, `with_selectors`, `email_fragment`), `src/pages/result/run.rs` (live selectors), `src/pages/errors.rs` (`selectors_refused_page`), `src/pages/evidence.rs` and `templates/pages/evidence.html`, `static/pages.css`.
+
+## Phase 6 — IDN display
+
+## Groups
+
+- G1 (C1–C6): one group.
+
+## Plan
+
+- G1: `src/idn.rs` (`unicode`, `title`), `src/lib.rs`, `Cargo.toml` (`idna`), `templates/partials/result_header.html`, `templates/pages/result.html` (`data-display`), `templates/pages/history.html`, `templates/pages/evidence.html`, `templates/pages/entry.html`, titles in `src/pages/result/mod.rs`, `src/pages/evidence.rs`, `src/entries/render.rs`, `static/pages.css`, `islands/src/recent.ts`.

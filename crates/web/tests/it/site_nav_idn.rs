@@ -78,7 +78,9 @@ async fn stored(domain: &str) -> (Arc<HistoryStore>, Entry, tempfile::TempDir) {
         .unwrap();
     store.migrate().await.unwrap();
     let id = match store
-        .record(domain, &run(), &[], now() - 10, |p, c| diff(p, c, &[], None))
+        .record(domain, &run(), &[], now() - 10, |p, c| {
+            diff(p, c, &[], None)
+        })
         .await
         .unwrap()
     {

@@ -226,7 +226,7 @@ async fn history(
         cache,
         &HistoryPage {
             frame: Frame::new(
-                &format!("{domain} history - netray"),
+                &format!("{} history - netray", crate::idn::title(&domain)),
                 "Every stored result of one domain.",
                 &format!("/{}/history", href_of(&domain)),
             ),
@@ -381,7 +381,7 @@ fn result_page(
         cache_control,
         &ResultPage {
             frame: Frame::new(
-                &format!("{domain} - netray"),
+                &format!("{} - netray", crate::idn::title(domain)),
                 "Every check of one domain, in one spectrum.",
                 &format!("/{}", href_of(domain)),
             ),

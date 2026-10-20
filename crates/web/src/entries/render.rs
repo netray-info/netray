@@ -57,7 +57,11 @@ struct PrivacyPage {
 pub fn entry(view: &EntryPageView) -> askama::Result<String> {
     EntryPage {
         frame: Frame::new(
-            &format!("{} · {}", view.domain, view.grade.letter),
+            &format!(
+                "{} · {}",
+                crate::idn::title(&view.domain),
+                view.grade.letter
+            ),
             "The result of one check run.",
             &format!("/r/{}", view.id),
         ),

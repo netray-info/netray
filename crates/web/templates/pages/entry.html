@@ -4,7 +4,7 @@
 {% import "components/diff_block.html" as diff_block %}
 {% import "components/check_row.html" as check_row %}
 
-{% block title %}{{ view.domain }} · {{ view.grade.letter }}{% endblock %}
+{% block title %}{{ crate::idn::title(view.domain) }} · {{ view.grade.letter }}{% endblock %}
 
 {% block meta %}
 <link rel="canonical" href="{{ frame.origin() }}{{ frame.canonical }}">
@@ -14,7 +14,7 @@
 {% endblock %}
 
 {% block main %}
-<h1>{{ view.domain }}</h1>
+<h1>{% if let Some(u) = crate::idn::unicode(view.domain) %}{{ u }} <span class="idn-alabel">{{ view.domain }}</span>{% else %}{{ view.domain }}{% endif %}</h1>
 {% call grade::grade(view.grade) %}{% endcall %}
 {% call run_line::run_line(view.run_line) %}{% endcall %}
 {% if let Some(d) = view.diff %}{% call diff_block::diff_block(d) %}{% endcall %}{% endif %}
