@@ -1,4 +1,4 @@
-//! C2/C3: the embedded catalogue holds the 54 checks of SDD §3.9; `Catalogue::from_toml` refuses
+//! C2/C3: the embedded catalogue holds the 57 checks of SDD §3.9 plus v2-tls-versions-coop Phase 3 (C20); `Catalogue::from_toml` refuses
 //! malformed entries naming the ID. The per-protocol count belongs to the embedded test, not the loader.
 
 use std::collections::HashSet;
@@ -39,6 +39,8 @@ const IDS: &[&str] = &[
     "tls.consistency",
     "tls.alpn_consistency",
     "tls.ech_advertised",
+    "tls.legacy_versions",
+    "tls.weak_suites",
     "http.https_redirect",
     "http.hsts",
     "http.cors",
@@ -51,6 +53,7 @@ const IDS: &[&str] = &[
     "http.deprecated_headers",
     "http.info_leakage",
     "http.caching",
+    "http.coop",
     "email.mx",
     "email.spf",
     "email.dkim",
@@ -65,15 +68,15 @@ const IDS: &[&str] = &[
 ];
 
 #[test]
-fn embedded_catalogue_holds_the_54_checks_of_the_sdd() {
+fn embedded_catalogue_holds_the_57_checks_of_the_sdd_and_tls_versions_coop() {
     let cat = catalogue();
     let entries = cat.entries();
-    assert_eq!(entries.len(), 54);
+    assert_eq!(entries.len(), 57);
 
     for (proto, n) in [
         (Protocol::Dns, 10),
-        (Protocol::Tls, 21),
-        (Protocol::Http, 12),
+        (Protocol::Tls, 23),
+        (Protocol::Http, 13),
         (Protocol::Email, 10),
         (Protocol::Ip, 1),
     ] {
@@ -104,7 +107,7 @@ fn embedded_catalogue_holds_the_54_checks_of_the_sdd() {
     }
 
     let want: HashSet<String> = IDS.iter().map(|s| s.to_string()).collect();
-    assert_eq!(IDS.len(), 54);
+    assert_eq!(IDS.len(), 57);
     assert_eq!(seen, want);
 
     for id in IDS {
