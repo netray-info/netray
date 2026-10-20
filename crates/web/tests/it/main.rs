@@ -255,6 +255,7 @@ mod site_nav_footer;
 mod site_nav_header;
 mod site_nav_legend;
 mod site_nav_links;
+mod site_nav_selectors;
 mod spectrum_catalogue_props;
 mod spectrum_component;
 mod spectrum_layout;
