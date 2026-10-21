@@ -163,6 +163,7 @@ mod inspect_shared_limits;
 mod inspect_speculation;
 mod inspect_stream;
 mod inspect_tls_jobs;
+mod inspect_tls_panels;
 mod inspect_tls_ports;
 mod inspect_tls_probe_cost;
 mod inspect_tls_related;
