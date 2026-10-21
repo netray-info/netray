@@ -7,7 +7,7 @@ use std::net::IpAddr;
 use askama::Template;
 use netray_model::Protocol;
 use netray_model::evidence::{Block, BlockId, Fields, Shape, Value};
-use netray_tls::module::REGISTER;
+use netray_tls::module::{REGISTER, band_port};
 use netray_tls::validate::chain_trust::TRUST_STORE;
 
 use super::validity::{self, ValidityState};
@@ -56,6 +56,9 @@ struct Port<'a> {
     chains: Vec<Chain<'a>>,
     handshakes: Vec<(IpAddr, &'a Block, &'a Fields)>,
     ct: Option<(&'a Block, &'a [Vec<Value>])>,
+    protocols: Option<(&'a Block, &'a Fields)>,
+    probes: Vec<(IpAddr, &'a Block, &'a Fields)>,
+    notices: Option<(&'a Block, &'a Fields)>,
 }
 
 impl Port<'_> {
@@ -63,6 +66,9 @@ impl Port<'_> {
         self.chains.iter().any(|(_, b, _)| &b.id == id)
             || self.handshakes.iter().any(|(_, b, _)| &b.id == id)
             || self.ct.is_some_and(|(b, _)| &b.id == id)
+            || self.protocols.is_some_and(|(b, _)| &b.id == id)
+            || self.probes.iter().any(|(_, b, _)| &b.id == id)
+            || self.notices.is_some_and(|(b, _)| &b.id == id)
     }
 
     fn chain(&self, addr: IpAddr) -> Option<&Chain<'_>> {
@@ -80,7 +86,8 @@ impl Port<'_> {
 /// The ports among `siblings` and the blocks each takes: the addresses table of the four
 /// columns; each chain and handshake of an `ok` address whose keys are all registered (a
 /// handshake only beside a taken chain, which shows its OCSP facts); the SCT table of the
-/// three columns when every row's address has a taken chain.
+/// three columns when every row's address has a taken chain; the protocols of the port and
+/// each probe block of an `ok` address with registered keys; the notices on the band port.
 fn taken(siblings: &[Block]) -> Vec<Port<'_>> {
     let registered = |name: &str| -> Vec<&str> {
         REGISTER
@@ -92,6 +99,9 @@ fn taken(siblings: &[Block]) -> Vec<Port<'_>> {
     };
     let chain_keys = registered("chain");
     let handshake_keys = registered("handshake");
+    let protocol_keys = registered("protocols");
+    let probe_keys = registered("probes");
+    let notice_keys = registered("notices");
     let known =
         |fields: &Fields, keys: &[&str]| fields.iter().all(|(k, _)| keys.contains(&k.as_str()));
     let of = |name: &'static str| {
@@ -143,6 +153,20 @@ fn taken(siblings: &[Block]) -> Vec<Port<'_>> {
                 }
                 _ => None,
             });
+        let protocols = of("protocols")
+            .filter(|b| b.id.qualifier() == head.id.qualifier())
+            .find_map(|b| match &b.shape {
+                Shape::Fields(fields) if known(fields, &protocol_keys) => Some((b, fields)),
+                _ => None,
+            });
+        let probes = of("probes")
+            .filter_map(|b| match &b.shape {
+                Shape::Fields(fields) if known(fields, &probe_keys) => {
+                    ok(&b.id).map(|(addr, _)| (addr, b, fields))
+                }
+                _ => None,
+            })
+            .collect();
         ports.push(Port {
             head,
             port,
@@ -150,7 +174,18 @@ fn taken(siblings: &[Block]) -> Vec<Port<'_>> {
             chains,
             handshakes,
             ct,
+            protocols,
+            probes,
+            notices: None,
         });
+    }
+    let band = band_port(ports.iter().filter_map(|p| u16::try_from(p.port).ok()));
+    let notices = of("notices").find_map(|b| match &b.shape {
+        Shape::Fields(fields) if known(fields, &notice_keys) => Some((b, fields)),
+        _ => None,
+    });
+    if let Some(port) = ports.iter_mut().find(|p| p.port == i64::from(band)) {
+        port.notices = notices;
     }
     ports
 }
@@ -311,7 +346,6 @@ struct AddressesView {
     band_width: u32,
     band_height: f64,
     note: String,
-    handshake: Option<String>,
     anchors: Vec<String>,
 }
 
@@ -348,9 +382,14 @@ struct CertificateView {
     anchors: Vec<String>,
 }
 
-/// The whole port: the Addresses section, then one Certificate section per distinct chain.
+/// The whole port: the notices, the Addresses section, one Certificate section per distinct
+/// chain, then the Protocols and features section.
 fn port_view(port: &Port<'_>, ctx: &ViewContext<'_>) -> Option<String> {
-    let mut html = addresses_section(port, ctx)?;
+    let mut html = match port.notices {
+        Some(notices) => notices_banner(port, notices, ctx)?,
+        None => String::new(),
+    };
+    html.push_str(&addresses_section(port, ctx)?);
     let mut groups: Vec<(Vec<String>, Vec<&Chain<'_>>)> = Vec::new();
     for row in &port.rows {
         let Some(chain) = port.chain(row.addr) else {
@@ -385,7 +424,356 @@ fn port_view(port: &Port<'_>, ctx: &ViewContext<'_>) -> Option<String> {
         let body = certificate(port, members, several, ctx)?;
         html.push_str(&frame(members[0].1, &title, &body, &inner)?);
     }
+    if port.protocols.is_some() || !port.handshakes.is_empty() || !port.probes.is_empty() {
+        let body = protocols(port, ctx)?;
+        let title = "Protocols and features";
+        html.push_str(&match port.protocols {
+            Some((block, _)) => frame(block, title, &body, &inner)?,
+            None => format!(
+                "<section class=\"protocol-view\"><h3 class=\"protocol-view__title\">{title}</h3>\n<div class=\"protocol-view__card\">{body}</div>\n</section>"
+            ),
+        });
+    }
     Some(html)
+}
+
+#[derive(Template)]
+#[template(path = "partials/tls_notices.html")]
+struct NoticesView {
+    line: Option<String>,
+    skipped: Vec<Cell>,
+    warnings: Vec<String>,
+    anchor: String,
+}
+
+/// The warn banner of the port's notices: the skipped addresses, then each warning.
+fn notices_banner(
+    port: &Port<'_>,
+    (block, fields): (&Block, &Fields),
+    ctx: &ViewContext<'_>,
+) -> Option<String> {
+    let skipped: Vec<Cell> = fields
+        .iter()
+        .filter(|(k, _)| k == "skipped_address")
+        .map(|(k, v)| cell(&block.id, k, v, ctx.decorate))
+        .collect();
+    let count = |n: usize| {
+        if n == 1 {
+            "1 address".to_string()
+        } else {
+            format!("{n} addresses")
+        }
+    };
+    NoticesView {
+        line: (!skipped.is_empty()).then(|| {
+            format!(
+                "{} not inspected: the inspector checks at most {} per host",
+                count(skipped.len()),
+                count(port.rows.len())
+            )
+        }),
+        skipped,
+        warnings: fields
+            .iter()
+            .filter(|(k, _)| k == "warning")
+            .map(|(_, v)| display_value(v))
+            .collect(),
+        anchor: block.id.to_string(),
+    }
+    .render()
+    .ok()
+}
+
+/// Which bar tones a cell's state allows: a bar never contradicts its cell.
+#[derive(Clone, Copy)]
+enum Fit {
+    Any,
+    Good,
+    Bad,
+}
+
+impl Fit {
+    fn of_version(word: &str) -> Fit {
+        match word {
+            "disabled" => Fit::Good,
+            "enabled" => Fit::Bad,
+            _ => Fit::Any,
+        }
+    }
+
+    fn admits(self, tone: &str) -> bool {
+        match self {
+            Fit::Any => true,
+            Fit::Good => tone == "pass",
+            Fit::Bad => tone != "pass",
+        }
+    }
+}
+
+struct ProtocolCell {
+    name: &'static str,
+    state: String,
+    tone: Option<&'static str>,
+    href: Option<String>,
+}
+
+struct ProbeRow {
+    name: String,
+    cells: Vec<Option<(String, String)>>,
+}
+
+#[derive(Template)]
+#[template(path = "partials/tls_protocols.html")]
+struct ProtocolsView {
+    cells: Vec<ProtocolCell>,
+    addrs: Vec<IpAddr>,
+    probes: Vec<ProbeRow>,
+    anchors: Vec<String>,
+}
+
+/// The probe keys' row names, in register order.
+const PROBE_NAMES: [(&str, &str); 8] = [
+    ("ssl3", "SSL 3.0"),
+    ("tls1_0", "TLS 1.0"),
+    ("tls1_1", "TLS 1.1"),
+    ("tls1_2", "TLS 1.2"),
+    ("tls1_3", "TLS 1.3"),
+    ("suites_insecure", "insecure suites"),
+    ("suites_cbc", "CBC suites"),
+    ("suites_static_rsa", "static RSA suites"),
+];
+
+/// The Protocols and features grid and the probe answers of the port.
+fn protocols(port: &Port<'_>, ctx: &ViewContext<'_>) -> Option<String> {
+    let proto = |key: &str| port.protocols.and_then(|(_, f)| get(f, key));
+    let judged = |id: &str| tone(ctx, id).map(|t| t.as_str());
+    let per = |key: &str, show: &dyn Fn(&Value) -> String| {
+        distinct_texts(
+            port.handshakes
+                .iter()
+                .filter_map(|(addr, _, f)| get(f, key).map(|v| (*addr, show(v))))
+                .collect(),
+            port.handshakes.len(),
+        )
+    };
+    let mut cells = Vec::new();
+    let mut push = |name: &'static str, state: String, check: Option<&str>, fit: Fit| {
+        cells.push(ProtocolCell {
+            name,
+            state,
+            tone: check.and_then(judged).filter(|t| fit.admits(t)),
+            href: None,
+        });
+    };
+    for (name, key, check) in [
+        ("TLS 1.3", "tls1_3", "tls.tls_version"),
+        ("TLS 1.2", "tls1_2", "tls.tls_version"),
+        ("TLS 1.1", "tls1_1", "tls.legacy_versions"),
+        ("TLS 1.0", "tls1_0", "tls.legacy_versions"),
+    ] {
+        if let Some(v) = proto(key) {
+            let legacy = matches!(key, "tls1_1" | "tls1_0");
+            let word = display_value(v);
+            let fit = if legacy {
+                Fit::of_version(&word)
+            } else {
+                Fit::Any
+            };
+            let state = if legacy && word == "disabled" {
+                "disabled, as it should be".to_string()
+            } else {
+                word
+            };
+            push(name, state, Some(check), fit);
+        }
+    }
+    let alpn = per("alpn", &display_value);
+    let alpn = if alpn.is_empty() {
+        "none".to_string()
+    } else {
+        alpn.join(" · ")
+    };
+    push("ALPN", alpn, Some("tls.alpn_consistency"), Fit::Any);
+    if let Some(v) = proto("forward_secrecy_all_suites") {
+        let (state, fit) = match v {
+            Value::Bool(true) => ("all suites".to_string(), Fit::Good),
+            Value::Bool(false) => ("not all suites".to_string(), Fit::Bad),
+            v => (display_value(v), Fit::Any),
+        };
+        push("Forward secrecy", state, Some("tls.weak_suites"), fit);
+    }
+    let ech = per("ech", &|v| match v {
+        Value::Bool(true) => "advertised".to_string(),
+        Value::Bool(false) => "not advertised".to_string(),
+        v => display_value(v),
+    });
+    if !ech.is_empty() {
+        push(
+            "Encrypted Client Hello",
+            ech.join(" · "),
+            Some("tls.ech_advertised"),
+            Fit::Any,
+        );
+    }
+    let host = port
+        .handshakes
+        .iter()
+        .find_map(|(_, _, f)| get(f, "sni").map(display_value));
+    if let Some(host) = host {
+        cells.push(ProtocolCell {
+            name: "HSTS",
+            state: "checked in the HTTP inspector".to_string(),
+            tone: None,
+            href: Some(format!("/inspect/http?url=https://{host}/")),
+        });
+    }
+    let mut push = |name: &'static str, state: String, check: Option<&str>, fit: Fit| {
+        cells.push(ProtocolCell {
+            name,
+            state,
+            tone: check.and_then(judged).filter(|t| fit.admits(t)),
+            href: None,
+        });
+    };
+    if let Some(v) = proto("ssl3") {
+        let word = display_value(v);
+        let fit = Fit::of_version(&word);
+        push("SSL 3.0", word, Some("tls.legacy_versions"), fit);
+    }
+    let groups: Vec<(&str, String)> = [
+        ("insecure", "suites_insecure"),
+        ("CBC", "suites_cbc"),
+        ("static RSA", "suites_static_rsa"),
+    ]
+    .into_iter()
+    .filter_map(|(label, key)| proto(key).map(|v| (label, display_value(v))))
+    .collect();
+    if !groups.is_empty() {
+        let fit = if groups.iter().any(|(_, w)| w == "accepted") {
+            Fit::Bad
+        } else if groups.iter().all(|(_, w)| w == "refused") {
+            Fit::Good
+        } else {
+            Fit::Any
+        };
+        let suites: Vec<String> = groups.iter().map(|(l, w)| format!("{l} {w}")).collect();
+        push(
+            "Cipher suites",
+            suites.join(" · "),
+            Some("tls.weak_suites"),
+            fit,
+        );
+    }
+    let kx = per("key_exchange_group", &display_value);
+    if !kx.is_empty() {
+        push("Key exchange", kx.join(" · "), None, Fit::Any);
+    }
+    let sni = per("sni", &display_value);
+    if !sni.is_empty() {
+        push("SNI", sni.join(" · "), None, Fit::Any);
+    }
+    let starttls = per("starttls", &display_value);
+    if !starttls.is_empty() {
+        push("STARTTLS", starttls.join(" · "), None, Fit::Any);
+    }
+
+    let addrs: Vec<IpAddr> = port
+        .rows
+        .iter()
+        .filter(|r| port.probes.iter().any(|(a, _, _)| *a == r.addr))
+        .map(|r| r.addr)
+        .collect();
+    let probe = |addr: IpAddr| {
+        port.probes
+            .iter()
+            .find(|(a, _, _)| *a == addr)
+            .map(|(_, _, f)| *f)
+    };
+    let probes = PROBE_NAMES
+        .iter()
+        .filter_map(|(key, name)| {
+            let answer = format!("{key}_answer");
+            let cells: Vec<Option<(String, String)>> = addrs
+                .iter()
+                .map(|a| {
+                    let f = probe(*a)?;
+                    let word = get(f, key).map(display_value);
+                    let said = get(f, &answer).map(display_value);
+                    (word.is_some() || said.is_some())
+                        .then(|| (word.unwrap_or_default(), said.unwrap_or_default()))
+                })
+                .collect();
+            cells.iter().any(Option::is_some).then(|| ProbeRow {
+                name: name.to_string(),
+                cells,
+            })
+        })
+        .collect();
+    ProtocolsView {
+        cells,
+        addrs,
+        probes,
+        anchors: port
+            .probes
+            .iter()
+            .map(|(_, b, _)| b.id.to_string())
+            .collect(),
+    }
+    .render()
+    .ok()
+}
+
+/// The part of a TLS run holding the band port's blocks: the only part, or the `port <n>`
+/// part of [`band_port`] over the parts' ports.
+pub fn tls_band_part(labels: &[String]) -> Option<usize> {
+    if labels.len() == 1 {
+        return Some(0);
+    }
+    let ports: Vec<(usize, u16)> = labels
+        .iter()
+        .enumerate()
+        .filter_map(|(n, l)| Some((n, l.strip_prefix("port ")?.parse().ok()?)))
+        .collect();
+    let band = band_port(ports.iter().map(|(_, p)| *p));
+    ports.iter().find(|(_, p)| *p == band).map(|(n, _)| *n)
+}
+
+/// The related-records summary of a TLS port's blocks: its CAA and TLSA records and whether
+/// a handshake saw ECH advertised in the HTTPS record.
+pub fn tls_related_summary(blocks: &[Block]) -> String {
+    let of = |name: &str| {
+        blocks
+            .iter()
+            .find(|b| b.id.module() == "tls" && b.id.name() == name)
+    };
+    let records = |name: &str| match of(name).map(|b| &b.shape) {
+        Some(Shape::Records(rows)) => Some(rows.len()),
+        _ => None,
+    };
+    let caa = match records("caa") {
+        Some(0) => "CAA (none published)".to_string(),
+        Some(1) => "CAA (1 record)".to_string(),
+        Some(n) => format!("CAA ({n} records)"),
+        None => "CAA (not measured)".to_string(),
+    };
+    let tlsa = match records("tlsa") {
+        Some(0) => "TLSA (none)".to_string(),
+        Some(n) => format!("TLSA ({n})"),
+        None => "TLSA (not measured)".to_string(),
+    };
+    let ech = blocks
+        .iter()
+        .filter(|b| b.id.module() == "tls" && b.id.name() == "handshake")
+        .find_map(|b| match &b.shape {
+            Shape::Fields(fields) => get(fields, "ech"),
+            _ => None,
+        });
+    let https = match ech {
+        Some(Value::Bool(true)) => "HTTPS (ech=)",
+        Some(Value::Bool(false)) => "HTTPS (no ech=)",
+        _ => "HTTPS (not measured)",
+    };
+    format!("{caa} · {tlsa} · {https}")
 }
 
 fn addresses_section(port: &Port<'_>, ctx: &ViewContext<'_>) -> Option<String> {
@@ -459,29 +847,6 @@ fn addresses_section(port: &Port<'_>, ctx: &ViewContext<'_>) -> Option<String> {
     if !durations.is_empty() {
         note.push_str(&format!(" · handshake {}", durations.join(" · ")));
     }
-    let cells: Vec<FactCell> = [
-        ("Key exchange", "key_exchange_group"),
-        ("ALPN", "alpn"),
-        ("SNI", "sni"),
-        ("STARTTLS", "starttls"),
-        ("Encrypted Client Hello", "ech"),
-    ]
-    .into_iter()
-    .filter_map(|(label, key)| {
-        let values = per(key, &display_value);
-        (!values.is_empty()).then(|| FactCell {
-            label: label.to_string(),
-            values: values.into_iter().map(Cell::from).collect(),
-            chips: false,
-            tone: None,
-        })
-    })
-    .collect();
-    let handshake = if cells.is_empty() {
-        None
-    } else {
-        Some(facts_grid_with(&FactsGridView { cells }, &[]).ok()?)
-    };
     let mut anchors: Vec<String> = port
         .handshakes
         .iter()
@@ -494,7 +859,6 @@ fn addresses_section(port: &Port<'_>, ctx: &ViewContext<'_>) -> Option<String> {
         band_width: MINI_WIDTH,
         band_height: MINI_HEIGHT,
         note,
-        handshake,
         anchors,
     }
     .render()

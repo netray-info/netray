@@ -25,3 +25,16 @@ G2
 10. `specs/sdd/v2.md` §6.1 and the facts_grid row amended.
 
 Decisions: the trust text on warn or fail is the catalogue `finding` of `tls.chain_trusted` in the check's tone (the view holds statuses, not findings; requirement 9 amended); the handshake facts render in a "Handshake" grid until Phase 2.
+
+## Phase 2 — Protocols, notices and related records
+
+### Groups
+
+G1: C1–C12 (one production file carries every criterion: `views/tls.rs`; the related box adds `inspect.rs` and its template).
+
+### Plan
+
+1. `crates/web/src/pages/views/tls.rs`: `taken` also takes `tls.protocols[@port]`, every `tls.probes@<addr>:<port>` of an ok row and `tls.notices`; the port fragment gains the notices banner (first), the "Protocols and features" section (after the certificate sections; `frame` with the protocols block when present) with the cell grid and the "Probe answers" details; the Phase 1 "Handshake" grid goes (its facts are cells); `pub fn tls_related_summary(blocks)` re-exported from `views/mod.rs`.
+2. `templates/partials/tls_protocols.html`, `tls_notices.html`.
+3. `crates/web/src/pages/inspect.rs` and `partials/inspect_start.html`: the related box gets `id="inspect-related"`; the stream sends an `inspect-related` fragment when the band port's TLS part arrives; `shared_html` renders it filled.
+4. `crates/web/static/pages.css`: `tls-protocols*` (board G: grid `repeat(auto-fill, minmax(250px, 1fr))`, 1 px line-coloured gaps, cells padding 12 16 on the surface, bar 3/5/6 px wide × 22 px by tone, name 14 px 600, state mono 12 px muted), `tls-notices` (warn tone), `tls-probes`.

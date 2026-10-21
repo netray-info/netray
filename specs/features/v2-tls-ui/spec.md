@@ -172,13 +172,15 @@ and canvas rows 9.50, 9.55, 9.56, 9.57, 9.58 (summaries).
     TLS 1.3, TLS 1.2, TLS 1.1, TLS 1.0 (from `tls.protocols`: "enabled", "disabled", "mixed";
     TLS 1.1 and 1.0 "disabled, as it should be"), ALPN (the protocols, "none" without), Forward
     secrecy ("all suites" or "not all suites"), Encrypted Client Hello ("advertised" or "not
-    advertised"), HSTS ("checked in the HTTP inspector", linking `/inspect/http?url=https://<host>/`
-    with host the SNI, else the address); then SSL 3.0, Cipher suites ("insecure <w> · CBC <w> ·
-    static RSA <w>"), Key exchange, SNI ("<name>" or "none, IP target" when the handshake holds no
-    `sni`), STARTTLS (only when held). A cell whose fact is absent is not shown, except SNI. Each
+    advertised"), HSTS ("checked in the HTTP inspector", linking `/inspect/http?url=https://<sni>/`,
+    only when the handshake holds `sni`: an IP target has no host to check, and a stored run
+    written before `sni` existed names none); then SSL 3.0, Cipher suites ("insecure <w> · CBC <w>
+    · static RSA <w>"), Key exchange, SNI, STARTTLS. A cell whose fact is absent is not shown. Each
     bar is the status of the check that judges the fact (TLS 1.3 and 1.2 `tls_version`; SSL 3.0,
-    TLS 1.1, 1.0 `legacy_versions`; Forward secrecy `forward_secrecy`; Cipher suites
-    `weak_suites`; ECH `ech_advertised`; ALPN `alpn_consistency`), none for a fact no check judges.
+    TLS 1.1, 1.0 `legacy_versions`; Forward secrecy and Cipher suites `weak_suites`; ECH
+    `ech_advertised`; ALPN `alpn_consistency`), none for a fact no check judges; a bar never
+    contradicts its cell: a cell in its good state (a legacy version disabled, all suites, every
+    suite group refused) shows no warn or fail bar, and a cell in its bad state shows no pass bar.
     The per-address probe answers sit in a `details` "Probe answers" table (a row per probe, a
     column per address, the word and the answer). (9.57, 3.21, 3.23, 3.6, 3.29)
 11. **Notices banner.** When the port holds `tls.notices`, a warn-tone banner above the addresses:
@@ -188,8 +190,8 @@ and canvas rows 9.50, 9.55, 9.56, 9.57, 9.58 (summaries).
 12. **Related records.** The inspector's related-records box reads, from the band port's blocks:
     "CAA (<n> records)" or "CAA (none published)" from `tls.caa`, "TLSA (<n>)" or "TLSA (none)"
     from `tls.tlsa@<port>`, "HTTPS (ech=)" or "HTTPS (no ech=)" from the handshake's `ech`; a block
-    or key that is absent reads "(not measured)". It is filled when that part arrives and in a
-    shared run. (9.58)
+    or key that is absent reads "(not measured)". It is filled when that part arrives (every entry
+    "(not measured)" when the part failed or timed out) and in a shared run. (9.58)
 
 ### Ports
 
@@ -275,7 +277,7 @@ GIVEN a port of two addresses with every registered key WHEN the nothing-lost te
 
 GIVEN `tls.protocols` with TLS 1.3 and 1.2 enabled, 1.1 and 1.0 disabled, forward secrecy for all suites, and a handshake with ALPN h2, ECH false and SNI `example.com` WHEN rendered THEN the first eight cells read TLS 1.3 enabled, TLS 1.2 enabled, TLS 1.1 and TLS 1.0 "disabled, as it should be", ALPN h2, Forward secrecy "all suites", Encrypted Client Hello "not advertised" and HSTS linking `/inspect/http?url=https://example.com/`.
 GIVEN `ech_advertised` warn and `legacy_versions` pass WHEN rendered THEN the ECH bar is warn and the TLS 1.1 and 1.0 bars pass; the HSTS cell carries no tone.
-GIVEN a handshake without `sni` WHEN rendered THEN SNI reads "none, IP target".
+GIVEN a handshake without `sni` WHEN rendered THEN no SNI and no HSTS cell exists.
 GIVEN a handshake with starttls smtp WHEN rendered THEN a STARTTLS cell reads "smtp"; GIVEN none THEN no STARTTLS cell.
 GIVEN no `tls.protocols` WHEN rendered THEN no version cell exists.
 GIVEN two `tls.probes` blocks WHEN rendered THEN "Probe answers" holds a column per address with each word and answer.
@@ -387,6 +389,12 @@ GIVEN the TLS inspector at 390 px WHEN measured THEN the document is not wider t
   check); a fact some addresses lack is named per address (Rule M); "same"/"differs" need two
   leaves; the port view's feeds line is the addresses block's (implementer under the operator's
   autonomy mandate, 2026-10-21).
+- Phase 2 review: SNI and HSTS show only when the handshake holds `sni` (stored runs older than
+  the key named no SNI though they had a host); a protocol cell's bar never contradicts its own
+  state (`legacy_versions` faults the versions it found enabled, not the disabled ones), and
+  Forward secrecy reads `weak_suites`, which judges the static-RSA probe the cell shows; the
+  related box reads "(not measured)" when the band port's part failed (implementer under the
+  operator's autonomy mandate, 2026-10-21).
 - The design check's live TLS board needs network: a binary built in a worktree gets none here,
   so `netray_bin` honours `NETRAY_BIN`, and the gate runs with this branch's build copied to the
   main checkout's target path (backed up and restored) (implementer under the operator's autonomy

@@ -9,6 +9,8 @@ mod ip;
 mod tls;
 pub mod validity;
 
+pub use tls::{tls_band_part, tls_related_summary};
+
 use askama::Template;
 use netray_model::evidence::{Block, Fields, Node, Shape, Value};
 use netray_model::{CheckId, Status};

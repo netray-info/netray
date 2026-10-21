@@ -539,7 +539,39 @@ struct StartFragment {
     band: BandSlot,
     share: String,
     export: String,
-    related: Option<String>,
+    related: Option<(String, String)>,
+}
+
+/// The related-records box alone, as the stream fills it.
+#[derive(Template)]
+#[template(path = "partials/inspect_start.html", block = "related")]
+struct RelatedFragment {
+    related: Option<(String, String)>,
+}
+
+/// The related box's summary before the band port's part arrives.
+const RELATED_PENDING: &str = "CAA · TLSA · HTTPS";
+const RELATED_ID: &str = "inspect-related";
+
+/// The related box of a run whose band port's part is `part`: its blocks, "(not measured)" when
+/// it failed, pending while it has not arrived.
+fn related_box(tool: Tool, input: &str, part: Option<&PartResult>) -> Option<(String, String)> {
+    let summary = match part {
+        Some(Ok(blocks)) => views::tls_related_summary(blocks),
+        Some(Err(_)) => views::tls_related_summary(&[]),
+        None => RELATED_PENDING.to_string(),
+    };
+    related(tool, input).map(|href| (href, summary))
+}
+
+/// The fragment that fills the related box once the band port's part `part` is known.
+fn related_event(tool: Tool, input: &str, part: &PartResult) -> Option<Event> {
+    let html = (RelatedFragment {
+        related: Some(related_box(tool, input, Some(part))?),
+    })
+    .render()
+    .ok()?;
+    Some(fragment(RELATED_ID, &html))
 }
 
 /// The band region of the start fragment: none, a placeholder the stream fills, or rendered.
@@ -1151,7 +1183,7 @@ fn finished_html(
     grade: Option<&'static str>,
     parts: Vec<(String, Option<String>)>,
     band: BandSlot,
-    (share, export, related): (String, String, Option<String>),
+    (share, export, related): (String, String, Option<(String, String)>),
 ) -> Option<String> {
     let mut rendered = Vec::with_capacity(parts.len());
     for (n, (label, html)) in parts.into_iter().enumerate() {
@@ -1221,11 +1253,13 @@ fn shared_html(run: &SharedRun, key: &str) -> Option<String> {
         run.grade,
         parts,
         band,
-        (
-            share_html(run.tool, Some(key.to_string()))?,
-            export,
-            related(run.tool, &run.input),
-        ),
+        (share_html(run.tool, Some(key.to_string()))?, export, {
+            let labels: Vec<String> = run.parts.iter().map(|(l, _)| l.clone()).collect();
+            let part = views::tls_band_part(&labels)
+                .and_then(|n| run.parts.get(n))
+                .map(|(_, r)| r);
+            related_box(run.tool, &run.input, part)
+        }),
     )
 }
 
@@ -1384,10 +1418,11 @@ fn stream_job(
             &[],
             false,
         )?,
-        related: related(head.tool, &head.input),
+        related: related_box(head.tool, &head.input, None),
     }
     .render()
     .ok()?;
+    let related_n = views::tls_band_part(&labels);
     let pending: FuturesUnordered<_> = job
         .parts
         .into_iter()
@@ -1426,7 +1461,7 @@ fn stream_job(
         exported: false,
         ended: false,
     };
-    let events = futures::stream::unfold(run, |mut run| async move {
+    let events = futures::stream::unfold(run, move |mut run| async move {
         loop {
             if let Some(event) = run.queue.pop_front() {
                 return Some((Ok(event), run));
@@ -1528,6 +1563,11 @@ fn stream_job(
                     }
                     let event = part_event(n, &run.labels[n], &result, &run.badges, &[])
                         .unwrap_or_else(|| fragment(&format!("inspect-part-{n}"), "render failed"));
+                    if related_n == Some(n)
+                        && let Some(event) = related_event(run.tool, &run.input, &result)
+                    {
+                        run.queue.push_back(event);
+                    }
                     run.results[n] = Some(result);
                     return Some((Ok(event), run));
                 }
@@ -1538,6 +1578,11 @@ fn stream_job(
                     for n in late {
                         let timed_out = Err("timed out".to_string());
                         if let Some(event) = part_event(n, &run.labels[n], &timed_out, &[], &[]) {
+                            run.queue.push_back(event);
+                        }
+                        if related_n == Some(n)
+                            && let Some(event) = related_event(run.tool, &run.input, &timed_out)
+                        {
                             run.queue.push_back(event);
                         }
                     }

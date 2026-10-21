@@ -69,3 +69,50 @@ Certificate not before 2026-09-26 today · 68 days left not after 2026-12-25 the
 Subject CN=shop.example.com Alternative names shop.example.com , *.shop.example.com … Certificate Transparency 2 SCTs …
 Chain shop.example.com crt.sh ↗ → Example TLS Issuing ECC CA 1 crt.sh ↗ → … trusted by the Mozilla root program Chain certificates …
 ```
+
+## Phase 2 — Protocols, notices and related records
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R10 protocols grid: cells in order with states, tones from their checks, absent facts not shown except SNI, probe answers in details | green | crates/web/tests/it/views_tls_protocols.rs |
+| C2 | R11 notices banner above the addresses: skipped count and limit, skipped addresses linked, each warning | green | crates/web/tests/it/views_tls_notices.rs |
+| C3 | R12 related box summaries from the band port's blocks, filled when the part arrives and in a shared run | green | crates/web/tests/it/inspect_tls_related.rs |
+| C4 | S TLS 1.3/1.2 enabled, 1.1/1.0 disabled, forward secrecy all suites, ALPN h2, ECH false, SNI example.com: the first eight cells and the HSTS link | green | crates/web/tests/it/views_tls_protocols.rs |
+| C5 | S ech_advertised warn and legacy_versions pass: ECH bar warn, TLS 1.1 and 1.0 bars pass, HSTS no tone | green | crates/web/tests/it/views_tls_protocols.rs |
+| C6 | S a handshake without sni: SNI reads none, IP target | green | crates/web/tests/it/views_tls_protocols.rs |
+| C7 | S starttls smtp: a STARTTLS cell reads smtp; none: no STARTTLS cell | green | crates/web/tests/it/views_tls_protocols.rs |
+| C8 | S no tls.protocols: no version cell | green | crates/web/tests/it/views_tls_protocols.rs |
+| C9 | S two tls.probes blocks: Probe answers holds a column per address with each word and answer | green | crates/web/tests/it/views_tls_protocols.rs |
+| C10 | S notices with one warning and two skipped addresses beside four inspected: the banner text, both addresses, the warning; no notices: no banner | green | crates/web/tests/it/views_tls_notices.rs |
+| C11 | S tls.caa with two records and no TLSA block: CAA (2 records) and TLSA (not measured); an empty TLSA block: TLSA (none) | green | crates/web/tests/it/inspect_tls_related.rs |
+| C12 | S the protocols, probes and notices fixtures: every value's display text appears | green | crates/web/tests/it/views_tls_nothing_lost.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 2 | opus | 129683 | 385 |
+| review fixes | 3 | opus | 49883 | 85 |
+
+The phase was planned by the orchestrator (one group, one production file); the c9 fixture's
+IPv6 qualifiers were bracketed (`BlockId` refuses a bare IPv6 address), a test change.
+
+### Review
+
+| class | finding | disposition |
+|---|---|---|
+| AMENDMENT | the related box stayed pending when the band port's part failed or timed out | requirement 12 amended and fixed: every entry "(not measured)", live and shared |
+| AMENDMENT | stored runs older than the `sni` key read "SNI none, IP target" and linked HSTS to an address | requirement 10 amended and fixed: SNI and HSTS only with `sni`; c6 and c8 changed (ADLC-Test-Change) |
+| AMENDMENT | a check's bar contradicted its own cell (legacy_versions on a disabled version; forward_secrecy judging the negotiated suite under "not all suites") | requirement 10 amended and fixed: bars never contradict their cell; Forward secrecy reads weak_suites |
+| DEFERRED | every TLS part re-streams with the band port's checks | Phase 3 (requirement 13) |
+
+### Behavioural verification
+
+Local lens from this worktree, seeded history (port 18531); `curl -s localhost:18531/shop.example.com/tls`
+(a stored run older than `sni`):
+
+```
+Protocols and features ALPN none Encrypted Client Hello not advertised Key exchange X25519
+```
