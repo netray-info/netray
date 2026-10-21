@@ -208,3 +208,20 @@ async fn c1_the_api_keeps_the_a_label_only() {
     assert!(body.contains(A), "{body}");
     assert!(!body.contains("bücher"), "{body}");
 }
+
+/// Review F2: the evidence view of a decoded name without a stored entry shows both forms in its
+/// heading and title.
+#[tokio::test]
+async fn c5_an_evidence_view_without_an_entry_shows_both_forms() {
+    let (store, _entry, _dir) = stored("example.com").await;
+    let app = evidence_router(EvidenceDeps {
+        history: store,
+        v1: None,
+    });
+    let (_, body) = get(&app, &format!("/{A}/email")).await;
+    assert_eq!(h1(&body), format!("No entry for bücher.example {SPAN}"));
+    assert!(
+        body.contains("<title>bücher.example (xn--bcher-kva.example) - netray</title>"),
+        "{body}"
+    );
+}

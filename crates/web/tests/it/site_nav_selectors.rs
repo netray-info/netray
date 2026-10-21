@@ -368,3 +368,62 @@ async fn c7_a_bad_selector_list_has_its_own_title_and_sentence_and_a_bad_domain_
         "{body}"
     );
 }
+
+/// A run backend that refuses every run with a per-address refusal.
+struct RefusingRuns;
+
+impl DomainRuns for RefusingRuns {
+    fn validate(&self, domain: &str) -> Result<String, DomainRefusal> {
+        Ok(domain.trim().to_lowercase())
+    }
+    fn start<'a>(
+        &'a self,
+        _domain: &'a str,
+        _client: IpAddr,
+        _trigger: RunTrigger,
+        _prefetch: bool,
+    ) -> BoxFuture<'a, RunStart> {
+        Box::pin(async {
+            RunStart::Refused(netray_web::api::RunRefusal {
+                reason: netray_web::api::RefusalReason::Budget,
+                retry_after_s: 30,
+                last_run_ago_s: None,
+                last_incomplete: false,
+            })
+        })
+    }
+}
+
+/// Review F1: a refused selector run without the stream island keeps the refusal line on its
+/// 429 page; the stored head is shown, but no run is announced.
+#[tokio::test]
+async fn c5_a_refused_selector_form_post_keeps_the_refusal_line() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = HistoryStore::open(&dir.path().join("history.db"))
+        .await
+        .unwrap();
+    store.migrate().await.unwrap();
+    store
+        .record(DOMAIN, &done_run(), &[], now() - 10, |p, c| {
+            diff(p, c, &[], None)
+        })
+        .await
+        .unwrap();
+    let app = router(ResultState::new(
+        Arc::new(store),
+        Arc::new(RefusingRuns),
+        300,
+    ));
+    let req = Request::post(format!("/{DOMAIN}/run"))
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(Body::from("trigger=recheck&dkim_selectors=s1,s2"))
+        .unwrap();
+
+    let (status, _, body) = send(&app, req).await;
+
+    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS, "{body}");
+    let line = &body[body.find(r#"<div id="run-line">"#).expect("run line")..];
+    let line = &line[..line.find("</div>").unwrap()];
+    assert!(line.contains("too many checks from your address"), "{line}");
+    assert!(!line.contains("until this run ends"), "{line}");
+}
