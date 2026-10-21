@@ -116,3 +116,18 @@ Local lens from this worktree, seeded history (port 18531); `curl -s localhost:1
 ```
 Protocols and features ALPN none Encrypted Client Hello not advertised Key exchange X25519
 ```
+
+## Phase 3 — Per-port parts and tabs
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R13 each TLS part carries its port's checks, renders its views with them on arrival, and a shared run stores and renders them | open | crates/web/tests/it/inspect_tls_panels.rs |
+| C2 | R14 several ports: tab row, one panel per port with its band, check list and port view, no band under the h1; tab meta with STARTTLS, tone and counts; band port current; tabs island; no-JS in-page links | open | crates/web/tests/it/inspect_tls_panels.rs |
+| C3 | S example.com:443,465,587: tabs 443, 465, 587 · STARTTLS, 443 current, panels with own band and check list, no band under the h1 | open | crates/web/tests/it/inspect_tls_panels.rs |
+| C4 | S port 465 failing its handshake: its tab carries the fail tone and its counts, 443's does not | open | crates/web/tests/it/inspect_tls_panels.rs |
+| C5 | S a one-port run: no tab row, one band under the h1 | open | crates/web/tests/it/inspect_tls_panels.rs |
+| C6 | S a TLS part carries its own port's tones and is not re-sent at band end | open | crates/web/tests/it/inspect_tls_panels.rs |
+| C7 | S a three-port share key renders panels with their own bands and tones | open | crates/web/tests/it/inspect_tls_panels.rs |
+| C8 | S without JavaScript a three-port shared run renders all panels in order with in-page tab links | open | crates/web/tests/it/inspect_tls_panels.rs |

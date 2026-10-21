@@ -347,3 +347,39 @@ async fn c7_c8_a_three_port_share_key_renders_all_panels_in_order_without_javasc
     );
     assert!(page.contains(r#"data-tone="fail""#), "{page}");
 }
+
+struct Closed;
+impl InspectorJobs for Closed {
+    fn admit(&self, _: Tool, _: IpAddr, _: &str) -> Result<(), Duration> {
+        Ok(())
+    }
+    fn start(&self, _: JobRequest) -> Result<Job, String> {
+        let unmeasured = vec![
+            check("tls.tls_reachable", Status::Unmeasured),
+            check("tls.chain_trusted", Status::Unmeasured),
+        ];
+        let job = Job::new(vec![
+            part("port 443", port_blocks(443, None)),
+            part(
+                "port 8443",
+                vec![addresses(8443, "CONNECTION_REFUSED", "refused")],
+            ),
+        ]);
+        Ok(job
+            .with_part_checks(0, Box::pin(async { Ok(checks(false)) }))
+            .with_part_checks(1, Box::pin(async move { Ok(unmeasured) }))
+            .with_band(Protocol::Tls, Box::pin(async { Ok(checks(false)) })))
+    }
+}
+
+/// Phase 3 review: a port whose lines are unmeasured does not look like a passing port (Rule M).
+#[tokio::test]
+async fn c4_an_unmeasured_port_reads_not_measured_without_the_pass_tone() {
+    let stream = run(&app(Closed)).await;
+    let frags = fragments(&stream);
+    let closed = frag(&frags, "inspect-port-meta-1");
+    assert!(!closed.contains(r#"data-tone="pass""#), "{closed}");
+    assert!(closed.contains("2 not measured"), "{closed}");
+    let open = frag(&frags, "inspect-port-meta-0");
+    assert!(open.contains(r#"data-tone="pass""#), "{open}");
+}
