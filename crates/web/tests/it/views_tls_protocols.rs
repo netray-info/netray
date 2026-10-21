@@ -377,3 +377,14 @@ fn qual(ip: &str) -> String {
         ip.to_string()
     }
 }
+
+/// Final review (F2): without a handshake read, ALPN is no measured "none".
+#[test]
+fn no_alpn_cell_without_a_taken_handshake() {
+    let blocks: Vec<Block> = port(vec![("alpn", t("h2"))], Some(full_protocols()))
+        .into_iter()
+        .filter(|b| !b.id.to_string().starts_with("tls.chain"))
+        .collect();
+    let html = render(&blocks);
+    assert!(cell(&html, "ALPN").is_none(), "{html}");
+}

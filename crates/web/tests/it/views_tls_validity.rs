@@ -209,3 +209,13 @@ fn c18_expiry_window_compares_against_expiry_warn_days() {
         CheckStatus::Pass
     );
 }
+
+/// Final review (F1): a leaf lapsed hours ago is stored with 0 days and `expired` true; the bar
+/// reads it as expired, as the Subject's chip does.
+#[test]
+fn a_leaf_lapsed_within_the_day_draws_expired() {
+    let html = view(now() - 100 * DAY, now() - 5 * 3_600);
+    assert!(html.contains(r#"data-state="expired""#), "{html}");
+    assert!(html.contains("expired today"), "{html}");
+    assert!(!html.contains("days left"), "{html}");
+}

@@ -221,3 +221,16 @@ describe("ports island, review fixes", () => {
     expect(h.value).toBe("example.com");
   });
 });
+
+describe("ports island, final review", () => {
+  beforeEach(() => {
+    document.body.replaceChildren();
+  });
+
+  it("presses nothing for a suffix the server refuses", () => {
+    const { group, h } = page();
+    ports(group);
+    typeHost(h, "example.com:0");
+    expect(pressed(group)).toEqual([]);
+  });
+});
