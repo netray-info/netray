@@ -5,7 +5,7 @@ use netray_model::evidence::{Block, Value};
 use percent_encoding::utf8_percent_encode;
 
 use super::{ViewContext, claim, claim_tree, frame};
-use crate::components::{FactCell, FactsGridView, facts_grid};
+use crate::components::{Cell, FactCell, FactsGridView, facts_grid};
 use crate::evidence::{BadgeTone, cell, display_value};
 use crate::explore::COMPONENT;
 use crate::links;
@@ -84,6 +84,15 @@ const LOOKUP_KEYS: &[&str] = &[
     "ua_device",
 ];
 
+fn fact(label: &str, cell: Cell) -> FactCell {
+    FactCell {
+        label: label.to_string(),
+        values: vec![cell],
+        chips: false,
+        tone: None,
+    }
+}
+
 struct Host {
     name: String,
     dns_href: String,
@@ -101,11 +110,15 @@ struct IpCard {
     address: String,
     host: Option<Host>,
     badges: Vec<Chip>,
-    grid: Option<String>,
+    network: Option<String>,
+    location: Option<String>,
+    map_href: Option<String>,
+    user_agent: Option<String>,
+    ua_raw: Option<String>,
 }
 
 /// `ip.lookup` as the address and its host name, a badge row of the facts that are flags and
-/// every other value in a facts grid.
+/// the rest in Network, Location and User agent facts grids.
 fn lookup(block: &Block, ctx: &ViewContext<'_>) -> Option<String> {
     let pairs = claim(block, LOOKUP_KEYS)?;
     let get = |key: &str| pairs.iter().find(|(k, _)| k == key).map(|(_, v)| v);
@@ -145,28 +158,163 @@ fn lookup(block: &Block, ctx: &ViewContext<'_>) -> Option<String> {
         }
     }
 
-    const SHOWN: [&str; 4] = ["address", "hostname", "eu", "infra_type"];
-    let cells: Vec<FactCell> = pairs
-        .iter()
-        .filter(|(k, _)| !SHOWN.contains(&k.as_str()) && !FLAGS.iter().any(|(f, _, _)| f == k))
-        .map(|(k, v)| FactCell {
-            label: k.clone(),
-            values: vec![cell(&block.id, k, v, ctx.decorate)],
-            chips: false,
-            tone: None,
-        })
-        .collect();
-    let grid = if cells.is_empty() {
-        None
-    } else {
-        Some(facts_grid(&FactsGridView { cells }).ok()?)
+    let one = |label: &str, key: &str| -> Option<FactCell> {
+        get(key).map(|v| fact(label, cell(&block.id, key, v, ctx.decorate)))
     };
+    let joined = |label: &str, keys: &[&str], sep: &str| -> Option<FactCell> {
+        let parts: Vec<(&str, &Value)> = keys
+            .iter()
+            .filter_map(|k| get(k).map(|v| (*k, v)))
+            .collect();
+        let (key, first) = *parts.first()?;
+        let text = parts
+            .iter()
+            .map(|(_, v)| display_value(v))
+            .collect::<Vec<_>>()
+            .join(sep);
+        Some(fact(label, super::cell_with(block, key, first, ctx, text)))
+    };
+    let coded = |label: &str, name: &str, code: &str| -> Option<FactCell> {
+        match (get(name), get(code)) {
+            (Some(n), Some(c)) => Some(fact(
+                label,
+                super::cell_with(
+                    block,
+                    name,
+                    n,
+                    ctx,
+                    format!("{} ({})", display_value(n), display_value(c)),
+                ),
+            )),
+            (Some(_), None) => one(label, name),
+            (None, Some(_)) => one(label, code),
+            (None, None) => None,
+        }
+    };
+
+    let network: Vec<FactCell> = [
+        one("ASN", "asn"),
+        one("Organisation", "org"),
+        one("Prefix", "prefix"),
+        one("Network type", "network_type"),
+        one("Network role", "network_role"),
+        one("ASN category", "asn_category"),
+        one("ASN registered", "asn_registered"),
+        one("IANA label", "iana_label"),
+        joined(
+            "Cloud",
+            &["cloud_provider", "cloud_service", "cloud_region"],
+            " · ",
+        ),
+        one("VPN provider", "vpn_provider"),
+        one("Bot provider", "bot_provider"),
+        one("TCP source port", "tcp_port"),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+
+    let accuracy = get("accuracy_km").map(|v| format!("± {} km", display_value(v)));
+    let coordinates = match (get("latitude"), get("longitude")) {
+        (Some(lat), Some(lon)) => {
+            let mut text = format!("{}, {}", display_value(lat), display_value(lon));
+            if let Some(acc) = &accuracy {
+                text.push(' ');
+                text.push_str(acc);
+            }
+            vec![fact(
+                "Coordinates",
+                super::cell_with(block, "latitude", lat, ctx, text),
+            )]
+        }
+        _ => {
+            let mut cells: Vec<FactCell> =
+                [one("Latitude", "latitude"), one("Longitude", "longitude")]
+                    .into_iter()
+                    .flatten()
+                    .collect();
+            if let (Some(v), Some(text)) = (get("accuracy_km"), accuracy) {
+                cells.push(fact(
+                    "Accuracy",
+                    super::cell_with(block, "accuracy_km", v, ctx, text),
+                ));
+            }
+            cells
+        }
+    };
+    let country = coded("Country", "country", "country_iso");
+    let registered = coded(
+        "Registered country",
+        "registered_country",
+        "registered_country_iso",
+    )
+    .filter(|r| {
+        country
+            .as_ref()
+            .is_none_or(|c| c.values[0].text != r.values[0].text)
+    });
+    let mut location: Vec<FactCell> = [
+        one("City", "city"),
+        coded("Region", "region", "region_code"),
+        country,
+        coded("Continent", "continent", "continent_code"),
+        one("Postal code", "postal_code"),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    location.extend(coordinates);
+    location.extend(
+        [one("Timezone", "timezone"), registered]
+            .into_iter()
+            .flatten(),
+    );
+
+    let map_href = match (get("latitude"), get("longitude")) {
+        (Some(lat), Some(lon)) => {
+            let (lat, lon) = (display_value(lat), display_value(lon));
+            let (lat, lon) = (
+                utf8_percent_encode(&lat, COMPONENT).to_string(),
+                utf8_percent_encode(&lon, COMPONENT).to_string(),
+            );
+            Some(format!(
+                "https://www.openstreetmap.org/?mlat={lat}&mlon={lon}#map=10/{lat}/{lon}"
+            ))
+        }
+        _ => None,
+    };
+
+    let ua_raw = get("ua_raw").map(display_value);
+    let user_agent: Vec<FactCell> = [
+        joined("Browser", &["ua_browser", "ua_browser_version"], " "),
+        joined("Operating system", &["ua_os", "ua_os_version"], " "),
+        one("Device", "ua_device"),
+        one("Raw header", "ua_raw"),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+
+    let section = |cells: Vec<FactCell>| -> Option<Option<String>> {
+        if cells.is_empty() {
+            Some(None)
+        } else {
+            Some(Some(facts_grid(&FactsGridView { cells }).ok()?))
+        }
+    };
+    let network = section(network)?;
+    let location = section(location)?;
+    let user_agent = section(user_agent)?;
 
     let body = IpCard {
         address: display_value(address),
         host,
         badges,
-        grid,
+        network,
+        location,
+        map_href,
+        user_agent,
+        ua_raw,
     }
     .render()
     .ok()?;

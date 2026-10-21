@@ -74,3 +74,45 @@ cache-control: no-cache
 The card with data is verified over the stub lookup by the router tests; screenshots follow in
 Phase 4.
 
+
+## Phase 2 — Network, location, user agent and headers
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R8 Network facts grid: ASN, organisation, prefix, network type and role, ASN category and registered, IANA label, cloud, VPN and bot providers, caller TCP source port | green | crates/web/tests/it/views_ip_network.rs |
+| C2 | R9 Location facts grid: city, region with code, country with ISO code, continent, postal code, coordinates with accuracy, timezone, differing registered country | green | crates/web/tests/it/views_ip_location.rs |
+| C3 | R10 OpenStreetMap link for known coordinates with rel noopener noreferrer | green | crates/web/tests/it/views_ip_location.rs |
+| C4 | R11 User agent facts grid with browser, OS, device and raw header with copy button | green | crates/web/tests/it/views_ip_user_agent.rs |
+| C5 | R12 Request headers: closed details, hops list or no proxy hops, name and value table in block order | already_implemented | crates/web/tests/it/views_ip_headers.rs |
+| C6 | S ASN AS64496, organisation, prefix, role, category and registration date each in the Network grid | green | crates/web/tests/it/views_ip_network.rs |
+| C7 | S cloud cell reads aws · EC2 · eu-central-1, or only aws | green | crates/web/tests/it/views_ip_network.rs |
+| C8 | S VPN and bot provider cells only when named | green | crates/web/tests/it/views_ip_network.rs |
+| C9 | S coordinates read 52.52, 13.4 ± 20 km and the map link targets OpenStreetMap | green | crates/web/tests/it/views_ip_location.rs |
+| C10 | S no coordinates, no map link | green | crates/web/tests/it/views_ip_location.rs |
+| C11 | S a registered country equal to the country has no cell | green | crates/web/tests/it/views_ip_location.rs |
+| C12 | S tcp_port 54321 reads TCP source port; none without it | green | crates/web/tests/it/views_ip_network.rs |
+| C13 | S Firefox 128 on Linux user agent grid with raw header and copy; none without keys | green | crates/web/tests/it/views_ip_user_agent.rs |
+| C14 | S headers block with two hops and three headers in a closed details; no hop reads no proxy hops | already_implemented | crates/web/tests/it/views_ip_headers.rs |
+
+C5 and C14 passed on the baseline: Phase 1 built the `ip.headers` view.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 1 | sonnet | 51163 | 84 |
+
+### Review
+
+| class | finding | disposition |
+|---|---|---|
+| NIT | the raw header's copy button sits on its own line under the User agent grid, not in the cell | listed; the Phase 4 reading judges its placement |
+
+### Behavioural verification
+
+skipped: the grids render only with GeoIP data, which does not exist locally; the views are
+verified over hand-built blocks by the router-free view tests, and Phase 4 screenshots the page
+over the stub lookup.
+

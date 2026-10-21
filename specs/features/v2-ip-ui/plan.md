@@ -50,3 +50,27 @@ new `partials/inspect_caller_notice.html`, SDD §6.2)
    finished run (no share key, export ready). Every caller answer `private, no-store`.
 7. Test change (orchestrator, ADLC-Test-Change): `inspect_ip_jobs.rs` anchor needle → `ev-ip.lookup`.
 8. SDD §6.2 amended.
+
+## Phase 2 — Network, location, user agent and headers
+
+### Groups
+
+G1: C1, C2, C3, C4, C6, C7, C8, C9, C10, C11, C12, C13 (one group: every criterion lands in
+`views/ip.rs` and `ip_card.html`). C5 and C14 are already implemented (Phase 1's headers view).
+
+### Plan
+
+G1
+1. `views/ip.rs` `lookup`: the raw-key grid goes; `IpCard` carries `network`, `location`,
+   `map_href`, `user_agent`, `ua_raw`. Cells only for present keys; composed cells through
+   `cell_with`. Network: ASN, Organisation, Prefix, Network type, Network role, ASN category, ASN
+   registered, IANA label, Cloud "p · s · r", VPN provider, Bot provider, TCP source port.
+   Location: City, Region "<name> (<code>)", Country "<name> (<iso>)", Continent "<name> (<code>)",
+   Postal code, Coordinates "<lat>, <lon>" with " ± <n> km", Timezone, Registered country when it
+   differs. A lone latitude, longitude or accuracy keeps a cell of its own (nothing lost). Map link
+   to OpenStreetMap when both coordinates exist. User agent: Browser, Operating system, Device;
+   the raw header below the grid with a copy button, in the card's own markup (gate rule 2: the
+   facts_grid markup only through its macro).
+2. `ip_card.html`: a `section.ip-card__section` with an `h4.ip-card__section-title` per grid; the
+   map link `rel="noopener noreferrer"`, the arrow outside the link text.
+3. `pages.css`: `.ip-card__section`, `__section-title`, `__map`, `__raw` (mono, wraps anywhere).
