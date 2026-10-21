@@ -56,14 +56,15 @@ function el(opts: { shell?: boolean; sha?: string; notAfter?: string; sans?: str
   const { shell = true, sha = "bb", notAfter = "2027-03-25T00:00:00Z", sans = "example.com" } = opts;
   const html = `<div class="tls-certdiff" data-island="certdiff" data-cert-key="${key}" data-not-after="${notAfter}" data-issuer="CN=R3" data-sans="${sans}" data-sha256="${sha}" hidden>
     <template class="tls-certdiff__template"><div class="tls-certdiff__banner" role="status"><p>Certificate changed since your last visit: <span class="tls-certdiff__changes"></span></p><button type="button" class="tls-certdiff__forget">Forget</button></div></template></div>`;
-  document.body.innerHTML = shell ? `<div class="inspector-shell">${html}</div>` : html;
+  // A live run of this page: the stream island's form carries its state.
+  const form = '<form data-stream-state="done"></form>';
+  document.body.innerHTML = shell ? `<div class="inspector-shell">${form}${html}</div>` : html;
   return document.querySelector(".tls-certdiff") as HTMLElement;
 }
 
+// A part the stream sends again: fresh server markup for the same key and sha256.
 function remount(): HTMLElement {
-  const html = document.body.innerHTML;
-  document.body.innerHTML = html;
-  return document.querySelector(".tls-certdiff") as HTMLElement;
+  return el();
 }
 
 const storeKey = () => `netray.cert.${key}`;
@@ -156,17 +157,29 @@ describe("certdiff island", () => {
     expect(JSON.parse(localStorage.getItem(storeKey()) as string).sha256).toBe("aa");
   });
 
-  it("shows the same banner on a second mount of the same key and sha256", () => {
+  it("a second run of the same certificate in the page shows no banner", () => {
     localStorage.setItem(storeKey(), JSON.stringify(old));
     const first = el();
     certdiff(first);
-    const firstText = first.querySelector(".tls-certdiff__changes")?.textContent ?? "";
-    expect(firstText).toContain("expiry 2026-12-25 → 2027-03-25");
+    expect(first.hidden).toBe(false);
 
     const second = remount();
-    expect(second.hidden).toBe(true);
     certdiff(second);
-    expect(second.hidden).toBe(false);
-    expect(second.querySelector(".tls-certdiff__changes")?.textContent).toBe(firstText);
+    expect(second.hidden).toBe(true);
+  });
+
+  it("a shared run (no live stream in the page) neither compares nor stores", () => {
+    localStorage.setItem(storeKey(), JSON.stringify(old));
+    const e = el();
+    document.querySelector("form[data-stream-state]")?.removeAttribute("data-stream-state");
+    certdiff(e);
+    expect(e.hidden).toBe(true);
+    expect(JSON.parse(localStorage.getItem(storeKey()) ?? "{}").sha256).toBe("aa");
+  });
+
+  it("names no expiry change when only the time of day differs", () => {
+    const a = { ...base, sha256: "aa", notAfter: "2027-01-06T10:00:00Z" };
+    const b = { ...base, sha256: "bb", notAfter: "2027-01-06T12:00:00Z" };
+    expect(describeChange(a, b)).toEqual(["same names and issuer, new key"]);
   });
 });

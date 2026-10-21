@@ -71,12 +71,12 @@ fn page(ip: &str, sni: Option<&str>) -> String {
     let blocks = vec![
         addresses(ip),
         Block {
-            id: BlockId::parse(&format!("tls.chain@{ip}:443")).unwrap(),
+            id: BlockId::parse(&format!("tls.chain@{}:443", qual(ip))).unwrap(),
             title: "Certificate chain".into(),
             shape: Shape::Chain(vec![leaf()]),
         },
         Block {
-            id: BlockId::parse(&format!("tls.handshake@{ip}:443")).unwrap(),
+            id: BlockId::parse(&format!("tls.handshake@{}:443", qual(ip))).unwrap(),
             title: "Handshake".into(),
             shape: Shape::Fields(fields(hs)),
         },
@@ -187,5 +187,25 @@ fn c17_without_sni_the_key_is_the_first_address_and_an_ipv6_one_is_bracketed() {
     assert!(
         with_sni.contains(r#"data-cert-key="example.com:443""#),
         "{with_sni}"
+    );
+}
+
+/// The address part of a block qualifier: an IPv6 address in brackets, as `BlockId` requires.
+fn qual(ip: &str) -> String {
+    if ip.contains(':') {
+        format!("[{ip}]")
+    } else {
+        ip.to_string()
+    }
+}
+
+/// Phase 5 review: the snapshot key is the lower-cased host, as the host's case names no other
+/// certificate.
+#[test]
+fn c17_the_key_lowercases_the_sni() {
+    let html = page("192.0.2.1", Some("Example.com"));
+    assert!(
+        html.contains(r#"data-cert-key="example.com:443""#),
+        "{html}"
     );
 }
