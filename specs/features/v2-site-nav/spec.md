@@ -1,7 +1,8 @@
 # Spec: v2-site-nav
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-20
+Finished: 2026-10-21
 
 ## Goal
 

@@ -280,3 +280,19 @@ Live stack (`design_stack_up` with lens, the design fixtures): `/`, `/tools`, `/
 |---|---|---|
 | F1 refused selector run lost its refusal line on the 429 page | the "stored run shows" line applies only when the shown line is no refusal | `site_nav_selectors.rs` `c5_a_refused_selector_form_post_keeps_the_refusal_line` |
 | F2 no-entry evidence view without the IDN form | heading and title show both forms | `site_nav_idn.rs` `c5_an_evidence_view_without_an_entry_shows_both_forms` |
+
+## Distilled
+
+Confirmed by the implementer under the operator's autonomy mandate (no operator present):
+
+| destination | kind | entry | source |
+|---|---|---|---|
+| specs/solutions | judgement | page assertions passed on links the site frame carries | site_nav_legend c3, result_mount.rs, site_nav_header c8 |
+| CLAUDE.md | mechanical, no check: written in the docs commit | absolute URLs from `pages::ORIGIN`; system colour words in the gate; the gone page's inline sheet; the manifest's `click` | ff49b1c8 |
+| CLAUDE.md (remove) | — | none | — |
+| specs/rules | — | none | — |
+| measurement | — | design check: 14 boards, 1801 properties, 0 open | Phase 7 |
+
+### Checks to build
+
+- A page test that asserts an `href` the frame's nav or footer also renders slices the page first (repo check over `crates/web/tests/it`).
