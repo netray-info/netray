@@ -768,6 +768,12 @@ impl InspectorJobs for InspectJobs {
         }
     }
 
+    fn max_ports(&self) -> usize {
+        self.state
+            .tls_inspector()
+            .map_or(7, netray_tls::TlsInspector::max_ports)
+    }
+
     fn enrich(&self, addrs: Vec<IpAddr>) -> BoxFuture<'static, Vec<(IpAddr, Vec<Badge>)>> {
         let Some(ip) = self.state.ip_lookup().cloned() else {
             return Box::pin(async { Vec::new() });

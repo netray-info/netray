@@ -91,6 +91,11 @@ impl TlsInspector {
         self.state.backend.probe_connections()
     }
 
+    /// The most ports one inspection takes: `limits.max_ports`.
+    pub fn max_ports(&self) -> usize {
+        self.state.config.load().limits.max_ports
+    }
+
     /// tlsight's input rules with this inspector's `limits.max_ports`.
     pub fn parse(&self, input: &str) -> Result<ParsedInput, AppError> {
         let mut parsed = input::parse_input(input, self.state.config.load().limits.max_ports)?;

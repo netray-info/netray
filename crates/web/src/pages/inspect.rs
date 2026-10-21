@@ -168,7 +168,7 @@ impl Tool {
     fn syntax(self) -> &'static str {
         match self {
             Tool::Dns => "A name, then optional record types, +flags and @resolvers.",
-            Tool::Tls => "A host, optionally with a port: example.com or example.com:443.",
+            Tool::Tls => "A host, optionally with ports: example.com or host:443,465.",
             Tool::Http => "A full URL, scheme included.",
             Tool::Email => "A domain, then DKIM selectors separated by spaces or commas.",
             Tool::Ip => "An IPv4 or IPv6 address.",
@@ -392,6 +392,10 @@ pub trait InspectorJobs: Send + Sync + 'static {
         let _ = addrs;
         Box::pin(async { Vec::new() })
     }
+    /// The most ports one TLS inspection takes.
+    fn max_ports(&self) -> usize {
+        7
+    }
 }
 
 #[derive(Clone)]
@@ -479,6 +483,7 @@ struct ShellView {
     autostart: bool,
     tabs: String,
     examples: Vec<ExampleView>,
+    between: String,
     slot: Option<String>,
     result: Option<String>,
     notice: Option<&'static str>,
@@ -532,6 +537,12 @@ struct InspectorPage {
 #[derive(Template)]
 #[template(path = "partials/inspect_dns_builder.html")]
 struct DnsBuilder;
+
+#[derive(Template)]
+#[template(path = "partials/port_chooser.html")]
+struct PortChooser {
+    max_ports: usize,
+}
 
 #[derive(Template)]
 #[template(path = "partials/inspect_tabs.html")]
@@ -710,6 +721,17 @@ async fn show(
         Tool::Dns => (DnsBuilder).render().ok(),
         _ => None,
     };
+    let between = match tool {
+        Tool::Tls => match (PortChooser {
+            max_ports: deps.jobs.max_ports(),
+        })
+        .render()
+        {
+            Ok(html) => html,
+            Err(_) => return server_error(),
+        },
+        _ => String::new(),
+    };
     let Ok(tabs) = (TabsFragment {
         tabs: tabs(tool, prefill.as_deref()),
     })
@@ -745,6 +767,7 @@ async fn show(
                 text,
             })
             .collect(),
+        between,
         slot,
         result,
         notice,

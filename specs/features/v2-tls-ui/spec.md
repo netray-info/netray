@@ -213,7 +213,11 @@ and canvas rows 9.50, 9.55, 9.56, 9.57, 9.58 (summaries).
     "HTTPS" (443), "E-Mail" (25, 465, 587, 993, 995), "All common" (443, 25, 465, 587, 993, 995,
     8443) and a field for one more port (1 to 65535). Default: 443 pressed, 8443 offered. The host
     field is the source of truth: a toggle rewrites its port suffix (`example.com:443,465`; only
-    443 pressed leaves the bare host), and typing `host:25,587` presses 25 and 587. The last pressed
+    443 pressed leaves the bare host; an IPv6 host in brackets), and typing `host:25,587` presses
+    25 and 587; the chooser re-reads the field before every action, on submit and on history
+    navigation (the shell writes the field without an input event), and reads a suffix as ports
+    only as the server's parser does (a list it would refuse presses nothing). The extra-port field
+    never blocks the form's submit. The last pressed
     port cannot be released. At most `limits.max_ports` (a data attribute) are pressed; one more is
     refused with a visible note naming the limit. The group is rendered `hidden` and shown by its
     island, so without JavaScript it is absent; the help names the `host:443,465` syntax. (3.4,
@@ -398,6 +402,10 @@ GIVEN the TLS inspector at 390 px WHEN measured THEN the document is not wider t
   operator's autonomy mandate, 2026-10-21).
 - Phase 3 review: a port whose lines are unmeasured (a closed 8443) reads "<u> not measured" on
   its tab without the pass tone (implementer under the operator's autonomy mandate, 2026-10-21).
+- Phase 4 review: the chooser re-reads the host field before every action (the shell restores
+  and fills it without input events), parses the suffix exactly as `crates/tls/src/input.rs`
+  does, brackets an IPv6 host, and its extra-port field is a text field that cannot block the
+  submit (implementer under the operator's autonomy mandate, 2026-10-21).
 - The design check's live TLS board needs network: a binary built in a worktree gets none here,
   so `netray_bin` honours `NETRAY_BIN`, and the gate runs with this branch's build copied to the
   main checkout's target path (backed up and restored) (implementer under the operator's autonomy

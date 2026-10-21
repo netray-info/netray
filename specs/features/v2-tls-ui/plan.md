@@ -52,3 +52,16 @@ G1: C1–C8 (one seam: `pages/inspect.rs` and its templates; `api/jobs.rs` attac
 3. `crates/web/src/api/jobs.rs` `port_jobs`: each part's checks from its port's outcome.
 4. `crates/web/static/inspector_shell.css` or `pages.css`: `.inspector-ports*` tab row (marker rule via `aria-current`), `.inspector-ports[data-ready] .inspector-port:not([data-shown]) { display: none }`.
 5. `specs/sdd/v2.md` §6.1 (inspector re-stream) and the TLS inspector paragraph: per-part checks, panels.
+
+## Phase 4 — Port chooser
+
+### Groups
+
+G1: C1–C9 (the server markup and the island; one group, two files of tests).
+
+### Plan
+
+1. `crates/web/src/pages/inspect.rs`: `InspectorJobs::max_ports` (default 7); `show` renders the chooser for TLS only; `Tool::syntax` for TLS names `host:443,465`. `crates/web/src/api/jobs.rs` (`InspectJobs`) returns the TLS inspector's `limits.max_ports`.
+2. `templates/components/query_input.html`: a `between` slot (HTML) between the box and the submit; `components/inspector_shell.html` passes it; a `partials/port_chooser.html`.
+3. `crates/web/islands/src/ports.ts` (`parsePorts`, `formatHost`, `ports`), registered in `main.ts`.
+4. `crates/web/static/query_input.css` or `inspector_shell.css`: `.port-chooser*` per board G (label 12 px muted; toggles 44 px, mono 14 px, padding 0 14 0 18, 1 px line border, pressed: ink border, weight 700 and the marker; "+" 44 × 44 dashed; gap 6 px).

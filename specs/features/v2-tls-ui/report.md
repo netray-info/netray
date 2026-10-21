@@ -166,3 +166,45 @@ inspect-share, inspect-export
 ```
 
 No `inspect-band` fragment in the panel run; each part arrived once.
+
+## Phase 4 — Port chooser
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R15 port chooser in the TLS form card: toggles, +, presets, field, host field as source of truth, limit with note, hidden until the island shows it, help names host:443,465 | green | crates/web/tests/it/inspect_tls_chooser.rs, crates/web/islands/test/ports.test.ts |
+| C2 | R18 no JavaScript: the chooser is absent (hidden); bundle under budget; the island writes no style | green | crates/web/tests/it/inspect_tls_chooser.rs, crates/web/islands/test/budget.test.ts |
+| C3 | S the idle TLS page holds a hidden Ports group with 443 pressed, 8443 unpressed, + and data-max-ports 7; other inspectors none | green | crates/web/tests/it/inspect_tls_chooser.rs |
+| C4 | S adding 465 with host example.com: the field reads example.com:443,465 | green | crates/web/islands/test/ports.test.ts |
+| C5 | S typing example.com:25,587 presses 25 and 587 and releases 443 | green | crates/web/islands/test/ports.test.ts |
+| C6 | S the E-Mail preset presses 25, 465, 587, 993, 995 | green | crates/web/islands/test/ports.test.ts |
+| C7 | S a limit of 7 with seven pressed: an eighth stays unpressed and the note names the limit | green | crates/web/islands/test/ports.test.ts |
+| C8 | S the last pressed port stays pressed | green | crates/web/islands/test/ports.test.ts |
+| C9 | S the islands bundle stays within the budget | green | crates/web/islands/test/budget.test.ts |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 1 | opus | 83710 | 316 |
+| review fixes | 1 | opus | 50119 | 165 |
+
+Planned by the orchestrator (one group). The empty-field note was added by the orchestrator.
+
+### Review
+
+| class | finding | disposition |
+|---|---|---|
+| BLOCKER | the shell writes the host field without input events, so the chooser showed a stale set and a toggle rewrote the field from it | fixed: the field is re-read before every action, on submit and popstate; test added |
+| BLOCKER | the number-typed extra-port field blocked every submit once it held an invalid value | fixed: a text field, cleared after every value; test added |
+| AMENDMENT | unbracketed IPv6 and non-port suffixes were rewritten into other targets | requirement 15 amended and fixed: the suffix is read as the server's parser reads it, IPv6 bracketed; tests added |
+| NIT | the chooser accepted lists the server refuses (spaces, empty items, duplicates past the limit) | fixed with the parser |
+
+With an empty host field a toggle press shows "Enter a host first." instead of appearing inert.
+
+### Behavioural verification
+
+The island runs in happy-dom (`crates/web/islands/test/ports.test.ts`, 26 tests) and the reviewer
+drove the real `shell.ts` and `ports.ts` in headless Chromium (scratchpad `pc/`), which found the
+two blockers above; the browser pass over the finished page is Phase 6's design check.
