@@ -1422,3 +1422,175 @@ main td {
 .csp-view__directive-issues [data-tone="pass"] { color: var(--status-pass-text); }
 .csp-view__directive-issues [data-tone="warn"] { color: var(--status-warn-text); }
 .csp-view__directive-issues [data-tone="fail"] { color: var(--status-fail-text); }
+.ip-card__address,
+.ip-card__host {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.ip-card__addr {
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-strong);
+  overflow-wrap: anywhere;
+}
+.ip-card__hostname {
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  overflow-wrap: anywhere;
+}
+.ip-card__none {
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+}
+.ip-card__link {
+  color: var(--color-muted);
+  font-size: var(--font-size-label);
+  text-decoration: underline;
+}
+.ip-card__link:hover {
+  color: var(--color-ink);
+}
+.ip-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: var(--space-3) 0 0;
+}
+.ip-card__section {
+  margin-top: var(--space-4);
+}
+.ip-card__section-title {
+  margin: 0 0 var(--space-2);
+  color: var(--color-muted);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-strong);
+}
+.ip-card__map {
+  margin: var(--space-2) 0 0;
+}
+.ip-card__raw {
+  margin: var(--space-1) 0 0;
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.geoip-attribution {
+  margin: var(--space-4) 0 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-label);
+}
+.geoip-attribution a {
+  color: inherit;
+  text-decoration: underline;
+}
+.ip-explorer__summary {
+  color: var(--color-ink);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-strong);
+  cursor: pointer;
+}
+.ip-explorer__rows {
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.ip-explorer__row {
+  margin-top: var(--space-3);
+  min-width: 0;
+}
+.ip-explorer__text {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-label);
+}
+.ip-explorer__command {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-2);
+  min-width: 0;
+}
+/* A long command wraps inside the card rather than running past it at phone width. */
+.ip-explorer__code {
+  min-width: 0;
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  overflow-wrap: anywhere;
+}
+.ip-explorer__docs {
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-size-label);
+}
+.ip-explorer__docs a {
+  color: var(--color-muted);
+  text-decoration: underline;
+}
+.ip-headers__summary {
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+  cursor: pointer;
+}
+.ip-headers__hops {
+  margin: var(--space-3) 0 0;
+  padding-inline-start: var(--space-4);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+}
+.ip-headers__none {
+  margin: var(--space-3) 0 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+}
+.ip-headers__scroll {
+  min-width: 0;
+  margin-top: var(--space-3);
+  overflow-x: auto;
+}
+.ip-headers__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.ip-headers__table tr + tr > * {
+  border-top: var(--line-hair) solid var(--color-line);
+}
+.ip-headers__name,
+.ip-headers__value {
+  padding: var(--space-2) var(--space-3) var(--space-2) 0;
+  vertical-align: top;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+}
+.ip-headers__name {
+  color: var(--color-ink);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ip-headers__value {
+  color: var(--color-ink);
+}
+/* The raw header's copy control lines up with the facts grid's left edge. */
+.ip-card__raw .inspector-copy {
+  padding-inline-start: 0;
+}
+@media (max-width: 480px) {
+  .ip-card__link,
+  .geoip-attribution a,
+  .ip-explorer__docs a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  /* A summary keeps display: list-item, or it loses its disclosure marker. */
+  .ip-explorer__summary,
+  .ip-headers__summary {
+    min-height: 44px;
+    line-height: 44px;
+  }
+}

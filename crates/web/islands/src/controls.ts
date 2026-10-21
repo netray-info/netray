@@ -4,7 +4,7 @@ const TEXT_FIELD =
 export function unhide(el: HTMLElement): void {
   el
     .querySelectorAll<HTMLElement>(
-      ".inspector-share__copy, .inspector-help__open, .inspector-export button",
+      ".inspector-share__copy, .inspector-copy, .inspector-help__open, .inspector-export button",
     )
     .forEach((b) => (b.hidden = false));
 }

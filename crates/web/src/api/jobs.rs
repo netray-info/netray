@@ -23,11 +23,11 @@ use super::dns::DNS_OFF;
 use super::email::EMAIL_OFF;
 use super::error::V1Error;
 use super::inspectors::{HTTP_OFF, TLS_OFF};
-use super::ip::charge;
+use super::ip::{charge, shown_headers};
 use super::state::ApiState;
 use crate::evidence::{Badge, BadgeTone};
 use crate::pages::{
-    CachedDns, DnsResults, InspectorJobs, Job, JobPart, JobRequest, Refusal, Tool,
+    CachedDns, CallerRequest, DnsResults, InspectorJobs, Job, JobPart, JobRequest, Refusal, Tool,
     registrable_domain,
 };
 
@@ -487,17 +487,78 @@ impl InspectJobs {
             "lookup",
             Protocol::Ip,
             Box::pin(async move {
-                let result = if caller {
-                    ip.lookup_caller(SocketAddr::new(addr, 0), None).await
-                } else {
-                    ip.lookup(addr).await
-                };
-                measured(netray_ip::translate(
-                    &[(addr, result.map_err(|e| e.to_string()))],
-                    1,
+                let remote = SocketAddr::new(addr, 0);
+                let result = bounded_reverse(req.deadline, |options| {
+                    if caller {
+                        ip.lookup_caller_with(remote, None, options)
+                    } else {
+                        ip.lookup_with(addr, options)
+                    }
+                })
+                .await;
+                measured(netray_ip::module::translate_lookup(
+                    addr,
+                    result.map_err(|e| e.to_string()),
                 ))
             }),
         ))
+    }
+
+    fn caller_job(&self, req: CallerRequest) -> Result<Job, String> {
+        let ip = self
+            .state
+            .ip_lookup()
+            .ok_or_else(|| IP_OFF.to_string())?
+            .clone();
+        let shown = shown_headers(&self.state, &req.headers);
+        let headers = netray_ip::module::headers_block(&shown.xff, &shown.headers);
+        let CallerRequest {
+            remote,
+            user_agent,
+            deadline,
+            ..
+        } = req;
+        Ok(job(
+            "lookup",
+            Protocol::Ip,
+            Box::pin(async move {
+                let result = bounded_reverse(deadline, |options| {
+                    ip.lookup_caller_with(remote, user_agent.as_deref(), options)
+                })
+                .await;
+                measured(netray_ip::module::translate_lookup(
+                    remote.ip(),
+                    result.map_err(|e| e.to_string()),
+                ))
+                .map(|(mut evidence, checks)| {
+                    evidence.push(headers);
+                    (evidence, checks)
+                })
+            }),
+        ))
+    }
+}
+
+/// A lookup with reverse DNS within three quarters of the time left before `deadline`; past that
+/// budget the PTR query is given up and the address is looked up without it, so a reverse zone
+/// that never answers costs the host name, never the card (v2-ip-ui).
+async fn bounded_reverse<'a, F>(
+    deadline: std::time::Instant,
+    lookup: F,
+) -> Result<netray_ip::backend::Ifconfig, netray_ip::IpRefusal>
+where
+    F: Fn(
+        netray_ip::lookup::LookupOptions,
+    ) -> BoxFuture<'a, Result<netray_ip::backend::Ifconfig, netray_ip::IpRefusal>>,
+{
+    let options = |reverse_dns| netray_ip::lookup::LookupOptions {
+        reverse_dns,
+        lang: None,
+    };
+    let budget = deadline.saturating_duration_since(std::time::Instant::now()) * 3 / 4;
+    match tokio::time::timeout(budget, lookup(options(true))).await {
+        Ok(result) => result,
+        Err(_) => lookup(options(false)).await,
     }
 }
 
@@ -758,6 +819,10 @@ impl InspectorJobs for InspectJobs {
             Tool::Email => self.start_email(req),
             Tool::Dns => self.start_dns(req),
         }
+    }
+
+    fn caller(&self, req: CallerRequest) -> Option<Result<Job, String>> {
+        Some(self.caller_job(req))
     }
 
     fn enrich(&self, addrs: Vec<IpAddr>) -> BoxFuture<'static, Vec<(IpAddr, Vec<Badge>)>> {

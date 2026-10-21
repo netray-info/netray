@@ -155,7 +155,7 @@ async fn ip_job_looks_up_caller_or_address_and_renders_blocks_and_ip_band() {
         assert_eq!(rec.calls.lock().unwrap().as_slice(), [expected], "{body:?}");
         assert_eq!(events.last().unwrap().0, "end", "{body:?}");
         let html = joined(&events);
-        assert!(html.contains(r#"id="ev-ip.addresses""#), "{body:?}: {html}");
+        assert!(html.contains(r#"id="ev-ip.lookup""#), "{body:?}: {html}");
         assert!(html.contains(r#"id="inspect-band""#), "{body:?}: {html}");
         let band: Vec<&(String, String, String)> =
             events.iter().filter(|e| e.1 == "inspect-band").collect();
