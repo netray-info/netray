@@ -314,3 +314,8 @@ another feature's part (proposals for the operator).
 Every state at 390 px has `document.documentElement.scrollWidth` 390 (no sideways scroll); the
 merge of v2-ip-ui had dropped a closing brace in `pages.css`, found by the screenshots (the grid
 rules were ignored), fixed and pinned by `static_css_balanced.rs`.
+
+### Checks to build
+
+- Built here: every stylesheet under `crates/web/static/` closes each block it opens (`crates/web/tests/it/static_css_balanced.rs`).
+- A trace-replay test: a trace stored by `GET /api/v1/dns/trace?q=<domain> <t1> <t2>` and opened by `/inspect/dns?r=<key>` carries the "Only the first type is traced" note (crates/web/tests/it, review minor of 42c11af2..89c0fbe4).

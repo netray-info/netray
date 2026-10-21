@@ -43,6 +43,7 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - Write no file into the worktree while `adlc verify` runs: its `cargo fmt --check` reads untracked files too and refutes the receipt.
 - `tests/repo/*` read `git ls-files`: stage new and deleted files before running them.
 - `just design-check` needs the private canvas: its export serves boards as sandboxed blob: iframes; reach them with Playwright's `contentFrame()`, never `iframe.contentDocument`.
+- `cargo run -p netray-web --example dns_stub [port]` serves the DNS inspector over the offline stub: local DNS is blocked, so screenshot DNS views from it.
 - A board's interpolated text sits in a `span.sc-interp`: select its parent with `:has(> span:text-is(…))`, and write a regex digit as `\\\\d` in the manifest's JSON text (Playwright's selector parser unescapes once more).
 - The design fixtures' stored grades must equal `score_run`'s, or the score guard hides the score on every gated page.
 - A board span in a flex column can read `height: auto` in the export: measure a one-line text through its container's height ("title column height").
@@ -144,6 +145,8 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **askama 0.16 escapes `'&<>"` as `&#39;` `&#38;` `&#60;` `&#62;` `&#34;`**: a test over rendered text compares that form.
 - **Pages show values through `evidence::display_value`**; `format_value` stays raw for exports, compact tables, links and explore.
 - **A protocol view (`crates/web/src/pages/views/`) claims a block only when it renders every key**; each view adds `views_nothing_lost.rs` rows with distinct display texts.
+- **A part view (`views::render_part`) claims a whole inspector part**: its fragment replaces the first claimed block; DNS reads `dns.answers`/`dns.servers` from `netray_dns::*_page_blocks`.
+- **Count a DNS query's types with `netray_dns::parser::named_record_types`**, never raw tokens: the parser drops duplicates, resolves aliases (KEY is DNSKEY) and adds defaults.
 - **The CSS gate refuses literal font sizes and colours**: add a token to `crates/web/tokens.json` (build.rs emits the variable).
 - **An optional element in a golden-tested template opens with `{%- if %}`**, so the markup without it stays byte-identical (`result_header.html`'s `dkim_selectors` field).
 - **A `base.html` block default compiles against every child**: put frame-struct fields only inside blocks a struct-less child overrides (v2-entries' pages override `meta`).

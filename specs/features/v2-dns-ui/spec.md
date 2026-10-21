@@ -1,7 +1,8 @@
 # Spec: v2-dns-ui
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-20
+Finished: 2026-10-21
 
 ## Goal
 
@@ -390,6 +391,9 @@ GIVEN the DNS inspector at 390 px WHEN measured THEN the document is not wider t
   from the API's own route (no `+trace` token) gets the note too. Compact also leaves record
   details alone under a server filter, and the SOA serial age is a row of the record details
   beside the row's mark (implementer under the operator's autonomy mandate, 2026-10-21).
+- Finish: the distilled entries (three CLAUDE.md bullets, one solutions note) are written without
+  the operator's confirmation, under the autonomy mandate; the operator may drop any of them
+  (implementer under the operator's autonomy mandate, 2026-10-21).
 - The trace heading names no traced type and the shared-result notices of the draft are dropped:
   the traced type is not in the collected trace result and adding it would change the API's done
   event; the run line already shows the query. A multi-type `+trace` puts "Only the first type is
