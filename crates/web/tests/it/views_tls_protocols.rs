@@ -63,7 +63,7 @@ fn chain(ip: &str) -> Block {
         ("expired", Value::Bool(false)),
     ]);
     Block {
-        id: BlockId::parse(&format!("tls.chain@{ip}:443")).unwrap(),
+        id: BlockId::parse(&format!("tls.chain@{}:443", qual(ip))).unwrap(),
         title: "Certificate chain".into(),
         shape: Shape::Chain(vec![leaf]),
     }
@@ -76,7 +76,11 @@ fn handshake(ip: &str, extra: Vec<(&str, Value)>) -> Block {
         ("handshake_ms", Value::Duration(22)),
     ];
     pairs.extend(extra);
-    fields_block(&format!("tls.handshake@{ip}:443"), "Handshake", pairs)
+    fields_block(
+        &format!("tls.handshake@{}:443", qual(ip)),
+        "Handshake",
+        pairs,
+    )
 }
 
 fn protocols(extra: Vec<(&str, Value)>) -> Block {
@@ -295,11 +299,12 @@ fn c5_tones_come_from_the_checks_and_hsts_has_none() {
 }
 
 #[test]
-fn c6_a_handshake_without_sni_reads_none_ip_target() {
+fn c6_a_handshake_without_sni_has_no_sni_and_no_hsts_cell() {
     let blocks = port(vec![], Some(full_protocols()));
     let html = render(&blocks);
-    let c = cell(&html, "SNI").unwrap_or_else(|| panic!("SNI cell: {html}"));
-    assert_eq!(state(&c), "none, IP target");
+    assert!(cell(&html, "SNI").is_none(), "{html}");
+    assert!(cell(&html, "HSTS").is_none(), "{html}");
+    assert!(html.contains("tls-protocols__cell"), "{html}");
 }
 
 #[test]
@@ -319,14 +324,14 @@ fn c8_without_tls_protocols_no_version_cell_exists() {
         assert!(cell(&html, name).is_none(), "{name}: {html}");
     }
     assert!(!html.contains(r#"id="ev-tls.protocols""#), "{html}");
-    assert!(cell(&html, "SNI").is_some(), "SNI is always shown: {html}");
+    assert!(cell(&html, "ALPN").is_some(), "{html}");
 }
 
 #[test]
 fn c9_probe_answers_hold_a_header_per_address_and_each_word_and_answer() {
     let probe = |ip: &str, answer: &str| {
         fields_block(
-            &format!("tls.probes@{ip}:443"),
+            &format!("tls.probes@{}:443", qual(ip)),
             "Probes",
             vec![
                 ("ssl3", t("refused")),
@@ -361,5 +366,14 @@ fn c9_probe_answers_hold_a_header_per_address_and_each_word_and_answer() {
         "refused",
     ] {
         assert!(details.contains(needle), "{needle}: {details}");
+    }
+}
+
+/// The address part of a block qualifier: an IPv6 address in brackets.
+fn qual(ip: &str) -> String {
+    if ip.contains(':') {
+        format!("[{ip}]")
+    } else {
+        ip.to_string()
     }
 }
