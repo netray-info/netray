@@ -10,6 +10,7 @@ mod facts_blocks;
 mod facts_definite;
 mod history_volatile;
 mod integration;
+mod job_blocks_trace_dnssec;
 mod job_page_blocks;
 mod job_page_blocks_human;
 mod job_summary;
