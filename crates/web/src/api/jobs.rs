@@ -108,8 +108,16 @@ fn port_jobs(
             }
         })
         .collect();
+    let mut job = Job::new(parts);
+    for (n, &port) in ports.iter().enumerate() {
+        let checks = outcome_of(shared.clone(), port);
+        job = job.with_part_checks(
+            n,
+            Box::pin(async move { checks.await.map(|(_, checks)| checks) }),
+        );
+    }
     let band = outcome_of(shared, netray_tls::module::band_port(ports.iter().copied()));
-    Job::new(parts).with_band(
+    job.with_band(
         Protocol::Tls,
         Box::pin(async move { band.await.map(|(_, checks)| checks) }),
     )
@@ -874,6 +882,12 @@ impl InspectorJobs for InspectJobs {
             Tool::Email => self.start_email(req),
             Tool::Dns => self.start_dns(req),
         }
+    }
+
+    fn max_ports(&self) -> usize {
+        self.state
+            .tls_inspector()
+            .map_or(7, netray_tls::TlsInspector::max_ports)
     }
 
     fn caller(&self, req: CallerRequest) -> Option<Result<Job, String>> {

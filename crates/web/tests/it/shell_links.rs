@@ -326,10 +326,11 @@ async fn tls_run_of_a_host_ends_with_the_related_records_box() {
                 )),
                 "{html}"
             );
-            assert_eq!(
-                hrefs(&html, "inspector-related__link"),
-                vec![format!("/inspect/dns?q={want_q}")]
-            );
+            // The stream sends the box twice: in the start fragment and filled when the part
+            // arrives (v2-tls-ui requirement 12); the second replaces the first by id.
+            let mut links = hrefs(&html, "inspector-related__link");
+            links.dedup();
+            assert_eq!(links, vec![format!("/inspect/dns?q={want_q}")]);
         }
     }
 }

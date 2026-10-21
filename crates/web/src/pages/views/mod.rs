@@ -7,6 +7,9 @@ mod email;
 mod http;
 mod ip;
 mod tls;
+pub mod validity;
+
+pub use tls::{tls_band_part, tls_port_view, tls_related_summary, tls_starttls};
 
 pub(crate) use ip::attribution;
 
@@ -27,9 +30,15 @@ pub struct ViewContext<'a> {
 
 /// The view fragment of `block` when a protocol view claims it.
 pub fn render(block: &Block, ctx: &ViewContext<'_>) -> Option<String> {
+    render_with(block, ctx, &[])
+}
+
+/// The view fragment of `block` shown with `siblings` (the block included, in block order); an
+/// empty fragment for a block another block's view renders.
+pub fn render_with(block: &Block, ctx: &ViewContext<'_>, siblings: &[Block]) -> Option<String> {
     http::render(block, ctx)
         .or_else(|| dns::render(block, ctx))
-        .or_else(|| tls::render(block, ctx))
+        .or_else(|| tls::render(block, ctx, siblings))
         .or_else(|| email::render(block, ctx))
         .or_else(|| ip::render(block, ctx))
 }
@@ -55,16 +64,17 @@ pub fn bar_width(value_ms: u64, slowest_ms: u64) -> u8 {
     pct.min(100) as u8
 }
 
-/// Whether a protocol view claims `block`.
-pub(crate) fn claims(block: &Block) -> bool {
+/// Whether a protocol view claims `block` shown with `siblings`.
+pub(crate) fn claims(block: &Block, siblings: &[Block]) -> bool {
     let decorate = |_: &_, _: &str, _: &Value| None;
-    render(
+    render_with(
         block,
         &ViewContext {
             statuses: &[],
             decorate: &decorate,
             feeds: &[],
         },
+        siblings,
     )
     .is_some()
 }

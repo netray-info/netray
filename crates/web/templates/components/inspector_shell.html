@@ -2,7 +2,7 @@
 {% macro inspector_shell(shell) %}
 <div class="inspector-shell" data-island="shell" data-tool="{{ shell.tool }}" data-field="{{ shell.field }}"{% if let Some(s) = shell.suggest %} data-suggest="{{ s.name }}" data-suggest-types="{{ s.types }}" data-suggest-flags="{{ s.flags }}" data-suggest-servers="{{ s.servers }}" data-suggest-parse="{{ s.parse }}"{% endif %}>
 {{ shell.tabs|safe }}
-{% call c::query_input(shell.query, shell.stream_url, shell.autostart, true) %}{% endcall %}
+{% call c::query_input(shell.query, shell.stream_url, shell.autostart, true, false, shell.between) %}{% endcall %}
 {% if shell.suggest.is_some() %}<p class="inspector-shell__hint" id="inspector-parse-hint" hidden></p>
 {% endif %}{% if let Some(slot) = shell.slot %}{{ slot|safe }}{% endif %}
 <noscript><p>A live run needs JavaScript. Enable it, or read the guides.</p></noscript>

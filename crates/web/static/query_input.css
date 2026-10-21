@@ -104,3 +104,95 @@
   color: var(--color-muted);
   font-size: var(--font-size-small);
 }
+.query-input--card {
+  align-items: flex-end;
+}
+.query-input__box:has(+ .port-chooser:not([hidden])) {
+  flex: 999 1 320px;
+}
+.port-chooser {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+.port-chooser[hidden],
+.port-chooser__menu[hidden],
+.port-chooser__note[hidden] {
+  display: none;
+}
+.port-chooser__label {
+  /* board G: "Ports" stands on the "Host" label's line, above the toggles */
+  position: absolute;
+  bottom: 100%;
+  margin-bottom: var(--space-2);
+  color: var(--color-muted);
+  font-size: var(--font-size-label);
+  white-space: nowrap;
+}
+.port-chooser__toggles,
+.port-chooser__menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.port-chooser__port,
+.port-chooser__preset,
+.port-chooser__add {
+  min-width: 44px;
+  min-height: 44px;
+  box-sizing: border-box;
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: transparent;
+  color: var(--color-muted);
+  font-size: var(--font-size-button);
+  cursor: pointer;
+}
+.port-chooser__port {
+  padding: 0 14px 0 18px;
+  font-family: var(--font-mono);
+  font-weight: var(--font-weight-regular);
+}
+.port-chooser__port[aria-pressed="true"] {
+  padding-inline-start: calc(18px + var(--line-hair) - var(--line-marker));
+  border-color: var(--color-ink);
+  border-inline-start-width: var(--line-marker);
+  color: var(--color-ink);
+  font-weight: var(--font-weight-bold);
+}
+.port-chooser__add {
+  padding: 0;
+  border-style: dashed;
+  font-size: var(--font-size-input);
+}
+.port-chooser__preset {
+  padding: 0 14px;
+  font-family: var(--font-sans);
+}
+.port-chooser__field {
+  width: 8em;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 var(--space-3);
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-input);
+}
+.port-chooser__note {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: var(--font-size-label);
+}
+@media (max-width: 480px) {
+  /* the chooser wraps under the host field: its label returns above its toggles */
+  .port-chooser__label {
+    position: static;
+    margin-bottom: 0;
+  }
+}

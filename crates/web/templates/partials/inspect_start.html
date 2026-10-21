@@ -8,6 +8,9 @@
 <h1 class="inspector-run__target">{{ target }}</h1>
 {% match band %}{% when BandSlot::Pending %}<div id="inspect-band"></div>
 {% when BandSlot::Done(html) %}{{ html|safe }}
-{% when BandSlot::Absent %}{% endmatch %}{% for (n, label, html) in parts %}{% if let Some(html) = html %}{{ html|safe }}{% else %}<section class="inspector-section" id="inspect-part-{{ n }}"><h2>{{ label }}</h2><p>pending</p></section>
-{% endif %}{% endfor %}{% if let Some(href) = related %}<aside class="inspector-related">Related records live in the DNS inspector: CAA · TLSA · HTTPS <a class="inspector-related__link" href="{{ href }}">Open in the DNS inspector →</a></aside>
-{% endif %}</div>
+{% when BandSlot::Absent %}{% endmatch %}{% if let Some(ports) = ports %}<div class="inspector-ports" data-island="tabs">
+<nav class="inspector-ports__tabs" aria-label="Ports">{% for tab in ports %}<a class="inspector-ports__tab marker" data-tab="{{ tab.name }}" href="#inspect-part-{{ tab.n }}"{% if tab.current %} aria-current="true"{% endif %}><span class="inspector-ports__name">{{ tab.name }}</span>{{ tab.meta|safe }}</a>{% endfor %}</nav>
+{% endif %}{% for (n, label, panel, html) in parts %}{% if let Some(html) = html %}{{ html|safe }}{% else %}<section class="inspector-section{% if panel.is_some() %} inspector-port{% endif %}" id="inspect-part-{{ n }}"{% if let Some(panel) = panel %} data-panel="{{ panel }}"{% endif %}><h2>{{ label }}</h2><p>pending</p></section>
+{% endif %}{% endfor %}{% if ports.is_some() %}</div>
+{% endif %}{% block related %}{% if let Some((href, summary)) = related %}<aside class="inspector-related" id="inspect-related">Related records live in the DNS inspector: {{ summary }} <a class="inspector-related__link" href="{{ href }}">Open in the DNS inspector →</a></aside>
+{% endif %}{% endblock %}</div>

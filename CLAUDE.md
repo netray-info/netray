@@ -78,6 +78,7 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - A profile version that only adds checks re-scores a stored run to its old grade (`score_section` skips unweighted ids): the diff's grade split puts their effect on the domain step.
 - Judge a new graded header in `crates/http/src/module.rs`, not by changing `inspect/security.rs`: spectra's V1 wire serialises each `security.*.status`.
 - A freshly built binary path (a cargo example) gets no network locally; replay its bytes from `python3` to check a live host.
+- `just design-check`'s live TLS boards need network: copy the build to the main checkout's `target/debug/netray` (back up, `rm`, `cp`, restore) and pass `NETRAY_BIN` to it.
 - Never put `|` in a `report.md` criteria cell, even in backticks: `adlc next` splits cells on it and keeps the phase open.
 
 The adlc working rules (receipt, baseline trailer, test changes, review) are in `AGENTS.md`.
@@ -98,6 +99,9 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **An address lookup has two halves.** Keep the answered half and report the failed one (`AddressLookup { ips, error }`); never fail the whole lookup on one family.
 - **`netray_dns::parser::parse` is no domain validation**: it lowercases the first token and checks no syntax; validate names with `netray_common::domain::validate`.
 - **An unguessable key comes from `Uuid::new_v4()`**: a v7's last 48 bits hold 16 counter bits shared by every key of one millisecond.
+- **TLS expiry reads `expired`, not the day count**: `days_remaining` truncates toward zero, so a leaf lapsed within the day stores 0 days and `expired` true.
+- **A block id with an IPv6 address needs brackets** (`tls.chain@[2001:db8::1]:443`): `BlockId::parse` refuses a bare one, and test fixtures built with `format!` hit it.
+- **An island that reads the inspector's host field re-reads it before acting**: the shell fills and restores the field (chips, history, back/forward) without an input event.
 - **Never derive a verdict from a finding's detail text.** Carry it in a structured marker (e.g. SPF `spf_incomplete` with `ipv4`/`ipv6`/`both`/`any`).
 - **An evidence block holds the fact that decided its check.** Omit unknowns; never publish a placeholder (`0`, `""`, a guessed TTL). `check_evidence_rule` and each module's `validate` test enforce it.
 - **Carry new internal data on V1 response structs as `#[serde(skip)]` fields** so the V1 wire and its goldens stay byte-identical; test struct literals then need the field.
