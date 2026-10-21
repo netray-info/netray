@@ -282,6 +282,13 @@ GIVEN the IP inspector at 390 px WHEN measured THEN the document is not wider th
   type the batch route refuses with 400 (requirement 13 amended); the result page's IP tab carries
   the attribution only beside its compact table, which exists only with `ip.addresses`
   (requirement 14 amended) (implementer under the operator's autonomy mandate, 2026-10-21).
+- Phase 4: the design check runs against the canvas manifest at netray.info `bdf1de3`; the head
+  `29c44ea` adds `v2-site-nav`'s rows, which this branch's checker and markup do not carry. The
+  reading's findings on the shell and the footer belong to `v2-inspector-shell` and `v2-site-nav`;
+  the module-off notice keeps the shell's notice markup; the card keeps one card per block with
+  sub-headed grids (one anchor, one feeds line) and the raw user agent in a grid cell (a full-width
+  cell is a `facts_grid` change, proposed) (implementer under the operator's autonomy mandate,
+  2026-10-21).
 - The explorer is always open: the IP view cannot tell the caller's card from a looked-up one
   by its block, and on both pages the commands are the point (implementer under the operator's
   autonomy mandate, 2026-10-21).

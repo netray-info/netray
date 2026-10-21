@@ -1,4 +1,5 @@
-<section class="ip-explorer"><details open><summary class="ip-explorer__summary">Use it from the command line</summary>
-<ul class="ip-explorer__rows">{% for row in rows %}<li class="ip-explorer__row"><p class="ip-explorer__text">{{ row.description }}</p><div class="ip-explorer__command"><div class="ip-explorer__scroll"><code>{{ row.command }}</code></div><button type="button" class="inspector-copy" data-copy-text="{{ row.command }}" hidden>Copy</button></div></li>{% endfor %}</ul>
+<section class="protocol-view ip-explorer"><h3 class="protocol-view__title">Use it from the command line</h3>
+<div class="protocol-view__card"><details open><summary class="ip-explorer__summary">Commands</summary>
+<ul class="ip-explorer__rows">{% for row in rows %}<li class="ip-explorer__row"><p class="ip-explorer__text">{{ row.description }}</p><div class="ip-explorer__command"><code class="ip-explorer__code">{{ row.command }}</code><button type="button" class="inspector-copy" data-copy-text="{{ row.command }}" hidden>Copy</button></div></li>{% endfor %}</ul>
 <p class="ip-explorer__docs"><a href="/api/v1/docs">API documentation</a></p>
-</details></section>
+</details></div></section>

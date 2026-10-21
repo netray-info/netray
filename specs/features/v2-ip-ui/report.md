@@ -167,3 +167,73 @@ skipped for the live server: the seeded fixtures' `ip.addresses` pages are cover
 `ip_attribution_pages.rs` (`/example.com/ip` through the real evidence router); Phase 4 reads
 the pages in a browser.
 
+
+## Phase 4 — Design gate and visual reading
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R16 design-check exits 0 with this feature; the IP inspector states read beside board G by an outside reader; findings closed; 390 px not wider than the viewport | green | design-check, reading below |
+| C2 | S design-check exits 0 | green | design-check |
+| C3 | S every finding of the reading beside board G is a report row and none stays open | green | reading below |
+| C4 | S the IP inspector at 390 px is not wider than the viewport | green | measured below |
+
+No test files: the phase's evidence is the design check, the reading and the measurement below.
+
+### Behavioural verification
+
+`NETRAY_DESIGN_DIR=/Users/lukas/Documents/src/netray.info/specs/design/canvas just design-check <manifest>`:
+`0 open deviation(s), 0 stale accepted entries`; 12 boards, 865 elements, 1614 properties, run
+before and after the reading's fixes. The manifest is the canvas manifest at netray.info
+`bdf1de3`: the canvas head `29c44ea` adds rows for the Inspectors menu, the footer and board M's
+menu sheet (a `click` key this branch's checker does not know, and footer markup), which belong to
+`v2-site-nav`; against it the check refuses the manifest (exit 2), and without the two `click`
+boards it reports 66 footer rows, none from this feature.
+
+The IP inspector has no board. Its states were rendered on a local server over a stub lookup
+(`StubIpLookup` wrapped to add every fact for the caller and no reverse DNS for 198.51.100.99; a
+temporary example, not committed) and shot with Playwright at 1280 and 390 px in both themes:
+caller with every fact, `?ip=2001:db8::1`, `?ip=198.51.100.99`, and the module off.
+
+```
+caller 390 light: scrollWidth 390 viewport 390     ipv6 390 light: scrollWidth 390 viewport 390
+caller 390 dark:  scrollWidth 390 viewport 390     ipv6 390 dark:  scrollWidth 390 viewport 390
+noptr 390 light:  scrollWidth 390 viewport 390     off 390 light:  scrollWidth 390 viewport 390
+noptr 390 dark:   scrollWidth 390 viewport 390     off 390 dark:   scrollWidth 390 viewport 390
+```
+
+After the fixes no link, button or summary of these pages is under 44 px tall at 390 px.
+
+### Visual reading beside board G
+
+A reader with no part in the build compared the 16 screenshots with boards 17, 18, 28, 29 and 30.
+
+| id | finding | status | disposition |
+|---|---|---|---|
+| V1 | two headings stacked: the part's h2 "lookup" and the card's title "Lookup" | green | rebuilt: the card's title reads "Address details"; the part heading over its views is the shell's, as on the HTTP inspector |
+| V2 | the check list card has no line border, unlike the cards below | green | not this feature: the shell's live check list (v2-inspector-shell; v2-http-ui V9) |
+| V3 | a lone "Lookup" link under the check card | green | not this feature: the shell's check row links each referenced block by its title |
+| V4 | the command explorer had no heading and no card | green | rebuilt: a section "Use it from the command line" over a card, as the protocol views |
+| V5 | long commands clipped at 390 px without a cue | green | rebuilt: a command wraps inside its card |
+| V6 | targets under 44 px at 390 px (host and map links, MaxMind and docs links, summaries) | green | rebuilt: 44 px at phone width; measured above |
+| V7 | the band's heading runs into its count | green | not this feature: the shell's band heading |
+| V8 | the module-off notice is bare text under the h1 | green | kept: the notice is the shell's notice markup, as every inspector's refusal |
+| V9 | slim one-line footer, rule wider than the column | green | not this feature: `v2-site-nav` (footer) |
+| V10 | a "?" in the tab row; no caret on "Inspectors" | green | not this feature: the shell's help button; the menu is `v2-site-nav` |
+| V11 | the raw header wraps in a third-width cell and its Copy was indented | green | rebuilt the indent; kept the cell: a full-width cell needs a `facts_grid` option (component change), proposal below |
+| V12 | Network, Location and User agent are sub-headed grids in one card, not cards of their own | green | kept: one block, one card, one anchor and one feeds line (v2-http-ui requirement 2); proposal below |
+| V13 | copy controls far right of their commands at 1280 px | green | rebuilt: the copy control follows its command |
+
+Proposals for the operator: an "IP inspector" board (caller card with network, location, user
+agent, request headers and the explorer); a full-width `facts_grid` cell for long values (raw user
+agent, certificate chains).
+
+### Review
+
+| class | finding | disposition |
+|---|---|---|
+| AMENDMENT | at phone width `inline-flex` removed the summaries' disclosure marker | fixed: the summaries keep `list-item` and reach 44 px with `min-height` |
+| AMENDMENT | the explorer's summary "Commands for this address" mislabels the caller's own commands | fixed: "Commands" |
+| NIT | the explorer, styled as a protocol view, is a j/k stop though it is no evidence block | kept: one more stop between the card and the headers; the help text names evidence blocks |
+

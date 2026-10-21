@@ -386,7 +386,7 @@ fn lookup(block: &Block, ctx: &ViewContext<'_>) -> Option<String> {
     }
     .render()
     .ok()?;
-    let card = frame(block, "Lookup", &body, ctx)?;
+    let card = frame(block, "Address details", &body, ctx)?;
     Some(card + &explorer(&display_value(address))?)
 }
 
