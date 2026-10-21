@@ -42,7 +42,7 @@ function page(max = "7"): { group: HTMLElement; h: HTMLInputElement } {
           <button type="button" class="port-chooser__preset" data-ports="443">HTTPS</button>
           <button type="button" class="port-chooser__preset" data-ports="25,465,587,993,995">E-Mail</button>
           <button type="button" class="port-chooser__preset" data-ports="443,25,465,587,993,995,8443">All common</button>
-          <input class="port-chooser__field" type="number" min="1" max="65535" inputmode="numeric" aria-label="Another port">
+          <input class="port-chooser__field" type="text" inputmode="numeric" aria-label="Another port">
         </div>
         <p class="port-chooser__note" hidden></p>
         <template class="port-chooser__template"><button type="button" class="port-chooser__port" aria-pressed="true"></button></template>
@@ -163,5 +163,61 @@ describe("ports island", () => {
     const note = group.querySelector(".port-chooser__note") as HTMLElement;
     expect(note.hasAttribute("hidden")).toBe(false);
     expect(note.textContent).toContain("7");
+  });
+});
+
+describe("ports island, review fixes", () => {
+  beforeEach(() => {
+    document.body.replaceChildren();
+  });
+
+  it("re-reads a field the shell wrote without an input event before a toggle acts", () => {
+    const { group, h } = page();
+    ports(group);
+    h.value = "example.com:25,587";
+    (toggle(group, 8443) as HTMLElement).click();
+    expect(h.value).toBe("example.com:25,587,8443");
+  });
+
+  it("brackets an IPv6 host when ports are added", () => {
+    expect(formatHost("2001:db8::1", [443, 8443])).toBe("[2001:db8::1]:443,8443");
+    expect(formatHost("2001:db8::1", [443])).toBe("2001:db8::1");
+    expect(formatHost("[2001:db8::1]", [443, 465])).toBe("[2001:db8::1]:443,465");
+  });
+
+  it.each(["example.com:25, 587", "example.com:25,,587", "example.com:0"])(
+    "reads no ports from %s, as the server refuses it",
+    (value) => {
+      expect(parsePorts(value).ports).toBeNull();
+    },
+  );
+
+  it("never rewrites a value whose suffix is no port list", () => {
+    const { group, h } = page();
+    ports(group);
+    typeHost(h, "https://example.com");
+    (toggle(group, 8443) as HTMLElement).click();
+    expect(h.value).toBe("https://example.com");
+  });
+
+  it("asks for a host first when the field is empty", () => {
+    const { group, h } = page();
+    ports(group);
+    typeHost(h, "");
+    (toggle(group, 8443) as HTMLElement).click();
+    const note = group.querySelector(".port-chooser__note") as HTMLElement;
+    expect(note.hidden).toBe(false);
+    expect(note.textContent).toBe("Enter a host first.");
+    expect(h.value).toBe("");
+  });
+
+  it("clears a refused extra port so it can never block the submit", () => {
+    const { group, h } = page();
+    ports(group);
+    const field = group.querySelector(".port-chooser__field") as HTMLInputElement;
+    field.value = "70000";
+    field.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(field.value).toBe("");
+    expect(h.value).toBe("example.com");
   });
 });
