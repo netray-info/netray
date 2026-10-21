@@ -338,3 +338,7 @@ fix range held four majors, fixed in turn. Two-port live run after the tab tone 
 two-ports 1280 light/dark: scrollWidth 1280 viewport 1280
 two-ports 390 light/dark: scrollWidth 390 viewport 390 (no target below 44 px)
 ```
+
+### Checks to build
+
+- design-check: a live board whose page holds none of its board-specific elements is a `no state` row, not a pass (`tests/acceptance/design/check.mjs`); see `specs/solutions/2026-10-21-worktree-binary-measured-a-timed-out-board.md`.

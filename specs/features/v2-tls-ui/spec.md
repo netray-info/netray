@@ -1,7 +1,8 @@
 # Spec: v2-tls-ui
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-20
+Finished: 2026-10-21
 
 ## Goal
 
@@ -430,6 +431,9 @@ GIVEN the TLS inspector at 390 px WHEN measured THEN the document is not wider t
   a refused suffix presses no port; a port's tab shows its tone as a bar. Requirements 1, 3, 17
   and 19 amended to what was built and what is measurable here (implementer under the
   operator's autonomy mandate, 2026-10-21).
+- Finish: the distilled entries (four CLAUDE.md bullets, one solutions note, one check to build)
+  are written without the operator's confirmation, under the autonomy mandate; the operator may
+  drop any of them (implementer under the operator's autonomy mandate, 2026-10-21).
 - The design check's live TLS board needs network: a binary built in a worktree gets none here,
   so `netray_bin` honours `NETRAY_BIN`, and the gate runs with this branch's build copied to the
   main checkout's target path (backed up and restored) (implementer under the operator's autonomy
