@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block main %}
 <div class="result-page" data-island="page">
-<div id="result" class="result" data-state="{{ state }}" data-domain="{{ domain }}" data-island="recent">
+<div id="result" class="result" data-state="{{ state }}" data-domain="{{ domain }}"{% if let Some(u) = crate::idn::unicode(domain) %} data-display="{{ u }}"{% endif %} data-island="recent">
 {{ parts.header|safe }}
 {{ parts.hard_fail|safe }}
 {{ parts.spectrum|safe }}

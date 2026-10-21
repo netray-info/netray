@@ -148,10 +148,18 @@ async fn rendered_guides_keep_the_content_of_their_v1_pages() {
         // Tool entries become query inputs.
         let rendered: Vec<_> = forms(&page, "query-input");
         for (action, name, placeholder) in forms(v1_main, "tool-entry__form") {
-            let (action, name) = if action == "https://lens.netray.info/" {
-                ("/".to_string(), "d".to_string())
-            } else {
-                (action, name)
+            // V1's subdomain tools are the apex inspectors since v2-site-nav; the email
+            // inspector's field is `d`.
+            let (action, name) = match action.as_str() {
+                "https://lens.netray.info/" => ("/".to_string(), "d".to_string()),
+                "https://email.netray.info/" => ("/inspect/email".to_string(), "d".to_string()),
+                a => match a
+                    .strip_prefix("https://")
+                    .and_then(|h| h.strip_suffix(".netray.info/"))
+                {
+                    Some(tool) => (format!("/inspect/{tool}"), name),
+                    None => (action, name),
+                },
             };
             let found = if name.is_empty() {
                 // An input-less V1 form needs a query input with the same action.
@@ -236,8 +244,9 @@ async fn api_v1_samples_read_the_run_shape() {
     }
     let audit = render("domain-security-audit").await;
     assert!(
-        audit.contains("jq -e &#39;.grade | test(") || audit.contains("jq -e '.grade | test("),
-        "domain-security-audit: the CI gate reads `.grade`"
+        audit.contains("jq -e &#39;.run.grade | test(")
+            || audit.contains("jq -e '.run.grade | test("),
+        "domain-security-audit: the CI gate reads `.run.grade` (the run answer nests the run)"
     );
     let scoring = render("scoring").await;
     assert!(

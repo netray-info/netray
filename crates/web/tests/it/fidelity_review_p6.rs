@@ -124,7 +124,9 @@ async fn home() -> String {
 #[tokio::test]
 async fn theme_sits_outside_the_nav_and_is_13px_muted_20px_after_it_on_desktop() {
     let body = home().await;
-    let nav = &body[body.find("<nav class=\"page-nav\">").unwrap()..];
+    let nav = &body[body
+        .find("<nav class=\"page-nav\" data-island=\"nav-menu\">")
+        .unwrap()..];
     let nav = &nav[..nav.find("</nav>").unwrap()];
     assert!(!nav.contains("theme-toggle"), "{nav}");
 

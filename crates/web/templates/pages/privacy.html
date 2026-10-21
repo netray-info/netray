@@ -1,13 +1,5 @@
 {% extends "base.html" %}
 
-{% block title %}Privacy{% endblock %}
-
-{% block meta %}{% endblock %}
-
-{% block styles %}<style>{{ styles|safe }}</style>{% endblock %}
-
-{% block header %}{% endblock %}
-
 {% block main %}
 <h1>Privacy</h1>
 <p>The history stores the domain, the check results and their evidence. It stores nothing about the visitor.</p>
@@ -15,5 +7,3 @@
 <p>Rate limiters and the throttle are held in memory only, keyed by address or domain; nothing of them is written to disk.</p>
 <p>A shared inspector result is kept in memory for one hour under a random key, then dropped; a lookup of your own address is never kept.</p>
 {% endblock %}
-
-{% block scripts %}{% endblock %}

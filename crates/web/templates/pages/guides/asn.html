@@ -68,7 +68,7 @@
 
   <section class="guide-tool">
     <h2>Look up ASN and IP enrichment</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://ip.netray.info/", "ip", "1.2.3.4", "Look up")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/ip", "ip", "1.2.3.4", "Look up")) %}{% endcall %}
     <p class="guide-tool__hint">Shows geolocation, ASN, network type, and full IP enrichment for any address.</p>
   </section>
 {% endblock %}

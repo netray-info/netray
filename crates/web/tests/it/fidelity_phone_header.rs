@@ -151,13 +151,18 @@ fn desktop_css() -> String {
 async fn header_markup_has_menu_details_with_nav_and_theme_outside() {
     let html = page("/no-such-page").await;
     let header = between(&html, "<header", "</header>");
-    let details = between(header, r#"<details class="page-menu">"#, "</details>");
+    // The page menu's own `</details>` follows the nested Inspectors menu's (v2-site-nav).
+    let details = between(header, r#"<details class="page-menu">"#, "</nav>");
 
     assert!(details.contains(SUMMARY), "menu button markup: {details}");
-    let nav = between(details, r#"<nav class="page-nav">"#, "</nav>");
+    let nav = between(
+        details,
+        r#"<nav class="page-nav" data-island="nav-menu">"#,
+        "</nav>",
+    );
     let mut at = 0;
     for needle in [
-        r#"href="/inspect/dns">Inspectors</a>"#,
+        r#"<summary class="nav-menu__button">Inspectors<"#,
         r#"href="/guide/">Guides</a>"#,
         r#"href="/api/v1/docs">API</a>"#,
         r#"href="/status">Status</a>"#,

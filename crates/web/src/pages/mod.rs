@@ -6,11 +6,12 @@ pub mod compare;
 mod errors;
 mod evidence;
 pub mod guides;
-mod headers;
+pub(crate) mod headers;
 mod inspect;
 mod jsonld;
 pub mod result;
 mod status;
+mod tools;
 pub mod views;
 
 use askama::Template;
@@ -30,13 +31,24 @@ pub use inspect::{
 /// The speculation rules every page embeds; the CSP allows exactly their hash.
 pub const SPECULATION_RULES: &str = r#"{"prerender":[{"where":{"or":[{"href_matches":"/guide/*"},{"href_matches":"/r/*"},{"href_matches":"/inspect/*"}]},"eagerness":"moderate"}]}"#;
 
+/// The netray version of the build, for the footer's version line.
+pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// The header menu's inspectors: label, tool name, description (board `D3 · Inspectors menu`).
+pub(crate) const INSPECTOR_MENU: [(&str, &str, &str); 5] = [
+    ("DNS", "dns", "DNS records and resolvers"),
+    ("TLS", "tls", "TLS certificates and handshake"),
+    ("HTTP", "http", "HTTP headers and redirects"),
+    ("Email", "email", "Email MX, SPF, DKIM, DMARC"),
+    ("IP", "ip", "IP location and network"),
+];
+
 /// The one origin of the canonical link and of every absolute link a page offers to copy.
 pub(crate) const ORIGIN: &str = "https://netray.info";
 
-const ROBOTS: &str = "User-agent: *\nAllow: /\nSitemap: https://netray.info/sitemap.xml\n";
-
-/// The guides, compare, status, the sitemap and the static files under `/static`, plus the 301s
-/// of V1's site paths (`/compare/`, `/status/`, `/tools`; `/guide/<slug>.html` in `guides::show`).
+/// The guides, compare, status, the inspector index `/tools`, the sitemap and the static files
+/// under `/static`, plus the 301s of V1's site paths (`/compare/`, `/status/`, `/tools/`;
+/// `/guide/<slug>.html` in `guides::show`).
 pub fn router() -> Router {
     Router::new()
         .route("/guide", get(guides::index_redirect))
@@ -47,14 +59,19 @@ pub fn router() -> Router {
         .route("/compare/", get(|| async { guides::moved("/compare") }))
         .route("/status", get(status::show))
         .route("/status/", get(|| async { guides::moved("/status") }))
-        .route("/tools", get(|| async { guides::moved("/") }))
-        .route("/tools/", get(|| async { guides::moved("/") }))
+        .route("/tools", get(tools::show))
+        .route("/tools/", get(|| async { guides::moved("/tools") }))
         .route("/sitemap.xml", get(sitemap))
         .route("/static/", get(errors::not_found))
         .route("/static/{*path}", get(assets::serve))
         .layer(axum::middleware::map_response(
             |response: Response| async move { headers::secure(response) },
         ))
+}
+
+/// The body of `/robots.txt`: everything allowed, the sitemap at the origin.
+pub fn robots_body() -> String {
+    format!("User-agent: *\nAllow: /\nSitemap: {ORIGIN}/sitemap.xml\n")
 }
 
 /// `/robots.txt`.
@@ -65,35 +82,19 @@ pub async fn robots() -> Response {
                 (CONTENT_TYPE, "text/plain; charset=utf-8"),
                 (CACHE_CONTROL, "public, max-age=3600"),
             ],
-            ROBOTS,
+            robots_body(),
         )
             .into_response(),
     )
 }
 
-/// `/sitemap.xml`: the pages this crate serves plus the entry pages and the inspector roots.
+/// `/sitemap.xml`: the pages this crate serves plus the entry pages and the inspector pages.
 async fn sitemap() -> Response {
-    let mut locs = vec![
-        "https://netray.info/".to_string(),
-        "https://netray.info/guide/".to_string(),
-    ];
-    locs.extend(
-        guides::GUIDES
-            .iter()
-            .map(|g| format!("https://netray.info/guide/{}", g.slug)),
-    );
-    locs.extend(
-        [
-            "https://netray.info/compare",
-            "https://netray.info/status",
-            "https://netray.info/privacy",
-            "https://ip.netray.info/",
-            "https://dns.netray.info/",
-            "https://tls.netray.info/",
-            "https://http.netray.info/",
-        ]
-        .map(str::to_string),
-    );
+    let mut paths = vec!["/".to_string(), "/guide/".to_string()];
+    paths.extend(guides::GUIDES.iter().map(|g| format!("/guide/{}", g.slug)));
+    paths.extend(["/compare", "/status", "/privacy", "/tools", "/api/v1/docs"].map(str::to_string));
+    paths.extend(Tool::ALL.map(|t| format!("/inspect/{}", t.as_str())));
+    let locs = paths.into_iter().map(|p| format!("{ORIGIN}{p}"));
     let mut xml = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
     );
@@ -118,6 +119,9 @@ pub(crate) struct Frame {
     pub canonical: String,
     pub og_image: String,
     pub rules: &'static str,
+    /// The header's current section: a tool name (`dns` … `ip`) on its inspector page, `tools` on
+    /// the inspector index, else empty.
+    pub nav: &'static str,
 }
 
 impl Frame {
@@ -130,9 +134,15 @@ impl Frame {
             title: title.to_string(),
             description: description.to_string(),
             canonical: canonical.to_string(),
-            og_image: "https://netray.info/static/og/landing.png".to_string(),
+            og_image: format!("{ORIGIN}/static/og/landing.png"),
             rules: SPECULATION_RULES,
+            nav: "",
         }
+    }
+
+    /// Whether the header's Inspectors menu is the current section.
+    pub(crate) fn nav_inspectors(&self) -> bool {
+        !self.nav.is_empty()
     }
 }
 

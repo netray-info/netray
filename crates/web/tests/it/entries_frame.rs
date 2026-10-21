@@ -76,7 +76,8 @@ fn pages() -> Vec<(&'static str, String)> {
 fn inlined_pages() -> Vec<(&'static str, String)> {
     pages()
         .into_iter()
-        .filter(|(page, _)| *page != "entry")
+        // The entry and privacy pages render in the site frame (v2-site-nav requirement 8).
+        .filter(|(page, _)| *page != "entry" && *page != "privacy")
         .collect()
 }
 
@@ -183,7 +184,7 @@ fn pages_are_self_contained_documents_with_a_privacy_footer() {
 
 #[test]
 fn pages_override_header_and_scripts_with_nothing() {
-    for page in ["gone", "privacy"] {
+    for page in ["gone"] {
         let src = crate_file(&format!("templates/pages/{page}.html"));
         for block in ["header", "scripts"] {
             let empty = format!("{{% block {block} %}}{{% endblock %}}");

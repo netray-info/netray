@@ -61,7 +61,7 @@ cat leaf.pem intermediate.pem > fullchain.pem</code></pre>
 
   <section class="guide-tool">
     <h2>Inspect a certificate chain</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://tls.netray.info/", "h", "example.com", "Inspect")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/tls", "h", "example.com", "Inspect")) %}{% endcall %}
     <p class="guide-tool__hint">Performs a full TLS handshake and analyzes the certificate chain, expiry, algorithms, OCSP, and CT.</p>
   </section>
 

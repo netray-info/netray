@@ -63,7 +63,7 @@ example.com. CAA 0 issuewild ";"</code></pre>
 
   <section class="guide-tool">
     <h2>Check your domain's CAA records</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://dns.netray.info/", "q", "example.com CAA", "Check")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/dns", "q", "example.com CAA", "Check")) %}{% endcall %}
     <p class="guide-tool__hint">Queries CAA records and cross-checks against the certificate issuer.</p>
   </section>
 

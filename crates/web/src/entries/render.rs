@@ -27,6 +27,8 @@ fn stylesheet() -> &'static str {
     SHEET.get_or_init(|| {
         let mut parts = vec![tokens::CSS, include_str!("../../static/base.css")];
         parts.extend(COMPONENT_CSS);
+        // The frame's own rules (the footer every page carries, spec v2-site-nav requirement 10).
+        parts.push(include_str!("../../static/pages.css"));
         parts.join("\n")
     })
 }
@@ -48,14 +50,18 @@ struct GonePage {
 #[derive(Template)]
 #[template(path = "pages/privacy.html")]
 struct PrivacyPage {
-    styles: &'static str,
+    frame: Frame,
 }
 
 /// The entry page of a stored entry.
 pub fn entry(view: &EntryPageView) -> askama::Result<String> {
     EntryPage {
         frame: Frame::new(
-            &format!("{} · {}", view.domain, view.grade.letter),
+            &format!(
+                "{} · {}",
+                crate::idn::title(&view.domain),
+                view.grade.letter
+            ),
             "The result of one check run.",
             &format!("/r/{}", view.id),
         ),
@@ -83,7 +89,11 @@ pub fn gone() -> askama::Result<String> {
 /// The privacy page.
 pub fn privacy() -> askama::Result<String> {
     PrivacyPage {
-        styles: stylesheet(),
+        frame: Frame::new(
+            "Privacy · netray",
+            "What netray stores about a check and what it keeps about the visitor: nothing.",
+            "/privacy",
+        ),
     }
     .render()
 }
