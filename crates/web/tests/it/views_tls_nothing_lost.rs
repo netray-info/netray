@@ -1,6 +1,7 @@
 //! v2-tls-ui Phase 1 (C2, C25): the TLS port view takes a block only when it renders every
 //! value of it; a port of two addresses with every registered key shows each value's display
 //! text in the addresses fragment, and the blocks it took render an empty fragment.
+//! Phase 2 (C12) adds tls.protocols, tls.probes and tls.notices to the same port.
 use std::collections::{BTreeMap, BTreeSet};
 
 use netray_model::evidence::{Block, BlockId, Shape, Value};
@@ -201,7 +202,7 @@ fn handshake(f: &mut Fixture, id: &str, second: bool) -> Shape {
             Value::Time("2026-10-15T00:00:00Z".into()),
             "2026-10-15",
         ),
-        f.pair(id, "ech", Value::Bool(true)),
+        f.shown(id, "ech", Value::Bool(true), "advertised"),
     ];
     if second {
         fields.extend([
@@ -348,6 +349,136 @@ fn c2_c25_port_view_renders_every_value_of_the_blocks_it_takes() {
     // The fixture holds every key the register lists for these blocks.
     let register = &netray_tls::module::REGISTER;
     for block in ["tls.addresses", "tls.chain", "tls.handshake", "tls.ct"] {
+        let registered: BTreeSet<String> = register
+            .keys
+            .iter()
+            .filter(|(b, _, _)| *b == block)
+            .map(|(_, key, _)| key.to_string())
+            .collect();
+        assert_eq!(
+            f.keys.get(block).cloned().unwrap_or_default(),
+            registered,
+            "{block}: fixtures must hold every registered key"
+        );
+    }
+}
+
+/// The Phase 1 fixture plus `tls.protocols`, a `tls.probes` per address and `tls.notices`.
+fn fixture_phase2() -> Fixture {
+    let mut f = fixture();
+
+    let id = "tls.protocols";
+    let fields = vec![
+        f.shown(id, "tls1_3", text("enabled"), "enabled"),
+        f.shown(id, "tls1_2", text("mixed"), "mixed"),
+        f.shown(id, "tls1_1", text("disabled"), "disabled, as it should be"),
+        f.shown(id, "tls1_0", text("disabled"), "disabled, as it should be"),
+        f.shown(id, "ssl3", text("disabled"), "disabled"),
+        f.shown(
+            id,
+            "suites_insecure",
+            text("refused"),
+            "insecure refused · CBC accepted · static RSA mixed",
+        ),
+        f.read(id, "suites_cbc", text("accepted")),
+        f.read(id, "suites_static_rsa", text("mixed")),
+        f.shown(
+            id,
+            "forward_secrecy_all_suites",
+            Value::Bool(true),
+            "all suites",
+        ),
+    ];
+    f.push(id, Shape::Fields(fields));
+
+    let probe_keys = [
+        "ssl3",
+        "tls1_0",
+        "tls1_1",
+        "tls1_2",
+        "tls1_3",
+        "suites_insecure",
+        "suites_cbc",
+        "suites_static_rsa",
+    ];
+    for (qualifier, word, answer) in [
+        (format!("{V4}:443"), "refused", "handshake_failure alert"),
+        (format!("[{V6}]:443"), "accepted", "ServerHello TLS 1.2"),
+    ] {
+        let id = format!("tls.probes@{qualifier}");
+        let mut fields = Vec::new();
+        for key in probe_keys {
+            fields.push(f.pair(&id, key, text(word)));
+            let answered = format!("{answer} for {key}");
+            fields.push(f.pair(&id, &format!("{key}_answer"), text(&answered)));
+        }
+        f.push(&id, Shape::Fields(fields));
+    }
+
+    let id = "tls.notices";
+    let fields = vec![
+        f.pair(id, "warning", text("lookup of AAAA answered slowly")),
+        f.pair(id, "warning", text("second warning & more")),
+        f.pair(id, "skipped_address", addr("192.0.2.7")),
+        f.pair(id, "skipped_address", addr("2001:db8::7")),
+    ];
+    f.needles.push(
+        "2 addresses not inspected: the inspector checks at most 2 addresses per host".to_string(),
+    );
+    f.push(id, Shape::Fields(fields));
+    f
+}
+
+#[test]
+fn c12_port_view_renders_protocols_probes_and_notices() {
+    let f = fixture_phase2();
+    let statuses: Vec<(CheckId, Status)> = vec![];
+    let decorate = decorate(&[]);
+    let feeds = vec![];
+    let ctx = ViewContext {
+        statuses: &statuses,
+        decorate: &decorate,
+        feeds: &feeds,
+    };
+
+    let head = &f.blocks[0];
+    let html = render_with(head, &ctx, &f.blocks)
+        .expect("the port view must take tls.addresses of a port with every registered key");
+    for needle in &f.needles {
+        assert!(
+            html.contains(needle.as_str()),
+            "{needle:?} missing in: {html}"
+        );
+    }
+
+    for block in &f.blocks {
+        let id = block.id.to_string();
+        let anchor = format!("id=\"ev-{id}\"");
+        assert_eq!(
+            html.matches(&anchor).count(),
+            1,
+            "{anchor} must appear once in: {html}"
+        );
+        if id.starts_with("tls.addresses") {
+            continue;
+        }
+        assert_eq!(
+            render_with(block, &ctx, &f.blocks).as_deref(),
+            Some(""),
+            "{id}: a taken block renders an empty fragment"
+        );
+    }
+
+    let register = &netray_tls::module::REGISTER;
+    for block in [
+        "tls.addresses",
+        "tls.chain",
+        "tls.handshake",
+        "tls.ct",
+        "tls.protocols",
+        "tls.probes",
+        "tls.notices",
+    ] {
         let registered: BTreeSet<String> = register
             .keys
             .iter()
