@@ -110,3 +110,54 @@ dns-view__tab-badge" data-tone="warn">2 not measured
 dns-server__measured">1 / 2 measured
 dns-server__outcome">not measured: SERVFAIL
 ```
+
+## Phase 3 — Toggles, explain and record details
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R11 hidden toolbar with hide empty, compact, only divergent, sort, expand and collapse; data attributes on the region; stylesheet hides; reorder by written ranks; persisted in netray.dns.view | green | crates/web/tests/it/dns_view_details.rs, crates/web/islands/test/dnsview-toolbar.test.ts |
+| C2 | R12 explain toggle shows the server-rendered explain sentence, hidden until on | green | crates/web/tests/it/dns_view_details.rs |
+| C3 | R13 record details: TTL in human units with seconds, server as mhost names it, transport, response time; SOA serial age on the row | green | crates/web/tests/it/dns_view_details.rs |
+| C4 | R18 without JavaScript tabs in order, details open, toolbar hidden, explain absent from view | green | crates/web/tests/it/dns_view_details.rs |
+| C5 | R19 bundle under 30 KB gzipped; islands write no style and compute no count | green | crates/web/islands/test/budget.test.ts, crates/web/islands/test/dnsview-toolbar.test.ts |
+| C6 | S hide empty sets data-hide-empty and writes no style | green | crates/web/islands/test/dnsview-toolbar.test.ts |
+| C7 | S only divergent sets data-only-divergent and the stylesheet hides non-diverging cards | green | crates/web/islands/test/dnsview-toolbar.test.ts, crates/web/tests/it/dns_view_details.rs |
+| C8 | S slowest first orders cards by data-rank | green | crates/web/islands/test/dnsview-toolbar.test.ts |
+| C9 | S a stored choice starts the toggles in that state; throwing storage keeps defaults | green | crates/web/islands/test/dnsview-toolbar.test.ts |
+| C10 | S an MX explain sentence is in the markup inside an element hidden until explain | green | crates/web/tests/it/dns_view_details.rs |
+| C11 | S TTL 3900 reads 1 h 5 min (3900 s) with server, transport and response time | green | crates/web/tests/it/dns_view_details.rs |
+| C12 | S SOA serial 2026101501 aged 4 reads serial 2026101501 · 4 days old; no age no text | green | crates/web/tests/it/dns_view_details.rs |
+| C13 | S expand all opens every record's details | green | crates/web/islands/test/dnsview-toolbar.test.ts |
+| C14 | S no JavaScript: toolbar hidden, details still open | green | crates/web/tests/it/dns_view_details.rs |
+| C15 | S the bundle budget test passes | already_implemented | crates/web/islands/test/budget.test.ts |
+
+C15 passed on the baseline (the budget test exists since v2-design-system); the bundle is 26.6 kB
+minified after this phase. C10's markup half passed on the baseline (Phase 1 rendered the explain
+sentence); its stylesheet half and the review's placement change are new.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 2 | sonnet | 60457 | 96 |
+
+### Review
+
+| class | finding | disposition |
+|---|---|---|
+| BLOCKER | Compact hid a not-measured group placed after the answered one | fixed: Compact keeps the lead (first answered) group and every unmeasured group; test `dns_view_review3.rs` |
+| BLOCKER | Compact plus a server filter or Hide empty could empty a card | fixed: Compact steps aside under a server filter; the lead is the first answered group |
+| BLOCKER | Compact did not hide record details | fixed: `.dns-view[data-compact] .dns-record__details` |
+| BLOCKER | the explain sentence sat inside the closed details, so Explain showed nothing | fixed: the sentence follows the details; c10's needle moved (`ADLC-Test-Change`) |
+| AMENDMENT | Only divergent hid not-measured cards | requirement 11 amended, repaired |
+| AMENDMENT | the details' server rows ignored the server filter | requirement 13 amended, repaired: `data-server` on each row, island selector extended |
+| AMENDMENT | a serial dated after today read a negative age | requirement 13 amended, repaired: "dated in the future" |
+
+### Behavioural verification
+
+Screenshots from the stub server (`node shoot.cjs` in the scratchpad, Playwright over
+`cargo run -p netray-web --example dns_stub`): every state at 1280 px and 390 px, light and dark,
+has `document.documentElement.scrollWidth` equal to the viewport (1280, 390). The visual reading is
+Phase 6.

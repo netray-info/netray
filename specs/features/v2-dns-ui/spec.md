@@ -148,19 +148,22 @@ runs render as structured views instead of key-value trees. The query input auto
 ### Toggles, explain and details
 
 11. **View toggles.** A toolbar above the tabs, rendered `hidden` and shown by the island: "Hide
-    empty" (hides `no_records` and `nxdomain` groups), "Compact" (hides groups past the first and
-    record details), "Only divergent" (hides agreeing and single cards), "Sort" (by type, or
+    empty" (hides `no_records` and `nxdomain` groups), "Compact" (hides groups past the first
+    answered one and record details, never a not-measured group, and not while a server filter is
+    on), "Only divergent" (hides agreeing and single cards; not-measured cards stay), "Sort" (by type, or
     slowest first by a server-written rank on each card), "Expand all" and "Collapse all" (record
     details). Each toggle switches a data attribute on the result region; the stylesheet hides or
     shows; the island reorders cards only by the written ranks. Choices persist per browser in
     `netray.dns.view`; storage failures keep the defaults. (2.17)
 12. **Explain mode.** A toolbar toggle "Explain" shows under each record the explain sentence of
-    `record_format.rs` where one exists, server-rendered and hidden until the toggle is on. (2.18)
+    `record_format.rs` where one exists, server-rendered outside the record's closed details and
+    hidden until the toggle is on. (2.18)
 13. **Record details.** Each record row is a `<details>` disclosing: TTL in human units with the
     seconds ("1 h 5 min (3900 s)"), the answering server as mhost names it, the transport and the
     response time; for SOA the serial age ("serial 2026101501 · 4 days old" from
-    `soa_serial_age_days`, absent when the serial is no date), which also shows on the SOA row
-    itself. (2.19, 2.24)
+    `soa_serial_age_days`, absent when the serial is no date, "dated in the future" for a serial
+    after today), which also shows on the SOA row itself; the details' server rows take part in the
+    server filter. (2.19, 2.24)
 
 ### Trace and DNSSEC views
 
@@ -335,6 +338,13 @@ GIVEN the DNS inspector at 390 px WHEN measured THEN the document is not wider t
   missing types are in no count; a server card without a name reads its address. Server record
   data in the Servers tab stays plain: the Results tab carries its links and badges
   (implementer under the operator's autonomy mandate, 2026-10-21).
+- Phase 3 review: Compact keeps the first answered group and every not-measured group (Rule M),
+  steps aside while a server filter is on (or a filtered card could go empty), and hides record
+  details as requirement 11 says; "Only divergent" keeps not-measured cards (the scenario's "cards
+  without diverge" would have hidden Rule M types); the explain sentence sits under the record,
+  outside its closed details, so the toggle shows it at once; the details' server rows carry their
+  server for the filter; a serial dated after today reads "dated in the future", not a negative
+  age (implementer under the operator's autonomy mandate, 2026-10-21).
 - The trace heading names no traced type and the shared-result notices of the draft are dropped:
   the traced type is not in the collected trace result and adding it would change the API's done
   event; the run line already shows the query. A multi-type `+trace` puts "Only the first type is

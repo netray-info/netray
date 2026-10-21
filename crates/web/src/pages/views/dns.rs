@@ -53,6 +53,7 @@ struct Record {
     data: String,
     human: Option<String>,
     explain: Option<String>,
+    serial_age_days: Option<i64>,
 }
 
 struct Answer {
@@ -102,6 +103,10 @@ impl Answer {
                     data: text(&r.fields, "data").unwrap_or_default(),
                     human: text(&r.fields, "human"),
                     explain: text(&r.fields, "explain"),
+                    serial_age_days: r.fields.iter().find_map(|(k, v)| match (k.as_str(), v) {
+                        ("soa_serial_age_days", Value::Int(n)) => Some(*n),
+                        _ => None,
+                    }),
                 })
                 .collect(),
         }
@@ -160,6 +165,16 @@ struct RecordView {
     explain: Option<String>,
     name: Option<String>,
     rtype: Option<String>,
+    serial: Option<String>,
+    answered_by: Vec<RecordServer>,
+}
+
+/// A server that answered a record: its mhost string, transport and response time.
+struct RecordServer {
+    server: String,
+    key: String,
+    transport: Option<String>,
+    time: Option<String>,
 }
 
 struct ServerView {
@@ -179,6 +194,8 @@ struct GroupView {
     outcome_text: Option<String>,
     records: Vec<RecordView>,
     servers: Vec<ServerView>,
+    /// The group Compact keeps: the first answered group, else the first.
+    lead: bool,
 }
 
 struct CardView {
@@ -186,6 +203,7 @@ struct CardView {
     record_type: String,
     agreement: String,
     rank: usize,
+    order: usize,
     tone: &'static str,
     badge: String,
     groups: Vec<GroupView>,
@@ -291,9 +309,14 @@ fn groups(
         }
     }
     keyed.sort_by_key(|(_, members)| std::cmp::Reverse(members.len()));
+    let lead = keyed
+        .iter()
+        .position(|(_, m)| m[0].outcome == "answered")
+        .unwrap_or(0);
     keyed
         .into_iter()
-        .map(|(_, members)| {
+        .enumerate()
+        .map(|(index, (_, members))| {
             let first = members[0];
             let ttls: Vec<i64> = members
                 .iter()
@@ -315,15 +338,36 @@ fn groups(
                         .filter(|x| x.data == r.data)
                         .filter_map(|x| x.ttl)
                         .collect();
+                    let answered_by = members
+                        .iter()
+                        .filter(|m| m.records.iter().any(|x| x.data == r.data))
+                        .map(|m| RecordServer {
+                            key: server_key(&m.server, m.source.as_deref(), shared),
+                            server: m.server.clone(),
+                            transport: m.transport.clone(),
+                            time: m
+                                .response_time
+                                .map(|ms| display_value(&Value::Duration(ms))),
+                        })
+                        .collect();
+                    let serial = r.serial_age_days.zip(r.data.split_whitespace().nth(2)).map(
+                        |(days, serial)| match days {
+                            // A serial dated after today is a date, but no age.
+                            d if d < 0 => format!("serial {serial} · dated in the future"),
+                            d => format!("serial {serial} · {} old", counted(d, "day", "days")),
+                        },
+                    );
                     RecordView {
                         data: r.data.clone(),
                         href,
                         badges,
-                        ttl: ttl_text(&ttls),
+                        ttl: ttl_human(&ttls),
                         human: r.human.clone().filter(|h| *h != r.data),
                         explain: r.explain.clone(),
                         name: r.name.clone(),
                         rtype: r.rtype.clone(),
+                        serial,
+                        answered_by,
                     }
                 })
                 .collect();
@@ -355,6 +399,7 @@ fn groups(
                 outcome_text: outcome_text(first),
                 records,
                 servers,
+                lead: index == lead,
             }
         })
         .collect()
@@ -384,6 +429,39 @@ fn ttl_text(ttls: &[i64]) -> Option<String> {
     match (ttls.iter().min(), ttls.iter().max()) {
         (Some(lo), Some(hi)) if lo == hi => Some(format!("TTL {lo} s")),
         (Some(lo), Some(hi)) => Some(format!("TTL {lo} to {hi} s")),
+        _ => None,
+    }
+}
+
+/// Seconds in units: the two largest non-zero of days, h, min, s, then the seconds in brackets
+/// ("1 h 5 min (3900 s)"); below a minute just "59 s".
+fn human_seconds(secs: i64) -> String {
+    let secs = secs.max(0);
+    if secs < 60 {
+        return format!("{secs} s");
+    }
+    let parts: Vec<String> = [
+        (secs / 86_400, "day"),
+        (secs % 86_400 / 3600, "h"),
+        (secs % 3600 / 60, "min"),
+        (secs % 60, "s"),
+    ]
+    .into_iter()
+    .filter(|(n, _)| *n != 0)
+    .take(2)
+    .map(|(n, unit)| match unit {
+        "day" => counted(n, "day", "days"),
+        _ => format!("{n} {unit}"),
+    })
+    .collect();
+    format!("{} ({secs} s)", parts.join(" "))
+}
+
+/// A record's TTL in units, or the range over the group's servers; `None` without a TTL.
+fn ttl_human(ttls: &[i64]) -> Option<String> {
+    match (ttls.iter().min(), ttls.iter().max()) {
+        (Some(lo), Some(hi)) if lo == hi => Some(human_seconds(*lo)),
+        (Some(lo), Some(hi)) => Some(format!("{} to {}", human_seconds(*lo), human_seconds(*hi))),
         _ => None,
     }
 }
@@ -571,6 +649,7 @@ pub(super) fn render_part(blocks: &[Block], ctx: &ViewContext<'_>) -> Option<Par
                 record_type: t.record_type.clone(),
                 agreement: t.agreement.clone(),
                 rank: by_slowest.iter().position(|(j, _)| *j == i).unwrap_or(i) + 1,
+                order: i + 1,
                 tone,
                 badge,
                 groups: groups(&t.answers, slowest, &answers.id, ctx.decorate, &shared),

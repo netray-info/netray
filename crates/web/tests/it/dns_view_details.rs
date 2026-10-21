@@ -169,10 +169,10 @@ fn c10_explain_sentence_renders_escaped_inside_the_record() {
             vec![pair("explain", text(sentence))],
         ),
     );
-    let details = html.split("<details").nth(1).expect("details");
-    let details = details.split("</details>").next().unwrap();
+    // Under the record, outside its closed details, so Explain shows it at once.
+    let after = html.split("</details>").nth(1).expect("details");
     assert!(
-        details.contains(&format!(r#"<p class="dns-record__explain">{sentence}</p>"#)),
+        after.starts_with(&format!(r#"<p class="dns-record__explain">{sentence}</p>"#)),
         "{html}"
     );
     let escaped = one(
@@ -203,7 +203,7 @@ fn c11_ttl_in_human_units_and_the_answering_server() {
         "{html}"
     );
     let at = html
-        .find(r#"<dd class="dns-record__server">"#)
+        .find(r#"<dd class="dns-record__server""#)
         .expect("server dd");
     let dd = &html[at..html[at..].find("</dd>").map(|e| at + e).unwrap()];
     assert!(

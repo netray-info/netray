@@ -40,3 +40,18 @@ G1: C1 to C9 (one fragment and its island; the files overlap).
 2. `crates/web/templates/partials/dns_view.html`: the root carries `data-island="dnsview"`; the "All servers" button; the Servers panel as `dns-server` cards with the hidden filter button; badges in the tab links.
 3. `crates/web/static/pages.css`: `.dns-server*`, `.dns-view__tab-badge` tones, `.dns-view__all`, `.dns-view [data-off] { display: none; }`.
 4. `crates/web/islands/src/dnsview.ts` (new) and `src/main.ts`: unhide the filter buttons; a click on `[data-server-filter]` sets or removes `data-server` on the root and `data-off` on non-matching `.dns-group__server` and `.dns-server`.
+
+## Phase 3 — Toggles, explain and record details
+
+### Groups
+
+G1: C1 to C15 (one fragment, its stylesheet and its island).
+
+### Plan
+
+#### G1
+
+1. `crates/web/src/pages/views/dns.rs`: cards gain `data-order`; records gain details rows: TTL in human units over the group's servers holding that record, and one row per answering server (mhost string, transport, response time); the SOA serial age from `soa_serial_age_days` and the SOA data's serial; a human-units function for seconds (two largest non-zero units, then the seconds).
+2. `crates/web/templates/partials/dns_view.html`: the hidden toolbar; `data-order`; `<dl class="dns-record__details">`; the serial span in the summary. The Phase 1 `dns-record__ttl` paragraph becomes the dd (the Phase 1 review test's needle "TTL 600 s" becomes "10 min (600 s)", ADLC-Test-Change).
+3. `crates/web/static/pages.css`: toggle rules (hide empty, only divergent, compact, explain), toolbar and details styles.
+4. `crates/web/islands/src/dnsview.ts`: toolbar unhide, toggles with `aria-pressed` and root attributes, reorder by written `data-rank` or `data-order`, expand and collapse, `netray.dns.view` persistence in try/catch.

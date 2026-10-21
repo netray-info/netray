@@ -160,5 +160,5 @@ fn each_record_shows_its_own_ttl() {
         ],
     );
     let html = render(&[answers(vec![card])]).html;
-    assert!(html.contains("TTL 600 s"), "{html}");
+    assert!(html.contains("10 min (600 s)"), "{html}");
 }

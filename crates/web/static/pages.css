@@ -1272,6 +1272,75 @@ main td {
   color: var(--color-muted);
   font-size: var(--font-size-caption);
 }
+.dns-record__explain {
+  display: none;
+}
+.dns-view[data-explain] .dns-record__explain {
+  display: block;
+}
+.dns-view[data-hide-empty] .dns-group[data-outcome="no_records"],
+.dns-view[data-hide-empty] .dns-group[data-outcome="nxdomain"] {
+  display: none;
+}
+.dns-view[data-only-divergent] .dns-type:not([data-agreement="diverge"]):not([data-agreement="unmeasured"]) {
+  display: none;
+}
+/* Compact keeps the lead group and every failure (Rule M); a server filter wins over it. */
+.dns-view[data-compact]:not([data-server]) .dns-group:not([data-lead]):not([data-outcome="unmeasured"]),
+.dns-view[data-compact] .dns-record__details {
+  display: none;
+}
+.dns-record__serial {
+  display: block;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+.dns-record__details {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-caption);
+}
+.dns-record__details dt {
+  color: var(--color-muted);
+}
+.dns-record__details dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+.dns-record__details dd + dd {
+  grid-column: 2;
+}
+.dns-record__server span {
+  color: var(--color-muted);
+}
+.dns-view__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+}
+.dns-view__toolbar[hidden] {
+  display: none;
+}
+.dns-view__toggle,
+.dns-view__action {
+  padding: var(--space-1) var(--space-3);
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  cursor: pointer;
+}
+.dns-view__toggle[aria-pressed="true"] {
+  border-color: var(--color-ink);
+  background: var(--color-line);
+}
 .dns-view [data-off] {
   display: none;
 }
