@@ -462,7 +462,15 @@ fn panels(run: &Run, domain: &str, entry_id: Option<&str>) -> Vec<EvidenceInner>
         .iter()
         .map(|p| EvidenceInner {
             shown: *p == current,
-            panel: Some(evidence::panel(run, *p, domain, entry_id)),
+            panel: Some({
+                let panel = evidence::panel(run, *p, domain, entry_id);
+                // The compact IP table is GeoIP data: the attribution follows it, and only it.
+                let geoip = *p == Protocol::Ip && panel.compact.is_some();
+                evidence::PanelView {
+                    attribution: geoip.then(crate::pages::views::attribution).flatten(),
+                    ..panel
+                }
+            }),
         })
         .collect()
 }

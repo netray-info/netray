@@ -617,6 +617,7 @@ pub struct PanelView {
     pub all_href: Option<String>,
     pub explore: ExploreLink,
     pub reason: Option<String>,
+    pub attribution: Option<String>,
 }
 
 impl PanelView {
@@ -693,6 +694,7 @@ pub fn panel(run: &Run, protocol: Protocol, domain: &str, entry_id: Option<&str>
             }
         },
         reason,
+        attribution: None,
     }
 }
 

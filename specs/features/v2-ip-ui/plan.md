@@ -74,3 +74,30 @@ G1
 2. `ip_card.html`: a `section.ip-card__section` with an `h4.ip-card__section-title` per grid; the
    map link `rel="noopener noreferrer"`, the arrow outside the link text.
 3. `pages.css`: `.ip-card__section`, `__section-title`, `__map`, `__raw` (mono, wraps anywhere).
+
+## Phase 3 — API explorer and attribution
+
+### Groups
+
+G1: C1, C2, C3, C4, C5, C8 · G2: C6. G2 calls G1's `attribution()`. C7 is already green and stays
+so (the partial holds no attribution text).
+
+### Plan
+
+G1
+1. `partials/geoip_attribution.html`: `<p class="geoip-attribution">{{ before }}<a
+   href="https://www.maxmind.com" rel="noopener noreferrer">MaxMind</a>{{ after }}</p>`, the text
+   split from `netray_ip::GEOIP_ATTRIBUTION`; `views/ip.rs` `pub(crate) fn attribution()`.
+2. `ip_card.html` ends with it; `IpCard.attribution`.
+3. `partials/ip_explorer.html` and `views/ip.rs` `explorer(address)`: seven commands from
+   `pages::ORIGIN`, `<details open>`, `<code>` and a copy button per row, the docs link; appended
+   after the card's frame in `lookup`.
+4. `views/ip.rs` claims `ip.addresses`: the generic evidence block's markup with the view's feeds,
+   then the attribution.
+5. The stored result page's IP tab: the attribution after the compact IP table (the panel carries
+   it when the protocol is IP; `evidence.rs` stays free of module names).
+6. `pages.css`: `.geoip-attribution` (muted, label size), `.ip-explorer` (commands scroll inside).
+
+G2
+1. `views/mod.rs` re-exports `attribution`; `inspect.rs` `part_html` appends it to a part whose
+   addresses carry badges.

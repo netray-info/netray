@@ -156,8 +156,8 @@ GeoLite2 attribution follows GeoIP-derived data wherever it is rendered, as its 
     `ORIGIN` (its host prefixed with `ip.` for the short forms): `curl ip.<host>`, `curl
     ip.<host>/json`, `curl ip.<host>/country`, `curl "ip.<host>/?ip=<address>"`, `curl
     "<origin>/api/v1/ip/<address>?format=yaml"`, `curl
-    "<origin>/api/v1/ip?fields=ip,location&format=json"`, `curl -X POST <origin>/api/v1/ip/batch
-    -d '{"addresses":["<address>"]}'`, and a link to `/api/v1/docs`. Commands are server-rendered
+    "<origin>/api/v1/ip?fields=ip,location&format=json"`, `curl <origin>/api/v1/ip/batch --json
+    '{"addresses":["<address>"]}'` (`--json` sends the JSON content type the batch route requires), and a link to `/api/v1/docs`. Commands are server-rendered
     text. (6.20)
 
 ### Attribution
@@ -167,6 +167,7 @@ GeoLite2 attribution follows GeoIP-derived data wherever it is rendered, as its 
     follows GeoIP-derived data: as the last element of the IP card; after every `ip.addresses`
     block wherever it renders (the evidence views `/<domain>/ip` and `/r/<id>/ip`, the result
     page's IP tab and "All evidence" details), the block's markup otherwise the generic block's;
+    after the compact IP table of the result page's IP tab, which exists only with that block;
     and at the end of an inspector part whose addresses carry IP badges. Without GeoIP data
     (no such block, no badge) nothing renders. (6.51)
 
@@ -277,6 +278,10 @@ GIVEN the IP inspector at 390 px WHEN measured THEN the document is not wider th
   three quarters of the time left and falls back to a lookup without it (requirement 4). A re-run
   with empty input is the caller as the island's fetch sees it, without port, user agent or headers
   (requirement 4 amended) (implementer under the operator's autonomy mandate, 2026-10-21).
+- Review of phase 3: the batch command uses `curl --json`, since `-d` alone sends a form content
+  type the batch route refuses with 400 (requirement 13 amended); the result page's IP tab carries
+  the attribution only beside its compact table, which exists only with `ip.addresses`
+  (requirement 14 amended) (implementer under the operator's autonomy mandate, 2026-10-21).
 - The explorer is always open: the IP view cannot tell the caller's card from a looked-up one
   by its block, and on both pages the commands are the point (implementer under the operator's
   autonomy mandate, 2026-10-21).

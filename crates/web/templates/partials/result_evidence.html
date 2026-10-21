@@ -5,7 +5,7 @@
 {% if let Some(compact) = panel.compact %}<p class="evidence-tabs__caption">{{ compact.caption }}</p>
 <div class="evidence-tabs__scroll"><table class="evidence-tabs__compact"><thead><tr>{% for column in compact.columns %}<th>{{ column }}</th>{% endfor %}</tr></thead><tbody>{% for row in compact.rows %}<tr>{% for cell in row %}<td{% if let Some(title) = cell.title %} title="{{ title }}"{% endif %}>{% if cell.strong %}<strong>{{ cell.text }}</strong>{% else %}{{ cell.text }}{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>
 <p class="evidence-tabs__swipe">← swipe the table</p>
-{% endif %}
+{% endif %}{% if let Some(a) = panel.attribution %}{{ a|safe }}{% endif %}
 <div class="evidence-tabs__links">
 {% if !panel.feeds.is_empty() %}<p class="evidence-tabs__feeds">Feeds lines: {% for feed in panel.feeds %}{% if !loop.first %} · {% endif %}{% if let Some(code) = feed.code %}<code>{{ code }}</code> {% endif %}{{ feed.short }}{% endfor %}</p>{% endif %}
 {% if let Some(href) = panel.all_href %}<a class="evidence-tabs__all" href="{{ href }}">All evidence →</a>{% endif %}

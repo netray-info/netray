@@ -116,3 +116,54 @@ skipped: the grids render only with GeoIP data, which does not exist locally; th
 verified over hand-built blocks by the router-free view tests, and Phase 4 screenshots the page
 over the stub lookup.
 
+
+## Phase 3 — API explorer and attribution
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R13 explorer section after the card with copyable curl commands built from ORIGIN and a docs link | green | crates/web/tests/it/views_ip_explorer.rs |
+| C2 | R14 one partial renders GEOIP_ATTRIBUTION with MaxMind linked, following GeoIP-derived data | green | crates/web/tests/it/views_ip_attribution.rs |
+| C3 | S explorer for 192.0.2.10 lists the short, ?ip= and API yaml commands with copy buttons and links /api/v1/docs | green | crates/web/tests/it/views_ip_explorer.rs |
+| C4 | S the IP card's last element is the attribution with a MaxMind link | green | crates/web/tests/it/views_ip_attribution.rs |
+| C5 | S ip.addresses on the evidence views and the live details is followed by the attribution | green | crates/web/tests/it/ip_attribution_pages.rs |
+| C6 | S an HTTP inspector part with IP badges ends with the attribution; none without badges | green | crates/web/tests/it/ip_attribution_badges.rs |
+| C7 | S no template holds the attribution text | already_implemented | crates/web/tests/it/views_ip_attribution.rs |
+| C8 | S the stored result page IP tab follows its compact table with the attribution (added after planning: the compact table shows GeoIP data) | green | crates/web/tests/it/ip_attribution_compact.rs |
+| C9 | S review blocker: an IP tab without ip.addresses renders no attribution | green | crates/web/tests/it/ip_attribution_no_data.rs |
+
+C7 passed on the baseline (no template ever held the text). C8 and C9 were added after planning
+and after the review. `views_ip_explorer.rs` (protected since this phase's test commit) changes
+its batch command to `--json` under `ADLC-Test-Change` (review amendment).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 + G2 (one test binary) | 1 | sonnet | 64165 | 100 |
+
+The review fixes (attribution beside the compact table only, the claimed-block flag, `--json`)
+were made by the orchestrator.
+
+### Review
+
+| class | finding | disposition |
+|---|---|---|
+| BLOCKER | the result page's IP tab showed the attribution on runs without GeoIP data | fixed: only beside the compact table, which exists only with `ip.addresses`; test `ip_attribution_no_data.rs` |
+| AMENDMENT | the batch command with `-d` sends a form content type; the route answers 400 | requirement 13 amended to `curl --json`; repaired in phase |
+| DEFERRED | the double-attribution guard searched the rendered part's text, which target content can contain | fixed: a flag set when a claimed IP block renders |
+| NIT | the claimed `ip.addresses` carries its feeds line in the live result panel's "All evidence" details, which the generic block there omits | kept: every claimed view renders its feeds line (v2-http-ui requirement 2) |
+
+On a live result page (no entry yet) the IP tab can show the attribution twice: under the compact
+table and after `ip.addresses` inside the collapsed "All evidence" details; each follows its data.
+
+### Behavioural verification
+
+```
+$ curl -s http://127.0.0.1:18977/example.com/ip    # local lens, seeded history, see Phase 1
+```
+skipped for the live server: the seeded fixtures' `ip.addresses` pages are covered by
+`ip_attribution_pages.rs` (`/example.com/ip` through the real evidence router); Phase 4 reads
+the pages in a browser.
+

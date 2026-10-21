@@ -1205,13 +1205,25 @@ fn part_html(
     let (html, text) = match result {
         Ok(blocks) => {
             let mut html = String::new();
+            // A claimed IP block renders its own attribution.
+            let mut attributed = false;
             for block in blocks {
                 let feeds = block_feeds(evidence, &block.id);
                 let slot = slot(block, &decorate, &statuses, &feeds);
                 match slot.view {
-                    Some(view) => html.push_str(&view),
+                    Some(view) => {
+                        attributed |= block.id.module() == "ip";
+                        html.push_str(&view)
+                    }
                     None => html.push_str(&components::evidence_block(&slot.block).ok()?),
                 }
+            }
+            let badged = blocks
+                .iter()
+                .flat_map(links::addresses)
+                .any(|a| badges.iter().any(|(b, tags)| *b == a && !tags.is_empty()));
+            if badged && !attributed {
+                html.extend(views::attribution());
             }
             (Some(html), String::new())
         }

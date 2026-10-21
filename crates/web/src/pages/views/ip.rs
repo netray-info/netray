@@ -5,8 +5,10 @@ use netray_model::evidence::{Block, Value};
 use percent_encoding::utf8_percent_encode;
 
 use super::{ViewContext, claim, claim_tree, frame};
-use crate::components::{Cell, FactCell, FactsGridView, facts_grid};
-use crate::evidence::{BadgeTone, cell, display_value};
+use crate::components::{
+    Cell, EvidenceBlockView, FactCell, FactsGridView, evidence_block, facts_grid,
+};
+use crate::evidence::{BadgeTone, block_view_with, cell, display_value};
 use crate::explore::COMPONENT;
 use crate::links;
 
@@ -17,6 +19,7 @@ pub(super) fn render(block: &Block, ctx: &ViewContext<'_>) -> Option<String> {
     match block.id.name() {
         "lookup" => lookup(block, ctx),
         "headers" => headers(block, ctx),
+        "addresses" => addresses(block, ctx),
         _ => None,
     }
 }
@@ -115,6 +118,70 @@ struct IpCard {
     map_href: Option<String>,
     user_agent: Option<String>,
     ua_raw: Option<String>,
+    attribution: Option<String>,
+}
+
+#[derive(Template)]
+#[template(path = "partials/geoip_attribution.html")]
+struct Attribution<'a> {
+    before: &'a str,
+    after: &'a str,
+}
+
+/// The GeoIP attribution paragraph, the text of `netray_ip::GEOIP_ATTRIBUTION` with its
+/// "MaxMind" linked.
+pub(crate) fn attribution() -> Option<String> {
+    let (before, after) = netray_ip::GEOIP_ATTRIBUTION.split_once("MaxMind")?;
+    Attribution { before, after }.render().ok()
+}
+
+struct Command {
+    description: &'static str,
+    command: String,
+}
+
+#[derive(Template)]
+#[template(path = "partials/ip_explorer.html")]
+struct IpExplorer {
+    rows: Vec<Command>,
+}
+
+/// "Use it from the command line": the seven ways to ask for `address` over HTTP.
+fn explorer(address: &str) -> Option<String> {
+    let origin = crate::pages::ORIGIN;
+    let host = origin.strip_prefix("https://").unwrap_or(origin);
+    let row = |description, command| Command {
+        description,
+        command,
+    };
+    IpExplorer {
+        rows: vec![
+            row("Your own address as plain text", format!("curl ip.{host}")),
+            row(
+                "Your address with its details as JSON",
+                format!("curl ip.{host}/json"),
+            ),
+            row("Your country", format!("curl ip.{host}/country")),
+            row(
+                "Another address on the plain-text host",
+                format!("curl \"ip.{host}/?ip={address}\""),
+            ),
+            row(
+                "This address from the API, as YAML",
+                format!("curl \"{origin}/api/v1/ip/{address}?format=yaml\""),
+            ),
+            row(
+                "Only some fields of your own address",
+                format!("curl \"{origin}/api/v1/ip?fields=ip,location&format=json\""),
+            ),
+            row(
+                "Several addresses in one request",
+                format!("curl {origin}/api/v1/ip/batch --json '{{\"addresses\":[\"{address}\"]}}'"),
+            ),
+        ],
+    }
+    .render()
+    .ok()
 }
 
 /// `ip.lookup` as the address and its host name, a badge row of the facts that are flags and
@@ -315,10 +382,21 @@ fn lookup(block: &Block, ctx: &ViewContext<'_>) -> Option<String> {
         map_href,
         user_agent,
         ua_raw,
+        attribution: attribution(),
     }
     .render()
     .ok()?;
-    frame(block, "Lookup", &body, ctx)
+    let card = frame(block, "Lookup", &body, ctx)?;
+    Some(card + &explorer(&display_value(address))?)
+}
+
+/// `ip.addresses` as the generic evidence block followed by the GeoIP attribution.
+fn addresses(block: &Block, ctx: &ViewContext<'_>) -> Option<String> {
+    let view = EvidenceBlockView {
+        feeds: ctx.feeds.to_vec(),
+        ..block_view_with(block, ctx.decorate)
+    };
+    Some(evidence_block(&view).ok()? + &attribution()?)
 }
 
 struct Header {

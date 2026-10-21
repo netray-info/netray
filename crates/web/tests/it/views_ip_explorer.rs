@@ -39,7 +39,7 @@ fn commands(address: &str) -> Vec<String> {
         format!("curl \"https://netray.info/api/v1/ip/{address}?format=yaml\""),
         "curl \"https://netray.info/api/v1/ip?fields=ip,location&format=json\"".to_string(),
         format!(
-            "curl -X POST https://netray.info/api/v1/ip/batch -d '{{\"addresses\":[\"{address}\"]}}'"
+            "curl https://netray.info/api/v1/ip/batch --json '{{\"addresses\":[\"{address}\"]}}'"
         ),
     ]
 }
