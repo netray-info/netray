@@ -162,6 +162,7 @@ mod inspect_seam;
 mod inspect_shared_limits;
 mod inspect_speculation;
 mod inspect_stream;
+mod inspect_tls_chooser;
 mod inspect_tls_jobs;
 mod inspect_tls_panels;
 mod inspect_tls_ports;
