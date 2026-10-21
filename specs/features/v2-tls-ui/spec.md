@@ -95,7 +95,8 @@ and canvas rows 9.50, 9.55, 9.56, 9.57, 9.58 (summaries).
 
 ### The port view
 
-1. **Port view seam.** `ViewContext` gains the sibling blocks the renderer shows with the block
+1. **Port view seam.** The seam gains the sibling blocks the renderer shows with the block
+   (`views::render_with(block, ctx, siblings)`; `render` passes none)
    (the inspector part's blocks; the run's blocks of the block's protocol in the evidence view and
    the live details). A view may render several blocks in one fragment: the TLS view renders the
    whole port at `tls.addresses` (or `tls.addresses@<port>`), and every block it renders there
@@ -111,8 +112,9 @@ and canvas rows 9.50, 9.55, 9.56, 9.57, 9.58 (summaries).
    A test feeds a port of two addresses with every registered key and asserts each value's
    display text appears.
 3. **Distinct values.** Where one cell shows a fact several addresses report (handshake facts,
-   OCSP, SCTs), equal values held by every address show once; otherwise (values differ, or some
-   addresses do not hold the fact) each value is followed by its addresses in parentheses.
+   OCSP, SCTs), equal values held by every address that completed a handshake show once;
+   otherwise (values differ, or some of those addresses do not hold the fact) each value is
+   followed by its addresses in parentheses. An address without a handshake is its error row.
 
 ### Addresses
 
@@ -234,8 +236,8 @@ and canvas rows 9.50, 9.55, 9.56, 9.57, 9.58 (summaries).
     shared run renders a stored certificate, no visit of the live one), and "expiry" names a
     changed date.
     After a run its island stores them per key in `localStorage` (`netray.cert.<key>`); on a later
-    run of the key, when the SHA-256 differs, a banner from a server-rendered `template` above the
-    section names the changes: "expiry <old> → <new>", "issuer <old> → <new>", "names added: …",
+    run of the key, when the SHA-256 differs, a banner from a server-rendered `template` at the
+    top of the certificate section names the changes: "expiry <old> → <new>", "issuer <old> → <new>", "names added: …",
     "names removed: …", or "same names and issuer, new key"; "Forget" removes the snapshot and the
     banner. Storage failures leave the page working without the banner. (3.20)
 
@@ -245,10 +247,12 @@ and canvas rows 9.50, 9.55, 9.56, 9.57, 9.58 (summaries).
     buttons and banner are absent; the islands bundle stays under 30 KB gzipped; islands write no
     style and compute no verdict. (S7, §8.4)
 19. **Design gate.** The private manifest measures G's and GDark's port chooser, addresses table,
-    certificate section (validity labels and bar, facts grid, chain pills, trust text), protocols
-    grid and related box; `just design-check` exits 0, every row fixed or accepted. Screenshots at
-    1280 and 390 px, both themes, of the live board target and of the stored states (two
-    addresses with differing leaves, three ports with STARTTLS, an expired leaf) are read beside G
+    certificate section (validity labels and bar, facts grid, chain pills, trust text) and
+    protocols grid (the related box needs a host target; the board's live target is an IP
+    address); `just design-check` exits 0, every row fixed or accepted. Screenshots at 1280 and
+    390 px, both themes, of the live board target and of the stored states (two addresses with
+    differing leaves, an expired leaf) and a live run of several ports (STARTTLS needs DNS for a
+    mail host, blocked locally) are read beside G
     by a reader with no part in the build; every finding is a `report.md` row and closed. At 390 px
     nothing scrolls sideways. (9.50, 9.55–9.58)
 
@@ -419,6 +423,11 @@ GIVEN the TLS inspector at 390 px WHEN measured THEN the document is not wider t
   cells, hanging chain arrows, the banner's gap and no amber caption on an expired bar; kept the
   marker rule, the nothing-lost notes and disclosures, Rule M absences and the 44 px phone targets
   (report.md V1–V25) (implementer under the operator's autonomy mandate, 2026-10-21).
+- Final review (f8ecf55d..d9aa2d11): the blocker (a leaf lapsed within the day drew a valid bar)
+  is fixed on this branch rather than splitting the change; ALPN "none" needs a handshake read;
+  a refused suffix presses no port; a port's tab shows its tone as a bar. Requirements 1, 3, 17
+  and 19 amended to what was built and what is measurable here (implementer under the
+  operator's autonomy mandate, 2026-10-21).
 - The design check's live TLS board needs network: a binary built in a worktree gets none here,
   so `netray_bin` honours `NETRAY_BIN`, and the gate runs with this branch's build copied to the
   main checkout's target path (backed up and restored) (implementer under the operator's autonomy

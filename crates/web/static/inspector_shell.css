@@ -222,6 +222,17 @@
 .inspector-ports__meta {
   font-weight: 400;
 }
+/* the port's worst status as a tone bar beside its name */
+.inspector-ports__meta[data-tone]::before {
+  content: "";
+  display: inline-block;
+  width: var(--line-marker);
+  height: 0.8em;
+  margin-inline: var(--space-2) var(--space-1);
+  background: var(--status-pass-mark);
+}
+.inspector-ports__meta[data-tone="warn"]::before { background: var(--status-warn-mark); }
+.inspector-ports__meta[data-tone="fail"]::before { background: var(--status-fail-mark); }
 .inspector-ports__meta[data-tone="warn"] {
   color: var(--status-warn-text);
 }

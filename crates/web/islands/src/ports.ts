@@ -90,7 +90,8 @@ export function ports(el: HTMLElement): void {
 
   const sync = (): boolean => {
     current = target(h.value);
-    const list = current.ports ?? [443];
+    // A suffix the server refuses presses nothing; an empty or bare host is the default 443.
+    const list = current.ports ?? (current.fixed && h.value.trim() ? [] : [443]);
     if (list.length > max) {
       refuse();
       return false;

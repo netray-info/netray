@@ -596,13 +596,23 @@ fn protocols(port: &Port<'_>, ctx: &ViewContext<'_>) -> Option<String> {
             push(name, state, Some(check), fit);
         }
     }
+    // "none" is a measured answer only when a handshake of the port was read.
     let alpn = per("alpn", &display_value);
-    let alpn = if alpn.is_empty() {
-        "none".to_string()
-    } else {
-        alpn.join(" · ")
-    };
-    push("ALPN", alpn, Some("tls.alpn_consistency"), Fit::Any);
+    if !alpn.is_empty() {
+        push(
+            "ALPN",
+            alpn.join(" · "),
+            Some("tls.alpn_consistency"),
+            Fit::Any,
+        );
+    } else if !port.handshakes.is_empty() {
+        push(
+            "ALPN",
+            "none".to_string(),
+            Some("tls.alpn_consistency"),
+            Fit::Any,
+        );
+    }
     if let Some(v) = proto("forward_secrecy_all_suites") {
         let (state, fit) = match v {
             Value::Bool(true) => ("all suites".to_string(), Fit::Good),
@@ -1015,10 +1025,14 @@ fn certificate(
 ) -> Option<String> {
     let (_, block, certs) = members[0];
     let leaf = &certs[0];
+    // The backend truncates days toward zero: a leaf lapsed hours ago stores 0 days and
+    // `expired` true, so the run's moment then lies just past not_after.
+    let lapsed = matches!(get(leaf, "expired"), Some(Value::Bool(true)));
     let measured = match (get(leaf, "not_after"), get(leaf, "days_remaining")) {
-        (Some(Value::Time(na)), Some(Value::Int(left))) => {
-            unix_time(na).map(|end| end - left * 86_400)
-        }
+        (Some(Value::Time(na)), Some(Value::Int(left))) => unix_time(na).map(|end| {
+            let moment = end - left * 86_400;
+            if lapsed { moment.max(end + 1) } else { moment }
+        }),
         _ => None,
     };
     let now = measured.unwrap_or_else(|| {
