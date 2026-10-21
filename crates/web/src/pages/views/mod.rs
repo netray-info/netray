@@ -11,6 +11,8 @@ pub mod validity;
 
 pub use tls::{tls_band_part, tls_related_summary, tls_starttls};
 
+pub(crate) use ip::attribution;
+
 use askama::Template;
 use netray_model::evidence::{Block, Fields, Node, Shape, Value};
 use netray_model::{CheckId, Status};
