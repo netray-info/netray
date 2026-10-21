@@ -1,17 +1,241 @@
 //! The DNS views: the part view over `dns.answers` and `dns.servers` (spec v2-dns-ui,
-//! requirements 2 to 7). No per-block view yet.
+//! requirements 2 to 7) and the block views of `dns.trace` and `dns.dnssec_chain`
+//! (requirements 14 and 15).
 
 use std::collections::BTreeSet;
 
 use askama::Template;
 use netray_model::evidence::{Block, BlockId, Fields, Node, Shape, Value};
 
-use super::{PartView, ViewContext, bar_width};
+use super::{PartView, ViewContext, bar_width, frame};
 
 use crate::evidence::{Badge, Decorate, Decoration, display_value};
 
-pub(super) fn render(_block: &Block, _ctx: &ViewContext<'_>) -> Option<String> {
-    None
+pub(super) fn render(block: &Block, ctx: &ViewContext<'_>) -> Option<String> {
+    match block.id.to_string().as_str() {
+        "dns.trace" => render_trace(block, ctx),
+        "dns.dnssec_chain" => render_dnssec(block, ctx),
+        _ => None,
+    }
+}
+
+/// Whether every key of `fields` is in `known`.
+fn only(fields: &Fields, known: &[&str]) -> bool {
+    fields.iter().all(|(k, _)| known.contains(&k.as_str()))
+}
+
+struct HopServer {
+    outcome: String,
+    outcome_text: String,
+    name: Option<String>,
+    address: Option<String>,
+    href: Option<String>,
+    badges: Vec<Badge>,
+    bar: Option<u8>,
+    time: Option<String>,
+    error: Option<String>,
+    referral: Option<String>,
+    answers: Vec<String>,
+}
+
+struct Hop {
+    level: i64,
+    zone: Option<String>,
+    disagree: bool,
+    servers: Vec<HopServer>,
+}
+
+#[derive(Template)]
+#[template(path = "partials/dns_trace_view.html")]
+struct TraceView {
+    meta: String,
+    hops: Vec<Hop>,
+}
+
+/// The delegation trace: a hop per zone level, its servers with latency bars, referrals,
+/// answers and errors.
+fn render_trace(block: &Block, ctx: &ViewContext<'_>) -> Option<String> {
+    let Shape::Tree(root) = &block.shape else {
+        return None;
+    };
+    let claimed = only(&root.fields, &["hops"])
+        && root.children.iter().all(|hop| {
+            only(
+                &hop.fields,
+                &["level", "zone", "servers_queried", "referral_groups"],
+            ) && hop.children.iter().all(|s| {
+                s.children.is_empty()
+                    && only(
+                        &s.fields,
+                        &[
+                            "address",
+                            "latency",
+                            "outcome",
+                            "server_name",
+                            "error",
+                            "referral",
+                            "answer",
+                        ],
+                    )
+            })
+        });
+    if !claimed {
+        return None;
+    }
+    let slowest = root
+        .children
+        .iter()
+        .flat_map(|hop| hop.children.iter())
+        .filter_map(|s| duration(&s.fields, "latency"))
+        .max()
+        .unwrap_or(0);
+    let hops = root
+        .children
+        .iter()
+        .map(|hop| Hop {
+            level: int(&hop.fields, "level"),
+            zone: text(&hop.fields, "zone"),
+            disagree: int(&hop.fields, "referral_groups") > 1,
+            servers: hop
+                .children
+                .iter()
+                .map(|s| {
+                    let f = &s.fields;
+                    let address = f.iter().find(|(k, _)| k == "address");
+                    let Decoration { href, badges } = address
+                        .and_then(|(k, v)| (ctx.decorate)(&block.id, k, v))
+                        .unwrap_or_default();
+                    let latency = duration(f, "latency");
+                    let referral = texts(f, "referral");
+                    let answers = texts(f, "answer");
+                    let outcome = text(f, "outcome").unwrap_or_default();
+                    // The outcome in words: an authoritative NODATA or NXDOMAIN is an answer
+                    // without records.
+                    let outcome_text = match outcome.as_str() {
+                        "answer" if answers.is_empty() => "answer, no records".to_string(),
+                        other => other.to_string(),
+                    };
+                    HopServer {
+                        outcome_text,
+                        outcome,
+                        name: text(f, "server_name"),
+                        address: address.map(|(_, v)| display_value(v)),
+                        href,
+                        badges,
+                        bar: latency
+                            .filter(|_| slowest > 0)
+                            .map(|ms| bar_width(ms, slowest)),
+                        time: latency.map(|ms| display_value(&Value::Duration(ms))),
+                        error: text(f, "error"),
+                        referral: (!referral.is_empty())
+                            .then(|| format!("Referral: {}", referral.join(", "))),
+                        answers,
+                    }
+                })
+                .collect(),
+        })
+        .collect();
+    let body = TraceView {
+        meta: counted(root.children.len() as i64, "hop", "hops"),
+        hops,
+    }
+    .render()
+    .ok()?;
+    frame(block, "Delegation trace", &body, ctx)
+}
+
+struct Finding {
+    tone: Option<&'static str>,
+    message: String,
+}
+
+struct Level {
+    level: i64,
+    zone: Option<String>,
+    latency: Option<String>,
+    badge: Option<(&'static str, String)>,
+    findings: Vec<Finding>,
+    records: Vec<(&'static str, Vec<String>)>,
+}
+
+#[derive(Template)]
+#[template(path = "partials/dns_dnssec_view.html")]
+struct DnssecView {
+    meta: String,
+    levels: Vec<Level>,
+}
+
+/// The DNSSEC chain: a level per zone with its findings and, folded, its key, DS and signature
+/// records.
+fn render_dnssec(block: &Block, ctx: &ViewContext<'_>) -> Option<String> {
+    let Shape::Tree(root) = &block.shape else {
+        return None;
+    };
+    let claimed = only(&root.fields, &["levels"])
+        && root.children.iter().all(|level| {
+            only(
+                &level.fields,
+                &["level", "zone", "latency", "dnskey", "ds", "rrsig"],
+            ) && level
+                .children
+                .iter()
+                .all(|f| f.children.is_empty() && only(&f.fields, &["severity", "message"]))
+        });
+    if !claimed {
+        return None;
+    }
+    let (mut warn_total, mut fail_total) = (0, 0);
+    let levels = root
+        .children
+        .iter()
+        .map(|level| {
+            let findings: Vec<Finding> = level
+                .children
+                .iter()
+                .map(|f| Finding {
+                    tone: match text(&f.fields, "severity").as_deref() {
+                        Some("ok") => Some("pass"),
+                        Some("warning") => Some("warn"),
+                        Some("failed") => Some("fail"),
+                        _ => None,
+                    },
+                    message: text(&f.fields, "message").unwrap_or_default(),
+                })
+                .collect();
+            let count_of = |tone| findings.iter().filter(|f| f.tone == Some(tone)).count();
+            let (warn, fail) = (count_of("warn"), count_of("fail"));
+            warn_total += warn;
+            fail_total += fail;
+            Level {
+                level: int(&level.fields, "level"),
+                zone: text(&level.fields, "zone"),
+                latency: duration(&level.fields, "latency")
+                    .map(|ms| display_value(&Value::Duration(ms))),
+                badge: (warn + fail > 0).then(|| {
+                    (
+                        if fail > 0 { "fail" } else { "warn" },
+                        format!("{warn} warn · {fail} fail"),
+                    )
+                }),
+                findings,
+                records: [("DNSKEY", "dnskey"), ("DS", "ds"), ("RRSIG", "rrsig")]
+                    .into_iter()
+                    .map(|(label, key)| (label, texts(&level.fields, key)))
+                    .filter(|(_, records)| !records.is_empty())
+                    .collect(),
+            }
+        })
+        .collect();
+    let body = DnssecView {
+        meta: format!(
+            "{} · {warn_total} warn · {fail_total} fail",
+            counted(root.children.len() as i64, "level", "levels")
+        ),
+        levels,
+    }
+    .render()
+    .ok()?;
+    frame(block, "DNSSEC chain", &body, ctx)
 }
 
 /// The display texts of every value of `key` in `fields`, in order.

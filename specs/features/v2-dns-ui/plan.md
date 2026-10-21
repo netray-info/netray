@@ -55,3 +55,19 @@ G1: C1 to C15 (one fragment, its stylesheet and its island).
 2. `crates/web/templates/partials/dns_view.html`: the hidden toolbar; `data-order`; `<dl class="dns-record__details">`; the serial span in the summary. The Phase 1 `dns-record__ttl` paragraph becomes the dd (the Phase 1 review test's needle "TTL 600 s" becomes "10 min (600 s)", ADLC-Test-Change).
 3. `crates/web/static/pages.css`: toggle rules (hide empty, only divergent, compact, explain), toolbar and details styles.
 4. `crates/web/islands/src/dnsview.ts`: toolbar unhide, toggles with `aria-pressed` and root attributes, reorder by written `data-rank` or `data-order`, expand and collapse, `netray.dns.view` persistence in try/catch.
+
+## Phase 4 — Trace and DNSSEC views
+
+### Groups
+
+G1: C1 to C8.
+
+### Plan
+
+#### G1
+
+1. `crates/dns/src/jobs/blocks.rs` `trace_blocks`, `dnssec_blocks`: the added keys (`referral_groups`, `server_name`, `error`, `referral`, `answer`; `dnskey`, `ds`, `rrsig`), absent values omitted.
+2. `crates/web/src/api/jobs.rs` `start_dns`/`dns_part`: extra warnings for the trace part when the query names several types.
+3. `crates/web/src/pages/views/dns.rs` `render`: the trace and DNSSEC views (claim only the contract's keys), framed by `super::frame`; templates `crates/web/templates/partials/dns_trace_view.html`, `dns_dnssec_view.html`.
+4. `crates/web/static/pages.css`: `.dns-trace*`, `.dns-hop*`, `.dns-chain*`, `.dns-level*`.
+5. Existing tests asserting generic markup for `dns.trace` (`inspect_dns_jobs.rs`, `inspect_dns_review.rs`: `id="ev-dns.trace" data-shape="tree"`) change to the view's anchor (ADLC-Test-Change).

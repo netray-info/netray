@@ -178,8 +178,10 @@ runs render as structured views instead of key-value trees. The query input auto
     view claims it and renders one row per hop: level, zone, the servers queried (server name and
     address, latency bar from a Rust function over the slowest server, error text of a failed
     one), the referral NS names, a "servers disagree" marker when `referral_groups` is above one,
-    and the answer records where a server answered. With several types in a `+trace` query the
-    warnings block carries "Only the first type is traced: <type>." (2.28)
+    each server's outcome in words ("referral", "answer", "answer, no records", "error"), and the
+    answer records where a server answered. With several types named in a `+trace` query (the
+    parser's default types of a query naming none do not count) the warnings block carries "Only
+    the first type is traced: <type>.", live and in a replay from the API cache. (2.28)
 
 ### Autocomplete, exports and acceptance
 
@@ -345,6 +347,12 @@ GIVEN the DNS inspector at 390 px WHEN measured THEN the document is not wider t
   outside its closed details, so the toggle shows it at once; the details' server rows carry their
   server for the filter; a serial dated after today reads "dated in the future", not a negative
   age (implementer under the operator's autonomy mandate, 2026-10-21).
+- Phase 4 review: a trace server's outcome shows in words, so an authoritative NODATA or NXDOMAIN
+  (an answer without records) is not a bare row; the "first type" note counts the types the query
+  names, not the parser's defaults, and a replay from the API cache recomputes it from the stored
+  query. A claimed part is streamed again after the band only when its HTML with the checks
+  differs from without, so views that read no checks (DNS) are sent once and the HTTP views still
+  get their tones (implementer under the operator's autonomy mandate, 2026-10-21).
 - The trace heading names no traced type and the shared-result notices of the draft are dropped:
   the traced type is not in the collected trace result and adding it would change the API's done
   event; the run line already shows the query. A multi-type `+trace` puts "Only the first type is

@@ -1463,9 +1463,13 @@ fn stream_job(
                             let Some(part @ Ok(blocks)) = part else {
                                 continue;
                             };
+                            // Only a part whose views read the checks changes; a view that reads
+                            // none (the DNS views) is not sent twice.
+                            let label = &run.labels[n];
                             if blocks.iter().any(views::claims)
-                                && let Some(event) =
-                                    part_event(n, &run.labels[n], part, &run.badges, checks)
+                                && part_html(n, label, part, &run.badges, checks)
+                                    != part_html(n, label, part, &run.badges, &[])
+                                && let Some(event) = part_event(n, label, part, &run.badges, checks)
                             {
                                 run.queue.push_back(event);
                             }

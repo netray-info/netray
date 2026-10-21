@@ -59,6 +59,7 @@ mod dns_view_results;
 mod dns_view_review;
 mod dns_view_review2;
 mod dns_view_review3;
+mod dns_view_review4;
 mod dns_view_servers;
 mod dns_view_summary;
 mod dns_view_trace_dnssec;

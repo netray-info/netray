@@ -161,3 +161,46 @@ Screenshots from the stub server (`node shoot.cjs` in the scratchpad, Playwright
 `cargo run -p netray-web --example dns_stub`): every state at 1280 px and 390 px, light and dark,
 has `document.documentElement.scrollWidth` equal to the viewport (1280, 390). The visual reading is
 Phase 6.
+
+## Phase 4 — Trace and DNSSEC views
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R14 dns.dnssec_chain gains dnskey, ds, rrsig; the DNSSEC view renders levels root first with zone, latency, toned findings, a warn and fail badge and record details; heading counts | green | crates/dns/tests/it/job_blocks_trace_dnssec.rs, crates/web/tests/it/dns_view_trace_dnssec.rs |
+| C2 | R15 dns.trace gains server_name, referral, answer, error and referral_groups; the trace view renders hops with servers, bars, referral names, a disagree marker and answers; a multi-type trace warns | green | crates/dns/tests/it/job_blocks_trace_dnssec.rs, crates/web/tests/it/dns_view_trace_dnssec.rs |
+| C3 | S a DNSSEC run renders one card per level with zone, latency, toned findings and records details when present | green | crates/web/tests/it/dns_view_trace_dnssec.rs |
+| C4 | S a level with a warning finding carries 1 warn | green | crates/web/tests/it/dns_view_trace_dnssec.rs |
+| C5 | S a trace of example.com MX shows level, zone, server addresses with bars, referral names and the answering hop's answers | green | crates/web/tests/it/dns_view_trace_dnssec.rs, crates/dns/tests/it/job_blocks_trace_dnssec.rs |
+| C6 | S a hop with referral_groups 2 carries servers disagree | green | crates/web/tests/it/dns_view_trace_dnssec.rs |
+| C7 | S example.com MX TXT +trace warns Only the first type is traced: MX. | green | crates/web/tests/it/dns_trace_types.rs |
+| C8 | S nothing lost: every value of the claimed trace and DNSSEC blocks appears | green | crates/web/tests/it/dns_view_trace_dnssec.rs |
+
+`inspect_dns_jobs.rs` c6 and `inspect_dns_review.rs` assert the claimed trace by its view anchor
+instead of the generic tree markup (`ADLC-Test-Change`).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 2 | sonnet | 95321 | 221 |
+
+The coder stopped at three red tests: the claimed trace part was streamed twice after the band.
+The orchestrator changed the re-stream to compare the part's HTML with and without the checks.
+
+### Review
+
+| class | finding | disposition |
+|---|---|---|
+| BLOCKER | a trace server's outcome reached only data-outcome; an answer without records rendered as a bare row | fixed: the outcome in words; test `dns_view_review4.rs` |
+| BLOCKER | a bare `+trace` warned "Only the first type is traced: A." from the parser's defaults | fixed: the note counts the named types; test `a_bare_trace_names_no_type_and_carries_no_note` |
+| AMENDMENT | an API-cache replay of a trace lacked the note | requirement 15 amended, repaired: recomputed from the stored query |
+| NIT | the nothing-lost needles for integer levels match any digit | the review test asserts the visible level element |
+
+### Behavioural verification
+
+The stub server's `example.com MX +trace` renders the Delegation trace view: "1 hop", the root
+level, thirteen root server addresses with bars and "1 ms", each with `MX 10 mx1.example.com.`
+(the stub answers authoritatively from every server); screenshot `trace-1280-dark.png` in the
+scratchpad. No page scrolls sideways at 390 px.

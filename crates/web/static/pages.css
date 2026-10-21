@@ -1447,3 +1447,104 @@ main td {
   font-size: var(--font-size-small);
   overflow-wrap: break-word;
 }
+/* The DNS trace and DNSSEC views (spec v2-dns-ui, requirements 14 and 15). */
+.dns-trace__meta,
+.dns-chain__meta {
+  margin: 0 0 var(--space-2);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+}
+.dns-trace__hops,
+.dns-chain {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dns-hop,
+.dns-level {
+  padding-block: var(--space-2);
+  border-top: var(--line-hair) solid var(--color-line);
+}
+.dns-hop__level {
+  margin-inline-end: var(--space-2);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+.dns-hop__zone,
+.dns-level__zone {
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  overflow-wrap: break-word;
+}
+.dns-hop__disagree,
+.dns-level__badge {
+  margin-inline-start: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+.dns-hop__disagree[data-tone="warn"],
+.dns-level__badge[data-tone="warn"] { color: var(--status-warn-text); }
+.dns-level__badge[data-tone="fail"] { color: var(--status-fail-text); }
+.dns-hop__servers {
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.dns-hop__server {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-small);
+}
+.dns-hop__name {
+  color: var(--color-ink);
+}
+.dns-hop__address,
+.dns-hop__time,
+.dns-level__latency {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+.dns-hop__error {
+  color: var(--status-fail-text);
+  font-size: var(--font-size-small);
+}
+.dns-hop__referral {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-caption);
+  overflow-wrap: break-word;
+}
+.dns-hop__answer,
+.dns-level__record {
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  overflow-wrap: break-word;
+}
+.dns-level__findings {
+  margin: var(--space-1) 0 0;
+  padding-inline-start: var(--space-4);
+  font-size: var(--font-size-small);
+}
+.dns-level__findings [data-tone="pass"] { color: var(--status-pass-text); }
+.dns-level__findings [data-tone="warn"] { color: var(--status-warn-text); }
+.dns-level__findings [data-tone="fail"] { color: var(--status-fail-text); }
+.dns-level__records {
+  margin-block-start: var(--space-2);
+}
+.dns-level__kind {
+  margin: var(--space-2) 0 0;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+.dns-level__record {
+  display: block;
+}

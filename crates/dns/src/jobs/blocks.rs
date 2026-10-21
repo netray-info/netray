@@ -545,22 +545,45 @@ pub fn trace_blocks(result: &DnsTraceResult) -> Vec<Block> {
                         ServerOutcome::Answer => "answer",
                         ServerOutcome::Error { .. } => "error",
                     };
-                    let mut fields = vec![("address", Value::Addr(server.server_ip))];
+                    let mut fields = Vec::new();
+                    if let Some(name) = server.server_name.as_deref().filter(|n| !n.is_empty()) {
+                        fields.push(("server_name", text(name)));
+                    }
+                    fields.push(("address", Value::Addr(server.server_ip)));
                     if !matches!(server.outcome, ServerOutcome::Error { .. }) {
                         fields.push(("latency", millis(server.latency_ms)));
                     }
                     fields.push(("outcome", text(outcome)));
+                    if let ServerOutcome::Error { message } = &server.outcome
+                        && !message.is_empty()
+                    {
+                        fields.push(("error", text(message)));
+                    }
+                    fields.extend(
+                        server
+                            .referral_ns
+                            .iter()
+                            .filter(|ns| !ns.is_empty())
+                            .map(|ns| ("referral", text(ns))),
+                    );
+                    fields.extend(server.answer_records.iter().map(|record| {
+                        (
+                            "answer",
+                            text(format!("{} {}", record.record_type, record.rdata)),
+                        )
+                    }));
                     node(fields, Vec::new())
                 })
                 .collect();
-            node(
-                vec![
-                    ("level", count(hop.level)),
-                    ("zone", text(&hop.zone)),
-                    ("servers_queried", count(hop.servers_queried)),
-                ],
-                servers,
-            )
+            let mut fields = vec![
+                ("level", count(hop.level)),
+                ("zone", text(&hop.zone)),
+                ("servers_queried", count(hop.servers_queried)),
+            ];
+            if !hop.referral_groups.is_empty() {
+                fields.push(("referral_groups", count(hop.referral_groups.len())));
+            }
+            node(fields, servers)
         })
         .collect::<Vec<_>>();
     vec![block(
@@ -594,6 +617,18 @@ pub fn dnssec_blocks(result: &DnsDnssecResult) -> Vec<Block> {
             let mut fields = vec![("level", count(level.level)), ("zone", text(&level.zone))];
             if level.servers_queried > 0 {
                 fields.push(("latency", millis(level.latency_ms)));
+            }
+            for (key, records) in [
+                ("dnskey", &level.dnskey_records),
+                ("ds", &level.ds_records),
+                ("rrsig", &level.rrsig_records),
+            ] {
+                fields.extend(
+                    records
+                        .iter()
+                        .filter(|r| !r.rdata.is_empty())
+                        .map(|r| (key, text(&r.rdata))),
+                );
             }
             node(fields, findings)
         })
