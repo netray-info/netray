@@ -172,6 +172,7 @@ mod inspect_tls_ports;
 mod inspect_tls_probe_cost;
 mod ip_attribution_badges;
 mod ip_attribution_compact;
+mod ip_attribution_no_data;
 mod ip_attribution_pages;
 mod ip_host_misc;
 mod ip_host_paths;
