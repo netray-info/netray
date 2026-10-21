@@ -123,11 +123,46 @@ Protocols and features ALPN none Encrypted Client Hello not advertised Key excha
 
 | id | criterion | status | test file |
 |---|---|---|---|
-| C1 | R13 each TLS part carries its port's checks, renders its views with them on arrival, and a shared run stores and renders them | open | crates/web/tests/it/inspect_tls_panels.rs |
-| C2 | R14 several ports: tab row, one panel per port with its band, check list and port view, no band under the h1; tab meta with STARTTLS, tone and counts; band port current; tabs island; no-JS in-page links | open | crates/web/tests/it/inspect_tls_panels.rs |
-| C3 | S example.com:443,465,587: tabs 443, 465, 587 · STARTTLS, 443 current, panels with own band and check list, no band under the h1 | open | crates/web/tests/it/inspect_tls_panels.rs |
-| C4 | S port 465 failing its handshake: its tab carries the fail tone and its counts, 443's does not | open | crates/web/tests/it/inspect_tls_panels.rs |
-| C5 | S a one-port run: no tab row, one band under the h1 | open | crates/web/tests/it/inspect_tls_panels.rs |
-| C6 | S a TLS part carries its own port's tones and is not re-sent at band end | open | crates/web/tests/it/inspect_tls_panels.rs |
-| C7 | S a three-port share key renders panels with their own bands and tones | open | crates/web/tests/it/inspect_tls_panels.rs |
-| C8 | S without JavaScript a three-port shared run renders all panels in order with in-page tab links | open | crates/web/tests/it/inspect_tls_panels.rs |
+| C1 | R13 each TLS part carries its port's checks, renders its views with them on arrival, and a shared run stores and renders them | green | crates/web/tests/it/inspect_tls_panels.rs |
+| C2 | R14 several ports: tab row, one panel per port with its band, check list and port view, no band under the h1; tab meta with STARTTLS, tone and counts; band port current; tabs island; no-JS in-page links | green | crates/web/tests/it/inspect_tls_panels.rs |
+| C3 | S example.com:443,465,587: tabs 443, 465, 587 · STARTTLS, 443 current, panels with own band and check list, no band under the h1 | green | crates/web/tests/it/inspect_tls_panels.rs |
+| C4 | S port 465 failing its handshake: its tab carries the fail tone and its counts, 443's does not | green | crates/web/tests/it/inspect_tls_panels.rs |
+| C5 | S a one-port run: no tab row, one band under the h1 | green | crates/web/tests/it/inspect_tls_panels.rs |
+| C6 | S a TLS part carries its own port's tones and is not re-sent at band end | green | crates/web/tests/it/inspect_tls_panels.rs |
+| C7 | S a three-port share key renders panels with their own bands and tones | green | crates/web/tests/it/inspect_tls_panels.rs |
+| C8 | S without JavaScript a three-port shared run renders all panels in order with in-page tab links | green | crates/web/tests/it/inspect_tls_panels.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 2 | opus | 111588 | 332 |
+
+Planned by the orchestrator (one group). The review's amendment (unmeasured tab) was fixed by the
+orchestrator with the test `c4_an_unmeasured_port_reads_not_measured_without_the_pass_tone`.
+
+### Review
+
+| class | finding | disposition |
+|---|---|---|
+| AMENDMENT | a port with only unmeasured lines carried the pass tone on its tab | requirement 14 amended and fixed; test added (ADLC-Test-Change) |
+| NIT | each panel's slim spectrum repeats the id `band-tls` | kept: nothing references it; the spectrum component owns the id |
+| NIT | a part past the deadline has no band region live but "timed out" in the shared run | kept: the shared run states what the run ended with |
+| DEFERRED | a part whose checks future never resolves loses its evidence at the deadline | `port_jobs` shares one future for both; documented on `with_part_checks` as a proposal |
+
+### Behavioural verification
+
+This branch's build at the main checkout's target path (network allowed), lens on port 18541,
+`curl -X POST -H 'Accept: text/event-stream' --data 'h=1.1.1.1:443,853' localhost:18541/inspect/tls/run`;
+fragment ids and texts:
+
+```
+inspect-result      … 1.1.1.1:443,853 443 853 port 443 pending port 853 pending
+inspect-part-0      port 443 [slim band, 23 lines] 1 line needs attention 0 fail · 1 warn …
+inspect-port-meta-0 · 0 fail · 1 warn
+inspect-part-1      port 853 [slim band] No line needs attention 23 not measured … TLS reachable 1.1.1.1 …
+inspect-port-meta-1 (empty: before the review fix; now "· 23 not measured")
+inspect-share, inspect-export
+```
+
+No `inspect-band` fragment in the panel run; each part arrived once.

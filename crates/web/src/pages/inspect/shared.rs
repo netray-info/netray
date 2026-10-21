@@ -23,6 +23,8 @@ pub(crate) struct SharedRun {
     pub(crate) link: Option<(String, String)>,
     pub(crate) grade: Option<&'static str>,
     pub(crate) parts: Vec<(String, Result<Vec<Block>, String>)>,
+    /// Each part's own checks; `None` for a part that carries none.
+    pub(crate) part_checks: Vec<Option<Result<Vec<CheckResult>, String>>>,
     pub(crate) band: Option<(Protocol, Result<Vec<CheckResult>, String>)>,
     pub(crate) badges: Vec<(IpAddr, Vec<Badge>)>,
 }

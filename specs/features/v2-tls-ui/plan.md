@@ -38,3 +38,17 @@ G1: C1–C12 (one production file carries every criterion: `views/tls.rs`; the r
 2. `templates/partials/tls_protocols.html`, `tls_notices.html`.
 3. `crates/web/src/pages/inspect.rs` and `partials/inspect_start.html`: the related box gets `id="inspect-related"`; the stream sends an `inspect-related` fragment when the band port's TLS part arrives; `shared_html` renders it filled.
 4. `crates/web/static/pages.css`: `tls-protocols*` (board G: grid `repeat(auto-fill, minmax(250px, 1fr))`, 1 px line-coloured gaps, cells padding 12 16 on the surface, bar 3/5/6 px wide × 22 px by tone, name 14 px 600, state mono 12 px muted), `tls-notices` (warn tone), `tls-probes`.
+
+## Phase 3 — Per-port parts and tabs
+
+### Groups
+
+G1: C1–C8 (one seam: `pages/inspect.rs` and its templates; `api/jobs.rs` attaches the checks).
+
+### Plan
+
+1. `crates/web/src/pages/inspect.rs`: `Job::with_part_checks(part, checks)`; `stream_job` awaits a part's checks with it, renders the part with them (and, with several checked parts, its own band region `inspect-band-<n>` / `inspect-checks-<n>` inside the panel), sends the tab meta fragment `inspect-port-meta-<n>`, and leaves such parts out of the band-end re-stream; the start fragment with several checked parts renders the tab row and the panel placeholders and no `inspect-band`; `SharedRun` stores per-part checks (`shared.rs`) and `shared_html` renders panels, bands and metas from them.
+2. `templates/partials/inspect_start.html`, `inspect_part.html`, `inspect_band.html` (id suffix), a `inspect_port_meta.html` partial.
+3. `crates/web/src/api/jobs.rs` `port_jobs`: each part's checks from its port's outcome.
+4. `crates/web/static/inspector_shell.css` or `pages.css`: `.inspector-ports*` tab row (marker rule via `aria-current`), `.inspector-ports[data-ready] .inspector-port:not([data-shown]) { display: none }`.
+5. `specs/sdd/v2.md` §6.1 (inspector re-stream) and the TLS inspector paragraph: per-part checks, panels.

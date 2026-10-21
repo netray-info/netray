@@ -341,6 +341,7 @@ type Gate = BoxFuture<'static, Result<(), Refusal>>;
 
 pub struct Job {
     parts: Vec<JobPart>,
+    part_checks: BTreeMap<usize, BandChecks>,
     band: Option<(Protocol, BandChecks)>,
     gate: Option<Gate>,
 }
@@ -349,6 +350,7 @@ impl Job {
     pub fn new(parts: Vec<JobPart>) -> Job {
         Job {
             parts,
+            part_checks: BTreeMap::new(),
             band: None,
             gate: None,
         }
@@ -365,6 +367,15 @@ impl Job {
     /// that text in the band region.
     pub fn with_band(mut self, protocol: Protocol, checks: BandChecks) -> Job {
         self.band = Some((protocol, checks));
+        self
+    }
+
+    /// Part `part`'s own checks: the part renders its views with them when it arrives and is not
+    /// streamed again with the band. With more than one part carrying checks, each part is a
+    /// panel holding its own band region. The part waits for its checks after its output: derive
+    /// both from one shared future, or a slow checks future costs the part its evidence.
+    pub fn with_part_checks(mut self, part: usize, checks: BandChecks) -> Job {
+        self.part_checks.insert(part, checks);
         self
     }
 }
@@ -535,11 +546,28 @@ struct StartFragment {
     target: String,
     link: Option<(String, String)>,
     grade: Option<&'static str>,
-    parts: Vec<(usize, String, Option<String>)>,
+    parts: Vec<(usize, String, Option<String>, Option<String>)>,
     band: BandSlot,
+    ports: Option<Vec<PortTab>>,
     share: String,
     export: String,
     related: Option<(String, String)>,
+}
+
+/// One port's tab: the part it shows, the port, whether it is the band port's, its meta.
+struct PortTab {
+    n: usize,
+    name: String,
+    current: bool,
+    meta: String,
+}
+
+#[derive(Template)]
+#[template(path = "partials/inspect_port_meta.html")]
+struct PortMetaFragment {
+    n: usize,
+    tone: Option<&'static str>,
+    text: String,
 }
 
 /// The related-records box alone, as the stream fills it.
@@ -593,8 +621,16 @@ struct ShareFragment {
 struct PartFragment {
     n: usize,
     label: String,
+    panel: Option<String>,
+    band: Option<String>,
     html: Option<String>,
     text: String,
+}
+
+/// A part shown as a port panel: its tab name and its own band region.
+struct Panel {
+    name: String,
+    band: Option<String>,
 }
 
 #[derive(Template)]
@@ -602,6 +638,7 @@ struct PartFragment {
 struct BandFragment {
     band: Option<BandView>,
     text: String,
+    suffix: String,
 }
 
 /// The band region of a finished run: the zoomed plate, its named lines and the live check list.
@@ -756,6 +793,7 @@ async fn shared_result(deps: &InspectDeps, tool: Tool, key: &str) -> Shared {
     let band = (BandFragment {
         band: None,
         text: NO_API_BAND.to_string(),
+        suffix: String::new(),
     })
     .render()
     .ok();
@@ -780,9 +818,9 @@ async fn shared_result(deps: &InspectDeps, tool: Tool, key: &str) -> Shared {
             None,
             vec![(
                 cached.mode.clone(),
-                part_html(0, &cached.mode, &blocks, &[], &[]),
+                part_html(0, &cached.mode, &blocks, &[], &[], None),
             )],
-            BandSlot::Done(band),
+            (BandSlot::Done(band), None),
             (share_html(Tool::Dns, Some(key.to_string()))?, export, None),
         )
     });
@@ -985,7 +1023,7 @@ async fn run(
     }
 }
 
-type PartOutput = (usize, Result<Vec<Block>, String>);
+type PartOutput = (usize, Result<Vec<Block>, String>, Option<BandResult>);
 
 type PartResult = Result<Vec<Block>, String>;
 type BandResult = Result<Vec<CheckResult>, String>;
@@ -1001,7 +1039,11 @@ struct Run {
     deadline: Instant,
     blocks: Vec<Block>,
     band: Option<(Protocol, BandChecks)>,
+    protocol: Option<Protocol>,
     results: Vec<Option<PartResult>>,
+    part_checks: Vec<Option<BandResult>>,
+    checked: BTreeSet<usize>,
+    panels: Option<Vec<String>>,
     band_out: Option<(Protocol, BandResult)>,
     shared: SharedRuns,
     share_key: Option<String>,
@@ -1036,6 +1078,7 @@ impl Run {
             link: self.link.clone(),
             grade: self.grade,
             parts,
+            part_checks: std::mem::take(&mut self.part_checks),
             band: self.band_out.take(),
             badges: std::mem::take(&mut self.badges),
         }
@@ -1043,13 +1086,14 @@ impl Run {
 }
 
 /// A part's section: its blocks, each as its protocol view when one claims it, read with the
-/// run's `checks`, or its error text.
+/// run's `checks`, or its error text; as a port `panel`, its band region first.
 fn part_html(
     n: usize,
     label: &str,
     result: &PartResult,
     badges: &[(IpAddr, Vec<Badge>)],
     checks: &[CheckResult],
+    panel: Option<Panel>,
 ) -> Option<String> {
     let decorate = links::decorate(badges);
     let statuses: Vec<(CheckId, Status)> =
@@ -1076,9 +1120,15 @@ fn part_html(
         Err(text) => (None, text.clone()),
     };
     let label = label.to_string();
+    let (panel, band) = match panel {
+        Some(Panel { name, band }) => (Some(name), band),
+        None => (None, None),
+    };
     (PartFragment {
         n,
         label,
+        panel,
+        band,
         html,
         text,
     })
@@ -1092,13 +1142,105 @@ fn part_event(
     result: &PartResult,
     badges: &[(IpAddr, Vec<Badge>)],
     checks: &[CheckResult],
+    panel: Option<Panel>,
 ) -> Option<Event> {
-    let html = part_html(n, label, result, badges, checks)?;
+    let html = part_html(n, label, result, badges, checks, panel)?;
     Some(fragment(&format!("inspect-part-{n}"), &html))
 }
 
-/// The band region: the plate and the check list, or the error text.
-fn band_region_html(protocol: Protocol, blocks: &[Block], result: &BandResult) -> Option<String> {
+/// The tab name of each part when more than one part carries its own checks: the port of a
+/// `port <n>` label, else the label.
+fn panel_names(labels: &[String], checked: &BTreeSet<usize>) -> Option<Vec<String>> {
+    (checked.len() > 1).then(|| {
+        labels
+            .iter()
+            .map(|l| l.strip_prefix("port ").unwrap_or(l).to_string())
+            .collect()
+    })
+}
+
+/// Part `n` as a port panel: its name and, with the run's protocol and its own checks, its band
+/// region with ids suffixed `-<n>`.
+fn panel(
+    names: Option<&[String]>,
+    n: usize,
+    protocol: Option<Protocol>,
+    result: &PartResult,
+    checks: Option<&BandResult>,
+) -> Option<Panel> {
+    let name = names?.get(n)?.clone();
+    let blocks = result.as_ref().map_or(&[][..], Vec::as_slice);
+    let band = match (protocol, checks) {
+        (Some(protocol), Some(checks)) => {
+            band_region_html(protocol, blocks, checks, &format!("-{n}"))
+        }
+        _ => None,
+    };
+    Some(Panel { name, band })
+}
+
+/// A port tab's meta: " · STARTTLS" when the port's handshake ran over it, the worst status of
+/// its own checks as the tone and the fail and warn counts when any line fails or warns.
+fn port_meta_html(n: usize, result: &PartResult, checks: Option<&BandResult>) -> Option<String> {
+    let mut text = String::new();
+    if result
+        .as_ref()
+        .is_ok_and(|blocks| views::tls_starttls(blocks))
+    {
+        text.push_str(" \u{b7} STARTTLS");
+    }
+    let tone = match checks {
+        Some(Ok(checks)) => {
+            let count = |want: Status| checks.iter().filter(|c| c.status == want).count();
+            let (fails, warns) = (count(Status::Fail), count(Status::Warn));
+            let (unmeasured, passes) = (count(Status::Unmeasured), count(Status::Pass));
+            if fails + warns > 0 {
+                text.push_str(&format!(" \u{b7} {fails} fail \u{b7} {warns} warn"));
+            } else if unmeasured > 0 {
+                // Rule M: an unmeasured line is no pass; the tab says so and carries no tone.
+                text.push_str(&format!(" \u{b7} {unmeasured} not measured"));
+            }
+            match (fails, warns, unmeasured, passes) {
+                (0, 0, 0, 0) => None,
+                (0, 0, 0, _) => Some("pass"),
+                (0, 0, _, _) => None,
+                (0, _, _, _) => Some("warn"),
+                _ => Some("fail"),
+            }
+        }
+        _ => None,
+    };
+    (PortMetaFragment { n, tone, text }).render().ok()
+}
+
+/// The tab row of a panel run; `meta` renders part `n`'s meta.
+fn port_tabs(
+    labels: &[String],
+    names: &[String],
+    meta: impl Fn(usize) -> Option<String>,
+) -> Option<Vec<PortTab>> {
+    let current = views::tls_band_part(labels);
+    names
+        .iter()
+        .enumerate()
+        .map(|(n, name)| {
+            Some(PortTab {
+                n,
+                name: name.clone(),
+                current: current == Some(n),
+                meta: meta(n)?,
+            })
+        })
+        .collect()
+}
+
+/// The band region: the plate and the check list, or the error text; its ids carry `suffix`.
+fn band_region_html(
+    protocol: Protocol,
+    blocks: &[Block],
+    result: &BandResult,
+    suffix: &str,
+) -> Option<String> {
     let (band, text) = match result
         .as_ref()
         .map_err(Clone::clone)
@@ -1107,11 +1249,17 @@ fn band_region_html(protocol: Protocol, blocks: &[Block], result: &BandResult) -
         Ok(band) => (Some(band), String::new()),
         Err(text) => (None, text),
     };
-    (BandFragment { band, text }).render().ok()
+    (BandFragment {
+        band,
+        text,
+        suffix: suffix.to_string(),
+    })
+    .render()
+    .ok()
 }
 
 fn band_event(protocol: Protocol, blocks: &[Block], result: &BandResult) -> Option<Event> {
-    let html = band_region_html(protocol, blocks, result)?;
+    let html = band_region_html(protocol, blocks, result, "")?;
     Some(fragment(BAND_ID, &html))
 }
 
@@ -1182,12 +1330,16 @@ fn finished_html(
     link: Option<(String, String)>,
     grade: Option<&'static str>,
     parts: Vec<(String, Option<String>)>,
-    band: BandSlot,
+    (band, ports): (BandSlot, Option<Vec<PortTab>>),
     (share, export, related): (String, String, Option<(String, String)>),
 ) -> Option<String> {
     let mut rendered = Vec::with_capacity(parts.len());
     for (n, (label, html)) in parts.into_iter().enumerate() {
-        rendered.push((n, label, Some(html?)));
+        let name = ports
+            .as_ref()
+            .and_then(|tabs| tabs.get(n))
+            .map(|tab| tab.name.clone());
+        rendered.push((n, label, name, Some(html?)));
     }
     StartFragment {
         title,
@@ -1196,6 +1348,7 @@ fn finished_html(
         grade,
         parts: rendered,
         band,
+        ports,
         share,
         export,
         related,
@@ -1213,25 +1366,46 @@ fn shared_html(run: &SharedRun, key: &str) -> Option<String> {
         .flatten()
         .cloned()
         .collect();
-    let band = match &run.band {
-        Some((protocol, result)) => BandSlot::Done(band_region_html(*protocol, &blocks, result)?),
-        None => BandSlot::Absent,
+    let labels: Vec<String> = run.parts.iter().map(|(l, _)| l.clone()).collect();
+    let checked: BTreeSet<usize> = (0..run.part_checks.len())
+        .filter(|n| run.part_checks[*n].is_some())
+        .collect();
+    let names = panel_names(&labels, &checked);
+    let protocol = run.band.as_ref().map(|(p, _)| *p);
+    let band = match (&run.band, &names) {
+        (Some((protocol, result)), None) => {
+            BandSlot::Done(band_region_html(*protocol, &blocks, result, "")?)
+        }
+        _ => BandSlot::Absent,
     };
-    let checks = match &run.band {
+    let band_checks = match &run.band {
         Some((_, Ok(checks))) => checks.as_slice(),
         _ => &[],
     };
+    let own = |n: usize| run.part_checks.get(n).and_then(Option::as_ref);
     let parts = run
         .parts
         .iter()
         .enumerate()
         .map(|(n, (label, result))| {
+            let checks = match own(n) {
+                Some(Ok(checks)) => checks.as_slice(),
+                Some(Err(_)) => &[],
+                None => band_checks,
+            };
+            let panel = panel(names.as_deref(), n, protocol, result, own(n));
             (
                 label.clone(),
-                part_html(n, label, result, &run.badges, checks),
+                part_html(n, label, result, &run.badges, checks, panel),
             )
         })
         .collect();
+    let ports = match &names {
+        Some(names) => Some(port_tabs(&labels, names, |n| {
+            port_meta_html(n, &run.parts[n].1, own(n))
+        })?),
+        None => None,
+    };
     let export = export_html(
         run.tool,
         &run.target,
@@ -1252,9 +1426,8 @@ fn shared_html(run: &SharedRun, key: &str) -> Option<String> {
         run.link.clone(),
         run.grade,
         parts,
-        band,
+        (band, ports),
         (share_html(run.tool, Some(key.to_string()))?, export, {
-            let labels: Vec<String> = run.parts.iter().map(|(l, _)| l.clone()).collect();
             let part = views::tls_band_part(&labels)
                 .and_then(|n| run.parts.get(n))
                 .map(|(_, r)| r);
@@ -1392,6 +1565,25 @@ fn stream_job(
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs() as i64);
     let labels: Vec<String> = job.parts.iter().map(|part| part.label.clone()).collect();
+    let mut part_checks = job.part_checks;
+    let checked: BTreeSet<usize> = part_checks
+        .keys()
+        .copied()
+        .filter(|n| *n < labels.len())
+        .collect();
+    let names = panel_names(&labels, &checked);
+    let ports = match &names {
+        Some(names) => Some(port_tabs(&labels, names, |n| {
+            (PortMetaFragment {
+                n,
+                tone: None,
+                text: String::new(),
+            })
+            .render()
+            .ok()
+        })?),
+        None => None,
+    };
     let start = StartFragment {
         title: live_run_title(now),
         target: head.target.clone(),
@@ -1401,13 +1593,17 @@ fn stream_job(
             .parts
             .iter()
             .enumerate()
-            .map(|(n, part)| (n, part.label.clone(), None))
+            .map(|(n, part)| {
+                let name = names.as_ref().and_then(|names| names.get(n).cloned());
+                (n, part.label.clone(), name, None)
+            })
             .collect(),
-        band: if job.band.is_some() {
+        band: if job.band.is_some() && names.is_none() {
             BandSlot::Pending
         } else {
             BandSlot::Absent
         },
+        ports,
         share: share_html(head.tool, None)?,
         export: export_html(
             head.tool,
@@ -1428,7 +1624,15 @@ fn stream_job(
         .into_iter()
         .enumerate()
         .map(|(n, part)| -> BoxFuture<'static, PartOutput> {
-            Box::pin(async move { (n, part.output.await) })
+            let checks = part_checks.remove(&n);
+            Box::pin(async move {
+                let output = part.output.await;
+                let checks = match checks {
+                    Some(checks) => Some(checks.await),
+                    None => None,
+                };
+                (n, output, checks)
+            })
         })
         .collect();
     let run = Run {
@@ -1445,10 +1649,14 @@ fn stream_job(
         .flatten()
         .collect(),
         results: (0..labels.len()).map(|_| None).collect(),
+        part_checks: (0..labels.len()).map(|_| None).collect(),
         labels,
         deadline,
         blocks: Vec::new(),
+        protocol: job.band.as_ref().map(|(p, _)| *p),
         band: job.band,
+        checked,
+        panels: names,
         band_out: None,
         shared,
         share_key: head.share_key,
@@ -1474,11 +1682,14 @@ fn stream_job(
                     let result = timeout_at(run.deadline, checks)
                         .await
                         .unwrap_or_else(|_| Err("timed out".to_string()));
-                    run.queue.push_back(
-                        band_event(protocol, &run.blocks, &result)
-                            .unwrap_or_else(|| fragment(BAND_ID, "render failed")),
-                    );
-                    // The checks reach the views: a part holding a claimed block comes again.
+                    if run.panels.is_none() {
+                        run.queue.push_back(
+                            band_event(protocol, &run.blocks, &result)
+                                .unwrap_or_else(|| fragment(BAND_ID, "render failed")),
+                        );
+                    }
+                    // The checks reach the views: a part holding a claimed block and no checks of
+                    // its own comes again.
                     if let Ok(checks) = &result
                         && !checks.is_empty()
                     {
@@ -1486,9 +1697,10 @@ fn stream_job(
                             let Some(part @ Ok(blocks)) = part else {
                                 continue;
                             };
-                            if blocks.iter().any(|b| views::claims(b, blocks))
+                            if !run.checked.contains(&n)
+                                && blocks.iter().any(|b| views::claims(b, blocks))
                                 && let Some(event) =
-                                    part_event(n, &run.labels[n], part, &run.badges, checks)
+                                    part_event(n, &run.labels[n], part, &run.badges, checks, None)
                             {
                                 run.queue.push_back(event);
                             }
@@ -1542,7 +1754,7 @@ fn stream_job(
                 return Some((Ok(end()), run));
             }
             match timeout_at(run.deadline, run.pending.next()).await {
-                Ok(Some((n, result))) => {
+                Ok(Some((n, result, checks))) => {
                     run.waiting.remove(&n);
                     if let Ok(blocks) = &result {
                         run.blocks.extend(blocks.iter().cloned());
@@ -1561,8 +1773,22 @@ fn stream_job(
                             run.badges.extend(found);
                         }
                     }
-                    let event = part_event(n, &run.labels[n], &result, &run.badges, &[])
+                    let own = match &checks {
+                        Some(Ok(checks)) => checks.as_slice(),
+                        _ => &[],
+                    };
+                    let names = run.panels.as_deref();
+                    let panel = panel(names, n, run.protocol, &result, checks.as_ref());
+                    let event = part_event(n, &run.labels[n], &result, &run.badges, own, panel)
                         .unwrap_or_else(|| fragment(&format!("inspect-part-{n}"), "render failed"));
+                    if names.is_some() {
+                        let meta = port_meta_html(n, &result, checks.as_ref());
+                        run.queue.push_back(fragment(
+                            &format!("inspect-port-meta-{n}"),
+                            meta.as_deref().unwrap_or("render failed"),
+                        ));
+                    }
+                    run.part_checks[n] = checks;
                     if related_n == Some(n)
                         && let Some(event) = related_event(run.tool, &run.input, &result)
                     {
@@ -1577,8 +1803,14 @@ fn stream_job(
                     let late: Vec<usize> = std::mem::take(&mut run.waiting).into_iter().collect();
                     for n in late {
                         let timed_out = Err("timed out".to_string());
-                        if let Some(event) = part_event(n, &run.labels[n], &timed_out, &[], &[]) {
+                        let panel = panel(run.panels.as_deref(), n, None, &timed_out, None);
+                        if let Some(event) =
+                            part_event(n, &run.labels[n], &timed_out, &[], &[], panel)
+                        {
                             run.queue.push_back(event);
+                        }
+                        if run.checked.contains(&n) {
+                            run.part_checks[n] = Some(Err("timed out".to_string()));
                         }
                         if related_n == Some(n)
                             && let Some(event) = related_event(run.tool, &run.input, &timed_out)

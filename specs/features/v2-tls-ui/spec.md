@@ -202,8 +202,9 @@ and canvas rows 9.50, 9.55, 9.56, 9.57, 9.58 (summaries).
     under the h1 and one panel per port in input order; the panel holds that port's band and check
     list (the shell's band region, ids suffixed by the part number) and its port view; no band sits
     under the h1. A tab names the port, adds "· STARTTLS" when the port's handshake holds
-    `starttls`, and carries the port's worst status as a tone and "<f> fail · <w> warn" when not
-    all lines pass; both arrive with the part. The band port's tab is current. The `tabs` island
+    `starttls`, and carries the port's worst status as a tone and "<f> fail · <w> warn" when a line
+    warns or fails; otherwise unmeasured lines read "<u> not measured" without a tone (Rule M), and
+    a port whose lines pass carries the pass tone; both arrive with the part. The band port's tab is current. The `tabs` island
     switches panels; without JavaScript all panels render in order and the tabs are in-page links.
     With one port there is no tab row (board G). (3.3, 3.5)
 15. **Port chooser.** In the TLS form card, between the host box and "Inspect", a group "Ports"
@@ -395,6 +396,8 @@ GIVEN the TLS inspector at 390 px WHEN measured THEN the document is not wider t
   Forward secrecy reads `weak_suites`, which judges the static-RSA probe the cell shows; the
   related box reads "(not measured)" when the band port's part failed (implementer under the
   operator's autonomy mandate, 2026-10-21).
+- Phase 3 review: a port whose lines are unmeasured (a closed 8443) reads "<u> not measured" on
+  its tab without the pass tone (implementer under the operator's autonomy mandate, 2026-10-21).
 - The design check's live TLS board needs network: a binary built in a worktree gets none here,
   so `netray_bin` honours `NETRAY_BIN`, and the gate runs with this branch's build copied to the
   main checkout's target path (backed up and restored) (implementer under the operator's autonomy

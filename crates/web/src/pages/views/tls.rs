@@ -738,6 +738,14 @@ pub fn tls_band_part(labels: &[String]) -> Option<usize> {
     ports.iter().find(|(_, p)| *p == band).map(|(n, _)| *n)
 }
 
+/// Whether a TLS port's handshake ran over STARTTLS.
+pub fn tls_starttls(blocks: &[Block]) -> bool {
+    blocks
+        .iter()
+        .filter(|b| b.id.module() == "tls" && b.id.name() == "handshake")
+        .any(|b| matches!(&b.shape, Shape::Fields(fields) if get(fields, "starttls").is_some()))
+}
+
 /// The related-records summary of a TLS port's blocks: its CAA and TLSA records and whether
 /// a handshake saw ECH advertised in the HTTPS record.
 pub fn tls_related_summary(blocks: &[Block]) -> String {

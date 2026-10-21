@@ -196,6 +196,39 @@
   font-family: var(--font-mono);
   font-size: var(--font-size-caption);
 }
+/* The port tabs of a run over several ports (3.3): the marker stands at the current port. */
+.inspector-ports__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: var(--space-5) 0 0;
+  border-bottom: var(--line-hair) solid var(--color-line);
+}
+.inspector-ports__tab {
+  display: inline-flex;
+  align-items: baseline;
+  padding: 8px 14px;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+  text-decoration: none;
+}
+.inspector-ports__tab[aria-current="true"] {
+  color: var(--color-ink);
+  font-weight: 700;
+}
+.inspector-ports__meta {
+  font-weight: 400;
+}
+.inspector-ports__meta[data-tone="warn"] {
+  color: var(--status-warn-text);
+}
+.inspector-ports__meta[data-tone="fail"] {
+  color: var(--status-fail-text);
+}
+.inspector-ports[data-ready] .inspector-port:not([data-shown]) {
+  display: none;
+}
 .inspector-share__copy {
   min-width: 44px;
   min-height: 44px;
