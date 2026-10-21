@@ -809,23 +809,17 @@ impl InspectJobs {
 /// "Only the first type is traced: <type>." for a `+trace` query that names more than one record
 /// type; the parser's default types of a query naming none do not count.
 fn trace_note(input: &str) -> Option<String> {
-    let known: Vec<String> = netray_dns::record_types()
-        .record_types
-        .into_iter()
-        .map(|t| t.name)
-        .collect();
-    let mut tokens = input.split_whitespace();
-    tokens.next()?;
-    if !input
+    input
         .split_whitespace()
         .any(|t| t.eq_ignore_ascii_case("+trace"))
-    {
-        return None;
-    }
-    let named: Vec<String> = tokens
-        .map(str::to_ascii_uppercase)
-        .filter(|t| known.contains(t))
-        .collect();
+        .then(|| types_note(input))
+        .flatten()
+}
+
+/// The note of a trace over `input`: the types it names, as the parser reads them (duplicates
+/// dropped, aliases resolved), when there is more than one.
+fn types_note(input: &str) -> Option<String> {
+    let named = netray_dns::parser::named_record_types(input);
     (named.len() > 1).then(|| format!("Only the first type is traced: {}.", named[0]))
 }
 
@@ -842,7 +836,8 @@ impl DnsResults for DnsResultCache {
                 DnsCachedJob::Compare(r) => (&r.errors, r.warnings()),
                 DnsCachedJob::AuthCompare(r) => (&r.errors, r.warnings()),
                 DnsCachedJob::Trace(r) => {
-                    notes.extend(trace_note(&cached.query));
+                    // A trace from the API's own route carries no `+trace` token.
+                    notes.extend(types_note(&cached.query));
                     (&r.errors, &notes[..])
                 }
                 DnsCachedJob::Dnssec(r) => (&r.errors, &[]),

@@ -85,10 +85,10 @@ async fn a_bare_trace_names_no_type_and_carries_no_note() {
 
 #[tokio::test]
 async fn an_answer_without_records_reads_in_words_and_the_level_shows() {
-    let s = run_q(&app(), "example.com CAA +trace").await;
+    // The stub answers SRV for example.com with no records (NODATA).
+    let s = run_q(&app(), "example.com SRV +trace").await;
     assert!(
-        s.contains(r#"<span class="dns-hop__outcome">answer, no records</span>"#)
-            || s.contains(r#"<span class="dns-hop__outcome">answer</span>"#),
+        s.contains(r#"<span class="dns-hop__outcome">answer, no records</span>"#),
         "{s}"
     );
     assert!(s.contains(r#"<span class="dns-hop__level">"#), "{s}");

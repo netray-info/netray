@@ -110,7 +110,7 @@ fn compact_keeps_the_lead_group_and_every_failure() {
         "{css}"
     );
     assert!(
-        css.contains(".dns-view[data-compact] .dns-record__details"),
+        css.contains(".dns-view[data-compact]:not([data-server]) .dns-record__details"),
         "{css}"
     );
 }

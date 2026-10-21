@@ -1605,7 +1605,7 @@ main td {
 }
 /* Compact keeps the lead group and every failure (Rule M); a server filter wins over it. */
 .dns-view[data-compact]:not([data-server]) .dns-group:not([data-lead]):not([data-outcome="unmeasured"]),
-.dns-view[data-compact] .dns-record__details {
+.dns-view[data-compact]:not([data-server]) .dns-record__details {
   display: none;
 }
 .dns-record__serial {

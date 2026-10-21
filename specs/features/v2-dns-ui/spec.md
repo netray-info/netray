@@ -384,6 +384,12 @@ GIVEN the DNS inspector at 390 px WHEN measured THEN the document is not wider t
   nested every later rule (all of v2-ip-ui's and this feature's) inside an open rule; the browser
   dropped them and no test failed. Restored, and `static_css_balanced.rs` now checks every
   stylesheet (implementer under the operator's autonomy mandate, 2026-10-21).
+- Final review (blocker): fixed on this branch rather than split. The trace note counts the types
+  as the parser reads them (`netray_dns::parser::named_record_types`: duplicates dropped, aliases
+  resolved, ALL expanded), so it names the type the trace runs; an API-cache replay of a trace
+  from the API's own route (no `+trace` token) gets the note too. Compact also leaves record
+  details alone under a server filter, and the SOA serial age is a row of the record details
+  beside the row's mark (implementer under the operator's autonomy mandate, 2026-10-21).
 - The trace heading names no traced type and the shared-result notices of the draft are dropped:
   the traced type is not in the collected trace result and adding it would change the API's done
   event; the run line already shows the query. A multi-type `+trace` puts "Only the first type is
