@@ -370,9 +370,18 @@ struct ChainCert {
     grid: String,
 }
 
+struct CertDiff {
+    key: String,
+    not_after: String,
+    issuer: String,
+    sans: String,
+    sha256: String,
+}
+
 #[derive(Template)]
 #[template(path = "partials/tls_certificate.html")]
 struct CertificateView {
+    certdiff: Option<CertDiff>,
     validity: Option<ValidityView>,
     grid: String,
     pills: Vec<Pill>,
@@ -961,6 +970,27 @@ fn validity_cells(cert: &Fields) -> Vec<FactCell> {
     .collect()
 }
 
+/// Every value of `key` in `cert`, newline-joined.
+fn all_values(cert: &Fields, key: &str) -> String {
+    cert.iter()
+        .filter(|(k, _)| k == key)
+        .map(|(_, v)| display_value(v))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// The shell's copy button for every value of `key` in `cert`, none without a value.
+fn copy(cert: &Fields, key: &str) -> Option<String> {
+    let text = all_values(cert, key);
+    if text.is_empty() {
+        return Some(String::new());
+    }
+    Some(format!(
+        "<button type=\"button\" class=\"inspector-copy\" data-copy-text=\"{}\" hidden>Copy</button>",
+        esc(&text)?
+    ))
+}
+
 /// A facts grid of `cells` with their trails.
 fn grid(cells: Vec<(Option<FactCell>, String)>) -> Option<String> {
     let (cells, trails): (Vec<FactCell>, Vec<String>) = cells
@@ -1110,16 +1140,25 @@ fn certificate(
 
     let f = |label: &str, key: &str| fact(block, leaf, label, key, ctx);
     let mut cells = vec![
-        (f("Subject", "subject"), flags(leaf)?),
-        (f("Alternative names", "sans"), String::new()),
-        (f("Issuer", "issuer"), String::new()),
+        (
+            f("Subject", "subject"),
+            flags(leaf)? + &copy(leaf, "subject")?,
+        ),
+        (f("Alternative names", "sans"), copy(leaf, "sans")?),
+        (f("Issuer", "issuer"), copy(leaf, "issuer")?),
         (f("Key", "key"), String::new()),
         (f("Signature", "signature_algorithm"), String::new()),
         (ocsp_cell, live_trail),
         (texts("Certificate Transparency", scts), String::new()),
-        (f("Serial", "serial"), String::new()),
-        (f("SHA-256", "fingerprint_sha256"), String::new()),
-        (f("SHA-1", "fingerprint_sha1"), String::new()),
+        (f("Serial", "serial"), copy(leaf, "serial")?),
+        (
+            f("SHA-256", "fingerprint_sha256"),
+            copy(leaf, "fingerprint_sha256")?,
+        ),
+        (
+            f("SHA-1", "fingerprint_sha1"),
+            copy(leaf, "fingerprint_sha1")?,
+        ),
         (f("Policy", "policy"), String::new()),
         (f("OCSP responder", "ocsp_url"), String::new()),
         (f("CA issuers", "ca_issuers_url"), String::new()),
@@ -1190,7 +1229,33 @@ fn certificate(
             })
         })
         .collect::<Option<Vec<_>>>()?;
+    // One snapshot per host and port: a port serving several leaves has no single certificate to
+    // compare, and its sections would overwrite each other's snapshot.
+    let certdiff = get(leaf, "fingerprint_sha256")
+        .filter(|_| !several)
+        .map(|sha| {
+            let host = addrs
+                .iter()
+                .find_map(|a| port.handshake(*a).and_then(|hs| get(hs, "sni")))
+                .map(|v| display_value(v).to_ascii_lowercase())
+                .unwrap_or_else(|| match addrs[0] {
+                    IpAddr::V6(v6) => format!("[{v6}]"),
+                    v4 => v4.to_string(),
+                });
+            CertDiff {
+                key: format!("{host}:{}", port.port),
+                not_after: match get(leaf, "not_after") {
+                    Some(Value::Time(t)) => t.clone(),
+                    Some(v) => display_value(v),
+                    None => String::new(),
+                },
+                issuer: get(leaf, "issuer").map(display_value).unwrap_or_default(),
+                sans: all_values(leaf, "sans"),
+                sha256: display_value(sha),
+            }
+        });
     CertificateView {
+        certdiff,
         validity,
         grid: grid_html,
         pills,

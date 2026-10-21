@@ -208,3 +208,46 @@ With an empty host field a toggle press shows "Enter a host first." instead of a
 The island runs in happy-dom (`crates/web/islands/test/ports.test.ts`, 26 tests) and the reviewer
 drove the real `shell.ts` and `ports.ts` in headless Chromium (scratchpad `pc/`), which found the
 two blockers above; the browser pass over the finished page is Phase 6's design check.
+
+## Phase 5 — Copy and certificate changed
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R16 Subject, Alternative names, Issuer, Serial, SHA-256 and SHA-1 carry the shell's copy button with the full value (SANs newline separated) | green | crates/web/tests/it/views_tls_copy.rs |
+| C2 | R17 the certificate section carries the leaf's facts and key; the island stores a snapshot per key and shows a banner naming the changes when the SHA-256 differs; Forget; storage failures harmless | green | crates/web/tests/it/views_tls_copy.rs, crates/web/islands/test/certdiff.test.ts |
+| C3 | R18 no JavaScript: copy buttons and the banner hidden; bundle under budget; islands write no style | green | crates/web/tests/it/views_tls_copy.rs, crates/web/islands/test/budget.test.ts |
+| C4 | S the facts grid's copy buttons hold the full values, hidden until the shell island shows them; a press writes the value | green | crates/web/tests/it/views_tls_copy.rs |
+| C5 | S a stored snapshot with another SHA-256, another not_after and one SAN fewer: the banner names the expiry change and the added name | green | crates/web/islands/test/certdiff.test.ts |
+| C6 | S a stored snapshot with the same SHA-256: no banner | green | crates/web/islands/test/certdiff.test.ts |
+| C7 | S only the fingerprint differs: same names and issuer, new key | green | crates/web/islands/test/certdiff.test.ts |
+| C8 | S Forget removes the snapshot and hides the banner | green | crates/web/islands/test/certdiff.test.ts |
+| C9 | S storage that throws: no banner, no error | green | crates/web/islands/test/certdiff.test.ts |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 1 | opus | 70229 | 170 |
+
+Planned by the orchestrator. Two test fixtures were wrong (an unbracketed IPv6 block id; a remount
+that kept the first mount's DOM) and were corrected; the review fixes were made by the orchestrator.
+
+### Review
+
+| class | finding | disposition |
+|---|---|---|
+| BLOCKER | a port with several leaves gave every section the same key, so the snapshots overwrote each other and banners were false | requirement 17 amended and fixed: the banner needs one distinct chain |
+| AMENDMENT | the memo outlived a run, so later runs in the page neither compared nor stored | fixed: no memo (TLS parts are not re-sent since Phase 3); test replaced (ADLC-Test-Change) |
+| AMENDMENT | a shared run compared a stored certificate and rolled the snapshot back | requirement 17 amended and fixed: only a live run compares; test added |
+| NIT | expiry named for the same date | fixed: dates compared; test added |
+| NIT | key case followed the typed host | fixed: lower-cased; test added |
+| NIT | changed tests need trailers | on the test commit |
+
+### Behavioural verification
+
+`just design-check` with this branch's build at the main checkout's target path rendered the live
+TLS inspector for `1.1.1.1:443` with the copy buttons beside Subject, Alternative names, Issuer,
+Serial, SHA-256 and SHA-1 (`target/design/d3-tls-inspector-light-page.png`); the banner logic runs
+in happy-dom (`certdiff.test.ts`, 17 tests).

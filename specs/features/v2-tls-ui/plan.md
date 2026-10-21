@@ -65,3 +65,15 @@ G1: C1–C9 (the server markup and the island; one group, two files of tests).
 2. `templates/components/query_input.html`: a `between` slot (HTML) between the box and the submit; `components/inspector_shell.html` passes it; a `partials/port_chooser.html`.
 3. `crates/web/islands/src/ports.ts` (`parsePorts`, `formatHost`, `ports`), registered in `main.ts`.
 4. `crates/web/static/query_input.css` or `inspector_shell.css`: `.port-chooser*` per board G (label 12 px muted; toggles 44 px, mono 14 px, padding 0 14 0 18, 1 px line border, pressed: ink border, weight 700 and the marker; "+" 44 × 44 dashed; gap 6 px).
+
+## Phase 5 — Copy and certificate changed
+
+### Groups
+
+G1: C1–C9 (the certificate section's markup in `views/tls.rs` and the `certdiff` island).
+
+### Plan
+
+1. `crates/web/src/pages/views/tls.rs` and `partials/tls_certificate.html`: copy buttons (the shell's `.inspector-copy` primitive of v2-ip-ui) as trailing markup of six facts cells; the `tls-certdiff` element with the leaf's facts and key and its banner template.
+2. `crates/web/islands/src/certdiff.ts` (`describeChange`, `certdiff`), registered in `main.ts`.
+3. `crates/web/static/pages.css`: `.tls-certdiff*` banner (warn tone, as the notices banner).

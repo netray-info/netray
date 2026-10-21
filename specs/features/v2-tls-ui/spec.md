@@ -228,8 +228,11 @@ and canvas rows 9.50, 9.55, 9.56, 9.57, 9.58 (summaries).
 16. **Copy per field.** Subject, Alternative names, Issuer, Serial, SHA-256 and SHA-1 carry a copy
     button (rendered `hidden`, shown by its island) that copies the full value (SANs newline
     separated). (3.18)
-17. **Changed since last visit.** In the inspector, the certificate section carries the leaf's
-    not_after, issuer, SANs and SHA-256 in data attributes and a key `<sni or first address>:<port>`.
+17. **Changed since last visit.** In the inspector, the certificate section of a port serving one
+    distinct chain carries the leaf's not_after, issuer, SANs and SHA-256 in data attributes and a
+    key `<sni, lower-cased, or first address>:<port>`; only a live run of the page compares (a
+    shared run renders a stored certificate, no visit of the live one), and "expiry" names a
+    changed date.
     After a run its island stores them per key in `localStorage` (`netray.cert.<key>`); on a later
     run of the key, when the SHA-256 differs, a banner from a server-rendered `template` above the
     section names the changes: "expiry <old> → <new>", "issuer <old> → <new>", "names added: …",
@@ -406,6 +409,11 @@ GIVEN the TLS inspector at 390 px WHEN measured THEN the document is not wider t
   and fills it without input events), parses the suffix exactly as `crates/tls/src/input.rs`
   does, brackets an IPv6 host, and its extra-port field is a text field that cannot block the
   submit (implementer under the operator's autonomy mandate, 2026-10-21).
+- Phase 5 review: the changed banner needs one distinct chain on the port (several leaves would
+  share and overwrite one snapshot), compares only in a live run (not a shared `?r=` page), keeps
+  no memo across runs, names expiry only for a changed date and lower-cases the host in its key.
+  The copy buttons reuse the shell's `.inspector-copy` primitive that v2-ip-ui built (implementer
+  under the operator's autonomy mandate, 2026-10-21).
 - The design check's live TLS board needs network: a binary built in a worktree gets none here,
   so `netray_bin` honours `NETRAY_BIN`, and the gate runs with this branch's build copied to the
   main checkout's target path (backed up and restored) (implementer under the operator's autonomy
