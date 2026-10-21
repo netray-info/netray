@@ -52,6 +52,7 @@ mod contrast;
 mod dns_trace_types;
 mod dns_view_badges;
 mod dns_view_details;
+mod dns_view_exports;
 mod dns_view_negative;
 mod dns_view_part;
 mod dns_view_readable;
