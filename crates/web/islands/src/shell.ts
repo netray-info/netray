@@ -24,12 +24,22 @@ export function shell(el: HTMLElement): void {
   const flags = words(el.dataset.suggestFlags);
   const servers = words(el.dataset.suggestServers).map((s) => "@" + s);
   let restoring = false;
+  const parseUrl = el.dataset.suggestParse;
+  const hint = el.querySelector<HTMLElement>("#inspector-parse-hint");
+  let hintFor = "";
+  let gen = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   let mode = "";
   let sel = -1;
   let span = [0, 0];
 
   const sync = (): void => {
     if (clear) clear.hidden = input.value === "";
+    // A parse hint belongs to the input it was given for.
+    if (hint && input.value !== hintFor) {
+      hint.textContent = "";
+      hint.hidden = true;
+    }
   };
   const load = (): string[] => {
     try {
@@ -56,6 +66,9 @@ export function shell(el: HTMLElement): void {
   const close = (): void => {
     if (list) list.hidden = true;
     sel = -1;
+    // A parse answer still on its way is for a list that no longer shows.
+    gen++;
+    clearTimeout(timer);
   };
   const open = (m: string, texts: string[], withClear: boolean, first: number): void => {
     if (!list || !texts.length) return close();
@@ -91,6 +104,50 @@ export function shell(el: HTMLElement): void {
     // Nothing preselected: Enter keeps submitting the typed query; Tab takes the first.
     open("s", provider(tok), false, -1);
   };
+  // The parse endpoint (DNS only): 150 ms after the last keystroke past the domain it answers with
+  // completions and the parse error. Any failure changes nothing; an answer that arrives after the
+  // input changed, the list closed or a row was selected is dropped.
+  const ask = (): void => {
+    clearTimeout(timer);
+    if (!parseUrl || !input.value) return;
+    const v = input.value;
+    const caret = input.selectionStart ?? v.length;
+    const start = v.lastIndexOf(" ", caret - 1) + 1;
+    if (start === 0) return;
+    const tok = v.slice(start, caret).toLowerCase();
+    const g = ++gen;
+    timer = setTimeout(async () => {
+      try {
+        const res = await fetch(parseUrl, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            input: v,
+            cursor_pos: new TextEncoder().encode(v.slice(0, caret)).length,
+          }),
+        });
+        if (!res.ok) return;
+        const body = await res.json();
+        if (g !== gen || input.value !== v) return;
+        const err = typeof body?.error === "string" ? body.error : "";
+        if (hint) {
+          hintFor = v;
+          hint.textContent = err;
+          hint.hidden = !err;
+        }
+        const hits: string[] = (Array.isArray(body?.completions) ? body.completions : [])
+          .map((c: { label?: unknown }) => c?.label)
+          .filter((l: unknown): l is string => typeof l === "string" && l.toLowerCase().startsWith(tok));
+        // The parser's completions first, then the table's the parser does not list.
+        const table = tok ? (providers[el.dataset.suggest ?? ""]?.(tok) ?? []) : [];
+        const merged = [...hits, ...table.filter((t) => !hits.includes(t))];
+        const showing = list && !list.hidden && mode === "s" && sel === -1;
+        if (hits.length && tok && showing && document.activeElement === input) open("s", merged, false, -1);
+      } catch {
+        /* the table suggestions stay */
+      }
+    }, 150);
+  };
   const pick = (i: number): void => {
     const li = list?.children[i] as HTMLElement | undefined;
     if (!li) return;
@@ -120,6 +177,7 @@ export function shell(el: HTMLElement): void {
     sync();
     if (input.value) suggest();
     else openHistory();
+    ask();
   });
   input.addEventListener("focus", () => {
     if (!input.value) openHistory();

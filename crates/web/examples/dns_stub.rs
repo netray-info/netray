@@ -46,7 +46,7 @@ async fn main() {
     .with_dns_results(state.dns_results().clone());
     let app = netray_web::pages::router()
         .merge(inspect_router(deps))
-        .merge(netray_web::api::router(state));
+        .nest("/api/v1", netray_web::api::router(state));
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let listener = tokio::net::TcpListener::bind(addr).await.expect("bind");
     println!("listening on http://{addr}");

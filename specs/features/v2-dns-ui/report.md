@@ -204,3 +204,41 @@ The stub server's `example.com MX +trace` renders the Delegation trace view: "1 
 level, thirteen root server addresses with bars and "1 ms", each with `MX 10 mx1.example.com.`
 (the stub answers authoritatively from every server); screenshot `trace-1280-dark.png` in the
 scratchpad. No page scrolls sideways at 390 px.
+
+## Phase 5 — Autocomplete over parse and exports
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R16 the DNS provider asks /api/v1/dns/parse with the caret as a UTF-8 byte offset, debounced 150 ms, lists matching completions, falls back silently, shows the parse error as a hint | green | crates/web/islands/test/shell-parse.test.ts, crates/web/tests/it/dns_view_exports.rs |
+| C2 | R17 the exports carry dns.answers and dns.servers as blocks | already_implemented | crates/web/tests/it/dns_view_exports.rs |
+| C3 | S example.com @cl with the caret at its end sends one request with cursor_pos 15 and offers completions starting with @cl | green | crates/web/islands/test/shell-parse.test.ts |
+| C4 | S two keystrokes within 150 ms send one request | green | crates/web/islands/test/shell-parse.test.ts |
+| C5 | S a 429 answer leaves the table suggestions and shows no error | green | crates/web/islands/test/shell-parse.test.ts |
+| C6 | S a parse error shows as the hint under the input | green | crates/web/islands/test/shell-parse.test.ts |
+| C7 | S a finished query's JSON export holds dns.answers and its CSV rows of dns.servers | already_implemented | crates/web/tests/it/dns_view_exports.rs |
+
+C2 and C7 passed on the baseline: the exports carry every block of the run, so the summary blocks
+reached them with Phase 1. Markdown names its sections by block title ("## Answers").
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 1 | sonnet | 46469 | 56 |
+
+### Review
+
+| class | finding | disposition |
+|---|---|---|
+| BLOCKER | a late parse answer reopened a list closed by submit, Escape or a Tab pick | fixed: every close drops the pending answer (a generation counter); test `islands/test/shell-parse-review.test.ts` |
+| BLOCKER | a late answer replaced the list under a selected row and reset the selection | fixed: an answer replaces only an open, unselected suggestion list |
+| BLOCKER | the hint stayed after emptying the field, the clear button, an example or Back | fixed: the hint belongs to the input it was given for and leaves on any change |
+| BLOCKER | a 429 after an error kept the stale hint | fixed by the same rule: the input changed, so the hint left before the request |
+| AMENDMENT | parse completions replaced table types the parser does not list | requirement 16 amended, repaired: completions lead, table suggestions follow |
+| AMENDMENT | keystrokes in the domain token spent the per-IP budget and starved the last request | requirement 16 amended, repaired: no request with the caret in the domain |
+
+### Behavioural verification
+
+`curl -s -X POST -H 'content-type: application/json' -d '{"input":"example.com @cl","cursor_pos":15}' http://127.0.0.1:18533/api/v1/dns/parse` against the stub server answers completions starting with `@cl` (`@cloudflare` among them); the island tests drive the shell over a stubbed fetch.

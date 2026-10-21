@@ -509,6 +509,7 @@ struct SuggestView {
     types: String,
     flags: String,
     servers: String,
+    parse: &'static str,
 }
 
 #[derive(Template)]
@@ -774,6 +775,7 @@ fn suggest(tool: Tool) -> Option<SuggestView> {
         types,
         flags,
         servers,
+        parse: "/api/v1/dns/parse",
     })
 }
 

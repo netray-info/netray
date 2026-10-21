@@ -186,10 +186,12 @@ runs render as structured views instead of key-value trees. The query input auto
 ### Autocomplete, exports and acceptance
 
 16. **Autocomplete over parse.** The shell's DNS provider asks `POST /api/v1/dns/parse` with the
-    input and the caret as a UTF-8 byte offset, at most once per 150 ms of typing, and lists its
-    `completions` that match the token; while the request fails or is refused (429) it falls back
-    to the server-written tables without showing an error. The parse `error` shows under the input
-    as a muted hint before submit. (2.4, 2.12, 7.85)
+    input and the caret as a UTF-8 byte offset, at most once per 150 ms of typing and only with the
+    caret past the domain, and lists its `completions` that match the token ahead of the table
+    suggestions it lacks; while the request fails or is refused (429) it falls back to the
+    server-written tables without showing an error. An answer that arrives after the input changed,
+    the list closed or a row was selected is dropped. The parse `error` shows under the input as a
+    muted hint before submit, and leaves with any change of the input. (2.4, 2.12, 7.85)
 17. **DNS exports.** The shell's exports of a query, compare or authcompare run carry
     `dns.answers` and `dns.servers` as blocks: JSON with their stored keys and raw values, CSV
     and Markdown rows for them. (2.40, 2.41, 2.42)
@@ -353,6 +355,14 @@ GIVEN the DNS inspector at 390 px WHEN measured THEN the document is not wider t
   query. A claimed part is streamed again after the band only when its HTML with the checks
   differs from without, so views that read no checks (DNS) are sent once and the HTTP views still
   get their tones (implementer under the operator's autonomy mandate, 2026-10-21).
+- Phase 5 review: a late parse answer is dropped once the list closed (submit, Escape, a pick,
+  blur) or a row is selected, so it never reopens a list or steals the selection; the hint follows
+  the input it was given for and leaves on any change; the parser's completions are added ahead of
+  the table's instead of replacing them (the table lists types the parser's completion data lacks,
+  NSEC3 among them); keystrokes in the domain send no request, which keeps a typed query's last
+  request inside the `[api]` per-IP budget at ordinary typing speed. A faster typist can still
+  meet a refused request; it falls back silently (implementer under the operator's autonomy
+  mandate, 2026-10-21).
 - The trace heading names no traced type and the shared-result notices of the draft are dropped:
   the traced type is not in the collected trace result and adding it would change the API's done
   event; the run line already shows the query. A multi-type `+trace` puts "Only the first type is
