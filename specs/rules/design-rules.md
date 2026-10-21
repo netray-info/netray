@@ -33,7 +33,9 @@ A manifest board names the board's title in the export, host, path (a live targe
 selectors), a class and the CSS properties to compare. An optional `state` names one more page state of
 the same canvas board (a long domain, full multi-address evidence): the board is measured again at
 its own path, its files are `<title slug>-<state slug>-*` and its rows and `accepted` entries name
-it "<title> [<state>]". An optional `wait` is a selector the page reaches when it is complete (an
+it "<title> [<state>]". An optional `click` names a board selector and a page selector (`{"board": …, "page": …}`, each
+optional) clicked in that order before the board and the page are measured, for a state behind a
+control: board M's menu sheet, the header's open Inspectors menu. An optional `wait` is a selector the page reaches when it is complete (an
 inspector's live run: `form[data-stream-state="done"]`); the check waits for it, up to 60 s, before
 it measures.
 

@@ -47,9 +47,13 @@ async fn header_holds_wordmark_tagline_and_nav_ending_in_theme_button() {
         header.contains(r#"<span class="page-tagline">your domain, in full spectrum</span>"#),
         "header tagline missing: {header}"
     );
-    let nav = between(header, r#"<nav class="page-nav">"#, "</nav>");
+    let nav = between(
+        header,
+        r#"<nav class="page-nav" data-island="nav-menu">"#,
+        "</nav>",
+    );
     let order = [
-        r#"href="/inspect/dns">Inspectors</a>"#,
+        r#"<summary class="nav-menu__button">Inspectors<"#,
         r#"href="/guide/">Guides</a>"#,
         r#"href="/api/v1/docs">API</a>"#,
         r#"href="/status">Status</a>"#,

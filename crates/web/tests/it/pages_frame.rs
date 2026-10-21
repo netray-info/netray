@@ -249,7 +249,7 @@ async fn not_found_and_server_error_share_prefix_and_footer() {
 async fn navigation_labels_are_the_approved_ones() {
     let html = netray_web_frame_body().await;
     for (href, label) in [
-        ("/inspect/dns", "Inspectors"),
+        ("/tools", "All tools →"),
         ("/guide/", "Guides"),
         ("/api/v1/docs", "API"),
         ("/status", "Status"),
@@ -261,6 +261,8 @@ async fn navigation_labels_are_the_approved_ones() {
         let text = &tail[tail.find('>').unwrap() + 1..tail.find("</a>").unwrap()];
         assert_eq!(text.trim(), label, "label of {href}");
     }
+    // The Inspectors entry is the menu's summary (v2-site-nav requirement 5).
+    assert!(html.contains(r#"<summary class="nav-menu__button">Inspectors<"#));
 }
 
 async fn netray_web_frame_body() -> String {

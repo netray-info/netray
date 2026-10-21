@@ -3,11 +3,18 @@
 {% block main %}
 <div data-island="page">
 <h1>Check a domain</h1>
-{% call c::query_input(query) %}{% endcall %}
+{% call c::query_input(query, "", false, false, true) %}{% endcall %}
 </div>
+<section class="score-key" aria-labelledby="score-key-title">
+<h2 id="score-key-title">What the grades mean</h2>
+<dl class="score-key__rows">
+{% for (letter, tone, word, meaning) in legend %}<div class="score-key__row" data-tone="{{ tone }}"><dt class="score-key__letter">{{ letter }}</dt><dd><span class="score-key__descriptor">{{ word }}</span> <span class="score-key__meaning">{{ meaning }}</span></dd></div>
+{% endfor %}</dl>
+<p><a href="/guide/scoring">How scoring works</a></p>
+</section>
 <p>{% include "partials/tagline.html" %}</p>
 <p>One run covers the DNS, TLS, HTTP, email and IP setup of a domain and keeps the history of its results.</p>
 <p>Try <a href="/example.com">example.com</a> or <a href="/netray.info">netray.info</a>.</p>
-<p>One protocol only: <a href="/inspect/dns">DNS</a>, <a href="/inspect/tls">TLS</a>, <a href="/inspect/http">HTTP</a>, <a href="/inspect/ip">IP</a>.</p>
+<p>One protocol only: <a href="/inspect/dns">DNS</a>, <a href="/inspect/tls">TLS</a>, <a href="/inspect/http">HTTP</a>, <a href="/inspect/email">Email</a>, <a href="/inspect/ip">IP</a>.</p>
 <ul id="recent" data-island="recent" hidden></ul>
 {% endblock %}

@@ -26,13 +26,13 @@ use super::{
     EvidenceInner, PROTOCOLS, Parts, ResultState, RunLineBody, SHOWN, StoredHow, assemble,
     domain_segment, done_rows, evidence_meta_part, evidence_part, figure_parts, full_page, href_of,
     is_fresh, issues_part, not_stored_shown, progress_part, recorded_entry, resolve, run_line_part,
-    sentences_of, spectrum_part, stored_parts, unrecorded_shown,
+    sentences_of, spectrum_part, stored_parts, unrecorded_shown, with_selectors,
 };
 use crate::api::{RunEvent, RunEvents, RunRefusal, RunStart, RunTrigger, wants_event_stream};
 use crate::client::client_ip;
 use crate::components::{self, ProgressRayView, RaySegment, RunLineView};
 use crate::evidence;
-use crate::pages::errors::refused_page;
+use crate::pages::errors::selectors_refused_page;
 use crate::pages::headers::secure;
 use crate::pages::server_error;
 use crate::spectrum::RunInput;
@@ -81,7 +81,7 @@ pub(super) async fn run(
         };
     let selectors = match crate::selectors::parse_dkim_selectors(raw_selectors.as_deref()) {
         Ok(selectors) => selectors,
-        Err(reason) => return refused_page(&domain, &reason),
+        Err(reason) => return selectors_refused_page(&domain, &reason),
     };
     let joined = (!selectors.is_empty()).then(|| selectors.join(","));
 
@@ -114,7 +114,7 @@ pub(super) async fn run(
         RunStart::Refused(refusal) => {
             refused(&state, &domain, &refusal, sse, joined.as_deref()).await
         }
-        RunStart::Admitted(events) if sse => stream(&state, domain, events).await,
+        RunStart::Admitted(events) if sse => stream(&state, domain, events, joined).await,
         RunStart::Admitted(events) if joined.is_some() => {
             finished_page(&state, &domain, events, joined.as_deref()).await
         }
@@ -274,9 +274,16 @@ struct Live {
     entries: Vec<Entry>,
     sections: Vec<SectionEvent>,
     done: Option<Run>,
+    /// The run's custom DKIM selectors, normalised.
+    selectors: Option<String>,
 }
 
-async fn stream(state: &ResultState, domain: String, events: RunEvents) -> Response {
+async fn stream(
+    state: &ResultState,
+    domain: String,
+    events: RunEvents,
+    selectors: Option<String>,
+) -> Response {
     let entries = state
         .store
         .entries(&domain)
@@ -292,6 +299,7 @@ async fn stream(state: &ResultState, domain: String, events: RunEvents) -> Respo
         entries,
         sections: Vec::new(),
         done: None,
+        selectors,
     };
     live.start();
     let stream: Events = futures::stream::unfold(live, |mut live| async move {
@@ -385,7 +393,7 @@ impl Live {
         let line = RunLineBody::Line(RunLineView {
             parts: vec!["running".to_string()],
         });
-        let html = run_line_part(&line);
+        let html = run_line_part(&with_selectors(line, self.selectors.as_deref()));
         self.push("run-line", html);
         self.progress(&run);
         self.figure(&run);
@@ -409,7 +417,7 @@ impl Live {
             shown: false,
             panel: Some(evidence::panel(&run, protocol, &self.domain, None)),
         };
-        let html = evidence_part(protocol, &inner);
+        let html = evidence_part(protocol, &inner, None);
         self.push(&format!("evidence-{}", protocol.as_str()), html);
         if self.sections.len() == 1 {
             self.push("evidence-meta", evidence_meta_part(false));
@@ -455,7 +463,7 @@ impl Live {
             &self.entries,
             &done,
             recorded,
-            None,
+            self.selectors.as_deref(),
         )
         .await;
         if let Some(parts) = parts {

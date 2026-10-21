@@ -90,3 +90,17 @@
 .query-input__clear[hidden] {
   display: none;
 }
+.query-input__selectors {
+  flex-basis: 100%;
+  margin-top: var(--space-2);
+}
+.query-input__selectors summary {
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+  cursor: pointer;
+}
+.query-input__hint {
+  margin: var(--space-1) 0 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+}

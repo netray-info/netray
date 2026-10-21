@@ -19,11 +19,11 @@
         <tr><th>Section</th><th>Tool</th><th>What it measures</th><th>Weight</th></tr>
       </thead>
       <tbody>
-        <tr><td>IP</td><td><a href="https://ip.netray.info">the IP inspector</a></td><td>Network type, hosting reputation, geolocation</td><td>10%</td></tr>
-        <tr><td>DNS</td><td><a href="https://dns.netray.info">the DNS inspector</a></td><td>DNSSEC, CAA records, NS delegation, HTTPS records</td><td>20%</td></tr>
-        <tr><td>TLS</td><td><a href="https://tls.netray.info">the TLS inspector</a></td><td>Certificate chain, protocol version, cipher strength</td><td>35%</td></tr>
-        <tr><td>HTTP</td><td><a href="https://http.netray.info">the HTTP inspector</a></td><td>Security headers, HSTS, CORS, cookie attributes</td><td>20%</td></tr>
-        <tr><td>Email</td><td><a href="https://email.netray.info">netray's email checks</a></td><td>SPF, DKIM, DMARC, MTA-STS, DANE, BIMI, DNSBL</td><td>15%</td></tr>
+        <tr><td>IP</td><td><a href="/inspect/ip">the IP inspector</a></td><td>Network type, hosting reputation, geolocation</td><td>10%</td></tr>
+        <tr><td>DNS</td><td><a href="/inspect/dns">the DNS inspector</a></td><td>DNSSEC, CAA records, NS delegation, HTTPS records</td><td>20%</td></tr>
+        <tr><td>TLS</td><td><a href="/inspect/tls">the TLS inspector</a></td><td>Certificate chain, protocol version, cipher strength</td><td>35%</td></tr>
+        <tr><td>HTTP</td><td><a href="/inspect/http">the HTTP inspector</a></td><td>Security headers, HSTS, CORS, cookie attributes</td><td>20%</td></tr>
+        <tr><td>Email</td><td><a href="/inspect/email">netray's email checks</a></td><td>SPF, DKIM, DMARC, MTA-STS, DANE, BIMI, DNSBL</td><td>15%</td></tr>
       </tbody>
     </table>
 
@@ -219,10 +219,10 @@
     </p>
 
 <pre><code># Via URL parameter
-https://netray.info/?d=example.com&dkim_selectors=google,selector1
+{{ frame.origin() }}/?d=example.com&dkim_selectors=google,selector1
 
 # Via curl
-curl -s -X POST 'https://netray.info/api/v1/domains/example.com/runs?dkim_selectors=default,s1' \
+curl -s -X POST '{{ frame.origin() }}/api/v1/domains/example.com/runs?dkim_selectors=default,s1' \
   | jq '.run.checks[] | select(.id | startswith("email.dkim"))'</code></pre>
 
     <p>Selector validation rules:</p>

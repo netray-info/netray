@@ -74,9 +74,8 @@ async fn trailing_slash_pages_move_to_canonical() {
 }
 
 #[tokio::test]
-async fn tools_moves_to_home() {
-    assert_moved("/tools", "/").await;
-    assert_moved("/tools/", "/").await;
+async fn tools_slash_moves_to_the_inspector_index() {
+    assert_moved("/tools/", "/tools").await;
 }
 
 #[tokio::test]

@@ -63,13 +63,13 @@ max_age: 604800</code></pre>
 
   <section class="guide-tool">
     <h2>Check MTA-STS and email security with netray</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://email.netray.info/", "domain", "example.com", "Check")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/email", "d", "example.com", "Check")) %}{% endcall %}
     <p class="guide-tool__hint">Validates MTA-STS policy, TLSRPT, DANE, and all email authentication records. Returns an A–F grade.</p>
   </section>
 
   <section class="guide-tool">
     <h2>Inspect raw MTA-STS DNS records with the DNS inspector</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://dns.netray.info/", "q", "example.com +check", "Inspect")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/dns", "q", "example.com +check", "Inspect")) %}{% endcall %}
     <p class="guide-tool__hint">Queries the <code>_mta-sts</code> TXT record and other email DNS records directly.</p>
   </section>
 {% endblock %}

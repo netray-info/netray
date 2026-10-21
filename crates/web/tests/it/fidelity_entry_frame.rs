@@ -50,7 +50,7 @@ fn entry_page_renders_inside_the_site_frame() {
         "<footer class=\"page-footer\"",
         "<link rel=\"stylesheet\" href=\"/static/app.css\">",
         "<title>example.com · A</title>",
-        "og:image\" content=\"/r/aB3dE5gH/og.png\"",
+        "og:image\" content=\"https://netray.info/r/aB3dE5gH/og.png\"",
     ] {
         assert!(html.contains(needle), "entry page lacks {needle}");
     }

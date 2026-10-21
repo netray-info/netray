@@ -91,7 +91,7 @@ openssl s_client -connect example.com:443 -showcerts 2>/dev/null | \
 
   <section class="guide-tool">
     <h2>Inspect certificate expiry, lifetime, and SAN quality</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://tls.netray.info/", "h", "example.com", "Inspect")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/tls", "h", "example.com", "Inspect")) %}{% endcall %}
     <p class="guide-tool__hint">Checks certificate expiry window, lifetime compliance, SAN list, AIA reachability, and chain completeness.</p>
   </section>
 

@@ -2,7 +2,6 @@
 {% import "components/inspector_shell.html" as s %}
 {% block header_inspector %}<span class="page-inspector"><span class="page-inspector__sep" aria-hidden="true">·</span> <span class="page-inspector__name">{{ shell.name }}</span></span>{% endblock %}
 {% block header_tagline %}<span class="page-tagline">{{ shell.tagline }}</span>{% endblock %}
-{% block nav_inspectors %}<a href="/inspect/dns" aria-current="page">Inspectors</a>{% endblock %}
 {% block main %}
 {% call s::inspector_shell(shell) %}{% endcall %}
 {% endblock %}
