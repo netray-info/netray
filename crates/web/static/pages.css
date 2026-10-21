@@ -194,7 +194,7 @@ main a {
 .page-footer {
   box-sizing: border-box;
   max-width: var(--layout-max-width);
-  margin: 0 auto;
+  margin: 56px auto 0;
   padding: 0 var(--layout-gutter);
   padding-bottom: 40px;
 }
@@ -242,6 +242,56 @@ main a {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 18px;
+}
+/* The inspector index `/tools` (spec v2-site-nav, requirement 7). */
+.tool-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--space-4);
+}
+.tool-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: var(--color-surface);
+}
+.tool-card h2 {
+  margin: 0;
+  font-size: var(--font-size-h2);
+}
+.tool-card p {
+  margin: 0;
+}
+main .tool-card__tagline {
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+  letter-spacing: var(--font-tracking-caps);
+  text-transform: uppercase;
+}
+.tool-card__takes {
+  font-size: var(--font-size-small);
+}
+.tool-card form {
+  margin-top: var(--space-2);
+}
+.tool-card > a {
+  margin-top: var(--space-2);
+}
+.tool-guides {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  padding: 0;
+  list-style: none;
+}
+.tool-guides a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
 }
 /* The home page's grade legend (spec v2-site-nav, requirement 12). */
 .score-key__rows {
@@ -585,9 +635,30 @@ main td {
 .selector-form {
   display: flex;
   flex-wrap: wrap;
-  align-items: end;
+  align-items: stretch;
   gap: var(--space-2);
   margin-top: var(--space-4);
+}
+/* The frame's form look: a caption label above, the field as wide as the row allows. */
+.selector-form label {
+  flex-basis: 100%;
+  color: var(--color-muted);
+  font-size: var(--font-size-label);
+  letter-spacing: var(--font-tracking-caps);
+  text-transform: uppercase;
+}
+.selector-form input {
+  flex: 1 1 200px;
+  min-width: 0;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-body);
 }
 .evidence-tabs__caption {
   margin: 0;
@@ -891,6 +962,7 @@ main td {
   }
   /* Board M's footer: one column, the version line last. */
   .page-footer {
+    margin-top: 34px;
     padding-bottom: 24px;
   }
   .page-footer__inner {
@@ -959,6 +1031,11 @@ main td {
   }
   .nav-menu + a {
     border-top: var(--line-hair) solid var(--color-line);
+  }
+  /* The sheet's site links are body text in ink, as board M draws them. */
+  .nav-menu ~ a {
+    color: var(--color-ink);
+    font-size: var(--font-size-body);
   }
   main {
     padding: 14px var(--layout-gutter);

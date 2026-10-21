@@ -324,6 +324,12 @@ GIVEN no JavaScript WHEN `/`, `/tools` and `/example.com/email` render THEN the 
   never in a streamed fragment: a stream that replaced the panel would drop the form, and a plain
   run's stream must not carry selector copy (implementer under the operator's autonomy mandate,
   2026-10-19).
+- Phone footer links stay 44 px tall (requirement 11) although board M draws them at text height;
+  the stacked footer is looser than the board (visual row V16) (implementer under the operator's
+  autonomy mandate, 2026-10-19).
+- Board M's footer rows do not measure `max-width`: the board draws no limit at 390 px and the
+  page's 1120 px never binds there (implementer under the operator's autonomy mandate,
+  2026-10-19).
 - Inspector links point at `/inspect/<tool>`, not at `<tool>.<apex>`: valid before and after the
   cutover and on every host (drafting agent, 2026-10-20).
 - `/tools` becomes the inspector index again and takes over the redirect v2-dkim-legacy-urls set

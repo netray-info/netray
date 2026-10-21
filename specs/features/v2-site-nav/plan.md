@@ -65,3 +65,13 @@
 ## Plan
 
 - G1: `src/idn.rs` (`unicode`, `title`), `src/lib.rs`, `Cargo.toml` (`idna`), `templates/partials/result_header.html`, `templates/pages/result.html` (`data-display`), `templates/pages/history.html`, `templates/pages/evidence.html`, `templates/pages/entry.html`, titles in `src/pages/result/mod.rs`, `src/pages/evidence.rs`, `src/entries/render.rs`, `static/pages.css`, `islands/src/recent.ts`.
+
+## Phase 7 — Design gate and visual reading
+
+## Groups
+
+- G1 (C1–C8): the gate's `click`, the manifest rows, the visual fixes.
+
+## Plan
+
+- G1: `tests/acceptance/design/manifest.mjs` (`click`), `board.mjs`, `page.mjs`, `specs/rules/design-rules.md`; the private manifest (netray.info); `static/pages.css` (footer spacing, sheet links, selector form, tool cards).

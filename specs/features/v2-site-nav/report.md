@@ -216,3 +216,60 @@ Changed protected tests: `site_nav_idn.rs` (rustfmt only).
 ### Behavioural verification
 
 skipped: router-level tests over a stored `xn--bcher-kva.example` entry; screenshots in Phase 7.
+
+## Phase 7 — Design gate and visual reading
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R18 header menu, phone sheet, footer, tools page, legend, selector inputs and IDN display work without JavaScript | green | crates/web/tests/it/site_nav_header.rs |
+| C2 | R19 a manifest board may name click with optional board and page selectors, clicked before measuring; unknown keys refused; design-rules describes it | green | tests/repo/test_design_manifest.sh |
+| C3 | R20 the manifest measures the menu on MenuOpen, the footer on F, FDark, G, GDark, M, MDark and the sheet on M menu open; design-check exits 0; screenshots read and findings closed | green | design-check |
+| C4 | S the loader accepts click and rejects an unknown key in it | green | tests/repo/test_design_manifest.sh |
+| C5 | S click.page is clicked before the page is measured, click.board before the board | test-unwritable | design-check |
+| C6 | S design-check over the MenuOpen, footer and menu open rows exits 0 | green | design-check |
+| C7 | S screenshots read beside board F; every finding a report row, none open | green | report.md visual rows |
+| C8 | S without JavaScript /, /tools and /example.com/email reach the menu, legend, cards and selector forms | green | crates/web/tests/it/site_nav_header.rs |
+| V1 | visual email-view: the selector form was unstyled (browser default input, label inline) | green | design-check |
+| V2 | visual email-view: four loose explore links after the evidence cards (pre-existing, v2-result-fidelity) | green | design-check |
+| V3 | visual selector-run: run line replaced by the per-address refusal (state of the screenshot run: the shooter hit the run limiter) | green | design-check |
+| V4 | visual selector-run: spectrum label leaders cross neighbouring labels (pre-existing spectrum layout) | green | design-check |
+| V5 | visual selector-run: the email tab's selector form is not in the TLS-tab screenshot | green | design-check |
+| V6 | visual email-view 390: FCrDNS table clipped without swipe hint (pre-existing evidence view) | green | design-check |
+| V7 | visual email-view 390: row cells not on one baseline (pre-existing) | green | design-check |
+| V8 | visual email-view: run line and check rows spacing and borders (pre-existing) | green | design-check |
+| V9 | visual email-view: BIMI evidence card with a heading and no body (pre-existing) | green | design-check |
+| V10 | visual selector-run and email-view: help button and export row beside the board's actions (pre-existing, decided in v2-result-fidelity) | green | design-check |
+| V11 | visual tools: inspectors were plain sections, not cards | green | design-check |
+| V12 | visual tools: Open link touching the input | green | design-check |
+| V13 | visual tools: featured guides as a bulleted list with small rows | green | design-check |
+| V14 | visual guide-csp 1280: prose runs the full container width (pre-existing guides) | green | design-check |
+| V15 | visual guide-csp 390: CTA input squeezed by a wide button (pre-existing guides) | green | design-check |
+| V16 | visual all pages 390: stacked footer looser than board M because every link is 44 px tall | green | design-check |
+
+C5 is exercised by every `just design-check` run (the MenuOpen and "menu open" rows measure open states); the check needs the private canvas and a browser and is not part of the gate (design-rules.md).
+
+### Design check
+
+`just design-check` on the final tree: exit 0, 14 boards, 956 elements, 1801 properties measured, 0 open deviations, 0 stale accepted entries (2 accepted, both from v2-result-fidelity). The first run found one deviation pair, `footer box max-width` on M and MDark (board none, page 1120 px): the board draws no width limit at 390 px, where the page's 1120 px never binds; the property left M's footer rows (manifest, netray.info).
+
+### Visual reading
+
+A reader with no part in the build read `/`, `/tools`, `/guide/csp`, `/privacy`, a selector run and the email view at 1280 and 390 px, light and dark, beside board F's frame (rows V1–V16). Dispositions:
+
+- Rebuilt: V1 (selector form takes the frame's caption label, field and 44 px height), V11–V13 (tool cards on the surface with a hairline, mono tagline, spacing; featured guides as an unbulleted row list).
+- Deliberately different (implementer under the operator's autonomy mandate, decision log): V16, requirement 11 keeps 44 px footer links on phones.
+- Not this feature's state or code, closed here and listed as proposals: V2, V4, V6–V10 (evidence view and result page, v2-result-fidelity / v2-result-polish), V14–V15 (guides), V3 (the screenshot run hit the per-address limiter; the refusal line is v2-result-fidelity's), V5 (the form is in the email tab; `site_nav_selectors.rs` asserts it).
+
+The frame (header, Inspectors menu, phone sheet, footer, container) matched on all six pages in the reader's words.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 gate click, manifest rows, visual fixes | 3 | orchestrator | 0 | 0 |
+
+### Behavioural verification
+
+Live stack (`design_stack_up` with lens, the design fixtures): `/`, `/tools`, `/guide/csp`, `/privacy`, `/shop.example.com?dkim_selectors=s1,s2`, `/shop.example.com/email` answered 200 at 1280 and 390 px in both themes; `just design-check` clicked the Inspectors menu open on `/` and board M's menu open on `/shop.example.com` and measured both.
