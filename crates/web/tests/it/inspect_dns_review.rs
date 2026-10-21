@@ -129,7 +129,8 @@ async fn trace_with_compare_streams_one_part_the_trace_tree() {
 
     assert_eq!(status, 200, "{s}");
     assert_eq!(parts(&s), 1, "{s}");
-    assert!(s.contains("id=\"ev-dns.trace\" data-shape=\"tree\""), "{s}");
+    assert!(s.contains("id=\"ev-dns.trace\""), "{s}");
+    assert!(s.contains("class=\"protocol-view\""), "{s}");
     assert!(!s.contains("ev-dns.compare"), "{s}");
 }
 

@@ -8,9 +8,9 @@ use futures::FutureExt;
 use futures::future::BoxFuture;
 use netray_dns::parser::ParsedQuery;
 use netray_dns::{
-    DnsAuthCompareResult, DnsCachedResult, DnsCompareResult, DnsDnssecResult, DnsErrorEvent,
-    DnsJob, DnsJobEvent, DnsQueryResult, DnsRefusal, DnsResultCache, DnsTraceResult, DnssecRequest,
-    TraceRequest, blocks,
+    DnsAuthCompareResult, DnsCachedJob, DnsCachedResult, DnsCompareResult, DnsDnssecResult,
+    DnsErrorEvent, DnsJob, DnsJobEvent, DnsQueryResult, DnsRefusal, DnsResultCache, DnsTraceResult,
+    DnssecRequest, TraceRequest, blocks,
 };
 use netray_email::{EmailInspectRequest, EmailRefusal};
 use netray_engine::{Domain, Facts, Module, RunContext, SectionOutcome};
@@ -213,6 +213,7 @@ fn dns_part<E: DnsJobEvent>(
     label: &str,
     started: tokio::sync::oneshot::Receiver<DnsJob<E>>,
     to_blocks: fn(&E::Collected) -> Vec<Block>,
+    notes: Vec<String>,
     store: Option<(DnsResultCache, String, String)>,
 ) -> JobPart
 where
@@ -252,7 +253,11 @@ where
                 });
             }
             blocks.extend(errors_block(&errors));
-            blocks.extend(warnings_block(collected.warnings()));
+            let warnings: Vec<String> = notes
+                .into_iter()
+                .chain(collected.warnings().iter().cloned())
+                .collect();
+            blocks.extend(warnings_block(&warnings));
             Ok(blocks)
         }),
     }
@@ -672,34 +677,47 @@ impl InspectJobs {
             .clone()
             .map(|key| (self.state.dns_results().clone(), key, req.input.clone()));
 
+        let trace_notes: Vec<String> = trace_note(&req.input).into_iter().collect();
         let (part, start) = if flagged("trace") {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("trace", rx, blocks::trace_blocks, store),
+                dns_part("trace", rx, blocks::trace_blocks, trace_notes, store),
                 DnsStart::Trace(tx),
             )
         } else if parsed.dnssec || flagged("dnssec") {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("dnssec", rx, blocks::dnssec_blocks, store),
+                dns_part("DNSSEC", rx, blocks::dnssec_blocks, Vec::new(), store),
                 DnsStart::Dnssec(tx),
             )
         } else if flagged("compare") {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("compare", rx, blocks::compare_blocks, store),
+                dns_part(
+                    "transport comparison",
+                    rx,
+                    blocks::compare_page_blocks,
+                    Vec::new(),
+                    store,
+                ),
                 DnsStart::Compare(tx),
             )
         } else if flagged("auth") {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("authcompare", rx, blocks::authcompare_blocks, store),
+                dns_part(
+                    "authoritative and recursive",
+                    rx,
+                    blocks::authcompare_page_blocks,
+                    Vec::new(),
+                    store,
+                ),
                 DnsStart::AuthCompare(tx),
             )
         } else {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("query", rx, blocks::query_blocks, store),
+                dns_part("query", rx, blocks::query_page_blocks, Vec::new(), store),
                 DnsStart::Query(tx),
             )
         };
@@ -788,12 +806,49 @@ impl InspectJobs {
     }
 }
 
+/// "Only the first type is traced: <type>." for a `+trace` query that names more than one record
+/// type; the parser's default types of a query naming none do not count.
+fn trace_note(input: &str) -> Option<String> {
+    input
+        .split_whitespace()
+        .any(|t| t.eq_ignore_ascii_case("+trace"))
+        .then(|| types_note(input))
+        .flatten()
+}
+
+/// The note of a trace over `input`: the types it names, as the parser reads them (duplicates
+/// dropped, aliases resolved), when there is more than one.
+fn types_note(input: &str) -> Option<String> {
+    let named = netray_dns::parser::named_record_types(input);
+    (named.len() > 1).then(|| format!("Only the first type is traced: {}.", named[0]))
+}
+
 impl DnsResults for DnsResultCache {
     fn result<'a>(&'a self, key: &'a str) -> BoxFuture<'a, Option<CachedDns>> {
         Box::pin(async move {
             let cached = self.get(key).await?;
+            // The errors and warnings the live part adds, so a replayed failure stays visible
+            // (Rule M).
+            let mut blocks = cached.result.page_blocks();
+            let mut notes = Vec::new();
+            let (errors, warnings): (&[DnsErrorEvent], &[String]) = match &cached.result {
+                DnsCachedJob::Query(r) => (&r.errors, r.warnings()),
+                DnsCachedJob::Compare(r) => (&r.errors, r.warnings()),
+                DnsCachedJob::AuthCompare(r) => (&r.errors, r.warnings()),
+                DnsCachedJob::Trace(r) => {
+                    // A trace from the API's own route carries no `+trace` token.
+                    notes.extend(types_note(&cached.query));
+                    (&r.errors, &notes[..])
+                }
+                DnsCachedJob::Dnssec(r) => (&r.errors, &[]),
+                DnsCachedJob::Check(_) => (&[], &[]),
+            };
+            if !blocks.is_empty() {
+                blocks.extend(errors_block(errors));
+                blocks.extend(warnings_block(warnings));
+            }
             Some(CachedDns {
-                blocks: cached.result.blocks(),
+                blocks,
                 query: cached.query,
                 mode: cached.mode,
             })

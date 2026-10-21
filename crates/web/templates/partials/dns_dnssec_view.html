@@ -1,0 +1,7 @@
+<p class="dns-chain__meta">{{ meta }}</p>
+<ol class="dns-chain">
+{% for level in levels %}<li class="dns-level" data-level="{{ level.level }}">{% if let Some(zone) = level.zone %}<code class="dns-level__zone">{{ zone }}</code>{% endif %}{% if let Some(latency) = level.latency %}<span class="dns-level__latency">{{ latency }}</span>{% endif %}{% if let Some((tone, label)) = level.badge %}<span class="dns-level__badge" data-tone="{{ tone }}">{{ label }}</span>{% endif %}
+{% if !level.findings.is_empty() %}<ul class="dns-level__findings">{% for finding in level.findings %}<li{% if let Some(tone) = finding.tone %} data-tone="{{ tone }}"{% endif %}>{{ finding.message }}</li>{% endfor %}</ul>
+{% endif %}{% if !level.records.is_empty() %}<details class="dns-level__records"><summary>Records</summary>{% for (label, records) in level.records %}<p class="dns-level__kind">{{ label }}</p>{% for record in records %}<code class="dns-level__record">{{ record }}</code>{% endfor %}{% endfor %}</details>
+{% endif %}</li>
+{% endfor %}</ol>

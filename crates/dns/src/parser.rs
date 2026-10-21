@@ -239,6 +239,24 @@ pub fn parse(input: &str) -> Result<ParsedQuery, ParseError> {
 /// "ALL" is handled as a special expansion marker. Blocked types (ANY, AXFR, IXFR)
 /// are allowed through here -- they are rejected in the caller after all tokens
 /// are collected, so the error message is clear.
+/// The record types a query names, in the order [`parse`] reads them: duplicates dropped, aliases
+/// resolved, `ALL` expanded, and no defaults when it names none. Tokens that are no record type
+/// are left out.
+pub fn named_record_types(input: &str) -> Vec<RecordType> {
+    let mut record_types = Vec::new();
+    let mut has_all = false;
+    let mut warnings = Vec::new();
+    for token in input.split_whitespace().skip(1) {
+        if !token.starts_with(['@', '+']) {
+            parse_record_type(token, &mut record_types, &mut has_all, &mut warnings);
+        }
+    }
+    if has_all {
+        record_types = expand_all();
+    }
+    record_types
+}
+
 fn parse_record_type(
     token: &str,
     record_types: &mut Vec<RecordType>,

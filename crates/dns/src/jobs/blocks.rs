@@ -7,13 +7,16 @@ use mhost::RecordType;
 use mhost::resolver::Lookup;
 use mhost::resolver::lookup::LookupResult;
 use netray_model::evidence::{Block, BlockId, Node, Shape, Value};
+use serde::Serialize;
 
 use super::events::{
     AuthResult, BatchLookups, DnsAuthCompareResult, DnsBatch, DnsCompareResult, DnsDnssecResult,
     DnsQueryResult, DnsTraceResult,
 };
+use super::summary::{DnsJobSummary, DnsServerAnswer, summarise};
 use crate::dns_trace::ServerOutcome;
 use crate::module::{block_id, rdata_text, records_block};
+use crate::record_format::rdata_texts;
 
 fn text(s: impl Into<String>) -> Value {
     Value::Text(s.into())
@@ -272,6 +275,259 @@ pub fn authcompare_blocks(result: &DnsAuthCompareResult) -> Vec<Block> {
     )]
 }
 
+/// A text field, left out when empty.
+fn push_text(fields: &mut Vec<(String, Value)>, key: &str, value: Option<&str>) {
+    if let Some(value) = value.filter(|v| !v.is_empty()) {
+        fields.push((key.to_owned(), text(value)));
+    }
+}
+
+/// The wire name of a unit-variant enum, as serde writes it.
+fn wire_name(value: &impl Serialize) -> String {
+    match serde_json::to_value(value) {
+        Ok(serde_json::Value::String(name)) => name,
+        _ => String::new(),
+    }
+}
+
+/// The `(human, explain)` texts by `(type, rdata text)`.
+type RecordTexts = BTreeMap<(String, String), (Option<String>, Option<String>)>;
+
+/// The `(human, explain)` texts of the resolved records, by `(type, rdata text)`.
+fn record_texts(batches: &[DnsBatch]) -> RecordTexts {
+    let mut texts = BTreeMap::new();
+    for batch in batches {
+        let BatchLookups::Resolved(lookups) = &batch.lookups else {
+            continue;
+        };
+        for record in lookups.iter().flat_map(|lookup| lookup.records()) {
+            let pair = rdata_texts(record.data());
+            if pair.0.is_some() || pair.1.is_some() {
+                texts.insert(
+                    (record.record_type().to_string(), rdata_text(record.data())),
+                    pair,
+                );
+            }
+        }
+    }
+    texts
+}
+
+fn answer_node(answer: &DnsServerAnswer, texts: &RecordTexts) -> Node {
+    let mut fields = Vec::new();
+    push_text(&mut fields, "server", Some(&answer.server));
+    push_text(&mut fields, "address", Some(&answer.address));
+    push_text(&mut fields, "name", answer.name.as_deref());
+    push_text(&mut fields, "transport", Some(&answer.transport));
+    push_text(&mut fields, "source", answer.source.as_deref());
+    push_text(&mut fields, "outcome", Some(&wire_name(&answer.outcome)));
+    push_text(
+        &mut fields,
+        "response_code",
+        answer.response_code.as_deref(),
+    );
+    push_text(&mut fields, "error", answer.error.as_deref());
+    if let Some(ms) = answer.response_time_ms {
+        fields.push(("response_time".to_owned(), millis(ms)));
+    }
+    let records = answer
+        .records
+        .iter()
+        .map(|record| {
+            let mut fields = Vec::new();
+            push_text(&mut fields, "name", Some(&record.name));
+            push_text(&mut fields, "type", Some(&record.record_type));
+            fields.push(("ttl".to_owned(), Value::Int(i64::from(record.ttl))));
+            push_text(&mut fields, "data", Some(&record.data));
+            if let Some(age) = record.soa_serial_age_days {
+                fields.push(("soa_serial_age_days".to_owned(), Value::Int(age)));
+            }
+            let (human, explain) = texts
+                .get(&(record.record_type.clone(), record.data.clone()))
+                .cloned()
+                .unwrap_or_default();
+            push_text(&mut fields, "human", human.as_deref());
+            push_text(&mut fields, "explain", explain.as_deref());
+            Node {
+                fields,
+                children: Vec::new(),
+            }
+        })
+        .collect();
+    Node {
+        fields,
+        children: records,
+    }
+}
+
+/// The `dns.answers` and `dns.servers` trees of a batch job. `done` is the job's done facts,
+/// `None` while it is unfinished.
+fn summary_blocks(
+    mode: &str,
+    batches: &[DnsBatch],
+    summary: Option<&DnsJobSummary>,
+    done: Option<Vec<(String, Value)>>,
+) -> [Block; 2] {
+    let summary = summary.cloned().unwrap_or_else(|| summarise(batches));
+    let texts = record_texts(batches);
+    let mut fields = vec![
+        ("mode".to_owned(), text(mode)),
+        ("finished".to_owned(), Value::Bool(done.is_some())),
+        (
+            "record_types".to_owned(),
+            Value::Int(i64::from(summary.record_types)),
+        ),
+        ("lookups".to_owned(), Value::Int(i64::from(summary.lookups))),
+        ("servers".to_owned(), count(summary.servers.len())),
+        ("agree".to_owned(), Value::Int(i64::from(summary.agree))),
+        ("diverge".to_owned(), Value::Int(i64::from(summary.diverge))),
+        ("single".to_owned(), Value::Int(i64::from(summary.single))),
+        (
+            "unmeasured".to_owned(),
+            Value::Int(i64::from(summary.unmeasured)),
+        ),
+    ];
+    fields.extend(done.into_iter().flatten());
+    let types = summary
+        .types
+        .iter()
+        .map(|comparison| {
+            let mut fields = Vec::new();
+            push_text(&mut fields, "record_type", Some(&comparison.record_type));
+            push_text(
+                &mut fields,
+                "agreement",
+                Some(&wire_name(&comparison.agreement)),
+            );
+            Node {
+                fields,
+                children: comparison
+                    .answers
+                    .iter()
+                    .map(|answer| answer_node(answer, &texts))
+                    .collect(),
+            }
+        })
+        .collect();
+    let servers = summary
+        .servers
+        .iter()
+        .map(|server| {
+            let mut fields = Vec::new();
+            push_text(&mut fields, "server", Some(&server.server));
+            push_text(&mut fields, "name", server.name.as_deref());
+            push_text(&mut fields, "transport", Some(&server.transport));
+            push_text(&mut fields, "source", server.source.as_deref());
+            fields.push(("lookups".to_owned(), Value::Int(i64::from(server.lookups))));
+            fields.push((
+                "measured".to_owned(),
+                Value::Int(i64::from(server.measured)),
+            ));
+            fields.push((
+                "unmeasured".to_owned(),
+                Value::Int(i64::from(server.unmeasured)),
+            ));
+            if let Some(ms) = server.median_response_time_ms {
+                fields.push(("median_response_time".to_owned(), millis(ms)));
+            }
+            Node {
+                fields,
+                children: Vec::new(),
+            }
+        })
+        .collect::<Vec<_>>();
+    [
+        block(
+            "answers",
+            "Answers",
+            Shape::Tree(Node {
+                fields,
+                children: types,
+            }),
+        ),
+        block(
+            "servers",
+            "Servers",
+            Shape::Tree(node(vec![("servers", count(servers.len()))], servers)),
+        ),
+    ]
+}
+
+/// The done facts every batch job shares.
+fn done_facts(duration_ms: u64, total_queries: u32) -> Vec<(String, Value)> {
+    vec![
+        ("duration".to_owned(), Value::Duration(duration_ms)),
+        (
+            "total_queries".to_owned(),
+            Value::Int(i64::from(total_queries)),
+        ),
+    ]
+}
+
+fn page(summary_blocks: [Block; 2], own: Vec<Block>) -> Vec<Block> {
+    summary_blocks.into_iter().chain(own).collect()
+}
+
+/// The page blocks of a query job: `dns.answers` and `dns.servers`, then `query_blocks`. A job
+/// with no record-type block has none.
+pub fn query_page_blocks(result: &DnsQueryResult) -> Vec<Block> {
+    let own = query_blocks(result);
+    if own.is_empty() {
+        return own;
+    }
+    let done = result.done.as_ref().map(|done| {
+        let mut facts = done_facts(done.duration_ms, done.total_queries);
+        let mut texts = Vec::new();
+        push_text(&mut texts, "transport", Some(&done.transport));
+        facts.extend(texts);
+        for provider in &done.degraded_providers {
+            push_text(&mut facts, "degraded_provider", Some(provider));
+        }
+        facts.push(("dnssec".to_owned(), Value::Bool(done.dnssec)));
+        facts
+    });
+    page(
+        summary_blocks("query", &result.batches, result.summary.as_ref(), done),
+        own,
+    )
+}
+
+/// The page blocks of a compare job: `dns.answers` and `dns.servers`, then `compare_blocks`.
+pub fn compare_page_blocks(result: &DnsCompareResult) -> Vec<Block> {
+    let done = result.done.as_ref().map(|done| {
+        let mut facts = done_facts(done.duration_ms, done.total_queries);
+        for transport in &done.transports {
+            push_text(&mut facts, "transport", Some(transport));
+        }
+        facts
+    });
+    page(
+        summary_blocks("compare", &result.batches, result.summary.as_ref(), done),
+        compare_blocks(result),
+    )
+}
+
+/// The page blocks of an authcompare job: `dns.answers` and `dns.servers`, then
+/// `authcompare_blocks`.
+pub fn authcompare_page_blocks(result: &DnsAuthCompareResult) -> Vec<Block> {
+    let done = result.done.as_ref().map(|done| {
+        let mut facts = done_facts(done.duration_ms, done.total_queries);
+        for server in &done.auth_servers {
+            push_text(&mut facts, "auth_server", Some(server));
+        }
+        facts
+    });
+    page(
+        summary_blocks(
+            "authcompare",
+            &result.batches,
+            result.summary.as_ref(),
+            done,
+        ),
+        authcompare_blocks(result),
+    )
+}
+
 /// The one `tree` block `dns.trace` of a trace job: a node per hop, its children the servers
 /// queried with address and latency.
 pub fn trace_blocks(result: &DnsTraceResult) -> Vec<Block> {
@@ -289,22 +545,45 @@ pub fn trace_blocks(result: &DnsTraceResult) -> Vec<Block> {
                         ServerOutcome::Answer => "answer",
                         ServerOutcome::Error { .. } => "error",
                     };
-                    let mut fields = vec![("address", Value::Addr(server.server_ip))];
+                    let mut fields = Vec::new();
+                    if let Some(name) = server.server_name.as_deref().filter(|n| !n.is_empty()) {
+                        fields.push(("server_name", text(name)));
+                    }
+                    fields.push(("address", Value::Addr(server.server_ip)));
                     if !matches!(server.outcome, ServerOutcome::Error { .. }) {
                         fields.push(("latency", millis(server.latency_ms)));
                     }
                     fields.push(("outcome", text(outcome)));
+                    if let ServerOutcome::Error { message } = &server.outcome
+                        && !message.is_empty()
+                    {
+                        fields.push(("error", text(message)));
+                    }
+                    fields.extend(
+                        server
+                            .referral_ns
+                            .iter()
+                            .filter(|ns| !ns.is_empty())
+                            .map(|ns| ("referral", text(ns))),
+                    );
+                    fields.extend(server.answer_records.iter().map(|record| {
+                        (
+                            "answer",
+                            text(format!("{} {}", record.record_type, record.rdata)),
+                        )
+                    }));
                     node(fields, Vec::new())
                 })
                 .collect();
-            node(
-                vec![
-                    ("level", count(hop.level)),
-                    ("zone", text(&hop.zone)),
-                    ("servers_queried", count(hop.servers_queried)),
-                ],
-                servers,
-            )
+            let mut fields = vec![
+                ("level", count(hop.level)),
+                ("zone", text(&hop.zone)),
+                ("servers_queried", count(hop.servers_queried)),
+            ];
+            if !hop.referral_groups.is_empty() {
+                fields.push(("referral_groups", count(hop.referral_groups.len())));
+            }
+            node(fields, servers)
         })
         .collect::<Vec<_>>();
     vec![block(
@@ -338,6 +617,18 @@ pub fn dnssec_blocks(result: &DnsDnssecResult) -> Vec<Block> {
             let mut fields = vec![("level", count(level.level)), ("zone", text(&level.zone))];
             if level.servers_queried > 0 {
                 fields.push(("latency", millis(level.latency_ms)));
+            }
+            for (key, records) in [
+                ("dnskey", &level.dnskey_records),
+                ("ds", &level.ds_records),
+                ("rrsig", &level.rrsig_records),
+            ] {
+                fields.extend(
+                    records
+                        .iter()
+                        .filter(|r| !r.rdata.is_empty())
+                        .map(|r| (key, text(&r.rdata))),
+                );
             }
             node(fields, findings)
         })

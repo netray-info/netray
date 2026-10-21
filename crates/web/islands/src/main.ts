@@ -1,5 +1,6 @@
 import { countdown } from "./countdown";
 import { dns } from "./dns";
+import { dnsview } from "./dnsview";
 import { issues } from "./issues";
 import { menu } from "./menu";
 import { page } from "./page";
@@ -37,6 +38,7 @@ export function mount(root: ParentNode): void {
 register("stream", (el) => stream(el as HTMLFormElement, mount));
 register("countdown", countdown);
 register("dns", dns);
+register("dnsview", dnsview);
 register("issues", issues);
 register("nav-menu", menu);
 register("page", page);
