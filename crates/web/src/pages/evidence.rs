@@ -174,7 +174,7 @@ async fn latest(
             "no-store",
             &EvidencePage {
                 frame: Frame::new(
-                    &format!("{domain} - netray"),
+                    &format!("{} - netray", crate::idn::title(&domain)),
                     "No entry is stored for this domain.",
                     "/",
                 ),

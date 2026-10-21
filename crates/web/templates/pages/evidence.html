@@ -13,7 +13,7 @@
 <form id="recheck" method="post" action="{{ home_href }}/run" hidden><input type="hidden" name="trigger" value="recheck"></form>
 </div>
 {% else %}
-<h1>No entry for {{ domain }}</h1>
+<h1>No entry for {% if let Some(u) = crate::idn::unicode(domain) %}{{ u }} <span class="idn-alabel">{{ domain }}</span>{% else %}{{ domain }}{% endif %}</h1>
 <p>Nothing has been recorded for this domain yet. <a href="{{ home_href }}">Check {{ domain }}</a>.</p>
 {% endif %}
 {% endblock %}

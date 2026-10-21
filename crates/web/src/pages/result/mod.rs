@@ -1504,13 +1504,15 @@ fn assemble(domain: &str, autostart: bool, shown: Shown, selectors: Option<&str>
     // A stored entry shown under a selector page is not the selector run: the line says what is
     // shown until that run ends, instead of relabelling the stored run.
     let line = match selectors {
-        Some(list) if shown.recorded => RunLineBody::Line(RunLineView {
-            parts: vec![
-                format!("DKIM selectors {}", list.replace(',', ", ")),
-                views::NOT_RECORDED.to_string(),
-                "the stored run shows until this run ends".to_string(),
-            ],
-        }),
+        Some(list) if shown.recorded && !matches!(shown.run_line, RunLineBody::Refusal { .. }) => {
+            RunLineBody::Line(RunLineView {
+                parts: vec![
+                    format!("DKIM selectors {}", list.replace(',', ", ")),
+                    views::NOT_RECORDED.to_string(),
+                    "the stored run shows until this run ends".to_string(),
+                ],
+            })
+        }
         _ => with_selectors(shown.run_line, selectors),
     };
     let run_line = run_line_part(&line)?;

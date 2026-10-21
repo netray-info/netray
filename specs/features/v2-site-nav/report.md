@@ -273,3 +273,10 @@ The frame (header, Inspectors menu, phone sheet, footer, container) matched on a
 ### Behavioural verification
 
 Live stack (`design_stack_up` with lens, the design fixtures): `/`, `/tools`, `/guide/csp`, `/privacy`, `/shop.example.com?dkim_selectors=s1,s2`, `/shop.example.com/email` answered 200 at 1280 and 390 px in both themes; `just design-check` clicked the Inspectors menu open on `/` and board M's menu open on `/shop.example.com` and measured both.
+
+## Review fixes
+
+| finding | fix | test |
+|---|---|---|
+| F1 refused selector run lost its refusal line on the 429 page | the "stored run shows" line applies only when the shown line is no refusal | `site_nav_selectors.rs` `c5_a_refused_selector_form_post_keeps_the_refusal_line` |
+| F2 no-entry evidence view without the IDN form | heading and title show both forms | `site_nav_idn.rs` `c5_an_evidence_view_without_an_entry_shows_both_forms` |
