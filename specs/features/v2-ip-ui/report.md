@@ -237,3 +237,7 @@ agent, certificate chains).
 | AMENDMENT | the explorer's summary "Commands for this address" mislabels the caller's own commands | fixed: "Commands" |
 | NIT | the explorer, styled as a protocol view, is a j/k stop though it is no evidence block | kept: one more stop between the card and the headers; the help text names evidence blocks |
 
+### Checks to build
+
+- `crates/web/tests/it/main.rs` mod lines in rustfmt order (`inspect_dns_review` before `inspect_dns_review3`): a `tests/repo` check, so a hand-sorted insert fails the gate's `cargo fmt --check` early with a clear message.
+

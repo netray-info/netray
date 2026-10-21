@@ -72,6 +72,7 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - The colour gate reads any island-test string holding `;` as CSS: write a newline in test markup as `\n`, never `&#10;` (`field` became a colour).
 - Island fixture goldens embed server text verbatim: keep it LF; a CRLF golden turns into LF on commit and fails CI.
 - A golden over live-run markup carries the wall clock: normalise it (`NOW` in `crates/web/tests/it/result_islands_fixtures.rs`), or the golden breaks at midnight.
+- A new line in `result_evidence.html` changes every islands fixture: put a conditional on an existing line, then regenerate with `UPDATE_GOLDEN=1`.
 - `HistoryStore::sweep` always keeps the head's predecessor: a swept-predecessor test needs a third entry as head.
 - A profile version that only adds checks re-scores a stored run to its old grade (`score_section` skips unweighted ids): the diff's grade split puts their effect on the domain step.
 - Judge a new graded header in `crates/http/src/module.rs`, not by changing `inspect/security.rs`: spectra's V1 wire serialises each `security.*.status`.
@@ -130,6 +131,7 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **An inspector under `/api/v1` runs on its module's `[modules.<x>]` state**; `[api.<x>]` holds only per-client limits (email adds its slots). Never build a second inspector state.
 - **An ip answer validates, then checks the seam, then charges**: a 400 or 503 costs no limiter; charge the per-IP limiter only through `charge_caller` (it feeds `X-RateLimit-Remaining` via a task-local).
 - **`netray_web::api::ip_host` serves `ip.`'s V1 paths** (`/country`, `/json`, `/ip/cidr` ...) and hands every other request back; the cutover mounts it before `ip_successor`.
+- **The IP inspector renders blocks, not the lookup document**: `ip.lookup` (card) and `ip.headers` (GET caller only); the IP view claims `ip.addresses` only to append the MaxMind attribution.
 - **Compose each new inspector onto the finished v1 document** (`api/compose.rs`, one step per part): composing it with the earlier parts renames a committed component and fails `openapi_contract`.
 - **A golden over prism's routes zeroes `latency_ms` and sorts hash-map-ordered lists** (authcompare's servers); capture it twice before committing.
 - **Outbound fetches of user- or domain-controlled URLs** go only through `netray_common::fetch`; never build a `reqwest::Client` for them. Checking and pinning live in its DNS resolver; reqwest keeps redirect handling.

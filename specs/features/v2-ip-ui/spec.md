@@ -1,7 +1,8 @@
 # Spec: v2-ip-ui
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-20
+Finished: 2026-10-21
 
 ## Goal
 
@@ -98,8 +99,9 @@ GeoLite2 attribution follows GeoIP-derived data wherever it is rendered, as its 
    `ip.lookup` and `ip.headers`, the band and check list, no share key. The answer carries
    `Cache-Control: private, no-store`. A refused admission, a timed-out lookup or an IP module
    that is off renders, with status 200, the caller's address as h1 and the reason as the notice
-   ("too many requests; try again in <n> s", "timed out", "IP lookups are unavailable"). (6.1,
-   6.5)
+   ("too many requests; try again in <n> s", "timed out", "IP lookups are unavailable"). A
+   prefetch or prerender of this GET answers 503 with `Cache-Control: no-store` and spends no token
+   and no lookup (speculation rules prerender `/inspect/*`). (6.1, 6.5)
 4. **Any address.** `?ip=X` keeps prefilling and autostarting (6.3); its job uses `lookup_with`
    with reverse DNS on and renders the same card without the caller-only parts (port, user agent,
    headers). A POST with empty input (a re-run) uses `lookup_caller_with` with reverse DNS on and
@@ -166,7 +168,8 @@ GeoLite2 attribution follows GeoIP-derived data wherever it is rendered, as its 
     text with "MaxMind" linked to `https://www.maxmind.com`; no template holds the text. It
     follows GeoIP-derived data: as the last element of the IP card; after every `ip.addresses`
     block wherever it renders (the evidence views `/<domain>/ip` and `/r/<id>/ip`, the result
-    page's IP tab and "All evidence" details), the block's markup otherwise the generic block's;
+    page's IP tab and "All evidence" details), the block's markup otherwise the generic block's
+    with its feeds line, as every claimed view renders it;
     after the compact IP table of the result page's IP tab, which exists only with that block;
     and at the end of an inspector part whose addresses carry IP badges. Without GeoIP data
     (no such block, no badge) nothing renders. (6.51)
@@ -179,7 +182,8 @@ GeoLite2 attribution follows GeoIP-derived data wherever it is rendered, as its 
     (caller with every fact, an IPv6 address, an address without reverse DNS, module off) at
     1280 px and 390 px, both themes, is read beside board G by a reader with no part in the
     build; every finding is a `report.md` row and is closed. At 390 px the document is not wider
-    than the viewport (the headers table and long commands scroll inside their section).
+    than the viewport (the headers table scrolls inside its section; a long command wraps inside
+    its card).
 
 ## Phase 1 — Blocks, caller on load and the address block
 
@@ -289,6 +293,9 @@ GIVEN the IP inspector at 390 px WHEN measured THEN the document is not wider th
   sub-headed grids (one anchor, one feeds line) and the raw user agent in a grid cell (a full-width
   cell is a `facts_grid` change, proposed) (implementer under the operator's autonomy mandate,
   2026-10-21).
+- Review of the feature range: requirements 3, 14 and 16 amended to what the work decided and
+  the report recorded (prefetch 503; the claimed `ip.addresses` keeps its feeds line; commands
+  wrap) (implementer under the operator's autonomy mandate, 2026-10-21).
 - The explorer is always open: the IP view cannot tell the caller's card from a looked-up one
   by its block, and on both pages the commands are the point (implementer under the operator's
   autonomy mandate, 2026-10-21).
