@@ -25,3 +25,18 @@ G1: C1, C8 · G2: C2 to C7, C9 to C20 (depends on G1; C14's block half is covere
 5. `crates/web/static/pages.css`: rules for `.dns-view*`, `.dns-type*`, `.dns-group*`, `.dns-bar*`, `.dns-record*` with G's tokens; panels hidden only under `[data-ready]`; wide content scrolls inside its card.
 6. `specs/sdd/v2.md` §6.1: a "Part views" bullet.
 7. `crates/web/tests/it/inspect_dns_jobs.rs` `c8_compare_and_auth_flags_stream_their_tables`: assert `id="ev-<id>"` and `class="dns-view"` instead of the generic table markup (ADLC-Test-Change).
+
+## Phase 2 — Servers tab, per-server view and tab badges
+
+### Groups
+
+G1: C1 to C9 (one fragment and its island; the files overlap).
+
+### Plan
+
+#### G1
+
+1. `crates/web/src/pages/views/dns.rs`: `ServerCard` gains per-type rows built from `dns.answers` (the server's answer per type: outcome words, records, the type's agreement); tab badge counts from the root's `diverge` and `unmeasured` and from the `dns.servers` children with `unmeasured` above zero.
+2. `crates/web/templates/partials/dns_view.html`: the root carries `data-island="dnsview"`; the "All servers" button; the Servers panel as `dns-server` cards with the hidden filter button; badges in the tab links.
+3. `crates/web/static/pages.css`: `.dns-server*`, `.dns-view__tab-badge` tones, `.dns-view__all`, `.dns-view [data-off] { display: none; }`.
+4. `crates/web/islands/src/dnsview.ts` (new) and `src/main.ts`: unhide the filter buttons; a click on `[data-server-filter]` sets or removes `data-server` on the root and `data-off` on non-matching `.dns-group__server` and `.dns-server`.

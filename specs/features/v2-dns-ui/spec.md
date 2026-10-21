@@ -142,8 +142,8 @@ runs render as structured views instead of key-value trees. The query input auto
    Without JavaScript the server cards are the per-server view. (2.16)
 10. **Tab badges.** The Results tab carries "<d> diverge" (warn tone) and "<u> not measured"
     (muted) when non-zero, and a pass mark otherwise; the Servers tab carries the number of
-    servers with an unmeasured lookup (warn tone), and a pass mark otherwise. Counts come from the
-    server; the island never counts. (2.43)
+    servers with an unmeasured lookup (warn tone), and a pass mark otherwise; a job that never
+    finished carries no pass mark. Counts come from the server; the island never counts. (2.43)
 
 ### Toggles, explain and details
 
@@ -328,6 +328,13 @@ GIVEN the DNS inspector at 390 px WHEN measured THEN the document is not wider t
   job's errors and warnings as the live part does (Rule M). An unfinished job's partial counts stay
   unshown: its cards hold every answer they count (implementer under the operator's autonomy
   mandate, 2026-10-21).
+- Phase 2 review: the server filter also hides an answer group none of whose servers is shown,
+  so another server's records do not stay on screen; a server that answers under two sources in
+  authcompare (a recursive and an authoritative server printing alike) gets a filter key with its
+  source and its card reads its own answers; an unfinished job carries no pass mark, since its
+  missing types are in no count; a server card without a name reads its address. Server record
+  data in the Servers tab stays plain: the Results tab carries its links and badges
+  (implementer under the operator's autonomy mandate, 2026-10-21).
 - The trace heading names no traced type and the shared-result notices of the draft are dropped:
   the traced type is not in the collected trace result and adding it would change the API's done
   event; the run line already shows the query. A multi-type `+trace` puts "Only the first type is

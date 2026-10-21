@@ -64,3 +64,49 @@ dns-type__badge" data-tone="warn">diverge
 dns-group__count">3 / 4 servers
 dns-group__count">1 / 4 servers
 ```
+
+## Phase 2 — Servers tab, per-server view and tab badges
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R8 one server card per server in summary order with transport, source, measured count, median and per type outcome and records; diverge marker per diverging type | green | crates/web/tests/it/dns_view_servers.rs |
+| C2 | R9 a server filter sets data-server on the result region and hides other servers' answers in both tabs; All servers resets; without JavaScript no filter | green | crates/web/islands/test/dnsview.test.ts, crates/web/tests/it/dns_view_servers.rs |
+| C3 | R10 Results tab carries d diverge and u not measured or the pass mark; Servers tab carries servers with an unmeasured lookup or the pass mark; counts from the server | green | crates/web/tests/it/dns_view_badges.rs |
+| C4 | S several servers give one card each in summary order with transport, measured and median | green | crates/web/tests/it/dns_view_servers.rs |
+| C5 | S a server with only errors shows no median and its lookups as not measured | green | crates/web/tests/it/dns_view_servers.rs |
+| C6 | S a diverging A type is marked divergent in every server card | green | crates/web/tests/it/dns_view_servers.rs |
+| C7 | S the filter button sets data-server; All servers removes it | green | crates/web/islands/test/dnsview.test.ts |
+| C8 | S one diverging and one unmeasured type give Results badges 1 diverge and 1 not measured | green | crates/web/tests/it/dns_view_badges.rs |
+| C9 | S every type agreeing gives the Results pass mark | green | crates/web/tests/it/dns_view_badges.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 2 | sonnet | 61684 | 97 |
+
+The plan was written by the orchestrator: one group, its files named by the Phase 1 view.
+
+### Review
+
+| class | finding | disposition |
+|---|---|---|
+| BLOCKER | the filter left other servers' answer groups visible in the Results tab | fixed: a group with no shown server is off too; test `islands/test/dnsview-review.test.ts` |
+| BLOCKER | in authcompare a recursive and an authoritative server printing alike shared one card answer and one filter key | fixed: such servers get a source-qualified filter key (`data-filter-key`), cards match source and transport; test `dns_view_review2.rs` |
+| AMENDMENT | an unfinished job showed pass marks on both tabs | requirement 10 amended, repaired: no pass mark when unfinished; test `an_unfinished_job_has_no_pass_mark` |
+| NIT | a nameless server card read the mhost string | fixed: it reads its address |
+| NIT | Servers tab record data has no links | kept: the Results tab carries them (Decision log) |
+| NIT | two test checks cannot fail (summary order found in the Results tab first; a must-not-contain needle) | noted |
+
+### Behavioural verification
+
+`curl -s -X POST --data-urlencode 'q=partial.example.net A AAAA @google' http://127.0.0.1:18533/inspect/dns/run` against the stub server:
+
+```
+dns-view__tab-badge" data-tone="muted">1 not measured
+dns-view__tab-badge" data-tone="warn">2 not measured
+dns-server__measured">1 / 2 measured
+dns-server__outcome">not measured: SERVFAIL
+```

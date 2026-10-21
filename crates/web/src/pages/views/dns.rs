@@ -164,6 +164,7 @@ struct RecordView {
 
 struct ServerView {
     server: String,
+    key: String,
     label: String,
     transport: Option<String>,
     source: Option<String>,
@@ -192,11 +193,29 @@ struct CardView {
 
 struct ServerCard {
     server: String,
+    key: String,
     label: String,
     transport: Option<String>,
     source: Option<String>,
     measured: String,
     median: Option<String>,
+    unmeasured: i64,
+    types: Vec<ServerType>,
+}
+
+/// One record type as one server answered it.
+struct ServerType {
+    record_type: String,
+    agreement: String,
+    diverge: bool,
+    outcome: Option<String>,
+    records: Vec<String>,
+}
+
+/// A tab badge: its tone and its words.
+struct TabBadge {
+    tone: &'static str,
+    label: String,
 }
 
 #[derive(Template)]
@@ -211,6 +230,8 @@ struct DnsView {
     table_anchors: Vec<String>,
     cards: Vec<CardView>,
     servers: Option<Vec<ServerCard>>,
+    results_badges: Vec<TabBadge>,
+    servers_badges: Vec<TabBadge>,
 }
 
 /// The agreement badge of a card: its tone and its words in `mode`.
@@ -254,6 +275,7 @@ fn groups(
     slowest: u64,
     id: &BlockId,
     decorate: Decorate<'_>,
+    shared: &BTreeSet<String>,
 ) -> Vec<GroupView> {
     let mut keyed: Vec<(GroupKey<'_>, Vec<&Answer>)> = Vec::new();
     for answer in answers {
@@ -308,6 +330,7 @@ fn groups(
             let servers = members
                 .iter()
                 .map(|m| ServerView {
+                    key: server_key(&m.server, m.source.as_deref(), shared),
                     server: m.server.clone(),
                     label: m
                         .name
@@ -487,7 +510,7 @@ pub(super) fn render_part(blocks: &[Block], ctx: &ViewContext<'_>) -> Option<Par
             "dns.answers" => true,
             "dns.servers" => match &block.shape {
                 Shape::Tree(node) => {
-                    servers = Some(server_cards(node));
+                    servers = Some(server_cards(node, &types));
                     true
                 }
                 _ => false,
@@ -536,6 +559,7 @@ pub(super) fn render_part(blocks: &[Block], ctx: &ViewContext<'_>) -> Option<Par
         })
         .collect();
     by_slowest.sort_by_key(|(_, ms)| std::cmp::Reverse(*ms));
+    let shared = shared_servers(&types);
     let cards = types
         .iter()
         .enumerate()
@@ -549,7 +573,7 @@ pub(super) fn render_part(blocks: &[Block], ctx: &ViewContext<'_>) -> Option<Par
                 rank: by_slowest.iter().position(|(j, _)| *j == i).unwrap_or(i) + 1,
                 tone,
                 badge,
-                groups: groups(&t.answers, slowest, &answers.id, ctx.decorate),
+                groups: groups(&t.answers, slowest, &answers.id, ctx.decorate, &shared),
             }
         })
         .collect();
@@ -561,6 +585,38 @@ pub(super) fn render_part(blocks: &[Block], ctx: &ViewContext<'_>) -> Option<Par
     if !finished {
         notices.push("The query ended before every server answered".to_string());
     }
+    let results_badges = match (
+        int(&root.fields, "diverge"),
+        int(&root.fields, "unmeasured"),
+    ) {
+        // A job that never finished is not clean: its missing types are in no count.
+        (0, 0) if finished => vec![pass_badge()],
+        (0, 0) => Vec::new(),
+        (diverge, unmeasured) => [
+            (diverge, "warn", "diverge"),
+            (unmeasured, "muted", "not measured"),
+        ]
+        .into_iter()
+        .filter(|(n, ..)| *n > 0)
+        .map(|(n, tone, words)| TabBadge {
+            tone,
+            label: format!("{n} {words}"),
+        })
+        .collect(),
+    };
+    let servers_badges = servers
+        .as_ref()
+        .map(
+            |cards| match cards.iter().filter(|c| c.unmeasured > 0).count() {
+                0 if finished => vec![pass_badge()],
+                0 => Vec::new(),
+                n => vec![TabBadge {
+                    tone: "warn",
+                    label: format!("{n} not measured"),
+                }],
+            },
+        )
+        .unwrap_or_default();
     let html = DnsView {
         mode,
         summary: finished.then(|| summary_line(&root.fields)),
@@ -571,34 +627,88 @@ pub(super) fn render_part(blocks: &[Block], ctx: &ViewContext<'_>) -> Option<Par
         table_anchors,
         cards,
         servers,
+        results_badges,
+        servers_badges,
     }
     .render()
     .ok()?;
     Some(PartView { html, claimed })
 }
 
-/// One card per server summary of `dns.servers`.
-fn server_cards(root: &Node) -> Vec<ServerCard> {
+/// The key the server filter matches on: the server, after its source in authcompare, where a
+/// recursive and an authoritative server can print alike.
+fn server_key(server: &str, source: Option<&str>, shared: &BTreeSet<String>) -> String {
+    match source {
+        Some(source) if shared.contains(server) => format!("{source} {server}"),
+        _ => server.to_string(),
+    }
+}
+
+/// The servers that answer under more than one source.
+fn shared_servers(types: &[TypeAnswers]) -> BTreeSet<String> {
+    let mut sources: std::collections::BTreeMap<&str, BTreeSet<Option<&str>>> =
+        std::collections::BTreeMap::new();
+    for a in types.iter().flat_map(|t| t.answers.iter()) {
+        sources
+            .entry(a.server.as_str())
+            .or_default()
+            .insert(a.source.as_deref());
+    }
+    sources
+        .into_iter()
+        .filter(|(_, s)| s.len() > 1)
+        .map(|(server, _)| server.to_string())
+        .collect()
+}
+
+fn pass_badge() -> TabBadge {
+    TabBadge {
+        tone: "pass",
+        label: "✓".to_string(),
+    }
+}
+
+/// One card per server summary of `dns.servers`, with that server's answer per record type.
+fn server_cards(root: &Node, types: &[TypeAnswers]) -> Vec<ServerCard> {
+    let shared = shared_servers(types);
     root.children
         .iter()
         .map(|s| {
             let f = &s.fields;
             let server = text(f, "server").unwrap_or_default();
+            let source = text(f, "source");
+            let transport = text(f, "transport");
+            let unmeasured = int(f, "unmeasured");
+            let mut address = None;
+            let type_rows = types
+                .iter()
+                .filter_map(|t| {
+                    let answer = t.answers.iter().find(|a| {
+                        a.server == server && a.source == source && a.transport == transport
+                    })?;
+                    address = address.take().or_else(|| answer.address.clone());
+                    Some(ServerType {
+                        record_type: t.record_type.clone(),
+                        agreement: t.agreement.clone(),
+                        diverge: t.agreement == "diverge",
+                        outcome: outcome_text(answer),
+                        records: answer.records.iter().map(|r| r.data.clone()).collect(),
+                    })
+                })
+                .collect();
             ServerCard {
-                label: text(f, "name").unwrap_or_else(|| server.clone()),
+                label: text(f, "name")
+                    .or(address)
+                    .unwrap_or_else(|| server.clone()),
+                key: server_key(&server, source.as_deref(), &shared),
                 server,
-                transport: text(f, "transport"),
-                source: text(f, "source"),
-                measured: match int(f, "unmeasured") {
-                    0 => format!("{} / {} measured", int(f, "measured"), int(f, "lookups")),
-                    u => format!(
-                        "{} / {} measured · {u} not measured",
-                        int(f, "measured"),
-                        int(f, "lookups")
-                    ),
-                },
+                transport,
+                source,
+                measured: format!("{} / {} measured", int(f, "measured"), int(f, "lookups")),
                 median: duration(f, "median_response_time")
                     .map(|ms| display_value(&Value::Duration(ms))),
+                unmeasured,
+                types: type_rows,
             }
         })
         .collect()
