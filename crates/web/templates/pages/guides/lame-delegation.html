@@ -62,7 +62,7 @@ dig example.com NS</code></pre>
 
   <section class="guide-tool">
     <h2>Check NS records and delegation consistency</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://dns.netray.info/", "q", "example.com NS", "Check")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/dns", "q", "example.com NS", "Check")) %}{% endcall %}
     <p class="guide-tool__hint">Queries NS records from both parent and child zones and flags lame delegations and consistency issues.</p>
   </section>
 

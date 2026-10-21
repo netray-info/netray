@@ -112,8 +112,11 @@ fn entry_page_holds_its_parts_in_order() {
     assert_eq!(html.matches(r#"<article class="check-row""#).count(), 2);
     assert!(html.contains("<title>a.example.com · B</title>"));
     assert!(html.contains(r#"property="og:title" content="a.example.com · B""#));
-    assert!(html.contains(r#"property="og:image" content="/r/Ab3dE6gH/og.png""#));
-    assert!(html.contains(r#"property="og:url" content="/r/Ab3dE6gH""#));
+    assert!(
+        html.contains(r#"property="og:image" content="https://netray.info/r/Ab3dE6gH/og.png""#)
+    );
+    assert!(html.contains(r#"property="og:url" content="https://netray.info/r/Ab3dE6gH""#));
+    assert!(html.contains(r#"<link rel="canonical" href="https://netray.info/r/Ab3dE6gH">"#));
 }
 
 #[test]

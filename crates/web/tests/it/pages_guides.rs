@@ -199,7 +199,7 @@ async fn guide_index_lists_every_guide_grouped_in_v1_order() {
             .unwrap_or_else(|| panic!("heading for category {cat:?} after byte {cursor}"));
         cursor = heading_pos;
         for slug in slugs {
-            let link = format!(r#"href="https://netray.info/guide/{slug}""#);
+            let link = format!(r#"href="/guide/{slug}""#);
             let pos = body[cursor..]
                 .find(&link)
                 .unwrap_or_else(|| panic!("{link} under {cat:?}, in order"));

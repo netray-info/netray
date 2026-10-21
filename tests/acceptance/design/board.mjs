@@ -36,6 +36,8 @@ export async function measureBoard(exportPage, board, outDir) {
   if (handle === null) throw new Error(`board "${board.title}" not found in the export`);
 
   const frame = await handle.contentFrame();
+  // A board state behind a control (board M's menu sheet) is opened before it is measured.
+  if (board.click?.board) await frame.locator(board.click.board).first().click();
   const height = await frame.evaluate(() => document.documentElement.scrollHeight);
   await handle.evaluate((f, h) => {
     f.style.border = '0';

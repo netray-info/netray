@@ -49,22 +49,33 @@ pub(super) fn query_view(value: Option<String>) -> QueryInputView {
     }
 }
 
+/// What the 404 page answers: no page, a refused domain name or a refused selector list.
+#[derive(PartialEq)]
+enum Refused {
+    Nothing,
+    Domain,
+    Selectors,
+}
+
 fn not_found_page(
     status: StatusCode,
     value: Option<String>,
-    invalid: bool,
+    refused: Refused,
     reason: Option<String>,
 ) -> Response {
-    let (title, description) = if invalid {
-        (
+    let (title, description) = match refused {
+        Refused::Domain => (
             "Not a domain name - netray",
             "That is not a domain name. Enter one, e.g. example.com.",
-        )
-    } else {
-        (
+        ),
+        Refused::Selectors => (
+            "Not a list of DKIM selectors - netray",
+            "That is not a list of DKIM selectors.",
+        ),
+        Refused::Nothing => (
             "Page not found - netray",
             "There is no page here. Enter a domain name to check it.",
-        )
+        ),
     };
     page(
         status,
@@ -72,9 +83,21 @@ fn not_found_page(
         &NotFoundPage {
             frame: Frame::new(title, description, "/"),
             query: query_view(value),
-            invalid,
+            invalid: refused == Refused::Domain,
             reason,
         },
+    )
+}
+
+/// The 400 page of a refused `dkim_selectors` list on `domain`'s page: the domain refilled.
+pub(super) fn selectors_refused_page(domain: &str, detail: &str) -> Response {
+    not_found_page(
+        StatusCode::BAD_REQUEST,
+        Some(domain.to_string()),
+        Refused::Selectors,
+        Some(format!(
+            "A DKIM selector list is 1 to 5 names of letters, digits and hyphens, separated by commas. This one was refused: {detail}."
+        )),
     )
 }
 
@@ -83,14 +106,14 @@ pub(super) fn refused_page(input: &str, reason: &str) -> Response {
     not_found_page(
         StatusCode::BAD_REQUEST,
         Some(input.to_string()),
-        true,
+        Refused::Domain,
         Some(reason.to_string()),
     )
 }
 
 /// The 404 page.
 pub async fn not_found() -> Response {
-    not_found_page(StatusCode::NOT_FOUND, None, false, None)
+    not_found_page(StatusCode::NOT_FOUND, None, Refused::Nothing, None)
 }
 
 /// The 500 page; a plain-text body when even that does not render.
@@ -157,6 +180,11 @@ pub async fn query_redirect(uri: Uri) -> Response {
             }
             secure((StatusCode::MOVED_PERMANENTLY, [(LOCATION, location)]).into_response())
         }
-        None => not_found_page(StatusCode::BAD_REQUEST, Some(raw.clone()), true, None),
+        None => not_found_page(
+            StatusCode::BAD_REQUEST,
+            Some(raw.clone()),
+            Refused::Domain,
+            None,
+        ),
     }
 }

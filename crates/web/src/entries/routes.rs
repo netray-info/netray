@@ -88,7 +88,10 @@ pub(crate) fn well_formed(id: &str) -> bool {
 
 fn page(status: StatusCode, html: askama::Result<String>) -> Response {
     match html {
-        Ok(body) => (status, [(CONTENT_TYPE, HTML), (CACHE_CONTROL, CACHE)], body).into_response(),
+        // The pages' security headers: the frame's one inline script is allowed by its hash.
+        Ok(body) => crate::pages::headers::secure(
+            (status, [(CONTENT_TYPE, HTML), (CACHE_CONTROL, CACHE)], body).into_response(),
+        ),
         Err(e) => {
             tracing::error!(error = %e, "entry page render failed");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()

@@ -8,7 +8,7 @@ use axum::http::header::LOCATION;
 use axum::response::{IntoResponse, Response};
 
 use super::jsonld::{Article, BreadcrumbList, script_json};
-use super::{Frame, SPECULATION_RULES, errors, page};
+use super::{Frame, ORIGIN, SPECULATION_RULES, errors, page};
 use crate::components::QueryInputView;
 
 const CACHE: &str = "public, max-age=3600";
@@ -502,7 +502,7 @@ pub async fn show(slug: Result<Path<String>, PathRejection>) -> Response {
     let Some(guide) = find(&slug) else {
         return errors::not_found().await;
     };
-    let url = format!("https://netray.info/guide/{}", guide.slug);
+    let url = format!("{ORIGIN}/guide/{}", guide.slug);
     let mut ld = vec![script_json(&Article::new(
         guide.title,
         guide.description,
@@ -510,8 +510,8 @@ pub async fn show(slug: Result<Path<String>, PathRejection>) -> Response {
     ))];
     if BREADCRUMBS.contains(&guide.slug) {
         ld.push(script_json(&BreadcrumbList::new(&[
-            ("Home", Some("https://netray.info/")),
-            ("Guides", Some("https://netray.info/guide/")),
+            ("Home", Some(&format!("{ORIGIN}/"))),
+            ("Guides", Some(&format!("{ORIGIN}/guide/"))),
             (guide.title, None),
         ])));
     }
@@ -519,8 +519,9 @@ pub async fn show(slug: Result<Path<String>, PathRejection>) -> Response {
         title: format!("{} - netray", guide.title),
         description: guide.description.to_string(),
         canonical: format!("/guide/{}", guide.slug),
-        og_image: format!("https://netray.info/static/og/{}", guide.og_image),
+        og_image: format!("{ORIGIN}/static/og/{}", guide.og_image),
         rules: SPECULATION_RULES,
+        nav: "",
     };
     let related = guide.related.iter().filter_map(|s| find(s)).collect();
     render(frame, guide, related, ld)
@@ -544,8 +545,8 @@ pub async fn index() -> Response {
         }
     }
     let ld = vec![script_json(&BreadcrumbList::new(&[
-        ("netray.info", Some("https://netray.info")),
-        ("Guides", Some("https://netray.info/guide/")),
+        ("netray.info", Some(&format!("{ORIGIN}/"))),
+        ("Guides", Some(&format!("{ORIGIN}/guide/"))),
     ]))];
     let frame = Frame::new(
         "All Guides - netray",

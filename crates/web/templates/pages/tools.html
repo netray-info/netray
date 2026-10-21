@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% import "components/query_input.html" as c %}
+{% block main %}
+<h1>Inspectors</h1>
+<p>Each inspector runs one protocol's checks live and shows the evidence as it arrives.</p>
+<div class="tool-cards">
+{% for t in cards %}<article class="tool-card">
+<h2>{{ t.name }}</h2>
+<p class="tool-card__tagline">{{ t.tagline }}</p>
+<p>{{ t.what }}</p>
+<p class="tool-card__takes">{{ t.takes }}</p>
+{% call c::query_input(t.query) %}{% endcall %}
+<a href="/inspect/{{ t.tool }}">Open the {{ t.name }} →</a>
+</article>
+{% endfor %}</div>
+<h2>Featured guides</h2>
+<ul class="tool-guides">
+{% for t in cards %}{% for g in t.guides %}<li><a href="/guide/{{ g.slug }}">{{ g.title }}</a></li>
+{% endfor %}{% endfor %}</ul>
+<p>Every inspector also answers over the API: <a href="/api/v1/docs">API docs</a>.</p>
+{% endblock %}

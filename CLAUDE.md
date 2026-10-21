@@ -155,6 +155,10 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **A new table inside `main` inherits `main th, main td`** (muted cells, a bottom rule): override colour and borders in its own rules.
 - **A browser breaks after a hyphen**: to break a domain only at its dots, wrap each label in an inline-block box (`.result-hero__label`).
 - **Identifier-valued CSS properties** (`grid-area`, `transition`) go into `IDENTIFIER_PROPERTIES` in `crates/web/src/gate.rs`, or the gate refuses colour words in them.
+- **Absolute URLs come from `pages::ORIGIN`**; in-page links are apex-relative (`/inspect/<tool>`). `tests/repo/test_no_absolute_apex.sh` refuses a `netray.info` literal in `crates/web/{templates,src,islands/src}`.
+- **The gate's colour words include CSS system colours** (`menu`, `canvas`, `field`): an island or class named so is refused as a colour literal (the header menu island is `nav-menu`). A class starting `grade-` belongs to the grade component (the home legend is `score-key`).
+- **The expired-entry page inlines its sheet** (`entries/render.rs` `stylesheet`): a frame rule it needs (the footer) lives in `pages.css`, which that sheet appends.
+- **A design board state behind a control** is measured with the manifest's `click` (`{"board": …, "page": …}`): board M's menu sheet, the open Inspectors menu.
 - **`site/` is frozen until v2-cutover; content changes go to netray-web:** guide prose to `crates/web/templates/pages/guides/`, guide titles and descriptions to `crates/web/src/pages/guides.rs`, compare rows to `crates/web/compare.toml`.
 
 ## Rules

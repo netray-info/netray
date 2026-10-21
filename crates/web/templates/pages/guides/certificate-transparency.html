@@ -49,7 +49,7 @@
 
   <section class="guide-tool">
     <h2>Inspect your certificate's CT records</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://tls.netray.info/", "h", "example.com", "Inspect")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/tls", "h", "example.com", "Inspect")) %}{% endcall %}
     <p class="guide-tool__hint">Shows SCT count, certificate chain, and full TLS inspection for your domain.</p>
   </section>
 

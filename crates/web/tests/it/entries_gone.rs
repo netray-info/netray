@@ -22,8 +22,13 @@ fn without_style(html: &str) -> String {
 }
 
 /// Every hostname-looking token (`label.tld`, tld of two or more letters) outside the style element.
+/// The host names of the page outside the site footer (whose GitHub link is the project's).
 fn hostnames(html: &str) -> Vec<String> {
-    without_style(html)
+    let html = match (html.find("<footer"), html.find("</footer>")) {
+        (Some(a), Some(b)) => format!("{}{}", &html[..a], &html[b..]),
+        _ => html.to_string(),
+    };
+    without_style(&html)
         .split(|c: char| !(c.is_ascii_alphanumeric() || c == '.' || c == '-'))
         .map(|t| t.trim_matches(|c| c == '.' || c == '-'))
         .filter(|t| {
