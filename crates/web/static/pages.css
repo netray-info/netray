@@ -1443,9 +1443,10 @@ main td {
   width: 100%;
   height: 10px;
 }
-.tls-validity__track { fill: var(--color-line); }
-.tls-validity__elapsed { fill: var(--status-pass-mark); }
-.tls-validity__warn { fill: var(--status-warn-mark); }
+/* board G: a pale pass track, the elapsed part in the pass line, the last days a pale amber zone */
+.tls-validity__track { fill: var(--status-pass-mark); fill-opacity: 0.25; }
+.tls-validity__elapsed { fill: var(--status-pass-mark); fill-opacity: 1; }
+.tls-validity__warn { fill: var(--status-warn-mark); fill-opacity: 0.3; }
 .tls-validity[data-state="expired"] .tls-validity__track,
 .tls-validity[data-state="expired"] .tls-validity__elapsed,
 .tls-validity[data-state="expired"] .tls-validity__warn { fill: var(--status-fail-mark); }
@@ -1494,6 +1495,8 @@ main td {
   list-style: none;
 }
 .tls-chain__pill {
+  /* the arrow before a pill hangs outside its border, so a wrapped row never ends in an arrow */
+  position: relative;
   padding: 6px 12px;
   border: var(--line-hair) solid var(--color-line);
   border-radius: var(--radius-max);
@@ -1505,14 +1508,31 @@ main td {
   border-style: dashed;
   color: var(--color-muted);
 }
+.tls-chain__pill:has(> .tls-chain__arrow) {
+  margin-inline-start: var(--space-5);
+}
 .tls-chain__arrow {
+  position: absolute;
+  right: 100%;
+  padding-inline-end: var(--space-2);
   color: var(--color-muted);
+}
+.tls-chain__verdict {
+  list-style: none;
 }
 .tls-chain__crtsh,
 .tls-chain__from {
   margin-inline-start: var(--space-1);
   color: var(--color-muted);
   font-size: var(--font-size-label);
+}
+@media (max-width: 480px) {
+  /* a 44 px tap target at phone width, as the shell's value links */
+  .tls-chain__crtsh {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
 }
 .tls-chain__trust {
   font-family: var(--font-sans);
@@ -1530,6 +1550,7 @@ main td {
   cursor: pointer;
 }
 .tls-notices {
+  margin-top: var(--space-6);
   margin-bottom: var(--space-4);
   padding: var(--space-3) var(--space-4);
   border: var(--line-hair) solid var(--status-warn-mark);
@@ -1571,12 +1592,25 @@ main td {
   font: inherit;
   cursor: pointer;
 }
+.protocol-view__card > .tls-addresses__scroll,
+.protocol-view__card > .tls-protocols {
+  /* board G draws the table and the grid as the card itself: they run to its edges */
+  margin: -18px -18px 0;
+  border: 0;
+}
+.protocol-view__card > .tls-addresses__scroll + *,
+.protocol-view__card > .tls-protocols + * {
+  margin-top: 18px;
+}
 .tls-protocols {
+  /* board G's 1 px rules between cells; drawn by the cells, so an unfilled last row stays the
+     card's surface instead of a grey block */
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: var(--line-hair);
   border: var(--line-hair) solid var(--color-line);
-  background: var(--color-line);
+  background: var(--color-surface);
+  overflow: hidden;
 }
 .tls-protocols__cell {
   display: grid;
@@ -1585,6 +1619,8 @@ main td {
   column-gap: var(--space-3);
   padding: 12px 16px;
   background: var(--color-surface);
+  outline: var(--line-hair) solid var(--color-line);
+  align-content: center;
 }
 .tls-protocols__bar {
   grid-row: span 2;
@@ -1598,7 +1634,7 @@ main td {
 .tls-protocols__name {
   color: var(--color-ink);
   font-size: var(--font-size-text);
-  font-weight: var(--font-weight-strong);
+  font-weight: 600; /* board G's cell name; as the submit button, no token holds 600 */
 }
 .tls-protocols__state {
   color: var(--color-muted);
@@ -1866,5 +1902,21 @@ main td {
   .ip-headers__summary {
     min-height: 44px;
     line-height: 44px;
+  }
+}
+
+/* board G: the address in bold; the shell's link keeps its underline */
+.tls-addresses__address .evidence-value__link {
+  font-weight: inherit;
+}
+/* the copy control sits on the value's line at desktop width; a 44 px target at phone width */
+[data-block^="tls.chain"] .inspector-copy {
+  min-height: 0;
+  padding-block: 0;
+  vertical-align: baseline;
+}
+@media (max-width: 480px) {
+  [data-block^="tls.chain"] .inspector-copy {
+    min-height: 44px;
   }
 }

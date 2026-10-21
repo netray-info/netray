@@ -111,6 +111,7 @@
   flex: 999 1 320px;
 }
 .port-chooser {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -123,8 +124,13 @@
   display: none;
 }
 .port-chooser__label {
+  /* board G: "Ports" stands on the "Host" label's line, above the toggles */
+  position: absolute;
+  bottom: 100%;
+  margin-bottom: var(--space-2);
   color: var(--color-muted);
   font-size: var(--font-size-label);
+  white-space: nowrap;
 }
 .port-chooser__toggles,
 .port-chooser__menu {
@@ -182,4 +188,11 @@
   margin: 0;
   color: var(--color-ink);
   font-size: var(--font-size-label);
+}
+@media (max-width: 480px) {
+  /* the chooser wraps under the host field: its label returns above its toggles */
+  .port-chooser__label {
+    position: static;
+    margin-bottom: 0;
+  }
 }

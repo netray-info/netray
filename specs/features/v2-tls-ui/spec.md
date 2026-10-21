@@ -414,6 +414,11 @@ GIVEN the TLS inspector at 390 px WHEN measured THEN the document is not wider t
   no memo across runs, names expiry only for a changed date and lower-cases the host in its key.
   The copy buttons reuse the shell's `.inspector-copy` primitive that v2-ip-ui built (implementer
   under the operator's autonomy mandate, 2026-10-21).
+- Phase 6 reading beside board G: rebuilt the Ports label's line, edge-to-edge table and grid,
+  bold addresses, the copy controls' rhythm, the trust text in the chain row, centred protocol
+  cells, hanging chain arrows, the banner's gap and no amber caption on an expired bar; kept the
+  marker rule, the nothing-lost notes and disclosures, Rule M absences and the 44 px phone targets
+  (report.md V1–V25) (implementer under the operator's autonomy mandate, 2026-10-21).
 - The design check's live TLS board needs network: a binary built in a worktree gets none here,
   so `netray_bin` honours `NETRAY_BIN`, and the gate runs with this branch's build copied to the
   main checkout's target path (backed up and restored) (implementer under the operator's autonomy

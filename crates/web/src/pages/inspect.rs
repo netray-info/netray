@@ -659,6 +659,8 @@ struct PartFragment {
     band: Option<String>,
     html: Option<String>,
     text: String,
+    /// The part's heading is for screen readers only: its view heads its own sections (board G).
+    quiet: bool,
 }
 
 /// A part shown as a port panel: its tab name and its own band region.
@@ -1340,6 +1342,9 @@ fn part_html(
         }
         Err(text) => (None, text.clone()),
     };
+    let quiet = result
+        .as_ref()
+        .is_ok_and(|blocks| views::tls_port_view(blocks));
     let label = label.to_string();
     let (panel, band) = match panel {
         Some(Panel { name, band }) => (Some(name), band),
@@ -1352,6 +1357,7 @@ fn part_html(
         band,
         html,
         text,
+        quiet,
     })
     .render()
     .ok()

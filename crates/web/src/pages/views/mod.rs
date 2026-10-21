@@ -9,7 +9,7 @@ mod ip;
 mod tls;
 pub mod validity;
 
-pub use tls::{tls_band_part, tls_related_summary, tls_starttls};
+pub use tls::{tls_band_part, tls_port_view, tls_related_summary, tls_starttls};
 
 pub(crate) use ip::attribution;
 

@@ -251,3 +251,79 @@ that kept the first mount's DOM) and were corrected; the review fixes were made 
 TLS inspector for `1.1.1.1:443` with the copy buttons beside Subject, Alternative names, Issuer,
 Serial, SHA-256 and SHA-1 (`target/design/d3-tls-inspector-light-page.png`); the banner logic runs
 in happy-dom (`certdiff.test.ts`, 17 tests).
+
+## Phase 6 — Design gate and visual reading
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R19 the manifest measures G's and GDark's port chooser, addresses table, certificate section, protocols grid; design-check exits 0; the reader's findings are rows and closed; 390 px without sideways scroll | green | design-check, reading below |
+| C2 | S design-check exits 0 with the TLS elements of G and GDark | green | design-check |
+| C3 | S every finding of the reading beside board G is a report row and none stays open | green | reading below |
+| C4 | S the TLS inspector at 390 px is not wider than the viewport | green | scratchpad `tlsui/shots.mjs` |
+
+### Design check
+
+`just design-check` with this branch's build at the main checkout's target path (scratchpad
+`tlsui/dc.sh`; a worktree binary gets no network here): `0 open deviation(s), 0 stale accepted
+entries`; 14 boards, 1026 elements, 1925 properties in the manifest. New rows, 35 per board on G
+and GDark (netray.info `specs/design/canvas/manifest.json`): ports label, pressed and offered port
+toggles, the add button, the addresses head and address cell, validity label, bar and caption, the
+certificate facts grid with label and value, a chain pill, the trust text, a protocols cell with
+name and state. The related box is not measured: the board's live target is an IP address
+(`1.1.1.1:443`), which has no DNS records to relate. Rebuilt during the check: the protocols cell
+name weight 600 (board).
+
+### Visual reading beside board G
+
+A reader with no part in the build compared the live run of `1.1.1.1:443` (1280 and 390 px, light
+and dark), a two-port live run (`1.1.1.1:443,853`), and stored runs with differing leaves and an
+expired leaf (evidence view, crafted fixtures) with boards 17 and 18.
+
+| id | finding | status | disposition |
+|---|---|---|---|
+| V1 | "Ports" sat about 23 px below "Host" | green | rebuilt: the label stands on the Host label's line; at phone width it returns above the toggles |
+| V2 | the pressed toggle's bar is its left border, not an inset bar | green | kept: the marker is one rule in base.css (frontend-rules §4); an inset bar would be a second marker |
+| V3 | the addresses table sat inset in a padded card | green | rebuilt: the table runs to the card's edges |
+| V4 | a note "Port 443 · handshake …" and the feeds line under the table | green | kept: requirement 4 (nothing lost) and v2-http-ui requirement 2 |
+| V5 | the address in a lighter weight with an underline | green | rebuilt: weight 700; the underline is the shell's address link (v2-inspector-shell requirement 19) |
+| V6 | copy buttons opened gaps in the facts' rhythm | green | rebuilt: at desktop width the copy control sits on the value's line; 44 px only at phone width |
+| V7 | the trust text on its own line | green | rebuilt: it follows the last pill in the chain row |
+| V8 | crt.sh links on pills and the dashed trust-store pill | green | kept: requirement 9 (3.14, 3.19) |
+| V9 | the "Chain certificates" disclosure | green | kept: requirement 9, nothing lost |
+| V10 | the protocols grid sat inset in a padded card | green | rebuilt: the grid runs to the card's edges |
+| V11 | cells in a row with a wrapped cell pushed their state to the bottom | green | rebuilt: name and state stay together, centred as on the board |
+| V12 | no ECH cell for the IP target | green | kept: the HTTPS lookup failed (DNS blocked locally), so `ech` is absent (Rule M) |
+| V13 | Forward secrecy carries a neutral bar | green | kept: `weak_suites` warns on CBC, and a bar never contradicts its cell (requirement 10) |
+| V14 | an unfilled last row | green | kept: the probe data adds cells beyond G's eight (decision log); the remainder is the card's surface |
+| V15 | the "Probe answers" disclosure | green | kept: requirement 10, nothing lost |
+| V16 | no related box in the evidence view | green | not this view: the box is the inspector's (requirement 12); the evidence view frame is v2-inspectors' |
+| V17 | an unstyled "Explore live" address list in the evidence view | green | not this feature: the evidence view frame |
+| V18 | a lone "HTTPS" link above Addresses in the evidence view | green | not this feature: the shared-evidence line (R29) of the evidence view |
+| V19 | the notices banner nearly touched the check list in a panel | green | rebuilt: the banner keeps a section gap above it |
+| V20 | the addresses table is cut at 390 px | green | kept: it scrolls inside its card, as board G's table does (`overflow-x: auto`, min-width 720 px) |
+| V21 | wide gaps between wrapped SAN links at 390 px | green | kept: each SAN is a link with the shell's 44 px phone target |
+| V22 | an arrow dangled at a row's end | green | rebuilt: the arrow hangs before its pill, outside the border, so a row never ends in one |
+| V23 | the centre validity label reached the card padding at 390 px | green | kept: within the card; no overflow (scroll width 390) |
+| V24 | an expired bar still showed the amber caption | green | rebuilt: no caption for an expired leaf |
+| V25 | the HSTS link wraps | green | kept: the cell's state is the link text |
+
+Rebuilt after the reading; `just design-check` again: `0 open deviation(s), 0 stale accepted entries`.
+
+### Behavioural verification
+
+Document width and tap targets (Playwright, scratchpad `tlsui/shots.mjs`, lens on the main
+checkout's target path):
+
+```
+live 1280 light/dark: scrollWidth 1280 viewport 1280
+live 390 light/dark: scrollWidth 390 viewport 390
+two-ports 1280 light: scrollWidth 1280 viewport 1280
+differs 1280/390 light/dark: scrollWidth = viewport
+expired 1280/390 light/dark: scrollWidth = viewport
+```
+
+The crt.sh links measured 13 px tall at 390 px and now have a 44 px phone target. A three-port run
+with a STARTTLS port needs DNS for a mail host, blocked locally; the panels are verified with the
+two-port live run and `inspect_tls_panels.rs`.

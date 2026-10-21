@@ -747,6 +747,11 @@ pub fn tls_band_part(labels: &[String]) -> Option<usize> {
     ports.iter().find(|(_, p)| *p == band).map(|(n, _)| *n)
 }
 
+/// Whether the TLS port view renders these blocks: its sections carry their own headings.
+pub fn tls_port_view(blocks: &[Block]) -> bool {
+    !taken(blocks).is_empty()
+}
+
 /// Whether a TLS port's handshake ran over STARTTLS.
 pub fn tls_starttls(blocks: &[Block]) -> bool {
     blocks
