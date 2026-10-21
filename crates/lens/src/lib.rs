@@ -420,7 +420,7 @@ async fn robots_txt() -> impl axum::response::IntoResponse {
             axum::http::header::CONTENT_TYPE,
             "text/plain; charset=utf-8",
         )],
-        "User-agent: *\nAllow: /\n",
+        netray_web::pages::robots_body(),
     )
 }
 

@@ -48,7 +48,7 @@
       <li><strong>MTA-STS</strong>: TXT record at <code>_mta-sts.&lt;domain&gt;</code> plus HTTPS policy file</li>
       <li><strong>BIMI</strong>: TXT record at <code>default._bimi.&lt;domain&gt;</code> for brand indicators</li>
     </ul>
-    <p>Use <a href="https://email.netray.info">netray's email checks</a> for a full scored analysis — it evaluates SPF, DKIM, DMARC, MTA-STS, DANE, BIMI, and DNSBL and produces an A–F grade with per-category verdicts. The DNS inspector's <code>+check</code> mode is useful for raw record inspection and DNS-level lint rules (e.g. flagging multiple SPF records or a malformed DMARC tag).</p>
+    <p>Use <a href="/inspect/email">netray's email checks</a> for a full scored analysis — it evaluates SPF, DKIM, DMARC, MTA-STS, DANE, BIMI, and DNSBL and produces an A–F grade with per-category verdicts. The DNS inspector's <code>+check</code> mode is useful for raw record inspection and DNS-level lint rules (e.g. flagging multiple SPF records or a malformed DMARC tag).</p>
 
     <h2>BIMI: brand indicators in email</h2>
     <p>Brand Indicators for Message Identification (BIMI) allows organizations to display their logo next to authenticated emails in supporting email clients (Gmail, Apple Mail, Yahoo Mail, and others). BIMI builds on top of DMARC: only messages that pass DMARC authentication with a policy of <code>p=quarantine</code> or <code>p=reject</code> are eligible to display the logo.</p>
@@ -93,13 +93,13 @@
 
   <section class="guide-tool">
     <h2>Check email security with netray</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://email.netray.info/", "domain", "example.com", "Check")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/email", "d", "example.com", "Check")) %}{% endcall %}
     <p class="guide-tool__hint">Scores SPF, DKIM, DMARC, MTA-STS, DANE, BIMI, and DNSBL. Returns an A–F grade with per-category verdicts.</p>
   </section>
 
   <section class="guide-tool">
     <h2>Inspect raw DNS records with the DNS inspector</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://dns.netray.info/", "q", "example.com +check", "Inspect")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/dns", "q", "example.com +check", "Inspect")) %}{% endcall %}
     <p class="guide-tool__hint">Queries SPF, DKIM, DMARC, MTA-STS, BIMI, and MX records and applies DNS-level lint rules.</p>
   </section>
 

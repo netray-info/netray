@@ -12,8 +12,9 @@ const DEFAULT_FIXTURES = 'tests/acceptance/fixtures/history';
 const TOP = { required: [], optional: ['export', 'fixtures', 'boards', 'accepted'] };
 const BOARD = {
   required: ['title', 'host', 'path', 'width', 'theme', 'elements'],
-  optional: ['target', 'state', 'wait'],
+  optional: ['target', 'state', 'wait', 'click'],
 };
+const CLICK = { required: [], optional: ['board', 'page'] };
 const ELEMENT = { required: ['name', 'board', 'page', 'class', 'properties'], optional: [] };
 const ACCEPTED = { required: ['board', 'element', 'property', 'reason'], optional: [] };
 
@@ -86,6 +87,11 @@ function checkBoard(board, index) {
   if (!board.path.startsWith('/')) throw new ManifestError(`${where}: path must start with "/"`);
   if (('target' in board) !== board.path.includes('{target}')) {
     throw new ManifestError(`${where}: a target needs "{target}" in the path, and "{target}" needs a target`);
+  }
+  if ('click' in board) {
+    if (!isObject(board.click)) throw new ManifestError(`${where}: click must be an object`);
+    checkKeys(board.click, CLICK, `${where} click`);
+    for (const key of CLICK.optional) checkString(board.click, key, `${where} click`);
   }
   if (!Number.isInteger(board.width) || board.width <= 0) {
     throw new ManifestError(`${where}: width must be a positive integer`);

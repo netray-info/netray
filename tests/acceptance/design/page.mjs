@@ -31,6 +31,8 @@ export async function measurePage(browser, board, baseUrls, outDir) {
     if (board.wait) {
       await page.waitForSelector(board.wait, { timeout: 60000 }).catch(() => {});
     }
+    // A page state behind a control (an open menu) is opened before it is measured.
+    if (board.click?.page) await page.locator(board.click.page).first().click();
     await page.evaluate(() =>
       document.fonts.ready.then(
         () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),

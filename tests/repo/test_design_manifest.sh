@@ -68,6 +68,11 @@ table=(
     "R14 empty state|m.boards[0].state = \"\"|2|state"
     "v2-inspector-shell wait selector on a board|m.boards[0].wait = \"form[data-stream-state=done]\"|0|"
     "v2-inspector-shell empty wait|m.boards[0].wait = \"\"|2|wait"
+    "v2-site-nav click on board and page|m.boards[0].click = {board: \"button[aria-label=Menu]\", page: \".page-menu__button\"}|0|"
+    "v2-site-nav click on the page only|m.boards[0].click = {page: \".nav-menu__button\"}|0|"
+    "v2-site-nav unknown click key|m.boards[0].click = {page: \"x\", hover: \"y\"}|2|click;;hover"
+    "v2-site-nav click not an object|m.boards[0].click = \".x\"|2|click"
+    "v2-site-nav empty click selector|m.boards[0].click = {page: \"\"}|2|page"
 )
 
 for row in "${table[@]}"; do

@@ -9,7 +9,7 @@ pub(crate) struct Organization {
     #[serde(rename = "@type")]
     kind: &'static str,
     name: &'static str,
-    url: &'static str,
+    url: String,
 }
 
 #[derive(Serialize)]
@@ -37,7 +37,7 @@ impl Article {
             publisher: Organization {
                 kind: "Organization",
                 name: "netray.info",
-                url: "https://netray.info",
+                url: format!("{}/", super::ORIGIN),
             },
             main_entity_of_page: url.to_string(),
         }

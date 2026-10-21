@@ -6,13 +6,13 @@
   <article>
     <h2>The quick answer: use netray</h2>
     <p>If you want a single verdict fast, netray is the starting point. It checks IP, DNS, TLS, HTTP, and Email security in parallel and produces a letter-graded health score — no setup, no scripting. Enter your domain at <a href="/">netray.info</a> or run:</p>
-    <pre><code>curl -s -X POST 'https://netray.info/api/v1/domains/example.com/runs' \
-  | jq '{grade, complete, sections}'</code></pre>
+    <pre><code>curl -s -X POST '{{ frame.origin() }}/api/v1/domains/example.com/runs' \
+  | jq '.run | {grade, complete, sections}'</code></pre>
     <p>The run carries an overall grade (A+ through F), whether it is complete, and how each of the five sections ended. If a section did not end measured, or the grade is low, use the individual tools below to dig into the details.</p>
     <p>For CI pipelines, you can gate a deploy on the overall grade:</p>
     <pre><code># Fail if grade is below B
-curl -sf -X POST 'https://netray.info/api/v1/domains/example.com/runs' \
-  | jq -e '.grade | test("^(A|B)")'</code></pre>
+curl -sf -X POST '{{ frame.origin() }}/api/v1/domains/example.com/runs' \
+  | jq -e '.run.grade | test("^(A|B)")'</code></pre>
     <p>The rest of this guide explains what netray is checking and how to investigate any findings in depth using the individual tools.</p>
 
     <h2>What a domain audit covers</h2>
@@ -40,7 +40,7 @@ curl -sf -X POST 'https://netray.info/api/v1/domains/example.com/runs' \
       <li><strong>DKIM</strong>: configured on each sending platform. Required for DMARC alignment when messages are forwarded.</li>
     </ul>
     <p>If the domain does not send email at all, publish <code>v=spf1 -all</code> and <code>v=DMARC1; p=reject</code> to tell receivers to reject any mail claiming to be from this domain. This is the strongest possible posture for a non-sending domain and takes two DNS records to implement.</p>
-    <p>Use <a href="https://email.netray.info">netray's email checks</a> for the full email authentication analysis — it scores SPF, DKIM, DMARC, MTA-STS, DANE, BIMI, and DNSBL across four graded buckets and flags common issues such as multiple SPF records (a permerror), DMARC stuck at p=none, and MTA-STS configuration mismatches. The DNS inspector's <code>+check</code> mode remains useful for raw record inspection and DNS-level lint rules.</p>
+    <p>Use <a href="/inspect/email">netray's email checks</a> for the full email authentication analysis — it scores SPF, DKIM, DMARC, MTA-STS, DANE, BIMI, and DNSBL across four graded buckets and flags common issues such as multiple SPF records (a permerror), DMARC stuck at p=none, and MTA-STS configuration mismatches. The DNS inspector's <code>+check</code> mode remains useful for raw record inspection and DNS-level lint rules.</p>
 
     <h2>Step 3: TLS certificate</h2>
     <p>Certificate issues are operationally impactful and often the most visible to end users. Check four things:</p>
@@ -76,22 +76,23 @@ curl -sf -X POST 'https://netray.info/api/v1/domains/example.com/runs' \
     <h2>Automating the audit</h2>
     <p>The simplest automation is the netray API's runs endpoint — one request, all five signals, one grade:</p>
     <pre><code># Get the overall grade and how each section ended
-curl -s -X POST 'https://netray.info/api/v1/domains/example.com/runs' \
-  | jq '{grade, complete, sections}'</code></pre>
+curl -s -X POST '{{ frame.origin() }}/api/v1/domains/example.com/runs' \
+  | jq '.run | {grade, complete, sections}'</code></pre>
     <p>For threshold alerting on individual fields, the component APIs return structured data with explicit pass/warn/fail fields:</p>
-    <pre><code># DNS check (returns JSON with lint results)
-curl -s "https://dns.netray.info/api/query?q=example.com+check" | jq .
+    <pre><code># DNS check (returns JSON with the DNS checks and their evidence)
+curl -s "{{ frame.origin() }}/api/v1/dns/check?q=example.com" | jq .
 
 # TLS inspection (returns JSON with cert, chain, graded checks)
-curl -s "https://tls.netray.info/api/inspect?h=example.com" | jq .
+curl -s -X POST '{{ frame.origin() }}/api/v1/tls/inspect' \
+  -H 'content-type: application/json' -d '{"host":"example.com"}' | jq .
 
-# Email security (SSE stream — wait for summary event)
-curl -sN https://email.netray.info/inspect/example.com \
-  | grep '"grade"' | head -1 | sed 's/^data: //' | jq .grade
+# Email security (JSON; with Accept: text/event-stream the same events stream)
+curl -s -X POST '{{ frame.origin() }}/api/v1/email/inspect' \
+  -H 'content-type: application/json' -d '{"domain":"example.com"}' | jq .
 
 # IP enrichment for the domain's A record
 IP=$(dig +short example.com | head -1)
-curl -s "https://ip.netray.info/${IP}" | jq .</code></pre>
+curl -s "{{ frame.origin() }}/api/v1/ip/${IP}" | jq .</code></pre>
     <p>Use netray for high-level pass/fail gating in CI; use the individual APIs when you need to alert on specific fields such as days-until-expiry, DMARC policy, or lint error counts.</p>
   </article>
 
@@ -103,11 +104,11 @@ curl -s "https://ip.netray.info/${IP}" | jq .</code></pre>
 
   <section class="guide-tool">
     <h2>Check your site's HTTP headers with the HTTP inspector</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://http.netray.info/", "url", "https://example.com", "Inspect Headers")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/http", "url", "https://example.com", "Inspect Headers")) %}{% endcall %}
   </section>
 
   <section class="guide-tool">
     <h2>Check your domain's email authentication with netray's email checks</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://email.netray.info/", "domain", "example.com", "Check Email Security")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/email", "d", "example.com", "Check Email Security")) %}{% endcall %}
   </section>
 {% endblock %}

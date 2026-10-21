@@ -108,7 +108,7 @@ example.com.  300  IN  CAA  0 iodef "mailto:security@example.com"</code></pre>
 
   <section class="guide-tool">
     <h2>Look up DNS records</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://dns.netray.info/", "q", "example.com A AAAA MX TXT", "Query")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/dns", "q", "example.com A AAAA MX TXT", "Query")) %}{% endcall %}
     <p class="guide-tool__hint">Query any record type across multiple resolvers. Supports dig-like syntax: domain [TYPE...] [@server...] [+flag...]</p>
   </section>
 

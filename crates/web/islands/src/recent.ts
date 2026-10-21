@@ -1,7 +1,7 @@
 const KEY = "netray.recent";
 const MAX = 8;
 
-type Item = { domain: string; grade: string; date: string };
+type Item = { domain: string; grade: string; date: string; display?: string };
 
 const valid = (v: unknown): v is Item => {
   const i = v as Item | null;
@@ -38,7 +38,8 @@ function record(el: HTMLElement): void {
   const letter = grade?.dataset.grade;
   const date = grade?.dataset.date;
   if (!domain || !letter || !date || letter === "incomplete") return;
-  write({ domain, grade: letter, date });
+  const display = el.dataset.display;
+  write(display ? { domain, grade: letter, date, display } : { domain, grade: letter, date });
 }
 
 function list(el: HTMLElement): void {
@@ -49,7 +50,11 @@ function list(el: HTMLElement): void {
       const li = document.createElement("li");
       const a = document.createElement("a");
       a.href = `/${item.domain}`;
-      a.textContent = item.domain;
+      // A decoded name keeps its A-label beside it (never the Unicode form alone).
+      a.textContent =
+        typeof item.display === "string" && item.display !== ""
+          ? `${item.display} (${item.domain})`
+          : item.domain;
       li.append(a, ` ${item.grade} ${item.date}`);
       return li;
     }),

@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% block main %}
 {% if rows.is_empty() %}
-<h1>{{ domain }}</h1>
+<h1>{% if let Some(u) = crate::idn::unicode(domain) %}{{ u }} <span class="idn-alabel">{{ domain }}</span>{% else %}{{ domain }}{% endif %}</h1>
 <p>not checked yet</p>
 <p><a href="/{{ href }}">Check {{ domain }}</a></p>
 {% else %}
-<h1>{{ domain }}</h1>
+<h1>{% if let Some(u) = crate::idn::unicode(domain) %}{{ u }} <span class="idn-alabel">{{ domain }}</span>{% else %}{{ domain }}{% endif %}</h1>
 <p><a href="/{{ href }}">Back to the latest result</a></p>
 <table id="history">
 <thead>
