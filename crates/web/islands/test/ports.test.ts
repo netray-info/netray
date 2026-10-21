@@ -9,7 +9,11 @@ describe("parsePorts", () => {
     ["example.com", "example.com", null],
     ["example.com:443", "example.com", [443]],
     ["[2001:db8::1]:443,465", "[2001:db8::1]", [443, 465]],
+    // The server refuses an unbracketed IPv6 address: no ports read.
     ["2001:db8::1", "2001:db8::1", null],
+    // In brackets the server trims each item and parses it as a u16.
+    ["[2001:db8::1]: 443", "[2001:db8::1]", [443]],
+    ["[2001:db8::1]:+443", "[2001:db8::1]", [443]],
   ])("parsePorts(%s) = host %s, ports %j", (value, host, want) => {
     expect(parsePorts(value)).toEqual({ host, ports: want });
   });
@@ -232,5 +236,20 @@ describe("ports island, final review", () => {
     ports(group);
     typeHost(h, "example.com:0");
     expect(pressed(group)).toEqual([]);
+  });
+});
+
+describe("ports island, fix-range review", () => {
+  beforeEach(() => {
+    document.body.replaceChildren();
+  });
+
+  it("presses nothing for more ports than the limit, as the server refuses them", () => {
+    const { group, h } = page("7");
+    ports(group);
+    typeHost(h, "example.com:1,2,3,4,5,6,7,8");
+    expect(pressed(group)).toEqual([]);
+    const note = group.querySelector(".port-chooser__note") as HTMLElement;
+    expect(note.hidden).toBe(false);
   });
 });
