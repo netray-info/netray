@@ -347,6 +347,15 @@ export function shell(el: HTMLElement): void {
       }
       return;
     }
+    const copy = target?.closest<HTMLElement>(".inspector-copy");
+    if (copy) {
+      try {
+        void navigator.clipboard?.writeText(copy.dataset.copyText ?? "").catch(() => {});
+      } catch {
+        /* clipboard unavailable */
+      }
+      return;
+    }
     const exporter = target?.closest<HTMLButtonElement>("button[data-export-action]");
     if (exporter) return exportClick(el, exporter);
     const chip = target?.closest<HTMLElement>("a.inspector-examples__chip[data-example]");

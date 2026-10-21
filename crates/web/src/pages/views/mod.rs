@@ -8,6 +8,8 @@ mod http;
 mod ip;
 mod tls;
 
+pub(crate) use ip::attribution;
+
 use askama::Template;
 use netray_model::evidence::{Block, BlockId, Fields, Node, Shape, Value};
 use netray_model::{CheckId, Status};

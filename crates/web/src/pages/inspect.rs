@@ -13,8 +13,8 @@ use axum::Router;
 use axum::extract::connect_info::ConnectInfo;
 use axum::extract::rejection::PathRejection;
 use axum::extract::{Form, FromRequest, Path, Query, Request, State};
-use axum::http::header::{CACHE_CONTROL, RETRY_AFTER};
-use axum::http::{StatusCode, Uri};
+use axum::http::header::{CACHE_CONTROL, RETRY_AFTER, USER_AGENT};
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::sse::Event;
 use axum::response::{IntoResponse, Response, Sse};
 use axum::routing::{get, post};
@@ -322,6 +322,16 @@ pub struct JobRequest {
     pub share_key: Option<String>,
 }
 
+/// What the caller's own run (`GET /inspect/ip` without an address) hands the job seam.
+#[derive(Debug, Clone)]
+pub struct CallerRequest {
+    pub remote: SocketAddr,
+    pub user_agent: Option<String>,
+    pub headers: HeaderMap,
+    /// The IP inspector's deadline for this page load.
+    pub deadline: std::time::Instant,
+}
+
 /// One part of a job, streamed as it finishes.
 pub struct JobPart {
     pub label: String,
@@ -376,6 +386,11 @@ pub trait InspectorJobs: Send + Sync + 'static {
     fn admit(&self, tool: Tool, client: IpAddr, input: &str) -> Result<(), Duration>;
     /// Starts the job; `Err` is the job function's validation message.
     fn start(&self, req: JobRequest) -> Result<Job, String>;
+    /// The caller's own IP run, rendered by the GET; `None` leaves the page idle.
+    fn caller(&self, req: CallerRequest) -> Option<Result<Job, String>> {
+        let _ = req;
+        None
+    }
     /// The badges of each address the lookup knows; an address it does not know is left out.
     fn enrich(&self, addrs: Vec<IpAddr>) -> BoxFuture<'static, Vec<(IpAddr, Vec<Badge>)>> {
         let _ = addrs;
@@ -541,6 +556,14 @@ struct StartFragment {
     share: String,
     export: String,
     related: Option<String>,
+    own: bool,
+}
+
+#[derive(Template)]
+#[template(path = "partials/inspect_caller_notice.html")]
+struct CallerNotice {
+    target: String,
+    message: String,
 }
 
 /// The band region of the start fragment: none, a placeholder the stream fills, or rendered.
@@ -611,19 +634,42 @@ enum Shared {
 async fn show(
     State(deps): State<InspectDeps>,
     tool: Result<Path<String>, PathRejection>,
-    uri: Uri,
+    req: Request,
 ) -> Response {
     let Some(tool) = tool.ok().and_then(|Path(name)| Tool::parse(&name)) else {
         return not_found().await;
     };
-    let mut query = Query::<HashMap<String, String>>::try_from_uri(&uri)
+    let mut query = Query::<HashMap<String, String>>::try_from_uri(req.uri())
         .map(|Query(q)| q)
         .unwrap_or_default();
     // A blank `ip` asks for the visitor's own address (the guides' "Leave blank for your IP").
     let own_ip = tool == Tool::Ip && query.get(tool.field()).is_some_and(|v| v.is_empty());
     let mut prefill = query.remove(tool.field()).filter(|v| !v.is_empty());
     let (mut status, mut result, mut notice) = (StatusCode::OK, None, None);
-    if let Some(key) = query.remove("r") {
+    let mut cache_control = "no-cache";
+    let shared_key = query.remove("r");
+    if tool == Tool::Ip && shared_key.is_none() && prefill.is_none() {
+        if netray_common::prefetch::is_prefetch(req.headers()) {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                [(CACHE_CONTROL, "no-store")],
+            )
+                .into_response();
+        }
+        let peer = req
+            .extensions()
+            .get::<ConnectInfo<SocketAddr>>()
+            .map(|c| c.0);
+        match caller_run(&deps, req.headers(), peer).await {
+            None => {}
+            Some(Some(html)) => {
+                result = Some(html);
+                cache_control = "private, no-store";
+            }
+            Some(None) => return server_error(),
+        }
+    }
+    if let Some(key) = shared_key {
         match shared_result(&deps, tool, &key).await {
             Shared::Found { input, html } => {
                 prefill = Some(input).filter(|v| !v.is_empty());
@@ -685,7 +731,7 @@ async fn show(
     };
     page(
         status,
-        "no-cache",
+        cache_control,
         &InspectorPage {
             frame: Frame {
                 nav: name,
@@ -697,6 +743,118 @@ async fn show(
             },
             shell,
         },
+    )
+}
+
+/// The caller's own IP run, finished before the page answers: `None` when the jobs offer none,
+/// `Some(None)` when it fails to render. Refusals, an unavailable lookup and the deadline answer
+/// as a notice under the caller's address.
+async fn caller_run(
+    deps: &InspectDeps,
+    headers: &HeaderMap,
+    peer: Option<SocketAddr>,
+) -> Option<Option<String>> {
+    let client = client_ip(&deps.extractor, headers, peer);
+    let port = peer.filter(|p| p.ip() == client).map_or(0, |p| p.port());
+    let user_agent = headers
+        .get(USER_AGENT)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned);
+    let target = client.to_string();
+    let caller_notice = |message: String| {
+        (CallerNotice {
+            target: target.clone(),
+            message,
+        })
+        .render()
+        .ok()
+    };
+    let deadline = Instant::now() + Duration::from_millis(deps.config.limits(Tool::Ip).deadline_ms);
+    let job = match deps.jobs.caller(CallerRequest {
+        remote: SocketAddr::new(client, port),
+        user_agent,
+        headers: headers.clone(),
+        deadline: deadline.into_std(),
+    })? {
+        Ok(job) => job,
+        Err(message) => return Some(caller_notice(message)),
+    };
+    let Ok(_permit) = deps.slots[Tool::Ip.index()].clone().try_acquire_owned() else {
+        return Some(caller_notice("busy, try again in a moment".to_string()));
+    };
+    if let Err(retry_after) = deps.jobs.admit(Tool::Ip, client, "") {
+        return Some(caller_notice(too_many_requests_text(retry_after)));
+    }
+    let Job { parts, band, .. } = job;
+    let labels: Vec<String> = parts.iter().map(|part| part.label.clone()).collect();
+    let finished = async move {
+        let results = futures::future::join_all(parts.into_iter().map(|part| part.output)).await;
+        let band = match band {
+            Some((protocol, checks)) => Some((protocol, checks.await)),
+            None => None,
+        };
+        (results, band)
+    };
+    let Ok((results, band)) = timeout_at(deadline, finished).await else {
+        return Some(caller_notice("timed out".to_string()));
+    };
+    Some(caller_html(target, &labels, &results, &band))
+}
+
+/// The caller's finished run: no share key, never kept.
+fn caller_html(
+    target: String,
+    labels: &[String],
+    results: &[PartResult],
+    band: &Option<(Protocol, BandResult)>,
+) -> Option<String> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs() as i64);
+    let blocks: Vec<Block> = results
+        .iter()
+        .filter_map(|r| r.as_ref().ok())
+        .flatten()
+        .cloned()
+        .collect();
+    let checks = match band {
+        Some((_, Ok(checks))) => checks.as_slice(),
+        _ => &[],
+    };
+    let band_slot = match band {
+        Some((protocol, result)) => BandSlot::Done(band_region_html(*protocol, &blocks, result)?),
+        None => BandSlot::Absent,
+    };
+    let parts = labels
+        .iter()
+        .zip(results)
+        .enumerate()
+        .map(|(n, (label, result))| (label.clone(), part_html(n, label, result, &[], checks)))
+        .collect();
+    let export = export_html(
+        Tool::Ip,
+        &target,
+        &live_run_title(now),
+        band.as_ref()
+            .and_then(|(p, r)| r.as_ref().ok().map(|c| (*p, c.as_slice()))),
+        &blocks,
+        &export_errors(
+            labels
+                .iter()
+                .zip(results)
+                .map(|(label, r)| (label.as_str(), Some(r))),
+            band.as_ref().map(|(_, r)| r),
+        ),
+        true,
+    )?;
+    finished_html(
+        live_run_title(now),
+        target,
+        None,
+        None,
+        parts,
+        band_slot,
+        (share_html(Tool::Ip, None)?, export, None, false),
     )
 }
 
@@ -757,7 +915,12 @@ async fn shared_result(deps: &InspectDeps, tool: Tool, key: &str) -> Shared {
                 part_html(0, &cached.mode, &blocks, &[], &[]),
             )],
             BandSlot::Done(band),
-            (share_html(Tool::Dns, Some(key.to_string()))?, export, None),
+            (
+                share_html(Tool::Dns, Some(key.to_string()))?,
+                export,
+                None,
+                false,
+            ),
         )
     });
     match html {
@@ -834,12 +997,23 @@ fn sse(status: StatusCode, events: Vec<Event>) -> Response {
     (status, Sse::new(stream)).into_response()
 }
 
+fn retry_secs(retry_after: Duration) -> u64 {
+    retry_after.as_secs() + u64::from(retry_after.subsec_nanos() > 0)
+}
+
+fn too_many_requests_text(retry_after: Duration) -> String {
+    format!(
+        "too many requests; try again in {} s",
+        retry_secs(retry_after)
+    )
+}
+
 fn too_many_requests(tool: Tool, retry_after: Duration) -> Response {
-    let secs = retry_after.as_secs() + u64::from(retry_after.subsec_nanos() > 0);
+    let secs = retry_secs(retry_after);
     let mut response = notice(
         tool,
         StatusCode::TOO_MANY_REQUESTS,
-        format!("too many requests; try again in {secs} s"),
+        too_many_requests_text(retry_after),
     );
     response.headers_mut().insert(RETRY_AFTER, secs.into());
     response
@@ -1044,6 +1218,8 @@ fn part_html(
                 feeds: &[],
             };
             let mut part = views::render_part(blocks, &ctx);
+            // A claimed IP block renders its own attribution.
+            let mut attributed = false;
             for block in blocks {
                 if let Some(view) = &mut part
                     && view.claimed.contains(&block.id)
@@ -1054,9 +1230,19 @@ fn part_html(
                 let feeds = block_feeds(evidence, &block.id);
                 let slot = slot(block, &decorate, &statuses, &feeds);
                 match slot.view {
-                    Some(view) => html.push_str(&view),
+                    Some(view) => {
+                        attributed |= block.id.module() == "ip";
+                        html.push_str(&view)
+                    }
                     None => html.push_str(&components::evidence_block(&slot.block).ok()?),
                 }
+            }
+            let badged = blocks
+                .iter()
+                .flat_map(links::addresses)
+                .any(|a| badges.iter().any(|(b, tags)| *b == a && !tags.is_empty()));
+            if badged && !attributed {
+                html.extend(views::attribution());
             }
             (Some(html), String::new())
         }
@@ -1170,7 +1356,7 @@ fn finished_html(
     grade: Option<&'static str>,
     parts: Vec<(String, Option<String>)>,
     band: BandSlot,
-    (share, export, related): (String, String, Option<String>),
+    (share, export, related, own): (String, String, Option<String>, bool),
 ) -> Option<String> {
     let mut rendered = Vec::with_capacity(parts.len());
     for (n, (label, html)) in parts.into_iter().enumerate() {
@@ -1186,6 +1372,7 @@ fn finished_html(
         share,
         export,
         related,
+        own,
     }
     .render()
     .ok()
@@ -1244,8 +1431,14 @@ fn shared_html(run: &SharedRun, key: &str) -> Option<String> {
             share_html(run.tool, Some(key.to_string()))?,
             export,
             related(run.tool, &run.input),
+            own_link(run.tool, &run.input),
         ),
     )
+}
+
+/// Whether a run's head links back to the caller's own address: a run of a given address.
+fn own_link(tool: Tool, input: &str) -> bool {
+    tool == Tool::Ip && !input.trim().is_empty()
 }
 
 /// The DNS inspector query of the records that belong beside a TLS run of a host: its CAA.
@@ -1404,6 +1597,7 @@ fn stream_job(
             false,
         )?,
         related: related(head.tool, &head.input),
+        own: own_link(head.tool, &head.input),
     }
     .render()
     .ok()?;
