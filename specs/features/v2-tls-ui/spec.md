@@ -141,7 +141,9 @@ and canvas rows 9.50, 9.55, 9.56, 9.57, 9.58 (summaries).
    before <date>" left, "today · <n> days left" centred, "not after <date>" right; the caption
    (mono 11 px) "the last <n> days turn the expiry line amber". `EXPIRY_WARN_DAYS` is one public
    constant in netray-tls that `check_expiry_window` reads (the literal 30 moves there). An expired
-   leaf draws the whole bar in the fail tone and the centre label reads "expired <n> days ago"; a
+   leaf (past not_after at the run's moment, or marked `expired` by the backend, whose day count
+   truncates toward zero) draws the whole bar in the fail tone and the centre label reads
+   "expired <n> days ago" ("expired today" within the first day); a
    leaf not yet valid reads "not valid for <n> days" with the marker at the start. (3.17, 3.30)
 7. **Facts grid.** A `facts_grid` with board G's eight cells first, then the further facts:
    Subject, Alternative names (comma-joined; a DNS name or address carries the shell's link),

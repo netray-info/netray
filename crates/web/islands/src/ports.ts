@@ -1,7 +1,10 @@
 // Mirrors crates/tls/src/input.rs: `split_target_and_ports` and `parse_ports`.
+// `parse_ports` trims each item and parses it as a u16 (a leading `+` included); the unbracketed
+// split only happens when the suffix is digits and commas, which `target` checks first.
 function portList(list: string): number[] | null {
-  if (!/^\d+(,\d+)*$/.test(list)) return null;
-  const nums = list.split(",").map(Number);
+  const items = list.split(",").map((p) => p.trim());
+  if (!items.every((p) => /^\+?\d+$/.test(p))) return null;
+  const nums = items.map(Number);
   return nums.every((n) => n >= 1 && n <= 65535) ? nums : null;
 }
 
@@ -27,10 +30,12 @@ function target(value: string): Target {
   }
   const colon = v.lastIndexOf(":");
   if (colon < 0) return { host: v, ports: null, fixed: false };
-  const ports = portList(v.slice(colon + 1));
-  if (!ports || colon === 0) return fixed;
+  const suffix = v.slice(colon + 1);
+  // Unbracketed, the server splits only at a last colon followed by digits and commas; a host
+  // left with a colon (an unbracketed IPv6 address) is then no address and no name: refused.
+  const ports = /^[\d,]+$/.test(suffix) ? portList(suffix) : null;
   const host = v.slice(0, colon);
-  if (host.includes(":")) return { host: v, ports: null, fixed: false };
+  if (!ports || colon === 0 || host.includes(":")) return fixed;
   return { host, ports, fixed: false };
 }
 
@@ -93,7 +98,10 @@ export function ports(el: HTMLElement): void {
     // A suffix the server refuses presses nothing; an empty or bare host is the default 443.
     const list = current.ports ?? (current.fixed && h.value.trim() ? [] : [443]);
     if (list.length > max) {
+      // The server refuses more ports than the limit: nothing is pressed.
       refuse();
+      selected = [];
+      show();
       return false;
     }
     note.hidden = true;

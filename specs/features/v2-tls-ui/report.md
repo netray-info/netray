@@ -327,3 +327,14 @@ expired 1280/390 light/dark: scrollWidth = viewport
 The crt.sh links measured 13 px tall at 390 px and now have a 44 px phone target. A three-port run
 with a STARTTLS port needs DNS for a mail host, blocked locally; the panels are verified with the
 two-port live run and `inspect_tls_panels.rs`.
+
+### Final review fixes
+
+The full-range review (f8ecf55d..d9aa2d11) held one blocker (a leaf lapsed within the day drew a
+valid bar) and six majors; the fixes and amendments are in `review.md`, and a second reading of the
+fix range held four majors, fixed in turn. Two-port live run after the tab tone bar:
+
+```
+two-ports 1280 light/dark: scrollWidth 1280 viewport 1280
+two-ports 390 light/dark: scrollWidth 390 viewport 390 (no target below 44 px)
+```

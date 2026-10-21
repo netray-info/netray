@@ -220,6 +220,7 @@
   font-weight: 700;
 }
 .inspector-ports__meta {
+  margin-inline-start: var(--space-1);
   font-weight: 400;
 }
 /* the port's worst status as a tone bar beside its name */
