@@ -136,12 +136,18 @@ fn render_trace(block: &Block, ctx: &ViewContext<'_>) -> Option<String> {
         })
         .collect();
     let body = TraceView {
-        meta: counted(root.children.len() as i64, "hop", "hops"),
+        // The block's title leads the meta line: the part heading above names the job.
+        meta: format!(
+            "{} · {}",
+            block.title,
+            counted(root.children.len() as i64, "hop", "hops")
+        ),
         hops,
     }
     .render()
     .ok()?;
-    frame(block, "Delegation trace", &body, ctx)
+    // The part heading names the trace; a second heading would repeat it.
+    frame(block, "", &body, ctx)
 }
 
 struct Finding {
@@ -228,14 +234,15 @@ fn render_dnssec(block: &Block, ctx: &ViewContext<'_>) -> Option<String> {
         .collect();
     let body = DnssecView {
         meta: format!(
-            "{} · {warn_total} warn · {fail_total} fail",
+            "{} · {} · {warn_total} warn · {fail_total} fail",
+            block.title,
             counted(root.children.len() as i64, "level", "levels")
         ),
         levels,
     }
     .render()
     .ok()?;
-    frame(block, "DNSSEC chain", &body, ctx)
+    frame(block, "", &body, ctx)
 }
 
 /// The display texts of every value of `key` in `fields`, in order.
@@ -397,6 +404,8 @@ struct RecordView {
 struct RecordServer {
     server: String,
     key: String,
+    label: String,
+    address: Option<String>,
     transport: Option<String>,
     time: Option<String>,
 }
@@ -568,6 +577,12 @@ fn groups(
                         .map(|m| RecordServer {
                             key: server_key(&m.server, m.source.as_deref(), shared),
                             server: m.server.clone(),
+                            label: m
+                                .name
+                                .clone()
+                                .or_else(|| m.address.clone())
+                                .unwrap_or_else(|| m.server.clone()),
+                            address: m.address.clone().filter(|_| m.name.is_some()),
                             transport: m.transport.clone(),
                             time: m
                                 .response_time
@@ -607,9 +622,10 @@ fn groups(
                         .unwrap_or_else(|| m.server.clone()),
                     transport: m.transport.clone(),
                     source: m.source.clone(),
+                    // A failed lookup draws no bar: a bar reads as an answer's speed.
                     bar: m
                         .response_time
-                        .filter(|_| slowest > 0)
+                        .filter(|_| slowest > 0 && m.measured())
                         .map(|ms| bar_width(ms, slowest)),
                     time: m
                         .response_time
@@ -913,8 +929,9 @@ pub(super) fn render_part(blocks: &[Block], ctx: &ViewContext<'_>) -> Option<Par
             |cards| match cards.iter().filter(|c| c.unmeasured > 0).count() {
                 0 if finished => vec![pass_badge()],
                 0 => Vec::new(),
+                // Not measured reads muted on both tabs: one tone per fact.
                 n => vec![TabBadge {
-                    tone: "warn",
+                    tone: "muted",
                     label: format!("{n} not measured"),
                 }],
             },

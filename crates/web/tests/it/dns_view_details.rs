@@ -207,7 +207,7 @@ fn c11_ttl_in_human_units_and_the_answering_server() {
         .expect("server dd");
     let dd = &html[at..html[at..].find("</dd>").map(|e| at + e).unwrap()];
     assert!(
-        dd.contains("<code>udp:8.8.8.8:53,name=Google 1</code>"),
+        dd.contains(r#"<span class="dns-record__server-name">Google 1</span>"#),
         "{dd}"
     );
     assert!(dd.contains("udp"), "{dd}");

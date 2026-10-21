@@ -33,7 +33,9 @@ async fn main() {
         .nth(1)
         .and_then(|p| p.parse().ok())
         .unwrap_or(18_533);
-    let config: ApiConfig = toml::from_str("[dns]\nper_ip_burst = 1000\nglobal_burst = 1000")
+    let config: ApiConfig = toml::from_str(
+        "[dns]\nper_ip_per_minute = 10000\nper_ip_burst = 1000\nper_target_per_minute = 10000\nper_target_burst = 1000\nglobal_burst = 1000",
+    )
         .expect("[api.dns] parses");
     let state = ApiState::new(config, Arc::new(NoRuns)).with_parts(ApiParts {
         dns: Some(netray_dns::testing::stub_jobs()),

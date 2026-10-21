@@ -120,7 +120,8 @@ runs render as structured views instead of key-value trees. The query input auto
 5. **Answer groups.** Inside a card, answers are grouped by identical outcome and record data, the
    largest group first; each group shows its records, "<n> / <m> servers" and per server its name
    (or address) with the transport (and the source in authcompare), the TTL range across the group
-   (each record's own TTL range in its details) and a response-time bar whose length is a Rust function of the server's time over the job's
+   (each record's own TTL range in its details) and a response-time bar (none for a
+   not-measured answer) whose length is a Rust function of the server's time over the job's
    slowest measured answer. A diverging card shows every group. (2.15, 2.29, 2.30)
 6. **Negative and failed answers.** `no_records` reads "no records", `nxdomain` reads "NXDOMAIN",
    an `unmeasured` answer reads "not measured: <response code or error>" beside the answered
@@ -142,7 +143,7 @@ runs render as structured views instead of key-value trees. The query input auto
    Without JavaScript the server cards are the per-server view. (2.16)
 10. **Tab badges.** The Results tab carries "<d> diverge" (warn tone) and "<u> not measured"
     (muted) when non-zero, and a pass mark otherwise; the Servers tab carries the number of
-    servers with an unmeasured lookup (warn tone), and a pass mark otherwise; a job that never
+    servers with an unmeasured lookup (muted, as on the Results tab), and a pass mark otherwise; a job that never
     finished carries no pass mark. Counts come from the server; the island never counts. (2.43)
 
 ### Toggles, explain and details
@@ -159,8 +160,8 @@ runs render as structured views instead of key-value trees. The query input auto
     `record_format.rs` where one exists, server-rendered outside the record's closed details and
     hidden until the toggle is on. (2.18)
 13. **Record details.** Each record row is a `<details>` disclosing: TTL in human units with the
-    seconds ("1 h 5 min (3900 s)"), the answering server as mhost names it, the transport and the
-    response time; for SOA the serial age ("serial 2026101501 · 4 days old" from
+    seconds ("1 h 5 min (3900 s)"), each answering server by its name and address (the mhost form
+    stays in `data-server`), the transport and the response time; for SOA the serial age ("serial 2026101501 · 4 days old" from
     `soa_serial_age_days`, absent when the serial is no date, "dated in the future" for a serial
     after today), which also shows on the SOA row itself; the details' server rows take part in the
     server filter. (2.19, 2.24)
@@ -363,6 +364,26 @@ GIVEN the DNS inspector at 390 px WHEN measured THEN the document is not wider t
   request inside the `[api]` per-IP budget at ordinary typing speed. A faster typist can still
   meet a refused request; it falls back silently (implementer under the operator's autonomy
   mandate, 2026-10-21).
+- Phase 6 reading beside board G (report.md V1 to V25, N1 to N12): rebuilt the trace rows, the
+  phone layout of server rows, full-width columns with row rules, one card level (types and
+  servers are sections of the tab panel), "All servers" in the toolbar, human part headings
+  ("Authoritative and recursive", "Transport comparison", "Trace", "DNSSEC") with the block's
+  name ("Delegation trace", "DNSSEC chain") in the card's meta line instead of a second heading,
+  no bar for a not-measured answer (a bar reads as an answer's speed), 44 px targets at 390 px,
+  readable muted sizes, label and value columns in record details with servers by name and
+  address (requirement 13 amended), one muted tone for "not measured" on both tabs (requirement
+  10 amended), and a muted summary line. Kept deliberately: the green "agree" badge and the amber
+  diverge marker in every server card (requirements 4 and 8: the reader asks for tone only on
+  problems, but agreement is the fact the Results tab exists to show, and the marker tells which
+  types a server answered differently); one badge per DNSSEC level in its worst tone (requirement
+  14); the tab counts' units come from the tab names; the hop's level and zone head its rows.
+  Findings on the shell (query builder, "+check" note, run line and exports, header, 429 frame)
+  belong to `v2-inspector-shell` and go to the operator as proposals (implementer under the
+  operator's autonomy mandate, 2026-10-21).
+- After merging main (v2-ip-ui, #51) the merge of `pages.css` dropped one closing brace, which
+  nested every later rule (all of v2-ip-ui's and this feature's) inside an open rule; the browser
+  dropped them and no test failed. Restored, and `static_css_balanced.rs` now checks every
+  stylesheet (implementer under the operator's autonomy mandate, 2026-10-21).
 - The trace heading names no traced type and the shared-result notices of the draft are dropped:
   the traced type is not in the collected trace result and adding it would change the API's done
   event; the run line already shows the query. A multi-type `+trace` puts "Only the first type is

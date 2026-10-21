@@ -143,7 +143,7 @@ fn c3_c8_c9_tab_badges_come_from_the_server_written_counts() {
                 "diverge</span>".to_string(),
                 "not measured</span>".to_string(),
             ],
-            servers_has: vec![badge("warn", "1 not measured")],
+            servers_has: vec![badge("muted", "1 not measured")],
             servers_lacks: vec![pass.clone()],
         },
         Row {
@@ -153,7 +153,7 @@ fn c3_c8_c9_tab_badges_come_from_the_server_written_counts() {
             server_unmeasured: &[2, 1, 0],
             results_has: vec![badge("warn", "3 diverge"), badge("muted", "2 not measured")],
             results_lacks: vec![pass.clone()],
-            servers_has: vec![badge("warn", "2 not measured")],
+            servers_has: vec![badge("muted", "2 not measured")],
             servers_lacks: vec![pass.clone()],
         },
     ];

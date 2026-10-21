@@ -85,3 +85,16 @@ G1: C1, C3 to C6 (C2 and C7 already hold: the exports carry every block).
 1. `crates/web/src/pages/inspect.rs` `SuggestView` and `crates/web/templates/components/inspector_shell.html`: `data-suggest-parse` on the shell element and the hidden hint line, DNS only.
 2. `crates/web/static/inspector_shell.css`: `.inspector-shell__hint` (muted, small).
 3. `crates/web/islands/src/shell.ts`: the DNS provider keeps its table suggestions and, 150 ms after the last input, posts input and the caret's UTF-8 byte offset to the parse endpoint; matching completion labels replace the list when the input is unchanged; the parse error fills the hint; any failure changes nothing.
+
+## Phase 6 — Design gate and visual reading
+
+### Groups
+
+G1: C1 to C4 (no new tests beyond the stylesheet balance check; the reading drives CSS and template changes).
+
+### Plan
+
+#### G1
+
+1. `just design-check` on the merged branch.
+2. Screenshots of the eight DNS states from `crates/web/examples/dns_stub.rs`; readings beside board G; rebuild findings in `crates/web/static/pages.css`, the DNS templates and `crates/web/src/pages/views/dns.rs`; human part labels in `crates/web/src/api/jobs.rs` and `pages/inspect.rs`.

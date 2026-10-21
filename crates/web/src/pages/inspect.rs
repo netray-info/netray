@@ -900,7 +900,7 @@ async fn shared_result(deps: &InspectDeps, tool: Tool, key: &str) -> Shared {
             None,
             blocks.as_ref().map_or(&[][..], Vec::as_slice),
             &export_errors(
-                std::iter::once((cached.mode.as_str(), Some(&blocks))),
+                std::iter::once((dns_label(&cached.mode), Some(&blocks))),
                 None::<&Result<(), String>>,
             ),
             true,
@@ -911,8 +911,8 @@ async fn shared_result(deps: &InspectDeps, tool: Tool, key: &str) -> Shared {
             backlink(Tool::Dns, &cached.query),
             None,
             vec![(
-                cached.mode.clone(),
-                part_html(0, &cached.mode, &blocks, &[], &[]),
+                dns_label(&cached.mode).to_string(),
+                part_html(0, dns_label(&cached.mode), &blocks, &[], &[]),
             )],
             BandSlot::Done(band),
             (
@@ -929,6 +929,16 @@ async fn shared_result(deps: &InspectDeps, tool: Tool, key: &str) -> Shared {
             html,
         },
         None => Shared::Broken,
+    }
+}
+
+/// The section heading of a DNS job's part, as the live part names it (`InspectJobs::start_dns`).
+fn dns_label(mode: &str) -> &str {
+    match mode {
+        "dnssec" => "DNSSEC",
+        "compare" => "transport comparison",
+        "authcompare" => "authoritative and recursive",
+        other => other,
     }
 }
 

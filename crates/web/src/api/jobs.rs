@@ -687,14 +687,14 @@ impl InspectJobs {
         } else if parsed.dnssec || flagged("dnssec") {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("dnssec", rx, blocks::dnssec_blocks, Vec::new(), store),
+                dns_part("DNSSEC", rx, blocks::dnssec_blocks, Vec::new(), store),
                 DnsStart::Dnssec(tx),
             )
         } else if flagged("compare") {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
                 dns_part(
-                    "compare",
+                    "transport comparison",
                     rx,
                     blocks::compare_page_blocks,
                     Vec::new(),
@@ -706,7 +706,7 @@ impl InspectJobs {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
                 dns_part(
-                    "authcompare",
+                    "authoritative and recursive",
                     rx,
                     blocks::authcompare_page_blocks,
                     Vec::new(),

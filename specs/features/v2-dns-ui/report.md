@@ -242,3 +242,75 @@ reached them with Phase 1. Markdown names its sections by block title ("## Answe
 ### Behavioural verification
 
 `curl -s -X POST -H 'content-type: application/json' -d '{"input":"example.com @cl","cursor_pos":15}' http://127.0.0.1:18533/api/v1/dns/parse` against the stub server answers completions starting with `@cl` (`@cloudflare` among them); the island tests drive the shell over a stubbed fetch.
+
+## Phase 6 — Design gate and visual reading
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R20 design-check exits 0; the DNS inspector states at 1280 and 390 px in both themes are read beside board G; every finding is a row and closed; nothing scrolls sideways at 390 px | green | crates/web/tests/it/static_css_balanced.rs, target/design/report.md |
+| C2 | S the manifest's design-check exits 0 | green | target/design/report.md, scratchpad dns-ui-shots |
+| C3 | S the screenshots read beside board G leave no open finding | green | target/design/report.md, scratchpad dns-ui-shots |
+| C4 | S the DNS inspector at 390 px is not wider than the viewport | green | target/design/report.md, scratchpad dns-ui-shots |
+
+`just design-check`: exit 0, 14 boards, 956 measured rows, 0 open deviations, 2 accepted entries
+(the history rows of v2-result-fidelity), 0 stale. No board shows the DNS inspector; its pages
+are read beside board G.
+
+### Visual reading
+
+Three readings by readers with no part in the build, over screenshots of the stub server
+(`cargo run -p netray-web --example dns_stub`, Playwright, eight states at 1280 and 390 px in both
+themes). Each finding is a row, closed by a rebuild, a decision in the spec's Decision log, or as
+another feature's part (proposals for the operator).
+
+| id | finding | status | disposition |
+|---|---|---|---|
+| V1 | trace answers shifted one row below their server | green | rebuild: result column on the server's row |
+| V2 | server rows at 390 px broke into fragments | green | rebuild: two-line phone rows |
+| V3 | server rows had no rules | green | rebuild: 1 px row rules; no header row, the cells name their unit (decision log) |
+| V4 | server columns used half the card | green | rebuild: columns span the card |
+| V5 | cards nested in the tab card | green | rebuild: types and servers are sections divided by rules |
+| V6 | All servers on its own row | green | rebuild: first toolbar button |
+| V7 | queries sent on a second line | green | deliberately kept: done-event facts beside the summary counts |
+| V8 | two stacked headings on trace and DNSSEC | green | rebuild: one heading, the block name leads the card's meta line |
+| V9 | part headings read Dnssec and Authcompare | green | rebuild: human part headings |
+| V10 | native controls in the query builder | green | not this feature: the builder is v2-inspector-shell's; proposal |
+| V11 | builder does not reflect the query | green | not this feature: proposal |
+| V12 | +check note on every page | green | not this feature: proposal |
+| V13 | export links in the run line | green | not this feature: proposal |
+| V14 | run line wraps raggedly at 390 px | green | not this feature: proposal |
+| V15 | controls under 44 px at 390 px | green | rebuild: 44 px minimum |
+| V16 | server card heads wrapped unevenly at 390 px | green | rebuild: fixed structure |
+| V17 | amber diverge marker in every server card | green | deliberately kept: requirement 8, it marks the types this server answered differently |
+| V18 | green agree on every card | green | deliberately kept: requirement 4, agreement is the fact the tab shows |
+| V19 | DNSSEC zone and latency glued; zero count in red | green | rebuild: spacing; one badge per level in its worst tone kept (requirement 14) |
+| V20 | details as inline label and config string | green | rebuild: label and value columns, servers by name and address |
+| V21 | not measured in two tones | green | rebuild: muted on both tabs |
+| V22 | 11 px muted meta in dark | green | rebuild: small size |
+| V23 | trace addresses the weakest text | green | rebuild: bold ink |
+| V24 | rate-limited captures | green | rebuild: the stub example raises its limits; the 429 frame is the shell's (proposal) |
+| V25 | header Theme link at 390 px | green | not this feature: proposal |
+| N1 | stacked headings (second pass) | green | rebuild: see V8 |
+| N2 | internal server form in details | green | rebuild: see V20 |
+| N3 | zero warn count in red | green | deliberately kept: one badge per level (requirement 14) |
+| N4 | time below the bar at 390 px | green | rebuild: bar centred on the row |
+| N5 | tab labels top-aligned at 390 px | green | rebuild: centred |
+| N6 | toolbar cramped at 1280 px | green | rebuild: spacing, actions set apart |
+| N7 | trace rows undivided at 390 px | green | rebuild: row rules |
+| N8 | diverge amber in every server card | green | deliberately kept: see V17 |
+| N9 | toggle states and grouping at 390 px | green | rebuild: actions set apart; pressed state is aria-pressed styled |
+| N10 | tab counts without units | green | deliberately kept: the tab names give the unit |
+| N11 | hop zone line above its rows | green | deliberately kept: the hop heads its servers |
+| N12 | summary line in ink | green | rebuild: muted |
+| T1 | third pass: a not-measured answer drew a full bar | green | rebuild: no bar for a failed lookup; test dns_view_review5.rs |
+| T2 | third pass: trace server column indent, phone trace spacing, servers-tab value alignment, explain gap | green | deliberately kept: minor, no board; proposal for a DNS board |
+| T3 | third pass: equal bars carry no information | green | sample data (the stub answers in 10 ms) |
+| T4 | third pass: active tab marker position | green | matches G's marker tab style |
+
+### Behavioural verification
+
+Every state at 390 px has `document.documentElement.scrollWidth` 390 (no sideways scroll); the
+merge of v2-ip-ui had dropped a closing brace in `pages.css`, found by the screenshots (the grid
+rules were ignored), fixed and pinned by `static_css_balanced.rs`.
