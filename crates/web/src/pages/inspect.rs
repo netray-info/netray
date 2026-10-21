@@ -540,6 +540,7 @@ struct SuggestView {
     types: String,
     flags: String,
     servers: String,
+    parse: &'static str,
 }
 
 #[derive(Template)]
@@ -1001,7 +1002,7 @@ async fn shared_result(deps: &InspectDeps, tool: Tool, key: &str) -> Shared {
             None,
             blocks.as_ref().map_or(&[][..], Vec::as_slice),
             &export_errors(
-                std::iter::once((cached.mode.as_str(), Some(&blocks))),
+                std::iter::once((dns_label(&cached.mode), Some(&blocks))),
                 None::<&Result<(), String>>,
             ),
             true,
@@ -1012,8 +1013,8 @@ async fn shared_result(deps: &InspectDeps, tool: Tool, key: &str) -> Shared {
             backlink(Tool::Dns, &cached.query),
             None,
             vec![(
-                cached.mode.clone(),
-                part_html(0, &cached.mode, &blocks, &[], &[], None),
+                dns_label(&cached.mode).to_string(),
+                part_html(0, dns_label(&cached.mode), &blocks, &[], &[], None),
             )],
             (BandSlot::Done(band), None),
             (
@@ -1033,6 +1034,16 @@ async fn shared_result(deps: &InspectDeps, tool: Tool, key: &str) -> Shared {
     }
 }
 
+/// The section heading of a DNS job's part, as the live part names it (`InspectJobs::start_dns`).
+fn dns_label(mode: &str) -> &str {
+    match mode {
+        "dnssec" => "DNSSEC",
+        "compare" => "transport comparison",
+        "authcompare" => "authoritative and recursive",
+        other => other,
+    }
+}
+
 /// The autocomplete tables: the DNS crate's own record types, flags and server names.
 fn suggest(tool: Tool) -> Option<SuggestView> {
     if tool != Tool::Dns {
@@ -1044,6 +1055,7 @@ fn suggest(tool: Tool) -> Option<SuggestView> {
         types,
         flags,
         servers,
+        parse: "/api/v1/dns/parse",
     })
 }
 
@@ -1318,9 +1330,21 @@ fn part_html(
     let (html, text) = match result {
         Ok(blocks) => {
             let mut html = String::new();
+            let ctx = views::ViewContext {
+                statuses: &statuses,
+                decorate: &decorate,
+                feeds: &[],
+            };
+            let mut part = views::render_part(blocks, &ctx);
             // A claimed IP block renders its own attribution.
             let mut attributed = false;
             for block in blocks {
+                if let Some(view) = &mut part
+                    && view.claimed.contains(&block.id)
+                {
+                    html.push_str(&std::mem::take(&mut view.html));
+                    continue;
+                }
                 let feeds = block_feeds(evidence, &block.id);
                 let slot = slot(block, &decorate, &statuses, &feeds, blocks);
                 match slot.view {
@@ -1936,10 +1960,16 @@ fn stream_job(
                             let Some(part @ Ok(blocks)) = part else {
                                 continue;
                             };
+                            // Only a part whose views read the checks changes; a view that reads
+                            // none (the DNS views) is not sent twice. A part with its own checks
+                            // (a TLS port) was rendered with them already.
+                            let label = &run.labels[n];
                             if !run.checked.contains(&n)
                                 && blocks.iter().any(|b| views::claims(b, blocks))
+                                && part_html(n, label, part, &run.badges, checks, None)
+                                    != part_html(n, label, part, &run.badges, &[], None)
                                 && let Some(event) =
-                                    part_event(n, &run.labels[n], part, &run.badges, checks, None)
+                                    part_event(n, label, part, &run.badges, checks, None)
                             {
                                 run.queue.push_back(event);
                             }
