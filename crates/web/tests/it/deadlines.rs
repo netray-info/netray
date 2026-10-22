@@ -67,6 +67,7 @@ fn state(s: Setup) -> ApexState {
             rate_limit_per_ip_burst: 3,
             rate_limit_global_per_minute: 100,
             rate_limit_global_burst: 20,
+            image_runs_per_minute: 20,
             ..ApexConfig::default().limits
         },
         ..ApexConfig::default()

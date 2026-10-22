@@ -33,6 +33,7 @@ fn base_config() -> ApexConfig {
             rate_limit_per_ip_burst: 10,
             rate_limit_global_per_minute: 1000,
             rate_limit_global_burst: 100,
+            image_runs_per_minute: 20,
             ..defaults.limits
         },
         ..defaults

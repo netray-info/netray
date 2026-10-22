@@ -24,6 +24,7 @@ for series in \
     'netray_admission_rejections_total{reason="budget"} 0' \
     'netray_admission_rejections_total{reason="limit"} 0' \
     'netray_admission_rejections_total{reason="slots"} 0' \
+    'netray_admission_rejections_total{reason="image_budget"} 0' \
     'netray_badge_requests_total{cache="hit"} 0' \
     'netray_badge_requests_total{cache="miss"} 0' \
     'netray_badge_requests_total{cache="throttled"} 0' \

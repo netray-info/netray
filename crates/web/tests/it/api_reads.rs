@@ -40,6 +40,7 @@ const LIMITS: AdmissionLimits = AdmissionLimits {
     rate_limit_per_ip_burst: 22,
     rate_limit_global_per_minute: 23,
     rate_limit_global_burst: 24,
+    image_runs_per_minute: 20,
 };
 
 fn app() -> Router {

@@ -4,6 +4,7 @@
 
 mod address_domain_routes;
 mod admission_budget;
+mod admission_image_budget;
 mod admission_join;
 mod admission_metrics;
 mod admission_prefetch;

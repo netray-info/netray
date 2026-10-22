@@ -65,6 +65,7 @@ startup_rejects=(
     "admission|per_ip_burst = 0|"
     "admission|global_per_minute = 0|"
     "admission|global_burst = 0|"
+    "admission|image_runs_per_minute = 0|admission.image_runs_per_minute"
     "badges|ttl_seconds = 0|"
     "api|per_ip_per_minute = 0|api.per_ip_per_minute"
     "api|per_ip_burst = 0|api.per_ip_burst"
