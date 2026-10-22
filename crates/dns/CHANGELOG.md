@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+This crate ships inside `netray` since 0.30.0 and has no release of its own; its changes are recorded in the root [CHANGELOG.md](../../CHANGELOG.md). The entries below are the history of the standalone service prism.
+
 ## [0.9.3] - 2026-05-01
 
 ### Security

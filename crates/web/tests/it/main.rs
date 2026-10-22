@@ -4,6 +4,7 @@
 
 mod address_domain_routes;
 mod admission_budget;
+mod admission_image_budget;
 mod admission_join;
 mod admission_metrics;
 mod admission_prefetch;
@@ -284,6 +285,7 @@ mod polish_refusal_notice;
 mod polish_run_actions;
 mod polish_wide_facts;
 mod privacy_mount;
+mod release_label_logo;
 mod result_branch_review;
 mod result_card_plate;
 mod result_card_plate_fixed;

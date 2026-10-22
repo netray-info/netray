@@ -2,6 +2,8 @@
 
 All notable changes to this project will be documented in this file.
 
+This crate ships inside `netray` since 0.30.0 and has no release of its own; its changes are recorded in the root [CHANGELOG.md](../../CHANGELOG.md). The entries below are the history of the published crate.
+
 ## 0.8.1 (2026-05-01)
 
 ### Changed

@@ -15,7 +15,7 @@
 </head>
 <body>
 {% block header %}<header class="page-header">
-<a href="/"><img src="/static/logo.svg" alt="netray"></a>
+<a href="{{ frame.origin() }}/"><img src="/static/logo.svg" alt="netray"></a>
 {% block header_inspector %}{% endblock %}{% block header_tagline %}<span class="page-tagline">{% include "partials/header_tagline.html" %}</span>{% endblock %}
 <details class="page-menu">
 <summary class="page-menu__button" aria-label="Menu"><span class="page-menu__bar"></span><span class="page-menu__bar"></span><span class="page-menu__bar"></span></summary>

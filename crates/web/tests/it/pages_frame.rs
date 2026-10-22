@@ -113,7 +113,8 @@ fn assert_frame(page: &str, html: &str) {
     );
     once(page, html, "<script type=\"speculationrules\">");
 
-    // Header: logo inside a link to `/`, theme button, nav links.
+    // Header: logo inside a link to the apex (v2-release-cleanup requirement 7), theme button,
+    // nav links.
     let header = slice(page, html, "<header", "</header>");
     let img = pos(page, header, "<img src=\"/static/logo.svg\"");
     let before_img = &header[..img];
@@ -121,8 +122,9 @@ fn assert_frame(page: &str, html: &str) {
         .rfind("<a ")
         .unwrap_or_else(|| panic!("{page}: logo is not inside a link"));
     assert!(
-        before_img[anchor..].contains("href=\"/\"") && !before_img[anchor..].contains("</a>"),
-        "{page}: logo must sit inside a link to /"
+        before_img[anchor..].contains("href=\"https://netray.info/\"")
+            && !before_img[anchor..].contains("</a>"),
+        "{page}: logo must sit inside a link to https://netray.info/"
     );
     let button = &header[..pos(page, header, "data-island=\"theme\"")];
     assert!(

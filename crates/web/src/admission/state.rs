@@ -19,7 +19,7 @@ use netray_model::Protocol;
 use netray_store::HistoryStore;
 
 use super::rate_limit::{GlobalRateLimiter, PerIpRateLimiter};
-use super::{Runs, Throttle};
+use super::{ImageBudget, Runs, Throttle};
 use crate::api::ApiParts;
 use crate::config::ApexConfig;
 use crate::metrics::ClientRunCounter;
@@ -44,6 +44,8 @@ pub struct ApexState {
     /// from the forwarding headers.
     pub ip_extractor: Arc<IpExtractor>,
     pub badge_recompute_limiter: Arc<BadgeRecomputeLimiter>,
+    /// The site-wide budget of badge and OG fresh runs.
+    pub image_budget: Arc<ImageBudget>,
     pub scoring_profile: Arc<Profile>,
     /// The modules and the resolve stage a run goes through.
     pub registry: Arc<Registry>,
@@ -97,6 +99,7 @@ impl ApexState {
             .allow_burst(NonZeroU32::new(1).unwrap());
         let badge_recompute_limiter = Arc::new(RateLimiter::keyed(badge_quota));
 
+        let image_budget = Arc::new(ImageBudget::new(limits.image_runs_per_minute));
         let slots = Arc::new(tokio::sync::Semaphore::new(
             limits.domain_run_slots as usize,
         ));
@@ -109,6 +112,7 @@ impl ApexState {
             global_limiter,
             ip_extractor,
             badge_recompute_limiter,
+            image_budget,
             scoring_profile: Arc::new(profile),
             registry: Arc::new(registry),
             plan: Arc::new(plan),

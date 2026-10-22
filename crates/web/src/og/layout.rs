@@ -42,4 +42,4 @@ pub const BG_COLOR: &str = "#0d1220";
 pub const UNKNOWN_GRADE_COLOR: &str = "#4d6480";
 
 pub const MAX_LABEL_LEN: usize = 32;
-pub const DEFAULT_LABEL: &str = "lens";
+pub const DEFAULT_LABEL: &str = "netray";

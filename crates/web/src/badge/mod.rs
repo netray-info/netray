@@ -100,7 +100,7 @@ mod tests {
         let r = parse_badge_request("example.com", q, &default_cfg()).unwrap();
         assert_eq!(r.domain, "example.com");
         assert_eq!(r.style, BadgeStyle::Flat);
-        assert_eq!(r.label, "lens");
+        assert_eq!(r.label, "netray");
     }
 
     #[test]

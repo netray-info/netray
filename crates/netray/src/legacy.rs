@@ -280,3 +280,179 @@ fn walk(table: &toml::Table, path: &mut Vec<String>) -> Result<(), String> {
 pub fn refuse(raw: &toml::Table) -> Result<(), String> {
     walk(raw, &mut Vec::new())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MODULES: [&str; 5] = ["dns", "tls", "http", "email", "ip"];
+
+    /// A valid TOML value for each destination key path (`<m>` substituted).
+    const SAMPLES: &[(&str, &str)] = &[
+        ("engine.resolve_timeout_ms", "1000"),
+        ("engine.profile_path", "\"profile.toml\""),
+        ("admission.cache_enabled", "true"),
+        ("admission.cache_window_seconds", "300"),
+        ("admission.per_ip_per_minute", "10"),
+        ("admission.per_ip_burst", "3"),
+        ("admission.global_per_minute", "100"),
+        ("admission.global_burst", "20"),
+        ("api.ip.per_ip_per_minute", "60"),
+        ("api.ip.per_ip_burst", "10"),
+        ("api.ip.per_target_per_minute", "120"),
+        ("api.ip.per_target_burst", "20"),
+        ("store.enabled", "true"),
+        ("store.db_path", "\"history.db\""),
+        ("server.metrics_bind", "\"127.0.0.1:9090\""),
+        ("modules.http.inspect.request_timeout_secs", "5"),
+        ("modules.http.inspect.total_timeout_secs", "10"),
+        ("modules.http.inspect.max_redirects", "5"),
+        ("modules.http.inspect.user_agent", "\"netray-test\""),
+        ("modules.dns.circuit_breaker", "{ window_secs = 60 }"),
+        ("modules.tls.validation", "{ expiry_warning_days = 30 }"),
+        ("modules.tls.quality", "{ enabled = true }"),
+        ("modules.email.dnsbl", "{ timeout_ms = 2000 }"),
+        ("modules.email.http", "{ timeout_ms = 5000 }"),
+        ("modules.email.dkim", "{ max_user_selectors = 5 }"),
+        ("modules.ip.user_agent_regexes", "\"regexes.yaml\""),
+        ("modules.ip.geoip_city_db", "\"city.mmdb\""),
+        ("modules.ip.geoip_asn_db", "\"asn.mmdb\""),
+        ("modules.ip.tor_exit_nodes", "\"tor.txt\""),
+        ("modules.ip.cloud_provider_ranges", "\"cloud.txt\""),
+        ("modules.ip.feodo_botnet_ips", "\"feodo.txt\""),
+        ("modules.ip.cins_army_ips", "\"cins.txt\""),
+        ("modules.ip.vpn_ranges", "\"vpn.txt\""),
+        ("modules.ip.datacenter_ranges", "\"dc.txt\""),
+        ("modules.ip.bot_ranges", "\"bot.txt\""),
+        ("modules.ip.spamhaus_drop", "\"drop.txt\""),
+        ("modules.ip.asn_patterns", "\"asn_patterns.toml\""),
+        ("modules.ip.asn_info", "\"asn_info.csv\""),
+        ("modules.dns.deadline_ms", "2000"),
+        ("modules.tls.deadline_ms", "2000"),
+        ("modules.http.deadline_ms", "2000"),
+        ("modules.email.deadline_ms", "2000"),
+        ("modules.ip.deadline_ms", "2000"),
+    ];
+
+    /// `[a.b] key`, `[a.b].key` or `[a.b]` as the key path `a.b.key` or `a.b`.
+    fn key_path(dest: &str) -> String {
+        let (table, rest) = dest
+            .strip_prefix('[')
+            .and_then(|d| d.split_once(']'))
+            .unwrap_or_else(|| panic!("destination {dest:?} does not start with a [table]"));
+        let rest = rest.trim().trim_start_matches('.');
+        if rest.is_empty() {
+            table.to_string()
+        } else {
+            format!("{table}.{rest}")
+        }
+    }
+
+    /// Every `Now` destination of `ROWS` as a key path, `<m>` replaced by each module.
+    fn destinations() -> Vec<(String, String)> {
+        let mut out = Vec::new();
+        for (pattern, origin, fate) in ROWS {
+            let Now(dest) = fate else { continue };
+            let row = format!("{pattern} ({origin}) -> {dest}");
+            if dest.contains("<m>") {
+                for m in MODULES {
+                    out.push((row.clone(), key_path(&dest.replace("<m>", m))));
+                }
+            } else {
+                out.push((row, key_path(dest)));
+            }
+        }
+        out
+    }
+
+    /// Keys a table needs beside any other: `[modules.ip]` loads only with both databases.
+    const REQUIRED: &[(&str, &str, &str)] = &[
+        ("modules.ip", "geoip_city_db", "\"city.mmdb\""),
+        ("modules.ip", "geoip_asn_db", "\"asn.mmdb\""),
+    ];
+
+    /// The key path `a.b.c` at `value` as a TOML document: `[a.b]`, the keys the table requires,
+    /// then `c = value`.
+    fn document(path: &str, value: &str) -> String {
+        let (table, key) = path.rsplit_once('.').expect("a destination names a table");
+        let mut doc = format!("[{table}]\n");
+        for (t, k, v) in REQUIRED {
+            if *t == table && *k != key {
+                doc.push_str(&format!("{k} = {v}\n"));
+            }
+        }
+        doc.push_str(&format!("{key} = {value}\n"));
+        doc
+    }
+
+    #[test]
+    fn key_paths_read_all_three_destination_forms() {
+        assert_eq!(
+            key_path("[engine] resolve_timeout_ms"),
+            "engine.resolve_timeout_ms"
+        );
+        assert_eq!(
+            key_path("[modules.http.inspect].max_redirects"),
+            "modules.http.inspect.max_redirects"
+        );
+        assert_eq!(
+            key_path("[modules.dns].circuit_breaker"),
+            "modules.dns.circuit_breaker"
+        );
+    }
+
+    #[test]
+    fn every_now_row_has_a_sample_value() {
+        let missing: Vec<String> = destinations()
+            .into_iter()
+            .filter(|(_, path)| !SAMPLES.iter().any(|(p, _)| p == path))
+            .map(|(row, path)| format!("{row}: no sample for {path}"))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "add a sample value:\n{}",
+            missing.join("\n")
+        );
+    }
+
+    #[tokio::test]
+    async fn every_now_destination_loads_in_check_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut refused = Vec::new();
+        for (n, (row, path)) in destinations().into_iter().enumerate() {
+            let Some((_, value)) = SAMPLES.iter().find(|(p, _)| *p == path) else {
+                continue;
+            };
+            let file = dir.path().join(format!("dest{n}.toml"));
+            std::fs::write(&file, document(&path, value)).unwrap();
+            if let Err(e) = crate::serve::check_config(file.to_str().unwrap()).await {
+                refused.push(format!("{row}: `{path} = {value}` refused: {e}"));
+            }
+        }
+        assert!(
+            refused.is_empty(),
+            "stale legacy rows:\n{}",
+            refused.join("\n")
+        );
+    }
+
+    /// The two rows the cutover's branch review caught (specs/solutions/2026-10-22-legacy-row-
+    /// names-a-refused-destination.md): their old destinations fail the same check.
+    #[tokio::test]
+    async fn a_destination_the_config_refuses_is_caught() {
+        let dir = tempfile::tempdir().unwrap();
+        for (n, dest, value) in [
+            (0, "[modules.http].enrichment", "{ enabled = true }"),
+            (1, "[api.ip] exempt_cidrs", "[\"192.0.2.0/24\"]"),
+        ] {
+            let file = dir.path().join(format!("stale{n}.toml"));
+            std::fs::write(&file, document(&key_path(dest), value)).unwrap();
+            assert!(
+                crate::serve::check_config(file.to_str().unwrap())
+                    .await
+                    .is_err(),
+                "{dest} must be refused"
+            );
+        }
+    }
+}

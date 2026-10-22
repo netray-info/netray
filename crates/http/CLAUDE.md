@@ -1,61 +1,40 @@
-# CLAUDE.md -- spectra
+# CLAUDE.md -- netray-http
 
-## What this is
+The HTTP module of `netray serve` (V1 codename spectra): a library, no binary. What it measures,
+its checks and its config keys are in `README.md`. Repo-wide rules, including the http-specific
+ones (graded headers judged in `src/module.rs`, `http.isolation`, volatile paths, contract
+goldens), live in the root [CLAUDE.md](../../CLAUDE.md) and are not repeated here.
 
-HTTP header inspector and security audit service (`http.netray.info`). Fourth pillar in the netray suite: IP -> DNS -> TLS -> HTTP.
+## Layout
 
-Given a URL, fires three concurrent requests (HTTPS chain, HTTP port-80 upgrade probe, CORS probe with evil origin), parses every response header category, and returns a structured JSON report with per-check quality verdicts.
+- `src/module.rs` -- `HttpModule` (`Module` impl), `REGISTER`, `VOLATILE`, `translate` from the
+  inspection onto the thirteen check ids and their evidence blocks.
+- `src/job.rs` -- the inspection netray-web runs (API v1 and `/inspect/http`): parse, charge
+  limits, resolve under the target policy, inspect; refusals as `HttpRefusal`.
+- `src/input.rs` -- URL parsing and target validation (`netray_common::target_policy`).
+- `src/inspect/` -- the three probes (`mod.rs`), the outbound request chain over
+  `netray_common::fetch` (`request.rs`), header analysers (security, csp, cors, cookies,
+  caching, fingerprint) and the V1-shaped `InspectResponse` (`assembler.rs`).
+- `src/quality/` -- per-check scoring of the V1 report; `translate` maps it onto the model.
+- `src/security/` -- `RateLimitState`, the per-IP and per-target limiters the job uses.
+- `src/testing.rs` -- stubs behind the `testing` feature.
 
-## Architecture
+## Rules
 
-Axum 0.8 service with embedded SolidJS 1.9 frontend. Follows the same patterns as tlsight/prism.
-
-- `src/input.rs` -- URL normalization + SSRF validation (delegates to netray-common target_policy)
-- `src/inspect/` -- Header analysis modules (security, csp, cors, cookies, caching, fingerprint)
-- `src/inspect/headers.rs` -- Raw header dump utility
-- `src/inspect/mod.rs` -- Inspection orchestrator; runs three concurrent probes
-- `src/inspect/request.rs` -- reqwest client with custom redirect policy for hop capture
-- `src/quality/` -- Per-check scoring engine; CheckStatus ordering: Pass < Skip < Warn < Fail
-- `src/security/` -- IP extraction and rate limiting (delegates to netray-common)
-- `src/routes.rs` -- API handlers, health/ready endpoints
-
-## Config
-
-TOML file (default: `spectra.dev.toml` for local dev) + env overrides as `NETRAY_HTTP_<SECTION>__<KEY>`. Set `NETRAY_HTTP_CONFIG` to override the config file path. Any `SPECTRA_*` variable fails the load, naming the new prefix. Every config struct is `deny_unknown_fields`: an unknown section or key, in the file or the env, fails the load. `netray http --check-config <path>` validates a file, including the values startup rejects (zero rate limits), and exits 0 (`config ok: <path>`) or 1 with the error.
-
-## Key conventions
-
-- Health endpoints: `GET /health`, `GET /ready` (root level per architecture-rules)
-- API: `GET/POST /api/inspect`, `GET /api/config`, `GET /api/meta`, `GET /docs` (Scalar UI)
-- Rate limiting: per-IP (10/min, burst 5) + per-target (30/min, burst 10)
-- Rate limit fires before DNS resolution to avoid unnecessary lookups for throttled clients
-
-## Development
-
-### Setup
-
-`spectra.dev.toml` is committed; copy `spectra.example.toml` for a config of your own.
-
-### Running locally
-
-```sh
-netray http crates/http/spectra.dev.toml  # starts the service (after `just build`)
-NETRAY_HTTP_CONFIG=my.toml netray http           # use a custom config file path
-```
-
-### Build & test
-
-The verbs live in the root `justfile` (see the root `README.md`); run them from the repository root.
-
-```sh
-just adlc-setup                      # once: npm workspaces + frontend builds
-just adlc-verify                     # the gate: fmt-check, clippy, tests, offline
-cargo test -p netray-http                # this crate's tests
-npm run dev -w spectra-frontend      # Vite dev server on :5175
-```
+- `CheckStatus` orders Pass < Skip < Warn < Fail; `Skip` maps to `NotApplicable`.
+- Limits are charged before any DNS resolution, in the module (`measure`) and in the job
+  (`inspect_url`).
+- Only `timeout`, `blocked` and `unreachable` probe errors are unanswered (`unmeasured`);
+  `refused`, `reset` and `tls` on the HTTPS probe are a measured fail (`unanswered` in
+  `src/module.rs`).
+- Input with an explicit `http://` scheme is refused; the port-80 probe runs for every
+  `https://` target.
+- The `testing`-feature targets (`tests/module.rs`, `tests/job.rs`) need
+  `cargo test -p netray-http --features testing --test <name>`; everything else is in
+  `tests/it/` (`cargo test -p netray-http --test it <module>`).
 
 ## Specs
 
-- Apply [frontend-rules](../../specs/rules/frontend-rules.md) when modifying `frontend/`
-- Apply [logging-rules](../../specs/rules/logging-rules.md) when modifying tracing/telemetry
-- Apply [architecture-rules](../../specs/rules/architecture-rules.md) for health probes and middleware
+- Apply [architecture-rules](../../specs/rules/architecture-rules.md) when changing outbound
+  probes, limits or errors.
+- Apply [logging-rules](../../specs/rules/logging-rules.md) when changing tracing.

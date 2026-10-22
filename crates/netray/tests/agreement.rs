@@ -130,6 +130,7 @@ fn production() -> (ApexConfig, impl Fn(Protocol) -> Duration, Duration) {
             rate_limit_per_ip_burst: admission("per_ip_burst"),
             rate_limit_global_per_minute: admission("global_per_minute"),
             rate_limit_global_burst: admission("global_burst"),
+            image_runs_per_minute: 20,
         },
         cache_enabled: raw["admission"]["cache_enabled"].as_bool().unwrap(),
         cache_window_seconds: int("admission", "cache_window_seconds"),

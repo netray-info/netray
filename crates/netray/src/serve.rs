@@ -81,6 +81,7 @@ pub async fn run(path: Option<String>) -> anyhow::Result<()> {
         per_ip_burst = apex.limits.rate_limit_per_ip_burst,
         global_rate = apex.limits.rate_limit_global_per_minute,
         global_burst = apex.limits.rate_limit_global_burst,
+        image_runs_per_minute = apex.limits.image_runs_per_minute,
         trusted_proxy_count = apex.trusted_proxies.len(),
         cache_enabled = apex.cache_enabled,
         cache_window_seconds = apex.cache_window_seconds,

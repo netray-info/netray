@@ -60,7 +60,12 @@ async fn c1_every_absolute_url_is_built_from_the_apex_origin() {
 async fn c2_guide_links_and_forms_are_apex_relative() {
     let action = Regex::new(r#"<form[^>]*\saction="([^"]*)""#).unwrap();
     for g in guides::GUIDES {
-        let html = without_canonical(&page(&format!("/guide/{}", g.slug)).await);
+        // The header logo links to the apex (v2-release-cleanup requirement 7).
+        let html = without_canonical(&page(&format!("/guide/{}", g.slug)).await).replacen(
+            r#"<a href="https://netray.info/"><img"#,
+            "<a><img",
+            1,
+        );
         assert!(
             !html.contains("href=\"https://netray.info"),
             "{}: absolute apex href",

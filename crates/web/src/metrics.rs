@@ -119,7 +119,7 @@ pub fn init_zero_series() {
         "netray_admission_rejections_total",
         "Requests refused a run, by reason"
     );
-    for reason in ["throttle", "budget", "limit", "slots"] {
+    for reason in ["throttle", "budget", "limit", "slots", "image_budget"] {
         metrics::counter!("netray_admission_rejections_total", "reason" => reason).increment(0);
     }
     metrics::describe_gauge!(

@@ -25,7 +25,7 @@ fn default_badge_ttl() -> u64 {
 }
 
 fn default_badge_label() -> String {
-    "lens".into()
+    "netray".into()
 }
 
 fn default_badge_max_label_len() -> usize {
@@ -79,7 +79,8 @@ pub struct ApexConfig {
 
 impl Default for ApexConfig {
     /// lens's defaults: budget 30 per hour, 8 slots, 10 per minute and a burst of 3 per IP, 100
-    /// per minute and a burst of 20 globally, the cache on with a 300 s window.
+    /// per minute and a burst of 20 globally, the cache on with a 300 s window; 10 badge and OG
+    /// runs per minute.
     fn default() -> Self {
         Self {
             trusted_proxies: Vec::new(),
@@ -90,6 +91,7 @@ impl Default for ApexConfig {
                 rate_limit_per_ip_burst: 3,
                 rate_limit_global_per_minute: 100,
                 rate_limit_global_burst: 20,
+                image_runs_per_minute: 10,
             },
             cache_enabled: true,
             cache_window_seconds: 300,

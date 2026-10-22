@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+This crate ships inside `netray` since 0.30.0 and has no release of its own; its changes are recorded in the root [CHANGELOG.md](../../CHANGELOG.md). The entries below are the history of the standalone service beacon.
+
 ## [Unreleased]
 
 ## [0.4.0] - 2026-10-07
