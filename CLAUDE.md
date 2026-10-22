@@ -53,7 +53,7 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - The gate's clippy runs without `--all-targets`; a narrower command with `--all-targets` hits old test-code lints the gate never sees.
 - `metrics_util` 0.20's `Snapshotter::snapshot()` swaps every value to 0 on read: read once, accumulate across reads, or render a `PrometheusRecorder`.
 - A `describe_*!` alone renders no HELP line: also register the metric at startup.
-- A service moved in-process keeps every check its route applied to lens's calls (input validation, per-target limits, policy); only per-client limits go.
+- A service moved in-process keeps every check its route applied to lens's calls (input validation, per-target limits, policy); only per-client limits go. Exception: the DNS module charges domain runs and their facts stage no per-target limit; lens admission bounds them (SDD S44).
 - hickory renders `xn--` labels as Unicode in `Name::to_string()` and in mhost's serialised lookups: compare owner names as A-labels (`to_ascii()`, `check.rs` `same_name`).
 - A DNS check judges a name below its zone apex by its zone (`check.rs` `read_zone`); a zone batch carries `source: "zone"` in memory only, `wire_batch` strips it from prism's stream.
 - A live domain run at the dev DNS limits admits two runs (burst 50, 19 per run, keyed by resolver): raise `LENS_MODULES__DNS__LIMITS__PER_TARGET_BURST` for a series of live checks.
