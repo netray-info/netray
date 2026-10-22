@@ -3,10 +3,11 @@
 The IP module (`crates/ip`, the `[modules.ip]` table of `netray.toml`) enriches each address
 with data from the sources below, loaded at startup and reloaded on SIGHUP. A reload in which a
 configured GeoIP database or `user_agent_regexes` file fails to load keeps the whole previous
-data; any other source that fails on reload is dropped until the next reload. The DNS, TLS, HTTP and email modules enrich their addresses
-through it in-process. This document describes every data source, how confidence is layered,
-and how the output fields are derived. Where each file comes from and how it is fetched:
-[`crates/ip/data/README.md`](../crates/ip/data/README.md).
+data; an `asn_patterns` file that fails falls back to the built-in patterns; any other source
+that fails on reload is dropped until the next reload. The DNS, TLS, HTTP and email modules
+enrich their addresses through it in-process. This document describes every data source, how
+confidence is layered, and how the output fields are derived.
+Where each file comes from and how it is fetched: [`crates/ip/data/README.md`](../crates/ip/data/README.md).
 
 ---
 
@@ -37,7 +38,8 @@ and how the output fields are derived. Where each file comes from and how it is 
 file that fails to load is a load error: `netray serve` does not start, and a reload keeps
 the previous data. Without `user_agent_regexes` User-Agent parsing is off.
 
-**Optional** (warning logged, detection disabled): all other sources. The
+**Optional** (warning logged, detection disabled): all other sources, except `asn_patterns`,
+whose failure falls back to the built-in patterns. The
 `netray_ip_enrichment_sources_loaded{source}` gauge tracks which sources loaded (for `asn_patterns`, whether the key is set).
 
 ---
