@@ -1,12 +1,16 @@
-//! Shared utilities for the netray.info service ecosystem.
+//! Shared Rust of the netray workspace: what the modules, netray-web and the `netray` binary
+//! use in common.
 //!
-//! This crate provides cross-cutting concerns used by multiple backend services:
-//!
-//! - [`config`] -- Strict layered configuration loading (TOML file + prefixed environment variables).
-//! - [`ip_extract`] -- Extract real client IP from proxy headers with trusted-proxy CIDR matching.
-//! - [`error`] -- Structured JSON error responses via the [`error::ApiError`] trait.
-//! - [`rate_limit`] -- Keyed and global rate limiting wrappers around `governor`.
-//! - [`security_headers`] -- Axum middleware for CSP, HSTS, and other security headers.
+//! - [`config`] -- strict layered configuration loading (TOML file + prefixed environment variables).
+//! - [`domain`] -- the domain-name input rule (UTS #46 A-label).
+//! - `fetch` (feature `fetch`) and [`target_policy`] -- outbound requests to user-supplied
+//!   targets and the addresses they refuse.
+//! - [`ip_extract`] -- the real client IP from proxy headers with trusted-proxy CIDR matching.
+//! - [`error`] -- structured JSON error responses via the [`error::ApiError`] trait.
+//! - [`rate_limit`] -- keyed and global rate limiting wrappers around `governor`.
+//! - [`security_headers`] -- axum middleware for CSP, HSTS and the other security headers.
+//! - `enrichment` (feature `enrichment`) -- in-process IP enrichment through the registered IP
+//!   module.
 //!
 //! # Example
 //!

@@ -41,7 +41,7 @@ headers, `headers_block`). The register of all three blocks is `module::REGISTER
 - `GEOIP_ATTRIBUTION`: the attribution text the GeoLite2 licence requires next to derived data.
 
 How an address is classified (cloud, VPN, Tor, bot, C2, Spamhaus, datacenter, ASN category and
-network role, geolocation) is described in [docs/enrichment.md](docs/enrichment.md).
+network role, geolocation) is described in [docs/ip-enrichment.md](../../docs/ip-enrichment.md).
 
 ## Configuration
 

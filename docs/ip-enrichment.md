@@ -1,15 +1,18 @@
-# Enrichment Pipeline
+# IP enrichment
 
-ifconfig-rs enriches each IP address with data from multiple sources loaded at startup
-(and optionally hot-reloaded via SIGHUP or filesystem watch). This document describes
-every data source, how confidence is layered, and exactly how the output fields are
-derived.
+The IP module (`crates/ip`, the `[modules.ip]` table of `netray.toml`) enriches each address
+with data from the sources below, loaded at startup and reloaded on SIGHUP. A reload whose
+required source fails keeps the previous data; an optional source that fails on reload is
+dropped until the next reload. The DNS, TLS, HTTP and email modules enrich their addresses
+through it in-process. This document describes every data source, how confidence is layered,
+and how the output fields are derived. Where each file comes from and how it is fetched:
+[`crates/ip/data/README.md`](../crates/ip/data/README.md).
 
 ---
 
 ## Data Sources
 
-| Config key | File | Source | Update cadence | What it provides |
+| `[modules.ip]` key | File | Source | Update cadence | What it provides |
 |---|---|---|---|---|
 | `geoip_city_db` | `GeoLite2-City.mmdb` | [MaxMind GeoLite2](https://www.maxmind.com/en/geolite2/signup) | 1st + 3rd Tuesday/month | City, region, country, coordinates, timezone, `is_eu`, accuracy radius |
 | `geoip_asn_db` | `GeoLite2-ASN.mmdb` | [MaxMind GeoLite2](https://www.maxmind.com/en/geolite2/signup) | 1st + 3rd Tuesday/month | ASN number, org name, IP prefix |
@@ -17,6 +20,7 @@ derived.
 | `cloud_provider_ranges` | `cloud_provider_ranges.jsonl` | AWS, GCP, Azure, Cloudflare, Oracle, Fastly, DigitalOcean, Linode, GitHub, Google Services (normalized to JSONL) | Weekly | Cloud provider identity: `provider`, `service`, `region` |
 | `bot_ranges` | `bot_ranges.jsonl` | Googlebot, Bingbot, Applebot, GPTBot (official publisher lists, normalized to JSONL) | Weekly | Bot crawler identity: `provider` |
 | `feodo_botnet_ips` | `feodo_botnet_ips.txt` | [Feodo Tracker / abuse.ch](https://feodotracker.abuse.ch/downloads/ipblocklist.txt) | Daily | Active botnet C2 nodes (`is_c2`) |
+| `cins_army_ips` | `cins_army_ips.txt` | [CINS Army / CI Bad Guys](https://cinsscore.com/list/ci-badguys.txt) | Daily | Known bad-actor IPs (`is_cins`) |
 | `spamhaus_drop` | `spamhaus_drop.txt` | [Spamhaus DROP + EDROP + DROPv6](https://www.spamhaus.org/drop/) | Daily | Hijacked netblocks (`is_spamhaus`) |
 | `tor_exit_nodes` | `tor_exit_nodes.txt` | [Tor Project bulk exit list](https://check.torproject.org/torbulkexitlist) | Hourly | Tor exit nodes (`is_tor`) |
 | `vpn_ranges` | `vpn_ranges.txt` | [X4BNet lists_vpn](https://github.com/X4BNet/lists_vpn) (IPv4 + IPv6) | Weekly | VPN CIDR ranges (`is_vpn`) |
@@ -26,12 +30,12 @@ derived.
 
 ### Source availability
 
-**Mandatory** (process exits if configured but fails to load): `geoip_city_db`,
-`geoip_asn_db`, `user_agent_regexes`.
+**Required by `netray serve`**: `geoip_city_db` and `geoip_asn_db`; it refuses a
+`[modules.ip]` without them or with a missing file. A configured GeoIP database or
+`user_agent_regexes` file that fails to load is a load error.
 
-**Optional** (warning logged, detection disabled): all other sources. When optional
-sources are configured but fail to load they appear in the `/ready` endpoint `warnings`
-array and are tracked by the `enrichment_sources_loaded{source}` Prometheus gauge.
+**Optional** (warning logged, detection disabled): all other sources. The
+`netray_ip_enrichment_sources_loaded{source}` gauge tracks which sources loaded (for `asn_patterns`, whether the key is set).
 
 ---
 
@@ -58,6 +62,8 @@ CIDR lists published directly by the operator of the resource:
 - **Feodo Tracker** — Active C2 botnet infrastructure IPs maintained by abuse.ch.
   Match gives `is_c2 = true`. These are known command-and-control nodes with high
   confidence; the list is manually curated.
+- **CINS Army** — IPs the CINS Army list scores as bad actors. Match gives
+  `is_cins = true`.
 - **Spamhaus DROP/EDROP/DROPv6** — Netblocks that Spamhaus considers entirely hijacked
   or under the control of criminal organizations. Match gives `is_spamhaus = true`.
   These are netblocks, not individual IPs — an entire prefix is considered hostile.
@@ -80,7 +86,7 @@ Crowdsourced or derived lists with good but not authoritative coverage:
 
 Data keyed by Autonomous System Number rather than individual prefix:
 
-- **ASN heuristic** (`asn_heuristic.rs`) — Case-insensitive substring match or exact
+- **ASN heuristic** (`crates/ip/src/backend/asn_heuristic.rs`) — Case-insensitive substring match or exact
   ASN number match against the MaxMind org name. Covers ~33 hosting providers and ~12
   VPN providers that do not publish machine-readable CIDR lists. When the VPN heuristic
   matches, it adds `vpn: { provider }` to an existing CIDR match or produces
@@ -95,9 +101,9 @@ Data keyed by Autonomous System Number rather than individual prefix:
   accuracy radius. Loaded from a MaxMind binary database via `maxminddb`.
 - **MaxMind GeoLite2-ASN** — ASN number, org name, and announced prefix. Used as
   input to Layer 3 lookups.
-- **PTR reverse DNS** — Async DNS query for the PTR record of the IP. Performed by
-  default for `?ip=` lookups; skipped by default in batch for performance (opt in via
-  `?dns=true`).
+- **PTR reverse DNS** — Async DNS query for the PTR record of the IP. On by default
+  for a single lookup (`?dns=` with anything but `true` or `1` turns it off); a batch
+  looks it up only with `?dns=true` or `?dns=1` (any case).
 
 ---
 
@@ -221,8 +227,6 @@ Routing role of the ASN in the global BGP topology:
 | `"ix_route_server"` | Internet exchange route server |
 | `null` | Unknown or not in dataset |
 
-Displayed as a badge in the UI and shown in the Network card's Role row.
-
 ---
 
 ## Flag Reference
@@ -231,6 +235,7 @@ Displayed as a badge in the UI and shown in the Network card's Role row.
 |---|---|---|
 | `is_internal` | IP math (Layer 0) | RFC 1918 / loopback / ULA — no external routing |
 | `is_c2` | Feodo Tracker (Layer 1) | Confirmed active botnet C2 infrastructure — block immediately |
+| `is_cins` | CINS Army (Layer 1) | Scored bad actor — elevated abuse probability for this IP |
 | `is_bot` | Bot CIDR ranges (Layer 1) | Verified crawler — usually safe, but may inflate analytics |
 | `is_spamhaus` | Spamhaus DROP/EDROP (Layer 1) | Hijacked netblock — high abuse probability across the entire prefix |
 | `is_tor` | Tor exit list (Layer 2) | Tor exit relay — anonymized origin, no real geolocation possible |

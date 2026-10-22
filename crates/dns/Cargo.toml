@@ -3,7 +3,7 @@ name = "netray-dns"
 version.workspace = true
 edition.workspace = true
 license = "MIT"
-description = "Web-based DNS debugging service powered by mhost"
+description = "The DNS module and inspector of netray, powered by mhost"
 
 [dependencies]
 netray-model = { workspace = true }

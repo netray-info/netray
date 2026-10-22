@@ -1,4 +1,5 @@
-//! Shared server utilities: graceful shutdown signal, metrics server, and static file handler.
+//! Server utilities of `netray serve`: the graceful shutdown signal and the Prometheus metrics
+//! server.
 
 // ---------------------------------------------------------------------------
 // Graceful shutdown

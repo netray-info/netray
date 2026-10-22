@@ -1,4 +1,4 @@
-//! Strict layered configuration loading shared by all services.
+//! Strict layered configuration loading: the one loader of `netray.toml`.
 //!
 //! Precedence (highest first): environment variables > TOML file > serde defaults.
 //! Unknown keys are rejected when the target type carries `#[serde(deny_unknown_fields)]`.

@@ -3,7 +3,7 @@ name = "netray-http"
 version.workspace = true
 edition.workspace = true
 license = "MIT"
-description = "HTTP header inspection and security audit service for netray.info"
+description = "The HTTP module and inspector of netray: headers and security audit"
 
 [dependencies]
 netray-model = { workspace = true }

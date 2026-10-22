@@ -3,7 +3,7 @@ name = "netray-email"
 version.workspace = true
 edition.workspace = true
 license = "MIT"
-description = "Email security inspector for netray.info — DNS-only mail posture analysis"
+description = "The email module and inspector of netray: mail posture from DNS, MTA-STS and BIMI"
 
 [dependencies]
 netray-model = { workspace = true }
