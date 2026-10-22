@@ -22,7 +22,7 @@ fn grade_card(label: &str) -> String {
 fn c1_c4_the_default_card_footer_is_the_apex_alone() {
     let svg = grade_card(DEFAULT_LABEL);
     assert_eq!(footer(&svg), "netray.info", "{svg}");
-    assert!(!svg.contains('\u{00b7}'), "no separator: {svg}");
+    assert!(!svg.contains("\u{00b7} netray.info"), "no separator: {svg}");
 }
 
 #[test]

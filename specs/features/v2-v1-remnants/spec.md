@@ -105,7 +105,7 @@ and `crates/web/tests/it/release_label_logo.rs`.
 
 ### Test Scenarios
 
-GIVEN the default label WHEN `svg_for_grade` builds the card for example.com THEN the footer text element reads exactly "netray.info" and the SVG contains no "·".
+GIVEN the default label WHEN `svg_for_grade` builds the card for example.com THEN the footer text element reads exactly "netray.info" and no "· netray.info" appears (the timestamp line keeps its own "·").
 GIVEN the default label WHEN `svg_for_entry` builds an entry card THEN its footer reads exactly "netray.info".
 GIVEN the label "custom" WHEN the card is built THEN the footer reads "custom · netray.info".
 GIVEN an empty label WHEN the card is built THEN the footer reads exactly "netray.info".
