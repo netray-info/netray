@@ -575,6 +575,7 @@ GIVEN `architecture-rules.md` WHEN read THEN the env prefix rule names `NETRAY_`
 - Merge of main (2026-10-22, implementer under the operator's autonomy mandate): the survivor copies of Phase 6 take main's lens changes since 2026-10-19, over leaving them behind with lens: DKIM-selector runs (`AdmittedRuns::start_with`, `admission::admit_dkim`), the recorded run duration (`netray_store::record_timed`), all-unmeasured measured sections as incomplete, single-label domains refused, and the inspector's history and DNS result cache; main's new lens tests are ported to the copies' harness.
 - Merge of main (2026-10-22, implementer under the operator's autonomy mandate): the branch's standalone integration tests of merged crates move into each crate's `it` binary (`v2-ci-speed`, `test_test_binaries.sh`), each move under `ADLC-Test-Change`.
 - Requirement 27 (`just release 0.30.0` on `main`) is not run by this lane, over running it after finish: the lane mandate (2026-10-22) forbids tags and releases, so the release is an operator step after the merge (implementer under the operator's autonomy mandate, 2026-10-22).
+- `[modules.dns.limits] per_target_per_minute` and `per_target_burst` leave the merged production config (the fixture `crates/netray/tests/fixtures/netray.production.toml` and handoff item 3), over carrying them into `netray.toml`: since `v2-correctness-followups` (SDD S44) the registry's DNS instance is admitted by its caller and reads neither key, and S44 hands dropping them to this config merge (S10); `serve`'s registry builds the DNS module with `admitted_by_caller()` as main's lens composition did (implementer under the operator's autonomy mandate, 2026-10-22).
 
 ## Open decisions
 
@@ -590,7 +591,7 @@ Operator handoff, in this order:
    - `[server] bind`, `metrics_bind`, `trusted_proxies` (lens's values) and `apex = "netray.info"`.
    - `[store] db_path` on the persistent volume.
    - `[modules.ip]` naming the files under `/netray/data`.
-   - lens's `[modules.*]` tables; `[admission]` (S33 start values); `[badges]`, `[og_cards]`, `[telemetry]`.
+   - lens's `[modules.*]` tables, without `[modules.dns.limits] per_target_*` (accepted but no longer read, SDD S44); `[admission]` (S33 start values); `[badges]`, `[og_cards]`, `[telemetry]`.
 
    Verify with `docker run --rm -v <file>:/netray/netray.toml ghcr.io/netray-info/netray:0.30.0 --check-config /netray/netray.toml`.
 4. **netray-ops env.** Remove every `LENS_*`, `NETRAY_{DNS,TLS,HTTP,EMAIL,IP}_*`, `PRISM_*`, `TLSIGHT_*`, `SPECTRA_*`, `BEACON_*` and `IFCONFIG_*` variable. `serve` refuses to start while any is set. Set the `NETRAY_*` equivalents only where a value must stay out of the file.

@@ -18,6 +18,7 @@ mod history_fixtures_story;
 mod no_address_sections;
 mod profile;
 mod profile_v4;
+mod profile_v5;
 mod registry;
 mod run;
 mod schema_derives;

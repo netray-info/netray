@@ -181,9 +181,10 @@ async fn meta_reports_version_profiles_and_limits() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["version"], env!("CARGO_PKG_VERSION"));
     assert_eq!(body["api"], "v1");
-    assert_eq!(body["current_profile"], 4);
+    assert_eq!(body["current_profile"], 5);
     assert!(body["profiles"].as_array().unwrap().contains(&json!(3)));
     assert!(body["profiles"].as_array().unwrap().contains(&json!(4)));
+    assert!(body["profiles"].as_array().unwrap().contains(&json!(5)));
     assert_eq!(
         body["evidence_schema_version"],
         netray_model::evidence::EVIDENCE_SCHEMA_VERSION

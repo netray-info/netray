@@ -203,10 +203,15 @@ async fn with_ip(
             .map_err(|e| format!("modules.dns: {e}"))?
             .admitted_by_caller(),
     );
+    // Domain runs and the facts stage are admitted by netray-web's admission (the domain-run
+    // slots and the per-domain throttle; visits, re-checks and API runs also the per-IP, global
+    // and budget limits), so the registry's instance charges no per-target limit (SDD S44);
+    // direct DNS jobs keep `[api.dns]`'s.
     let dns = Arc::new(
         netray_dns::DnsModule::new(dns_config, enrichment)
             .await
-            .map_err(|e| format!("modules.dns: {e}"))?,
+            .map_err(|e| format!("modules.dns: {e}"))?
+            .admitted_by_caller(),
     );
     let mut registry = Registry::new()
         .with(Box::new(Shared(dns.clone())))

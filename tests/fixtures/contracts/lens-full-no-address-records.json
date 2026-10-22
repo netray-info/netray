@@ -79,7 +79,7 @@
       },
       {
         "evidence": [],
-        "fix_hint": "Publish either one alias-mode or only service-mode HTTPS records that advertise the supported ALPN protocols.",
+        "fix_hint": "Publish an HTTPS record at the domain: either one alias-mode record, or only service-mode records that advertise the supported ALPN protocols.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/record-types",
         "messages": [

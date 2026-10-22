@@ -52,9 +52,9 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - The gate's clippy runs without `--all-targets`; a narrower command with `--all-targets` hits old test-code lints the gate never sees.
 - `metrics_util` 0.20's `Snapshotter::snapshot()` swaps every value to 0 on read: read once, accumulate across reads, or render a `PrometheusRecorder`.
 - A `describe_*!` alone renders no HELP line: also register the metric at startup.
+- The DNS module charges domain runs and their facts stage no per-target limit: admission bounds them (SDD S44); direct DNS jobs keep `[api.dns]`'s limits.
 - hickory renders `xn--` labels as Unicode in `Name::to_string()` and in mhost's serialised lookups: compare owner names as A-labels (`to_ascii()`, `check.rs` `same_name`).
 - A DNS check judges a name below its zone apex by its zone (`check.rs` `read_zone`); a zone batch carries `source: "zone"` in memory only, `wire_batch` strips it from prism's stream.
-- A live domain run at the dev DNS limits admits two runs (burst 50, 19 per run, keyed by resolver): raise `NETRAY_MODULES__DNS__LIMITS__PER_TARGET_BURST` for a series of live checks.
 - hickory 0.26 `Name::eq` compares `is_fqdn`: a live query name without the trailing dot never equals a wire record name; never compare owners against the query name.
 - `tests/repo/test_workflows.sh` checks the workflows' shape, not their behaviour; a workflow change is verified by its first CI run or release tag.
 - CI's check job compiles the workspace tests once (`check` runs `test-rust` in place of `test-rust-offline`) and links them with mold: a warm-cache run took 5m34s, `just check` 4m21s (test-repo 1m19s, test compile 1m18s; run 39286874346, was 27m30s in 39227670650); `timeout-minutes` is 20, leaving room for a cold rust-cache. A change to the job's `CARGO*`/`RUST*` env changes the rust-cache key: expect one cold run.
@@ -77,6 +77,7 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - A new line in `result_evidence.html` changes every islands fixture: put a conditional on an existing line, then regenerate with `UPDATE_GOLDEN=1`.
 - `HistoryStore::sweep` always keeps the head's predecessor: a swept-predecessor test needs a third entry as head.
 - A profile version that only adds checks re-scores a stored run to its old grade (`score_section` skips unweighted ids): the diff's grade split puts their effect on the domain step.
+- A new profile version moves the current-profile pins (`profile.rs`, `schema_derives.rs`, `scoring_regression.rs`, `api_reads.rs`) and every history fixture's `profile_version`: regenerate fixtures, never hand-edit.
 - Judge a new graded header in `crates/http/src/module.rs`, not by changing `inspect/security.rs`: spectra's V1 wire serialises each `security.*.status`.
 - A freshly built binary path (a cargo example) gets no network locally; replay its bytes from `python3` to check a live host.
 - `just design-check`'s live TLS boards need network: copy the build to the main checkout's `target/debug/netray` (back up, `rm`, `cp`, restore) and pass `NETRAY_BIN` to it.

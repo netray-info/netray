@@ -99,14 +99,15 @@ fn profile_v3_stays_loadable_with_its_54_weights() {
         assert!(!got.contains_key(*id), "{id} not in v3");
     }
     assert!(Profiles::get(2).is_none());
-    assert_eq!(Profiles::versions(), vec![3, 4]);
+    assert_eq!(Profiles::versions(), vec![3, 4, 5]);
 }
 
 #[test]
 fn profile_v4_is_current_and_weights_exactly_the_catalogue() {
+    // v5 repeats v4's numbers (v2-correctness-followups); the current profile's weights are v4's.
     let p = Profiles::current();
-    assert_eq!(p.version, 4);
-    assert_eq!(p.name, "v4");
+    assert_eq!(p.version, 5);
+    assert_eq!(p.name, "v5");
 
     let got = weights_of(p);
 

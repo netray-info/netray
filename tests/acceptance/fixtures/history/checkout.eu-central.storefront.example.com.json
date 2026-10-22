@@ -2,7 +2,7 @@
   "domain": "checkout.eu-central.storefront.example.com",
   "age_seconds": 0,
   "run": {
-    "profile_version": 4,
+    "profile_version": 5,
     "engine_version": "0.26.0",
     "evidence_schema_version": 1,
     "grade": "A",

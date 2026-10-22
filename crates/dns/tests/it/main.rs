@@ -9,6 +9,7 @@ mod evidence_records;
 mod facts_blocks;
 mod facts_definite;
 mod history_volatile;
+mod https_svcb_absent;
 mod job_blocks_trace_dnssec;
 mod job_page_blocks;
 mod job_page_blocks_human;

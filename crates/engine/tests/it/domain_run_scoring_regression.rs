@@ -122,8 +122,8 @@ fn default_profile_parses_correctly() {
     let profile = default_profile();
 
     // Basic structural checks
-    assert_eq!(profile.name, "v4");
-    assert_eq!(profile.version, 4);
+    assert_eq!(profile.name, "v5");
+    assert_eq!(profile.version, 5);
 
     // Section weights are non-zero
     for section in ["dns", "tls", "ip"] {
