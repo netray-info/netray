@@ -134,6 +134,15 @@ pub enum ParseError {
     AllExceedsLimit(usize, usize),
 }
 
+/// The name a lookup queries for a parsed domain: an IP address becomes its reverse name
+/// (`…in-addr.arpa` / nibble `ip6.arpa`), anything else is returned unchanged.
+pub(crate) fn lookup_name(domain: &str) -> String {
+    match domain.parse::<IpAddr>() {
+        Ok(addr) => hickory_proto::rr::Name::from(addr).to_ascii(),
+        Err(_) => domain.to_string(),
+    }
+}
+
 /// Parse a dig-inspired query string into structured query parameters.
 ///
 /// The first whitespace-delimited token is always the domain. Remaining tokens

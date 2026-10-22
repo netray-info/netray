@@ -23,6 +23,7 @@ use netray_model::evidence::{
 use netray_model::{CheckId, CheckResult, Protocol, Status};
 use tokio::sync::{Semaphore, mpsc};
 
+use crate::api::check::ZONE_SOURCE;
 use crate::api::check::{
     CHECK_TOTAL_STEPS, CheckEvent, CheckRun, LintEvent, check_query, run_check,
 };
@@ -707,7 +708,8 @@ const EVIDENCE_ONLY_INPUTS: &[(&str, &[&str])] = &[("dnssec", &["RRSIG", "NSEC",
 /// records blocks of the answered base-name batches. A check references the blocks of its inputs that the section holds.
 pub fn translate(events: &[CheckEvent]) -> SectionOutcome {
     let mut checks: Vec<LintCheck> = Vec::new();
-    let mut batch_errors: Vec<(&str, Option<String>)> = Vec::new();
+    let mut batch_errors: Vec<(&str, Option<String>, bool)> = Vec::new();
+    let mut replaced: Vec<&str> = Vec::new();
     let mut batches: Vec<&BatchEvent> = Vec::new();
     let mut unanswered: Vec<(&'static str, &[String], bool)> = Vec::new();
     let mut stream_timed_out = false;
@@ -715,7 +717,11 @@ pub fn translate(events: &[CheckEvent]) -> SectionOutcome {
     for event in events {
         match event {
             CheckEvent::Batch(batch) => {
-                batch_errors.push((batch.record_type.as_str(), batch_error(batch)));
+                let zone = batch.source.as_deref() == Some(ZONE_SOURCE);
+                if zone {
+                    replaced.push(batch.record_type.as_str());
+                }
+                batch_errors.push((batch.record_type.as_str(), batch_error(batch), zone));
                 batches.push(batch);
             }
             CheckEvent::Lint(lint) => {
@@ -735,6 +741,14 @@ pub fn translate(events: &[CheckEvent]) -> SectionOutcome {
             _ => {}
         }
     }
+
+    // A batch read at the zone replaces the queried name's batch of its type: the name's failure
+    // decides nothing once the zone's lookup stands in for it.
+    let batch_errors: Vec<(&str, Option<String>)> = batch_errors
+        .into_iter()
+        .filter(|(record_type, _, zone)| *zone || !replaced.contains(record_type))
+        .map(|(record_type, error, _)| (record_type, error))
+        .collect();
 
     for check in &mut checks {
         let findings: Vec<String> = if check.name == "ttl" {
@@ -881,12 +895,21 @@ fn check_evidence(check: &str, blocks: &[Block]) -> Vec<BlockId> {
 /// The finding of a batch that measured nothing: no lookups, or every lookup an error or a
 /// negative answer that is not definite. Names the record type, the causes and the resolvers.
 fn batch_error(batch: &BatchEvent) -> Option<String> {
-    let record_type = &batch.record_type;
-    if batch.lookups.is_empty() {
-        return Some(format!("{record_type} lookup failed: no resolver answered"));
-    }
+    lookup_error(&batch.record_type, batch.lookups.iter(), None)
+}
+
+/// [`batch_error`] over `lookups` of `record_type`, naming `owner` when given.
+pub(crate) fn lookup_error<'a>(
+    record_type: &str,
+    lookups: impl Iterator<Item = &'a Lookup>,
+    owner: Option<&str>,
+) -> Option<String> {
+    let subject = match owner {
+        Some(owner) => format!("{record_type} lookup of {owner}"),
+        None => format!("{record_type} lookup"),
+    };
     let mut causes: Vec<(String, Vec<String>)> = Vec::new();
-    for lookup in batch.lookups.iter() {
+    for lookup in lookups {
         let cause = match lookup.result() {
             LookupResult::Error(e) => e.to_string(),
             LookupResult::NxDomain(nx) if !nx.is_definite() => {
@@ -905,14 +928,14 @@ fn batch_error(batch: &BatchEvent) -> Option<String> {
             None => causes.push((cause, vec![server])),
         }
     }
+    if causes.is_empty() {
+        return Some(format!("{subject} failed: no resolver answered"));
+    }
     let causes: Vec<String> = causes
         .into_iter()
         .map(|(cause, servers)| format!("{cause} from {}", servers.join(", ")))
         .collect();
-    Some(format!(
-        "{record_type} lookup failed: {}",
-        causes.join("; ")
-    ))
+    Some(format!("{subject} failed: {}", causes.join("; ")))
 }
 
 /// A lint event as a single check carrying the worst verdict.

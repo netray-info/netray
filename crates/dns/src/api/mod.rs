@@ -50,7 +50,8 @@ pub struct BatchEvent {
     /// Transport used for this batch (compare mode only).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transport: Option<String>,
-    /// Source of this batch: "recursive" or "authoritative" (auth mode only).
+    /// Source of this batch: "recursive" or "authoritative" (auth mode only). A check batch read at
+    /// the zone or an ancestor carries "zone" in memory, which the stream leaves out.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
 }

@@ -23,7 +23,8 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use tokio::sync::mpsc;
 
 use netray_model::evidence::{Block, BlockId};
-use netray_model::{CheckId, CheckResult, Protocol};
+use netray_model::run::SectionKind;
+use netray_model::{CheckId, CheckResult, Protocol, Status};
 
 /// A boxed, sendable future; keeps the traits usable as trait objects.
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -127,6 +128,47 @@ pub enum SectionOutcome {
     },
     /// The module's own deadline fired.
     TimedOut,
+}
+
+/// The kind and reason a section is reported with, given the `(status, findings)` of the checks
+/// of a section its module reported measured. A section with at least one check and every check
+/// `Unmeasured` is `Incomplete` with the reason "every check unmeasured: <the first check's first
+/// finding>" (no suffix when that check has no finding); any other is `Measured`. Every site that
+/// maps a section outcome onto a [`SectionKind`] goes through this rule.
+pub fn measured_kind_and_reason<'a>(
+    checks: impl IntoIterator<Item = (Status, &'a [String])>,
+) -> (SectionKind, Option<String>) {
+    let mut checks = checks.into_iter().peekable();
+    let Some((_, first_findings)) = checks.peek().copied() else {
+        return (SectionKind::Measured, None);
+    };
+    if checks.all(|(status, _)| status == Status::Unmeasured) {
+        let reason = match first_findings.first() {
+            Some(finding) => format!("every check unmeasured: {finding}"),
+            None => "every check unmeasured".to_string(),
+        };
+        return (SectionKind::Incomplete, Some(reason));
+    }
+    (SectionKind::Measured, None)
+}
+
+impl SectionOutcome {
+    /// The kind and reason this outcome is reported with; see [`measured_kind_and_reason`] for
+    /// the `Measured` case. `NotApplicable` and `Incomplete` carry their reason, `TimedOut` none.
+    pub fn kind_and_reason(&self) -> (SectionKind, Option<String>) {
+        match self {
+            SectionOutcome::Measured { checks, .. } => {
+                measured_kind_and_reason(checks.iter().map(|c| (c.status, c.findings.as_slice())))
+            }
+            SectionOutcome::NotApplicable { reason } => {
+                (SectionKind::NotApplicable, Some(reason.clone()))
+            }
+            SectionOutcome::Incomplete { reason } => {
+                (SectionKind::Incomplete, Some(reason.clone()))
+            }
+            SectionOutcome::TimedOut => (SectionKind::TimedOut, None),
+        }
+    }
 }
 
 /// Facts could not be resolved.

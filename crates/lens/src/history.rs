@@ -71,7 +71,12 @@ pub fn build_run(state: &AppState, output: &CheckOutput, facts: &[Block]) -> Run
                     })
                 }));
                 blocks.extend(result.evidence.iter().cloned());
-                (SectionKind::Measured, None)
+                netray_engine::measured_kind_and_reason(
+                    result
+                        .checks
+                        .iter()
+                        .map(|c| (Status::from(c.verdict.clone()), c.messages.as_slice())),
+                )
             }
             Err(SectionError::NotApplicable { reason }) => {
                 checks.extend(catalogue_checks(protocol, Status::NotApplicable));

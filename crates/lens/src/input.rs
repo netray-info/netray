@@ -8,12 +8,19 @@ use crate::error::AppError;
 /// - Rejects wildcards (labels starting with `*`).
 /// - Rejects labels longer than 63 characters.
 /// - Rejects total length exceeding 253 characters.
+/// - Rejects a single-label name.
 /// - Returns the lowercased, trimmed domain on success.
 ///
 /// Does NOT perform DNS resolution. Target IP policy checks happen after
 /// resolution in the check orchestration layer.
 pub fn validate_domain(input: &str) -> Result<String, AppError> {
-    netray_common::domain::validate(input).map_err(AppError::DomainInvalid)
+    let domain = netray_common::domain::validate(input).map_err(AppError::DomainInvalid)?;
+    if !domain.contains('.') {
+        return Err(AppError::DomainInvalid(
+            "a domain needs at least two labels".into(),
+        ));
+    }
+    Ok(domain)
 }
 
 #[cfg(test)]
@@ -75,10 +82,12 @@ mod tests {
     }
 
     #[test]
-    fn single_label_accepted() {
-        // lens does not reject single-label domains at input validation time;
-        // that is a DNS-level concern, not a syntax concern.
-        assert_eq!(validate_domain("localhost").unwrap(), "localhost");
+    fn single_label_refused() {
+        let err = validate_domain("localhost").unwrap_err();
+        assert!(matches!(
+            err,
+            AppError::DomainInvalid(ref m) if m == "a domain needs at least two labels"
+        ));
     }
 
     // --- IP addresses rejected ---

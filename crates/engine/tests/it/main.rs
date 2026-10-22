@@ -19,6 +19,7 @@ mod schema_derives;
 mod score;
 mod score_run;
 mod score_v1_cases;
+mod section_kind;
 mod strong_signature_finding;
 mod traits;
 mod unmeasured_scoring;

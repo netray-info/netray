@@ -23,8 +23,9 @@ tokio-stream = { workspace = true, features = ["sync"] }
 futures = { workspace = true }
 
 # DNS (used by the trace delegation walk)
-hickory-proto = { version = "0.26.3", features = ["dnssec-ring"] }
+hickory-proto = { workspace = true, features = ["dnssec-ring"] }
 rand = "0.10"
+psl = { workspace = true }
 
 # Serialization
 serde = { workspace = true, features = ["derive"] }
@@ -110,6 +111,7 @@ reqwest = { workspace = true, features = ["rustls"] }
 rcgen = "0.14"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 tokio-rustls = "0.26"
+tokio = { workspace = true, features = ["full", "test-util"] }
 
 [[test]]
 name = "job_blocks"

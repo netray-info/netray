@@ -339,7 +339,11 @@ pub async fn check_spf_measured<R: DnsLookup>(
         .fold(Unresolved::default(), |acc, s| {
             acc.union(Unresolved::from_token(&s.detail))
         });
-    if sub_checks.is_empty() {
+    // An Info sub-check (e.g. overlapping_cidrs) does not suppress the pass.
+    if !sub_checks
+        .iter()
+        .any(|s| matches!(s.verdict, Verdict::Warn | Verdict::Fail))
+    {
         sub_checks.push(SubCheck {
             name: "spf_ok".to_string(),
             verdict: Verdict::Pass,
