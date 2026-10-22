@@ -31,11 +31,13 @@ fn wide_threshold_is_sixty_four_chars() {
 #[test]
 fn wide_counts_chars_of_the_joined_texts() {
     let n = FACT_WIDE_CHARS;
-    assert!(!cell("L", &["a".repeat(n).as_str()], false).wide());
-    assert!(cell("L", &["a".repeat(n + 1).as_str()], false).wide());
+    // words of seven characters and a space: no token reaches FACT_TOKEN_CHARS
+    let words = |unit: &str, len: usize| -> String { unit.repeat(len).chars().take(len).collect() };
+    assert!(!cell("L", &[words("abcdefg ", n).as_str()], false).wide());
+    assert!(cell("L", &[words("abcdefg ", n + 1).as_str()], false).wide());
     // n + 1 two-byte chars: wide by chars; n two-byte chars (2n bytes): not wide
-    assert!(cell("L", &["é".repeat(n + 1).as_str()], false).wide());
-    assert!(!cell("L", &["é".repeat(n).as_str()], false).wide());
+    assert!(cell("L", &[words("ééééééé ", n + 1).as_str()], false).wide());
+    assert!(!cell("L", &[words("ééééééé ", n).as_str()], false).wide());
     // chips: three names of 21 chars joined with ", " = 63 + 4 = 67 > 64
     let names = ["a".repeat(21), "b".repeat(21), "c".repeat(21)];
     let refs: Vec<&str> = names.iter().map(String::as_str).collect();
@@ -47,8 +49,22 @@ fn wide_counts_chars_of_the_joined_texts() {
 }
 
 #[test]
+fn an_unbroken_token_past_the_token_limit_is_wide() {
+    use netray_web::components::FACT_TOKEN_CHARS;
+    assert_eq!(FACT_TOKEN_CHARS, 32);
+    // a 47-character serial has no break point: wide
+    let serial = "4E:D0:33:04:C4:6B:87:A8:C2:EB:55:69:DB:9E:BA:0C";
+    assert!(cell("Serial", &[serial], false).wide());
+    // fifty characters of short words: not wide
+    let ocsp = "stapled · good · 2026-10-21, fresh until 2026-10-28";
+    assert!(!cell("OCSP", &[ocsp], false).wide());
+    assert!(!cell("L", &["a".repeat(FACT_TOKEN_CHARS).as_str()], false).wide());
+    assert!(cell("L", &["a".repeat(FACT_TOKEN_CHARS + 1).as_str()], false).wide());
+}
+
+#[test]
 fn facts_grid_marks_only_wide_cells() {
-    let long = "x".repeat(FACT_WIDE_CHARS + 1);
+    let long = "abcdefg ".repeat(10);
     let html = facts_grid(&FactsGridView {
         cells: vec![
             cell("Short", &["200"], false),

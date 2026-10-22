@@ -592,9 +592,15 @@ pub struct FactCell {
 /// A facts cell whose values read longer than this many characters spans the grid's full width.
 pub const FACT_WIDE_CHARS: usize = 64;
 
+/// A facts cell holding an unbroken token longer than this many characters (a serial, a
+/// fingerprint, a URL) spans the grid's full width too: a third-width cell would break it
+/// mid-token.
+pub const FACT_TOKEN_CHARS: usize = 32;
+
 impl FactCell {
     /// Whether the cell spans the grid's width: its values joined with ", " are longer than
-    /// `FACT_WIDE_CHARS` characters (a raw user agent, a long SAN list).
+    /// `FACT_WIDE_CHARS` characters (a raw user agent, a long SAN list), or one value holds a
+    /// token without whitespace longer than `FACT_TOKEN_CHARS`.
     pub fn wide(&self) -> bool {
         let chars: usize = self
             .values
@@ -603,6 +609,11 @@ impl FactCell {
             .sum::<usize>()
             + 2 * self.values.len().saturating_sub(1);
         chars > FACT_WIDE_CHARS
+            || self.values.iter().any(|v| {
+                v.text
+                    .split_whitespace()
+                    .any(|t| t.chars().count() > FACT_TOKEN_CHARS)
+            })
     }
 }
 

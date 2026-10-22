@@ -189,6 +189,11 @@
   color: var(--color-ink);
   font-size: var(--font-size-label);
 }
+.guide-tool .query-input__field,
+.guide-tool .query-input__submit {
+  min-height: 44px;
+  box-sizing: border-box;
+}
 @media (max-width: 480px) {
   .guide-tool .query-input__field {
     flex-basis: 100%;

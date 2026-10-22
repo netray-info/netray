@@ -107,7 +107,9 @@ V24, V25, HTTP-UI V9, IP-UI V11, site-nav V2, V4, V6, V7, V9, V10, V14, V15.
    leaders pass labels. Rows are added as before (at least three); the placement is made at the
    narrowest plate. SDD §5.5 is amended in the same commit.
 10. **Wide facts.** A `facts_grid` cell whose values' display text (joined as rendered) is longer
-    than `FACT_WIDE_CHARS` (one public constant, 64: about two lines of a 240 px cell) spans the grid's full width
+    than `FACT_WIDE_CHARS` (one public constant, 64: about two lines of a 240 px cell), or
+    holding a token without whitespace longer than `FACT_TOKEN_CHARS` (32: a serial, a
+    fingerprint, a URL, which a narrow cell breaks mid-token), spans the grid's full width
     (`data-wide`); the decision is one pure function in Rust, used by the template. Applies to
     every facts grid (TLS certificate, IP card).
 11. **Guides.** A guide's article (title, lede, prose, code, tool cards, related guides) reads in
@@ -211,6 +213,15 @@ GIVEN every captured page at 390 px WHEN measured THEN the document is not wider
   width too, leaving short cells alone on their rows; at 64 a value wraps to at most about two
   lines of a 240 px cell before it spans the grid (implementer under the operator's autonomy
   mandate, 2026-10-22).
+- Spectrum leaders at 390 px: the phone plate (358 px, a 6.3 px pitch, 10 px labels) is narrower
+  than §5.5's placement plate (the 8 px minimum pitch, 11 px labels), so a label box can still
+  cover a neighbour's leader there; placing at the phone geometry changes the band height on every
+  board and is a proposal for the operator (implementer under the operator's autonomy mandate,
+  2026-10-22).
+- Phase 4 reading: rebuilt the facts grid's long tokens, the result page's export row edge and
+  the guide tool card's heading and control heights; every other finding is kept by an earlier
+  feature's decision or listed as a proposal (report.md N1–N22) (implementer under the
+  operator's autonomy mandate, 2026-10-22).
 - The guide column uses a `ch` width, not a token: the gate tokens colours, radii, fonts and
   lines, and no board draws a guide (implementer under the operator's autonomy mandate,
   2026-10-22).

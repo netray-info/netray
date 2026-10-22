@@ -340,6 +340,9 @@ main .tool-card__tagline {
   border-radius: var(--radius-max);
   background: var(--color-surface);
 }
+.guide-tool > h2 {
+  margin-top: 0;
+}
 .guide-tool + .guide-tool {
   margin-top: var(--space-4);
 }
@@ -1316,6 +1319,9 @@ main td {
 }
 #evidence > .inspector-export {
   margin: var(--space-2) 0 0;
+}
+#evidence > .inspector-export > button:first-child {
+  padding-inline-start: 0;
 }
 .evidence-section__rows {
   margin: var(--space-3) 0;

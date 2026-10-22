@@ -141,3 +141,57 @@ Read: Explore live section with four named links; row links inside the rows card
 | AMENDMENT | the acceptance suite read explore hrefs from `.evidence-view__explore`, now the section | repaired in phase: `tests/acceptance/v2/inspectors.spec.ts` reads `.evidence-view__explore a` |
 | AMENDMENT | the guide tool field rendered 62 px at phone width (content-box) | repaired in phase: `box-sizing: border-box` |
 | NIT | the card-closing guard in `polish_evidence_view.rs` cannot fail with check rows inside | kept: the template's rows loop and links loop are one loop inside the card |
+
+## Phase 4 — Visual reading and design gate
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R12 screenshots at 1280 and 390 px, light and dark, of the listed pages read beside the nearest board; every finding a row and closed; design-check exits 0; nothing scrolls sideways at 390 px | green | design-check, report.md visual rows |
+| C2 | S design-check over the manifest exits 0 | green | design-check |
+| C3 | S the screenshots read beside the nearest board leave no open finding | green | report.md visual rows |
+| C4 | S every captured page at 390 px is no wider than the viewport | green | p4shots.mjs scrollWidth log |
+
+### Design check
+
+`just design-check` on the final tree: exit 0, 14 boards, 0 open deviations, 0 stale accepted entries (2 accepted, from v2-result-fidelity). The private manifest marks the TLS boards' shell elements (netray.info ffa6ffa); with their board elements pointed at nothing, the light TLS board reads `no state (no board element on the page)`.
+
+### Visual reading
+
+A reader with no part in the build read 40 captures (DNS idle, `+check`, run, refused run; email evidence view; TLS inspector; IP inspector; a guide; two result pages; 1280 and 390 px, light and dark) beside boards F, G and M. Every page measured `scrollWidth` equal to the viewport. Rows R2–R11 are the claimed fixes, N1–N22 new findings. Recaptured after the fixes: TLS at all four states (the first pass hit the TLS limiter), result, guide, email view.
+
+| id | finding | status | disposition |
+|---|---|---|---|
+| R2 | builder toggles and select styled; the select keeps the native chevron | green | kept: the chevron is the platform's affordance for a select; border, font and 44 px follow the form field |
+| R3 | +check note only on the +check page | green | holds |
+| R4 | run actions and evidence view tools at 1280 and 390 | green | holds |
+| R5 | refused run: warn notice card, chips, frame | green | holds |
+| R6 | email view at 390: explore list, rows card, swipe note, Nothing recorded, aligned cells | green | holds |
+| R7 | guide column and stacked tool card | green | holds |
+| R8 | check list in one card | green | holds |
+| R9 | leaders clear at 1280 on both result pages; at 390 DMARC's leader crosses MTA-STS | green | decision log: the phone plate (358 px, 6.3 px pitch, 10 px labels) is narrower than §5.5's placement plate (8 px pitch); proposal to place at the phone geometry |
+| R10 | TLS long values span the grid | green | holds; IP card covered by `polish_wide_facts.rs` (the local IP module has no GeoIP data) |
+| R11 | phone header: wordmark, Theme, menu | green | holds |
+| N1 | the inspector band's zoomed plate scrolls at 390 with no hint | green | kept: the band scrolls inside its column by v2-inspector-shell's decision; proposal: a swipe note as on evidence tables |
+| N2 | builder toggles do not reflect the typed query | green | not this feature: DNS-UI V11, a non-goal |
+| N3 | DNS results toolbar buttons 24 px at 1280 | green | kept: v2-dns-ui's toolbar, 44 px at phone width |
+| N4 | empty line between title and meta in check rows at 390 | green | kept: check_row's phone structure (board M rows) |
+| N5 | record addresses 52 px apart at 390 | green | kept: 44 px tap targets (v2-inspector-shell R29) |
+| N6 | "n lines need attention" over a list of every line | green | kept: the inspector lists every line of its band; the heading counts the ones that need attention |
+| N7 | serial, SHA-1 and CA issuers broke mid-token in third-width cells | green | rebuild: a token longer than `FACT_TOKEN_CHARS` (32) spans the grid (requirement 10 amended) |
+| N8 | protocols grid's ninth cell alone | green | kept: v2-tls-ui decision (extra cells after board G's eight) |
+| N9 | three notice styles (TLS notices banner, refusal, unavailable) | green | proposal: one notice component; the TLS banner is v2-tls-ui's |
+| N10 | TLS order and missing related box against board G | green | kept: shell order by v2-inspector-shell; the related box needs a host target (board G's live target is an IP) |
+| N11 | feeds line and table header fonts differ between views | green | proposal: one feeds-line style across views |
+| N12 | scrolling tables reach the card's right edge | green | kept: the overflow edge of a scroll container |
+| N13 | swipe note under tables that fit | green | decision log: static note at phone width |
+| N14 | table row heights differ | green | kept: linked cells carry 44 px tap targets |
+| N15 | gap between meta line and row links at 390 | green | kept: check_row's phone structure and 44 px links |
+| N16 | TLS-RPT record breaks mid-word | green | kept: field values wrap anywhere (pre-existing evidence_block rule) |
+| N17 | key column width differs per card | green | kept: each card's own label column (pre-existing) |
+| N18 | result page export row indented | green | rebuild: first button flush with the content edge |
+| N19 | CSP row meta wraps on the result page at 390 | green | kept: result page phone rows (board M); proposal |
+| N20 | dangling "· FIRST RUN" in the long-domain run title at 390 | green | proposal: run-title wrapping (v2-result-polish) |
+| N21 | guide tool card: 50 px above its heading, 36 px controls at 1280 | green | rebuild: heading margin 0, 44 px field and button |
+| N22 | TLS Ports row ends short of the card edge at 390 | green | proposal: port chooser phone layout (v2-tls-ui) |

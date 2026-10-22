@@ -41,3 +41,13 @@
 - G1: `src/explore.rs` (`ExploreLink::target`), `templates/pages/evidence.html` (Explore live section), `templates/partials/evidence_section.html` (`.evidence-section__rows` card), `src/components.rs` (`EvidenceShape::is_empty`, `swipes`), `templates/components/evidence_block.html`, `static/evidence_block.css`, `static/pages.css`.
 - G2: `src/components.rs` (`FACT_WIDE_CHARS`, `FactCell::wide`), `templates/components/facts_grid.html`, `static/facts_grid.css`.
 - G3: `templates/pages/guide.html` (`article.guide-article`), `static/pages.css`, `static/query_input.css` (phone tool card).
+
+## Phase 4 — Visual reading and design gate
+
+## Groups
+
+- G1: C1, C2, C3, C4 (design check, captures, reading, rebuilds)
+
+## Plan
+
+- G1: `just design-check`; captures at 1280 and 390 px in both themes; a reader with no part in the build; rebuilds in `src/components.rs` (`FACT_TOKEN_CHARS`), `static/pages.css`, `static/query_input.css`.
