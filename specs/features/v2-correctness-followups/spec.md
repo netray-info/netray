@@ -1,7 +1,8 @@
 # Spec: v2-correctness-followups
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-22
+Finished: 2026-10-22
 
 ## Goal
 
@@ -181,6 +182,9 @@ GIVEN the committed history fixtures WHEN `every_history_fixture_is_its_recomput
   resolver load. Accepted and stated in S44 rather than reintroducing a limiter: the decision is
   that lens admission bounds domain runs; a badge/OG ceiling is an operator proposal
   (implementer under the operator's autonomy mandate, 2026-10-22).
+- Finish: distilled lessons written to CLAUDE.md without operator confirmation (one stale bullet
+  removed, one added), the review's MINOR dropped as fixed there, under the operator's autonomy
+  mandate (implementer, 2026-10-22).
 
 ## Open decisions
 

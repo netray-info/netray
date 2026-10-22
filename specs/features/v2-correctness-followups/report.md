@@ -164,3 +164,8 @@ letters match the offline rescoring above (lwn.net B to A, docs.github.com C to 
 - NIT (fixed): `lens.example.toml` and `crates/lens/CLAUDE.md` named profile v3.
 - NIT (kept): the C11 diff test cannot tell a re-score under v4 from v5 (same numbers); and
   `contract_status.rs` pins a synthetic `Failed` lint for `dns.https_svcb` that mhost never emits.
+
+### Checks to build
+
+None: the lessons of this block are judgement (which alerts refuse, what bounds domain runs) or
+already caught (profile lock test, fixture recompute, `adlc verify`'s rustfmt).
