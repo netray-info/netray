@@ -1,5 +1,4 @@
-//! The module registry both `netray serve` and the V1 `netray lens` build from their
-//! `[modules.*]` tables: the five modules, the in-process enrichment client the ip module hands
+//! The module registry `netray serve` builds from its `[modules.*]` tables: the five modules, the in-process enrichment client the ip module hands
 //! the other four, and the parts `/api/v1` calls.
 
 use std::collections::BTreeMap;
@@ -293,5 +292,71 @@ mod registry_wiring {
             "email holds an enrichment client"
         );
         assert!(m.registry.module(Protocol::Ip).is_none());
+    }
+}
+
+#[cfg(test)]
+mod dns_admission {
+    // specs/features/v2-correctness-followups Phase 2, requirement 3 (C1, C3, C4): a domain run
+    // charges no per-target limit of the DNS module; admission bounds domain runs (S44). Moved
+    // from the V1 composition root in crates/netray/src/main.rs onto `module_registry`.
+
+    use std::time::{Duration, Instant};
+
+    use netray_engine::{
+        Domain, Facts, FactsProvider, Module, RunContext, RunOptions, SectionOutcome,
+    };
+
+    use super::{ModuleTables, module_registry};
+
+    const CONFIG: &str = "[dns]\nservers = [\"9.9.9.9\"]\n\n[dns.dns]\nallow_arbitrary_servers = true\n\n[dns.limits]\nper_target_burst = 1\n";
+
+    fn ctx() -> RunContext {
+        RunContext {
+            deadline: Instant::now() + Duration::from_millis(300),
+            domain: Domain::new("example.com"),
+            options: RunOptions::default(),
+        }
+    }
+
+    /// The registry's DNS module goes on to the network and outlives its deadline in blocking
+    /// tasks, so it runs on its own runtime, shut down without waiting for them.
+    #[test]
+    fn a_domain_run_charges_no_dns_per_target_limit() {
+        let tables: ModuleTables = toml::from_str(CONFIG).expect("module tables parse");
+
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("runtime builds");
+        let (runs, facts) = rt.block_on(async {
+            let modules = module_registry(&tables, false)
+                .await
+                .expect("modules build");
+            let mut runs: Vec<SectionOutcome> = Vec::new();
+            let mut facts: Vec<String> = Vec::new();
+            for _ in 0..2 {
+                runs.push(modules.dns.run(&ctx(), &Facts::default()).await);
+                let c = ctx();
+                if let Err(e) = modules.dns.resolve(&c, &c.domain).await {
+                    facts.push(e.to_string());
+                }
+            }
+            (runs, facts)
+        });
+        rt.shutdown_background();
+
+        for outcome in &runs {
+            assert!(
+                !matches!(outcome, SectionOutcome::Incomplete { reason } if reason.contains("rate limit")),
+                "a domain run refused by the DNS per-target limit: {outcome:?}"
+            );
+        }
+        for error in &facts {
+            assert!(
+                !error.contains("rate limit"),
+                "the facts stage refused by the DNS per-target limit: {error}"
+            );
+        }
     }
 }
