@@ -472,3 +472,7 @@ Pass 2: the four fixes hold; no wrong result. NIT (fixed): `test_workflows.sh` n
 | the section 9.2 set registered at startup | crates/web/src/metrics.rs (`init_zero_series`) |
 | renamed series | crates/web/src/admission/mod.rs, crates/web/src/metrics.rs, crates/store/src/record.rs, crates/web/src/api/state.rs, crates/dns/src (`netray_dns_*`, label `operation`), crates/email/src (`netray_email_*`, label `fetch`), crates/tls/src/routes.rs, crates/http/src/inspect/mod.rs, crates/ip/src, crates/web/src/host/apex.rs (`http_metrics("netray")`) |
 | `lens_check_requests_total` ended | no tracked source names it (`rg lens_check_requests_total crates`) |
+
+### Checks to build
+
+- Every `Now(dest)` row of `crates/netray/src/legacy.rs` names a destination `serve --check-config` accepts (a test in `crates/netray/tests/`; see specs/solutions/2026-10-22-legacy-row-names-a-refused-destination.md).

@@ -1,7 +1,8 @@
 # Spec: v2-cutover
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-17
+Finished: 2026-10-22
 
 ## Goal
 
