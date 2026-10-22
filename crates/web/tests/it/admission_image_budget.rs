@@ -246,6 +246,9 @@ async fn c2_a_refused_badge_without_head_renders_unscored_with_short_cache() {
         String::from_utf8(body).unwrap().contains(">?<"),
         "unscored badge"
     );
+    // The route started no run: a run of example.net would hold its throttle minute or be
+    // joined, so the budget still answers the refusal.
+    assert_eq!(badge(&s, "example.net"), (None, Some(Reason::ImageBudget)));
     s.runs.drain().await;
 }
 
@@ -262,6 +265,9 @@ async fn c2_a_refused_badge_with_a_stale_head_renders_its_grade() {
         String::from_utf8(body).unwrap().contains(">B<"),
         "the head's grade"
     );
+    // The route started no run: a run of example.net would hold its throttle minute or be
+    // joined, so the budget still answers the refusal.
+    assert_eq!(badge(&s, "example.net"), (None, Some(Reason::ImageBudget)));
     s.runs.drain().await;
 }
 
@@ -280,5 +286,8 @@ async fn c2_a_refused_og_card_without_head_is_an_image_not_an_error() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(resp.headers().get("content-type").unwrap(), "image/png");
+    // The route started no run: a run of example.net would hold its throttle minute or be
+    // joined, so the budget still answers the refusal.
+    assert_eq!(badge(&s, "example.net"), (None, Some(Reason::ImageBudget)));
     s.runs.drain().await;
 }
