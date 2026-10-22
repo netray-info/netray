@@ -7,7 +7,7 @@
 //! MTA-STS fetch refuses every address.
 
 use std::collections::BTreeSet;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
 
 use hickory_proto::op::Message;
@@ -40,6 +40,8 @@ fn key(name: &str) -> String {
 /// What a name and type answer; anything not listed is a definite NODATA.
 enum Answer {
     Records(Vec<Json>),
+    /// Records of other owners and types, as (owner, type, data): a CNAME and its target's data.
+    Mixed(Vec<(String, String, Json)>),
     ServFail,
 }
 
@@ -53,6 +55,16 @@ impl Zones {
     fn with(mut self, name: &str, rtype: &str, data: Vec<Json>) -> Self {
         self.answers
             .push(((key(name), rtype.to_owned()), Answer::Records(data)));
+        self
+    }
+
+    fn with_mixed(mut self, name: &str, rtype: &str, rows: Vec<(&str, &str, Json)>) -> Self {
+        let rows = rows
+            .into_iter()
+            .map(|(o, t, d)| (o.to_owned(), t.to_owned(), d))
+            .collect();
+        self.answers
+            .push(((key(name), rtype.to_owned()), Answer::Mixed(rows)));
         self
     }
 
@@ -90,7 +102,7 @@ impl ResolverLookup for ZonesLookup {
             .into_uni_queries()
             .into_iter()
             .map(|uni| {
-                let name = uni.name().to_string();
+                let name = uni.name().to_ascii();
                 let rtype = uni.record_type().to_string();
                 zones
                     .asked
@@ -109,6 +121,19 @@ impl ResolverLookup for ZonesLookup {
                             .iter()
                             .map(|data| {
                                 json!({ "name": name, "type": rtype, "ttl": 300, "data": data })
+                            })
+                            .collect();
+                        json!({ "Response": {
+                            "records": records,
+                            "response_time": time,
+                            "valid_until": "2099-01-01T00:00:00Z"
+                        }})
+                    }
+                    Some(Answer::Mixed(rows)) => {
+                        let records: Vec<Json> = rows
+                            .iter()
+                            .map(|(owner, t, data)| {
+                                json!({ "name": owner, "type": t, "ttl": 300, "data": data })
                             })
                             .collect();
                         json!({ "Response": {
@@ -213,6 +238,11 @@ fn authoritative(_: SocketAddr, name: &Name, rtype: RecordType) -> Option<Messag
 }
 
 async fn run(domain: &str, zones: Zones) -> Ran {
+    run_with_glue(domain, zones, &[]).await
+}
+
+/// `run` with further nameserver names resolving to the given addresses.
+async fn run_with_glue(domain: &str, zones: Zones, extra_glue: &[(&str, &[IpAddr])]) -> Ran {
     let zones = Arc::new(zones);
     let group = ResolverGroupBuilder::new()
         .nameserver(NameServerConfig::udp(
@@ -226,10 +256,11 @@ async fn run(domain: &str, zones: Zones) -> Ran {
         .expect("resolver group over documentation addresses");
     let config = crate::config::Config::load(None).expect("default config");
     let sender = RecordingSender::new(authoritative);
-    let glue = StubResolver::new(&[
-        ("ns1.example.net", &[v4(192, 0, 2, 53)]),
-        ("ns2.example.net", &[v4(192, 0, 2, 54)]),
-    ]);
+    let (ip1, ip2) = ([v4(192, 0, 2, 53)], [v4(192, 0, 2, 54)]);
+    let mut glue_table: Vec<(&str, &[IpAddr])> =
+        vec![("ns1.example.net", &ip1), ("ns2.example.net", &ip2)];
+    glue_table.extend_from_slice(extra_glue);
+    let glue = StubResolver::new(&glue_table);
     let backend = DnsBackend {
         lookup: Arc::new(ZonesLookup(Arc::clone(&zones))),
         raw: test_outbound(sender.clone(), glue),
@@ -617,4 +648,133 @@ async fn c16_apex_makes_exactly_todays_lookups() {
     assert_eq!(ran.zones.asked(), expected);
     assert_eq!(ran.check("ns").0, Status::Pass);
     assert_eq!(ran.check("caa").0, Status::Warn);
+}
+
+// ---------------------------------------------------------------------------
+// C17 to C21: edges of the zone determination
+// ---------------------------------------------------------------------------
+
+/// C17: owners compare as A-labels, so an IDN zone is found and the TLD-like label is not asked.
+#[tokio::test]
+async fn c17_idn_zone_is_found_by_its_a_label() {
+    let zones = Zones::default()
+        .with("xn--bcher-kva.example", "SOA", vec![soa()])
+        .with(
+            "xn--bcher-kva.example",
+            "NS",
+            vec![ns("ns1.example.net."), ns("ns2.example.net.")],
+        );
+    let ran = run("www.xn--bcher-kva.example", zones).await;
+
+    assert_eq!(ran.check("ns").0, Status::Pass);
+    let sent = ran.sender.sent();
+    assert!(!sent.is_empty(), "raw NS queries were sent");
+    assert!(
+        sent.iter()
+            .all(|s| key(&s.name.to_ascii()) == "xn--bcher-kva.example"),
+        "raw queries ask for the zone: {sent:?}"
+    );
+    assert!(!ran.zones.asked_name("example"));
+}
+
+/// C18: a CNAME at the name carries another zone's NS, DNSKEY and DS; none of it is the zone's.
+#[tokio::test]
+async fn c18_cname_target_records_are_not_the_zones() {
+    let cname = (
+        "www.example.com",
+        "CNAME",
+        json!({ "CNAME": "example.net." }),
+    );
+    let zones = Zones::default()
+        .with("example.com", "SOA", vec![soa()])
+        .with(
+            "example.com",
+            "NS",
+            vec![ns("ns1.example.net."), ns("ns2.example.net.")],
+        )
+        .with("example.com", "DNSKEY", vec![dnskey_ksk()])
+        .with("example.com", "DS", vec![ds()])
+        .with_mixed(
+            "www.example.com",
+            "NS",
+            vec![cname.clone(), ("example.net", "NS", ns("ns1.example.org."))],
+        )
+        .with_mixed(
+            "www.example.com",
+            "DNSKEY",
+            vec![cname.clone(), ("example.net", "DNSKEY", dnskey_ksk())],
+        )
+        .with_mixed(
+            "www.example.com",
+            "DS",
+            vec![cname, ("example.net", "DS", ds())],
+        );
+    let foreign = v4(192, 0, 2, 99);
+    let ran = run_with_glue("www.example.com", zones, &[("ns1.example.org", &[foreign])]).await;
+
+    let sent = ran.sender.sent();
+    assert!(!sent.is_empty(), "raw NS queries were sent");
+    assert!(
+        sent.iter().all(|s| s.server.ip() != foreign),
+        "no query goes to example.net's server: {sent:?}"
+    );
+    let (status, findings) = ran.check("dnssec_rollover");
+    assert_eq!(status, Status::Pass, "{findings:?}");
+    assert!(
+        !findings.iter().any(|f| f.contains("Multiple KSKs")),
+        "{findings:?}"
+    );
+    let rows = ran.block("NS").expect("dns.ns block");
+    let zone_rows: Vec<&(String, String)> =
+        rows.iter().filter(|(o, _)| o == "example.com").collect();
+    assert_eq!(
+        zone_rows,
+        vec![
+            &("example.com".to_owned(), "ns1.example.net.".to_owned()),
+            &("example.com".to_owned(), "ns2.example.net.".to_owned()),
+        ]
+    );
+}
+
+/// C19: when the name's own SOA lookup fails, nothing above it is asked.
+#[tokio::test]
+async fn c19_failed_own_soa_lookup_queries_no_ancestor() {
+    let zones =
+        Zones::default()
+            .servfail("www.example.com", "SOA")
+            .with("example.com", "SOA", vec![soa()]);
+    let ran = run("www.example.com", zones).await;
+
+    assert!(!ran.zones.was_asked("example.com", "SOA"));
+}
+
+/// C20: a nonexistent name under a public suffix never asks the suffix, and is not a pass.
+#[tokio::test]
+async fn c20_nonexistent_name_never_asks_the_public_suffix() {
+    let zones = Zones::default().with("co.uk", "SOA", vec![soa()]);
+    let ran = run("unregistered.example.co.uk", zones).await;
+
+    assert!(!ran.zones.asked_name("co.uk"));
+    assert_ne!(ran.check("ns").0, Status::Pass);
+}
+
+/// C21: the climb stops after 8 ancestors, however many labels the name has.
+#[tokio::test]
+async fn c21_ancestor_climb_is_bounded() {
+    let name = "a.b.c.d.e.f.g.h.i.j.example.com";
+    let zones = Zones::default().with("example.com", "SOA", vec![soa()]);
+    let ran = run(name, zones).await;
+
+    let ancestors: BTreeSet<String> = ran
+        .zones
+        .asked()
+        .into_iter()
+        .filter(|(n, t)| t == "SOA" && *n != name)
+        .map(|(n, _)| n)
+        .collect();
+    assert!(
+        ancestors.len() <= 8,
+        "{} ancestor SOA lookups: {ancestors:?}",
+        ancestors.len()
+    );
 }
