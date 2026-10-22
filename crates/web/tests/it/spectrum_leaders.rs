@@ -1,6 +1,6 @@
 //! Leader clearance of the spectrum layout (V2 spec v2-ui-polish, requirement 9, criteria C2, C8,
 //! C9): a leader rises from the plate through every lower row, so no box in a lower row covers it.
-use netray_web::spectrum::{LineInput, LineTone, Placement, place};
+use netray_web::spectrum::{LineInput, LineTone, Placement, place, place_phone};
 use proptest::prelude::*;
 
 const EPS: f64 = 0.5;
@@ -148,6 +148,27 @@ proptest! {
         prop_assert!(p.rows >= 3);
         assert_row_disjoint(&p);
         // leaders clear, or a dense cluster that falls back to the line-order placement
+        prop_assert!(crossings_only_in_line_order_clusters(&p), "{p:?}");
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig { cases: 256, failure_persistence: None, ..ProptestConfig::default() })]
+
+    /// v2-spectrum-phone requirement 1: the phone placement keeps every rule of the desktop one.
+    #[test]
+    fn phone_leaders_stay_clear_and_every_flagged_line_keeps_a_label(
+        rows in prop::collection::vec(("[A-Za-z0-9]{3,8}", tone()), 2..=60),
+    ) {
+        let lines: Vec<LineInput> = rows.iter().map(|(s, t)| line(s, *t)).collect();
+        let p = place_phone(&lines).unwrap();
+        let flagged = lines
+            .iter()
+            .filter(|l| matches!(l.tone, LineTone::Warn | LineTone::Fail | LineTone::Fixed))
+            .count();
+        prop_assert_eq!(p.labels.len(), flagged);
+        prop_assert!(p.rows >= 3);
+        assert_row_disjoint(&p);
         prop_assert!(crossings_only_in_line_order_clusters(&p), "{p:?}");
     }
 }

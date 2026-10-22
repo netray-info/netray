@@ -277,7 +277,8 @@ impl SpectrumBand {
     }
 }
 
-/// One label: `x` the leader in percent of the plate, `width` the box width in px.
+/// One label: `x` the leader in percent of the plate, `width` the box width in px; `phone_row`
+/// and `phone_width` its row and box width in the phone placement (SDD §5.5 point 2).
 #[derive(Debug, Clone)]
 pub struct SpectrumLabel {
     pub code: String,
@@ -286,6 +287,8 @@ pub struct SpectrumLabel {
     pub row: usize,
     pub x: f64,
     pub width: f64,
+    pub phone_row: usize,
+    pub phone_width: f64,
 }
 
 impl SpectrumLabel {
@@ -295,6 +298,10 @@ impl SpectrumLabel {
 
     fn width_px(&self) -> String {
         format!("{:.2}", self.width)
+    }
+
+    fn phone_width_px(&self) -> String {
+        format!("{:.2}", self.phone_width)
     }
 
     /// The leader's height: the first leader plus one label row per row (8, 22, 36 px on the
@@ -380,6 +387,8 @@ pub struct SpectrumView {
     pub label: String,
     pub line_count: usize,
     pub rows: usize,
+    /// The largest phone row count of any run.
+    pub phone_rows: usize,
     pub bands: Vec<SpectrumBand>,
     pub label_sets: Vec<SpectrumLabelSet>,
     pub regions: Vec<SpectrumRegion>,
@@ -422,6 +431,11 @@ impl SpectrumView {
     fn band_height(&self) -> String {
         let extra = self.rows.saturating_sub(LABEL_BAND_ROWS);
         format!("calc(var(--spectrum-label-band) + {extra} * var(--spectrum-label-row))")
+    }
+
+    /// The phone label band's rows beyond the third, which the phone stylesheet adds.
+    fn phone_extra(&self) -> usize {
+        self.phone_rows.saturating_sub(LABEL_BAND_ROWS)
     }
 
     /// The view with each region labelled by its section's letter grade; `grades` maps a
@@ -496,13 +510,19 @@ impl SpectrumView {
                 labels: run
                     .labels
                     .iter()
-                    .map(|l| SpectrumLabel {
-                        code: layout.lines[l.line].id.to_string(),
-                        text: l.text.clone(),
-                        tone: line_tone(run.tones[l.line]),
-                        row: l.row,
-                        x: l.leader / plate * 100.0,
-                        width: l.width,
+                    .map(|l| {
+                        // Both placements label the same lines.
+                        let phone = run.phone_labels.iter().find(|p| p.line == l.line);
+                        SpectrumLabel {
+                            code: layout.lines[l.line].id.to_string(),
+                            text: l.text.clone(),
+                            tone: line_tone(run.tones[l.line]),
+                            row: l.row,
+                            x: l.leader / plate * 100.0,
+                            width: l.width,
+                            phone_row: phone.map_or(l.row, |p| p.row),
+                            phone_width: phone.map_or(l.width, |p| p.width),
+                        }
                     })
                     .collect(),
             })
@@ -521,6 +541,7 @@ impl SpectrumView {
             label: label.to_string(),
             line_count: layout.lines.len(),
             rows: layout.runs.iter().map(|r| r.rows).max().unwrap_or(0),
+            phone_rows: layout.runs.iter().map(|r| r.phone_rows).max().unwrap_or(0),
             bands,
             label_sets,
             regions,
