@@ -209,11 +209,11 @@ Created: 2026-10-17
     - i. Apex `/api/check` and `/api/check/<domain>` → 410 naming `https://<apex>/api/v1/domains/{domain}/runs`. Any other apex `/api/<x>` with `x` ≠ `v1` (for example `/api/meta`) → 410 naming `https://<apex>/api/v1` (default, not interviewed). Row m comes first.
     - j. Apex `/r/<id>`, `/r/<id>/og.png` and `/r/<id>/<protocol>` for a well-formed ID that is no stored entry → 410. The page routes answer with the §4.6 page, which names no domain, and `og.png` with an empty body (as `v2-entries` does). A V1 snapshot ID is such an ID. `v2-entries`' V1-snapshot step is removed. A malformed ID still answers 404.
     - k. `dns./?q=…`, `tls./?h=…`, `http./?url=…` and `ip./?ip=…` answer 200 with the inspector (no redirect, no 410). `dns./?r=<key>` answers 200 and ignores `r`.
-    - l. Apex `/tools` and `/tools/` (the V1 tool list, `site/tools/index.html`) → 301 `https://<apex>/` (default, not interviewed).
+    - l. Superseded 2026-10-22 (Decision log): `/tools` is the inspector index of `v2-site-nav`, and `/tools/` moves to `/tools`.
     - m. Apex `/api/` and `/api/<name>.html` for `index`, `dns`, `tls`, `http`, `email`, `ip` and `lens` (the V1 API docs, `site/api/*.html`) → 301 `https://<apex>/api/v1/docs`. They are human pages, so they redirect and do not answer a JSON 410 (default, not interviewed).
     - n. Apex `/guide/lens` → 301 `https://<apex>/guide/scoring` (`v2-pages`).
     - o. Apex `/docs` and `/docs/` (lens's V1 docs, reached from `lens.` through row a) → 301 `https://<apex>/api/v1/docs`; apex `/api-docs/openapi.json` (lens's V1 OpenAPI) → 410 naming `https://<apex>/api/v1/openapi.json` (default, not interviewed).
-14. On `ip.`, every route of `crates/ip/src/routes.rs:107-166` other than `/`, `/health`, `/ready` and `/docs` (row 13h) answers 410 naming its successor (§7.2, R35):
+14. On `ip.`, every route of `crates/ip/src/routes.rs:107-166` other than `/`, `/health`, `/ready` and `/docs` (row 13h) answers 410 naming its successor (§7.2, R35), except what `netray_web::api::ip_host` serves, which answers first (operator, 2026-10-22, Decision log):
     - `/json`, `/yaml`, `/toml`, `/csv`, `/all[/{fmt}]`, `/ip[/{fmt}]` → `/api/v1/ip`;
     - `/ip/cidr` and `/range` → `/api/v1/ip/range/{cidr}`;
     - `/asn[/{param}]` → `/api/v1/asn/{n}`;
@@ -317,7 +317,7 @@ Created: 2026-10-17
     - **Rules table:** the `frontend-rules.md` trigger loses `packages/common-frontend` and `crates/*/frontend`.
 
     `README.md` (layout, run, release lines 3, 9, 11, 32, 36) and `specs/rules/architecture-rules.md:10-11` (env prefixes) follow, as does `specs/rules/logging-rules.md` wherever it names per-service targets or `lens` backends: the services-in-scope line (`:7`), A3 (default filter, `{crate}` examples), A5 (metrics port), A7 (service names), B3 (the service table), C3 (inter-service calls, which end with in-process enrichment) and the C-section intro on lens calling prism.
-27. After `adlc feature finish` merges onto `main`, `just release 0.30.0` runs on `main`. It sets the version to `0.30.0`, inserts `## [0.30.0] - <date>`, commits and signs the tag `v0.30.0`. Nothing is pushed, and no `git fetch` runs until the operator has pushed the tag.
+27. After `adlc feature finish` merges onto `main`, `just release 0.30.0` runs on `main` (an operator step since 2026-10-22, Decision log). It sets the version to `0.30.0`, inserts `## [0.30.0] - <date>`, commits and signs the tag `v0.30.0`. Nothing is pushed, and no `git fetch` runs until the operator has pushed the tag.
 
 ## Phases
 
@@ -564,6 +564,18 @@ GIVEN `architecture-rules.md` WHEN read THEN the env prefix rule names `NETRAY_`
 - The page CSP's `form-action` names `https://netray.info` beside `https://*.netray.info`, over leaving the no-JS inspector form on a host broken by its redirect: the wildcard does not match the bare apex (Phase 6 second review AMENDMENT; implementer under the operator's autonomy mandate, 2026-10-19).
 - The header logo on an inspector host keeps linking `/`, its own inspector, over pointing it at the apex home: requirement 2 keeps the host page byte-equal to the apex's, and an absolute link belongs with the template work the operator's design review reopens (deferred; implementer under the operator's autonomy mandate, 2026-10-19).
 
+- Operator, 2026-10-22: the cutover resumes by merging main into this branch, not by restarting; Phases 7 and 8, review and finish are authorised, and the stop after Phase 6 (2026-10-19) is lifted. V1 deletion lands on main through this feature's PR; the deploy stays the operator's.
+- Operator, 2026-10-22: lens's MCP tools are dropped with `crates/lens`, over porting them onto `/api/v1`: no successor is built, and the CHANGELOG lists them as removed.
+- Operator, 2026-10-22: V1 `/r/<shortid>` links are dropped: they answer `410` per row 13j, with no lookup, redirect or migration of V1 snapshot IDs; this confirms requirement 23.
+- Operator, 2026-10-22: old V1 API clients are ignored: the `410` rows of requirements 13 and 14 are their only answer, with no compatibility shim and no notice period.
+- Operator, 2026-10-22: the legacy `email.` URLs (rows 13c to 13e) and `dns./?r=<key>` (row 13k) stay as this spec planned. Main's inspector shell (`v2-inspector-shell`) now reads `?r=` on `/inspect/<tool>` as a share key; the inspector host's `/` strips `r` before rendering, so a V1 key is ignored there, and V2 share links name `/inspect/<tool>?r=` on the apex.
+- Operator, 2026-10-22: on `ip.`, `netray_web::api::ip_host` (`v2-ip-cli`, S40) answers before the `410` rows of requirement 14 (`ip_successor`): the field and format family, `/ip/cidr`, bare `/asn` and the root's negotiation answer again, and only what `ip_host` hands back meets the rows (`/range`, `/diff`, `/batch`, `/meta`, `/ipv4`, `/ipv6`, `/asn/<n>`, other methods). This supersedes requirement 14's field-family rows and the 2026-10-17 decision on the bare `ip.` field routes. `HostRouters` gains `ip_api`; `crates/web/tests/it/host_ip_host_order.rs` holds the order.
+- Operator, 2026-10-22: CI's check job keeps main's `timeout-minutes: 20` (main's fast check job with mold), superseding this spec's 60 (2026-10-19); `test_workflows.sh` drops the `>= 60` check.
+- Merge of main (2026-10-22, implementer under the operator's autonomy mandate): where main and this branch built the same thing, main's version is kept: `ip_host` replaces the branch's curl root on `ip.` (`ip_root`, `CLI_AGENTS`); main's inspector shell replaces the back-link partial and its `data-stream-reset` fix; main's `/api/v1` guide samples replace the branch's; main's `?d=` carries `dkim_selectors` (`v2-dkim-legacy-urls`), superseding the 2026-10-18 decision to drop the `scoring.html` sample, and `test_no_v1_samples.sh` no longer flags it; main's `/tools` is the inspector index (`v2-site-nav`), so row 13l (`/tools` → `/`) is removed and `/tools/` moves to `/tools` as main's pages do; row 13n stays, answering as main's guide redirect does.
+- Merge of main (2026-10-22, implementer under the operator's autonomy mandate): the survivor copies of Phase 6 take main's lens changes since 2026-10-19, over leaving them behind with lens: DKIM-selector runs (`AdmittedRuns::start_with`, `admission::admit_dkim`), the recorded run duration (`netray_store::record_timed`), all-unmeasured measured sections as incomplete, single-label domains refused, and the inspector's history and DNS result cache; main's new lens tests are ported to the copies' harness.
+- Merge of main (2026-10-22, implementer under the operator's autonomy mandate): the branch's standalone integration tests of merged crates move into each crate's `it` binary (`v2-ci-speed`, `test_test_binaries.sh`), each move under `ADLC-Test-Change`.
+- Requirement 27 (`just release 0.30.0` on `main`) is not run by this lane, over running it after finish: the lane mandate (2026-10-22) forbids tags and releases, so the release is an operator step after the merge (implementer under the operator's autonomy mandate, 2026-10-22).
+
 ## Open decisions
 
 None.
@@ -573,7 +585,7 @@ None.
 Operator handoff, in this order:
 
 1. **Before the deploy, the second baseline pull (V0.3, S33).** On argus, run the Phase 0 script (netray-ops, beside the production watch, S27) against a copy of `snapshots.db` taken with SQLite's online backup, read-only on the original. Keep only the aggregate JSON in the private planning records. Then 0.30.0 may deploy.
-2. **Push.** `git push && git push origin v0.30.0` from `main`. Do not `git fetch` before the tag is pushed. `release.yml` builds and smoke-tests `ghcr.io/netray-info/netray:0.30.0`.
+2. **Release and push.** On `main` after the merge, `just release 0.30.0` (requirement 27), then `git push && git push origin v0.30.0`. Do not `git fetch` before the tag is pushed. `release.yml` builds and smoke-tests `ghcr.io/netray-info/netray:0.30.0`.
 3. **netray-ops config: one `netray.toml`, merged from the six production configs** per the CHANGELOG 0.30.0 configuration table. This includes `[api]`, `[api.<inspector>]` and `[inspect.<tool>]`, and `[rate_limit]` and `[cache]` folded into `[admission]`.
    - `[server] bind`, `metrics_bind`, `trusted_proxies` (lens's values) and `apex = "netray.info"`.
    - `[store] db_path` on the persistent volume.

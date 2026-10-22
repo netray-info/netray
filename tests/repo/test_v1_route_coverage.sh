@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # specs/features/v2-cutover, requirement 15: every route of the V1 routers (deleted in Phase 7,
 # so the list is kept here) and every site/ path of rows 13l-n has a row in
-# crates/web/tests/host_redirects.rs. A row is a line starting `("<host>", "<METHOD>", "<path>`.
+# crates/web/tests/it/host_redirects.rs. A row is a line starting `("<host>", "<METHOD>", "<path>`.
 #
 # Matching rule: a plain path needs a row for exactly that path (the path is followed by `"` or
 # `?`). A templated path (`{...}`) is written below as its prefix up to the first `{` and ends in
@@ -13,7 +13,7 @@ cd "$(dirname "$0")/../.." || exit 1
 fails=0
 fail() { echo "FAIL: $1"; fails=1; }
 
-TABLE=crates/web/tests/host_redirects.rs
+TABLE=crates/web/tests/it/host_redirects.rs
 git ls-files --error-unmatch "$TABLE" >/dev/null 2>&1 || { echo "FAIL: $TABLE is not tracked"; exit 1; }
 
 # host|path pairs; the apex is netray.info. `/` and the probes on inspector hosts are excluded.

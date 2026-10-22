@@ -138,8 +138,9 @@ const ROWS: &[(&str, &str, &str, u16, &str)] = &[
     ("netray.info", "GET", "/api/check/example.com", 410, "https://netray.info/api/v1/domains/{domain}/runs"),
     ("netray.info", "GET", "/api/meta", 410, "https://netray.info/api/v1"),
     ("netray.info", "GET", "/api/v1/meta", 200, "apex"),
-    ("netray.info", "GET", "/tools", 301, "https://netray.info/"),
-    ("netray.info", "GET", "/tools/", 301, "https://netray.info/"),
+    // v2-site-nav: /tools is the inspector index, served by the pages (row l superseded).
+    ("netray.info", "GET", "/tools", 200, "apex"),
+    ("netray.info", "GET", "/tools/", 200, "apex"),
     ("netray.info", "GET", "/api/", 301, "https://netray.info/api/v1/docs"),
     ("netray.info", "GET", "/api", 301, "https://netray.info/api/v1/docs"),
     ("netray.info", "GET", "/api/index", 301, "https://netray.info/api/v1/docs"),

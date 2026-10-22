@@ -172,7 +172,8 @@ impl Legacy<'_> {
         Some(self.gone(&successor))
     }
 
-    /// Rows m, i, o, l and n of 13, in that order, on the apex.
+    /// Rows m, i, o and n of 13, in that order, on the apex. Row l is gone: `/tools` is the
+    /// inspector index (`v2-site-nav`), and the pages move `/tools/` there.
     pub fn apex_legacy(&self) -> Option<Response> {
         let path = self.path();
         if matches!(
@@ -204,7 +205,6 @@ impl Legacy<'_> {
         match path {
             "/docs" | "/docs/" => Some(self.moved("/api/v1/docs")),
             "/api-docs/openapi.json" => Some(self.gone("/api/v1/openapi.json")),
-            "/tools" | "/tools/" => Some(self.moved("/")),
             "/guide/lens" => Some(self.moved("/guide/scoring")),
             _ => None,
         }
