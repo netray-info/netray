@@ -76,3 +76,23 @@ answers it 404, and `pages_frame.rs` covers the landing page.
 
 `just design-check` with this build copied to main's binary path (backed up, restored
 byte-identical, `NETRAY_BIN` set): `0 open deviation(s), 0 stale accepted entries`.
+
+## Phase 3 — Legacy destinations load
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R8: every Now row (each module for <m>) loads through serve::check_config at a sample value; a row without a sample fails; caught rows fixed | already_implemented | crates/netray/src/legacy.rs |
+| C2 | every Now destination is accepted | already_implemented | crates/netray/src/legacy.rs |
+| C3 | a Now row with no sample value fails naming the row | already_implemented | crates/netray/src/legacy.rs |
+| C4 | a destination the config refuses fails naming it | already_implemented | crates/netray/src/legacy.rs |
+
+The phase was already in place: every `Now(dest)` row of `ROWS` names a key that loads (the two
+stale rows had been fixed on the cutover branch), so the new tests pass and stay as the guard.
+`a_destination_the_config_refuses_is_caught` proves the check refuses the two historic stale
+destinations; `[modules.ip]` rows are written with both GeoIP databases, which the table requires.
+
+### Behavioural verification
+
+skipped: the check is the unit test itself (`cargo test -p netray --bin netray legacy`, 4 passed).
