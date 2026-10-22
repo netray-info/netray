@@ -38,4 +38,13 @@ describe("dns +check note", () => {
     type(q, "example.com A");
     expect(note.hasAttribute("hidden")).toBe(true);
   });
+
+  it("follows a field the shell writes without an input event", async () => {
+    const { builder, q, note } = page();
+    dns(builder);
+    q.value = "example.com +check";
+    document.getElementById("f")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(note.hasAttribute("hidden")).toBe(false);
+  });
 });

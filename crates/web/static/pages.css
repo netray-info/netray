@@ -1280,12 +1280,24 @@ main td {
   height: auto;
   border: var(--line-hair) solid var(--color-line);
 }
-.evidence-view__tools {
+/* The h1 and its tools share a line, the tools at its end (board F's hero actions); on a phone
+   the tools wrap under the h1 on one line. */
+.evidence-view__head {
   display: flex;
   flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  margin: 0 0 var(--space-4);
+}
+.evidence-view__head h1 {
+  margin: 0;
+}
+.evidence-view__tools {
+  display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   gap: var(--space-2);
-  margin: 0 0 var(--space-4);
 }
 .result-hero__actions .inspector-help__open,
 .evidence-view__tools .inspector-help__open {

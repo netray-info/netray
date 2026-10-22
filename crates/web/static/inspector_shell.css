@@ -193,6 +193,24 @@
   display: inline;
   margin: 0;
 }
+.inspector-checks__card {
+  /* board F's card: the rows inside one frame, divided by the rows' own top rule */
+  margin-top: var(--space-3);
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: var(--color-surface);
+}
+.inspector-checks__card > :first-child {
+  border-top: 0;
+}
+.inspector-checks__card > .evidence-section__link {
+  margin-top: 0;
+}
+@media (max-width: 480px) {
+  .inspector-checks__card > .evidence-section__link {
+    margin-inline-start: var(--space-4);
+  }
+}
 .inspector-checks__meta {
   color: var(--color-muted);
   font-family: var(--font-mono);
@@ -340,10 +358,18 @@
 .inspector-shell__hint[hidden] {
   display: none;
 }
+/* A notice in the result region: board F's card, a warn marker for a refusal to wait out. */
 .inspector-notice {
   margin: 0 0 var(--space-3);
-  color: var(--color-muted);
+  padding: var(--space-3) var(--space-4);
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: var(--color-surface);
+  color: var(--color-ink);
   font-size: var(--font-size-small);
+}
+.inspector-notice[data-tone="warn"] {
+  border-inline-start: var(--line-warn) solid var(--status-warn-mark);
 }
 .inspector-tabs .inspector-help__open {
   margin-inline-start: auto;
@@ -460,36 +486,92 @@
   margin-inline-start: var(--space-2);
   color: var(--color-ink);
 }
-/* The DNS builder's choices: each label is the tap target of its checkbox or radio. */
-.inspector-shell fieldset label {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-height: 44px;
-  margin-inline-end: var(--space-3);
-}
-
-/* The DNS builder continues the input card. */
-.inspector-shell fieldset {
-  margin: 0;
-  padding: 12px 18px;
+/* The DNS builder: a card of labelled rows; each choice is board G's port toggle, its native
+   checkbox or radio kept (visually hidden, still focusable) for the dns island and the form. */
+.dns-builder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 18px;
   border: var(--line-hair) solid var(--color-line);
-  border-top: 0;
+  border-radius: var(--radius-max);
   background: var(--color-surface);
-  font-size: var(--font-size-small);
 }
-.inspector-shell fieldset legend {
-  float: left;
-  width: 100%;
-  margin-bottom: var(--space-2);
+.dns-builder__row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dns-builder__label {
   color: var(--color-muted);
   font-size: var(--font-size-label);
+}
+.dns-builder__toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dns-builder__toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 14px 0 18px;
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-button);
+  font-weight: var(--font-weight-regular);
+  cursor: pointer;
+}
+.dns-builder__toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.dns-builder__toggle:has(input:checked) {
+  padding-inline-start: calc(18px + var(--line-hair) - var(--line-marker));
+  border-color: var(--color-ink);
+  border-inline-start-width: var(--line-marker);
+  color: var(--color-ink);
+  font-weight: var(--font-weight-bold);
+}
+.dns-builder__toggle:has(input:focus-visible) {
+  outline: var(--line-marker) solid var(--color-ink);
+  outline-offset: var(--line-hair);
+}
+.dns-builder__select {
+  align-self: flex-start;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 var(--space-3);
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-input);
+}
+.dns-builder__note {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+}
+.dns-builder__note[hidden] {
+  display: none;
 }
 @media (max-width: 480px) {
   .inspector-tabs__tab {
     min-height: 44px;
   }
-  .page-inspector__sep {
+  .page-inspector {
+    /* board M's phone header holds wordmark, Theme and the menu; the tab row names the inspector */
     display: none;
   }
   /* The tab row keeps one line and scrolls inside, so the help button stays in it. */
@@ -497,10 +579,21 @@
     flex-wrap: nowrap;
     overflow-x: auto;
   }
+  /* The back link takes its own line; Copy link and the exports stand on one line under it,
+     the first flush with the run title, each button a 44 px target. */
   .inspector-run__actions {
     margin-inline-start: 0;
+    column-gap: 0;
+    row-gap: 0;
   }
-}
-.inspector-shell fieldset select {
-  min-height: 44px;
+  .inspector-backlink {
+    flex-basis: 100%;
+  }
+  .inspector-export {
+    flex-wrap: nowrap;
+    gap: 0;
+  }
+  .inspector-run__actions > :is(.inspector-share, .inspector-export):first-of-type > button:first-child {
+    padding-inline-start: 0;
+  }
 }
