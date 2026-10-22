@@ -1882,6 +1882,10 @@ mod mta_sts_outbound_tests;
 mod ns_outbound_tests;
 
 #[cfg(test)]
+#[path = "check_zone_tests.rs"]
+mod zone_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
