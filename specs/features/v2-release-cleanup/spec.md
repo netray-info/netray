@@ -1,6 +1,6 @@
 # Spec: v2-release-cleanup
 
-Status: Draft
+Status: Ready for Implementation
 Created: 2026-10-22
 
 ## Goal
