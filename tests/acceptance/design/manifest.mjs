@@ -15,7 +15,7 @@ const BOARD = {
   optional: ['target', 'state', 'wait', 'click'],
 };
 const CLICK = { required: [], optional: ['board', 'page'] };
-const ELEMENT = { required: ['name', 'board', 'page', 'class', 'properties'], optional: [] };
+const ELEMENT = { required: ['name', 'board', 'page', 'class', 'properties'], optional: ['shell'] };
 const ACCEPTED = { required: ['board', 'element', 'property', 'reason'], optional: [] };
 
 export class ManifestError extends Error {}
@@ -73,6 +73,9 @@ function checkElement(el, boardTitle, index, seen) {
   }
   if (!Array.isArray(el.properties) || el.properties.length === 0 || !el.properties.every(isString)) {
     throw new ManifestError(`${label}: properties must be a non-empty array of strings`);
+  }
+  if ('shell' in el && typeof el.shell !== 'boolean') {
+    throw new ManifestError(`${label}: shell must be true or false`);
   }
 }
 

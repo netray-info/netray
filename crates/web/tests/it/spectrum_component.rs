@@ -290,8 +290,8 @@ fn c6_row_two_label_sits_on_the_calc_and_its_leader_is_36px() {
         })
         .expect("a leader of row 2");
     assert_eq!(attr(leader, "data-tone"), Some(tone));
-    // The third dns line sits at x = 20 of 456 px.
-    assert_eq!(style_value(leader, "left"), "4.3860%");
+    // Labels are placed right to left: the first dns line, at x = 4 of 456 px, sits in row 2.
+    assert_eq!(style_value(leader, "left"), "0.8772%");
 }
 
 #[test]

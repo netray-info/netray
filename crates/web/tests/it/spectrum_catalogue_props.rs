@@ -5,8 +5,8 @@ use netray_engine::catalogue::catalogue;
 use netray_engine::profile::Profiles;
 use netray_model::{CheckId, Protocol, Status};
 use netray_web::spectrum::{
-    Label, LineTone, RunInput, RunLayout, SectionState, label_width, layout, line_pitch_min,
-    scaled_start,
+    Label, LineTone, RunInput, RunLayout, SectionState, at_leader, covers, label_width, layout,
+    line_pitch_min, scaled_start,
 };
 use proptest::prelude::*;
 use std::collections::BTreeMap;
@@ -157,10 +157,11 @@ fn check_labels(
     for l in &r.labels {
         prop_assert!(l.row < r.rows);
         for j in 0..l.row {
-            let hit = r
-                .labels
-                .iter()
-                .any(|o: &Label| o.row == j && overlap(l.start, l.width, o.start, o.width));
+            let hit = r.labels.iter().any(|o: &Label| {
+                // a row is skipped for an overlap there, or to clear a leader the box covers
+                (o.row == j && overlap(l.start, l.width, o.start, o.width))
+                    || (at_leader(l) && o.row >= j && covers(l, o))
+            });
             prop_assert!(
                 hit,
                 "label {l:?} in row {} overlaps nothing in row {j}",

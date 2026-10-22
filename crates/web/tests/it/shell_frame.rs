@@ -84,7 +84,7 @@ async fn one_shell_builds_every_inspector_page() {
         "one dns builder"
     );
     assert!(
-        root.contains("<fieldset data-island=\"dns\""),
+        root.contains("<div class=\"dns-builder\" data-island=\"dns\""),
         "the dns builder is inside the shell root"
     );
 

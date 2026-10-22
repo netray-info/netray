@@ -9,10 +9,12 @@
 </figure>
 <section class="inspector-section inspector-checks" id="inspect-checks{{ suffix }}">
 <h2 class="inspector-checks__title">{{ band.heading }}</h2>{% if let Some(meta) = band.meta %} <span class="inspector-checks__meta">{{ meta }}</span>{% endif %}
+<div class="inspector-checks__card">
 {% for row in band.rows %}
 {% call check_row::check_row(row.check) %}{% endcall %}
 {% for link in row.links %}<a class="evidence-section__link" href="{{ link.href }}">{{ link.label }}</a>
 {% endfor %}
 {% endfor %}
+</div>
 </section>{% else %}<p>{{ text }}</p>{% endif %}
 </div>

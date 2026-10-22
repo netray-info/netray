@@ -28,8 +28,12 @@ export async function measurePage(browser, board, baseUrls, outDir) {
     const status = response?.status() ?? null;
     // A board whose page fills in after load (an inspector's live run) names the selector that
     // marks the finished state; a page that never reaches it is measured as it stands.
+    let waited = null;
     if (board.wait) {
-      await page.waitForSelector(board.wait, { timeout: 60000 }).catch(() => {});
+      waited = await page
+        .waitForSelector(board.wait, { timeout: 60000 })
+        .then(() => true)
+        .catch(() => false);
     }
     // A page state behind a control (an open menu) is opened before it is measured.
     if (board.click?.page) await page.locator(board.click.page).first().click();
@@ -60,7 +64,7 @@ export async function measurePage(browser, board, baseUrls, outDir) {
 
     const screenshot = join(outDir, `${boardSlug(board)}-page.png`);
     await page.screenshot({ path: screenshot, fullPage: true });
-    return { board: boardName(board), url, status, screenshot, colorScheme, theme, state, values };
+    return { board: boardName(board), url, status, screenshot, colorScheme, theme, state, waited, values };
   } finally {
     await context.close();
   }
