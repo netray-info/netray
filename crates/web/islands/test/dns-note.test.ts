@@ -46,6 +46,13 @@ describe("dns +check note", () => {
     expect(note.hasAttribute("hidden")).toBe(false);
   });
 
+  it("folds ASCII only, as the parser does", () => {
+    const { builder, q, note } = page();
+    dns(builder);
+    type(q, "example.com +chec\u212A");
+    expect(note.hasAttribute("hidden")).toBe(true);
+  });
+
   it("follows a field the shell writes without an input event", async () => {
     const { builder, q, note } = page();
     dns(builder);

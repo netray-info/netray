@@ -21,8 +21,8 @@ export function dns(el: HTMLElement): void {
   // The +check note shows while the query holds the token (spec v2-ui-polish R3).
   const note = el.querySelector<HTMLElement>(".dns-builder__note");
   const syncNote = (): void => {
-    // the parser reads flags in any case
-    if (note) note.hidden = !q.value.split(/\s+/).some((t) => t.toLowerCase() === "+check");
+    // the parser folds flags ASCII-only (to_ascii_lowercase): no `u` flag, so no Unicode folding
+    if (note) note.hidden = !q.value.split(/\s+/).some((t) => /^\+check$/i.test(t));
   };
   q.addEventListener("input", syncNote);
   // The shell fills and clears the field without an input event: re-read it after each
