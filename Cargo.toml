@@ -10,6 +10,7 @@ edition = "2024"
 netray-common = { path = "crates/common" }
 netray-model = { path = "crates/model" }
 netray-engine = { path = "crates/engine" }
+hickory-proto = "0.26.3"
 netray-store = { path = "crates/store" }
 netray-ip = { path = "crates/ip" }
 netray-tls = { path = "crates/tls" }
