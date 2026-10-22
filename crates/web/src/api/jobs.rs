@@ -469,6 +469,11 @@ impl InspectJobs {
                     Err(Refusal::RateLimited(Duration::from_secs(retry_after_secs)))
                 })));
             }
+            Err(busy @ EmailRefusal::Busy) => {
+                let message = busy.to_string();
+                return Ok(Job::new(Vec::new())
+                    .with_gate(Box::pin(async move { Err(Refusal::Busy(message)) })));
+            }
             Err(other) => return Err(other.to_string()),
         };
         Ok(job(

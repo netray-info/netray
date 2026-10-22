@@ -191,7 +191,8 @@ fn c13_four_labels_four_rows() {
     let over: Vec<(usize, &str, LineTone)> = (0..4).map(|i| (i, "abcd", LineTone::Fail)).collect();
     let p = place_ok(&lines(54, &over), 432);
     let rows: Vec<usize> = p.labels.iter().map(|l| l.row).collect();
-    assert_eq!(rows, vec![0, 1, 2, 3]);
+    // four rows either way: right to left, each box sits above the leader it covers
+    assert_eq!(rows, vec![3, 2, 1, 0]);
     assert_eq!(p.rows, 4);
 }
 

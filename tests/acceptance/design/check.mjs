@@ -11,6 +11,7 @@ import { measureBoard, openExport, sideBySide } from './board.mjs';
 import {
   applyAccepted,
   deviations,
+  liveState,
   noStateDeviation,
   reportMarkdown,
   summary,
@@ -76,7 +77,9 @@ try {
     } else if (page.state !== null && page.state !== 'fresh') {
       found.push(noStateDeviation(board, `data-state=${page.state}`));
     } else {
-      found.push(...deviations(board, measured.values, page.values));
+      const reason = liveState(board, page.values, page.waited);
+      if (reason) found.push(noStateDeviation(board, reason));
+      else found.push(...deviations(board, measured.values, page.values));
     }
     const sbs = join(outDir, `${boardSlug(board)}-sbs.png`);
     await sideBySide(browser, measured.screenshot, page.screenshot, sbs);

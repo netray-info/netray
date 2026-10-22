@@ -3,11 +3,13 @@
 {% block main %}
 {% if let Some(section) = section %}
 <div class="evidence-view" data-island="page">
-<h1>{% if let Some(u) = crate::idn::unicode(domain) %}{{ u }} <span class="idn-alabel">{{ domain }}</span>{% else %}{{ domain }}{% endif %} · {{ protocol }}</h1>
-<div class="evidence-view__tools">{% include "partials/help_button.html" %}{% if let Some(x) = export %}{{ x|safe }}{% endif %}</div>
+<div class="evidence-view__head"><h1>{% if let Some(u) = crate::idn::unicode(domain) %}{{ u }} <span class="idn-alabel">{{ domain }}</span>{% else %}{{ domain }}{% endif %} · {{ protocol }}</h1>
+<div class="evidence-view__tools">{% include "partials/help_button.html" %}{% if let Some(x) = export %}{{ x|safe }}{% endif %}</div></div>
 {{ section|safe }}
-{% for link in links %}<p><a class="evidence-view__explore" href="{{ link.href }}">{{ link.label }}</a></p>
-{% endfor %}
+{% if !links.is_empty() %}<section class="evidence-view__explore"><h2>Explore live</h2><ul>
+{% for link in links %}<li><a href="{{ link.href }}">{{ link.target() }}</a></li>
+{% endfor %}</ul></section>
+{% endif %}
 {% if let Some(form) = selector_form %}{{ form|safe }}
 {% endif %}{% include "partials/page_help.html" %}
 <form id="recheck" method="post" action="{{ home_href }}/run" hidden><input type="hidden" name="trigger" value="recheck"></form>

@@ -138,6 +138,15 @@ export function noStateDeviation(board, reason) {
   };
 }
 
+// A live board (one with `wait`) has no state when its wait selector was not reached or when its
+// page holds only shell elements (`shell: true`, present on every page); null otherwise.
+export function liveState(board, pageValues, waited) {
+  if (!board.wait) return null;
+  if (waited === false) return `wait ${board.wait} not reached`;
+  const onPage = board.elements.some((el) => !el.shell && pageValues[el.name] != null);
+  return onPage ? null : 'no board element on the page';
+}
+
 export function criterion(dev) {
   const head = `${dev.board} ${dev.width}/${dev.theme}:`;
   if (dev.kind === 'value') {

@@ -1,7 +1,8 @@
 //! Property test of the spectrum layout (V2 spec v2-spectrum, requirement 8, criteria C7, C8,
 //! C21): requirements 2-7 over random line lists and widths.
 use netray_web::spectrum::{
-    LineInput, LineTone, Placement, label_width, line_pitch_min, place, scaled_start,
+    LineInput, LineTone, Placement, at_leader, covers, label_width, line_pitch_min, place,
+    scaled_start,
 };
 use proptest::prelude::*;
 use std::path::PathBuf;
@@ -119,8 +120,10 @@ proptest! {
         for l in &p.labels {
             prop_assert!(l.row < p.rows);
             for j in 0..l.row {
+                // a row is skipped for an overlap there, or to clear a leader the box covers
                 let hit = p.labels.iter().any(|o| {
-                    o.row == j && overlap(l.start, l.width, o.start, o.width)
+                    (o.row == j && overlap(l.start, l.width, o.start, o.width))
+                        || (at_leader(l) && o.row >= j && covers(l, o))
                 });
                 prop_assert!(hit, "label {l:?} in row {} overlaps nothing in row {j}", l.row);
             }

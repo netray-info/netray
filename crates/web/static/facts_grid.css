@@ -10,6 +10,10 @@
   gap: var(--space-1);
   min-width: 0;
 }
+.facts-grid__cell[data-wide] {
+  /* a long value (a raw user agent, a SAN list) reads on one line across the grid */
+  grid-column: 1 / -1;
+}
 .facts-grid[data-toned] .facts-grid__cell {
   /* in a grid with a toned cell every cell keeps the bar's slot, so the cells align */
   padding-inline-start: var(--space-2);
