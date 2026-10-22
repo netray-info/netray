@@ -1,7 +1,8 @@
 # Spec: v2-spectrum-phone
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-22
+Finished: 2026-10-22
 
 ## Goal
 
@@ -109,3 +110,8 @@ GIVEN the stylesheet WHEN read THEN at 480 px or narrower the label's bottom and
   scaled desktop placement did. SDD §5.5 and requirement 3 are narrowed to that; changing the
   rules at the phone (fallback threshold, right-aligned edge boxes) is a proposal (implementer
   under the operator's autonomy mandate, 2026-10-22).
+- Branch review MAJOR (held): the SDD's "neither case draws worse than the scaled desktop
+  placement did" holds as clear or not, not by count: a cluster dense only at the phone can cross
+  at two leaders where the scaled drawing crossed at one. §5.5 now says so; a phone-only
+  fallback threshold one row higher is a proposal (implementer under the operator's autonomy
+  mandate, 2026-10-22).
