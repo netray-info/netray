@@ -95,8 +95,8 @@ single-label name in an OG card URL starts a domain run.
    zone's authoritative nameservers: the record's name and type are looked up at those servers
    and the answer is sent as a batch of that type, so the records block shows the highest TTL
    across all answers, the authoritative one included; the authoritative TTL applies to the whole
-   RRset (RFC 2181 §5.2), and to the RRSIGs covering it (RFC 4034 §3), which are never re-read on
-   their own; an RRSIG also takes the highest TTL its covered RRset shows at any resolver. Only names
+   RRset (RFC 2181 §5.2). RRSIGs are left out of the TTL lint: each carries the TTL of the RRset
+   it covers (RFC 4034 §3), which the lint judges on that RRset, and is never re-read. Only names
    at or below the zone are re-read. A record whose
    authoritative TTL is 60 s or more is not low. When no authoritative server answers, the recursive TTL is judged, as
    today.
@@ -189,7 +189,8 @@ GIVEN xn--bcher-kva.example A at TTL 29 from the resolvers and 300 from its auth
 GIVEN www.example.com CNAME web.example.com at TTL 29 from the resolvers, carried only in the A lookup, and 300 from the authoritative server WHEN the check runs THEN `dns.ttl` is `pass`.
 GIVEN www.example.com CNAME shop.example.net whose A is TTL 20 from the resolvers WHEN the check runs THEN no authoritative lookup is made for shop.example.net and `dns.ttl` warns with 20s.
 GIVEN example.com's RRSIG records at TTL 29 from the resolvers WHEN the check runs THEN no authoritative lookup is made for RRSIG: an RRSIG carries the TTL of the RRset it covers (RFC 4034 §3).
-GIVEN example.com A and its RRSIG at TTL 29 from the resolvers and A at 60 from the authoritative server WHEN the check runs THEN `dns.ttl` is `pass`: the RRSIG takes the covered RRset's TTL.
+GIVEN example.com A and its RRSIG at TTL 29 from the resolvers and A at 60 from the authoritative server WHEN the check runs THEN `dns.ttl` is `pass`: the RRSIG is judged by its covered RRset.
+GIVEN example.com A at 29 s at one resolver and 300 s at another, and its RRSIG at 29 s WHEN the check runs THEN `dns.ttl` is `pass`.
 
 ## Phase 4 — DNS inspector: reverse names and `@system`
 
@@ -260,6 +261,10 @@ GIVEN the DNS inspector query `com NS` WHEN parsed THEN it is accepted.
   router's contract (`result_page_csp`) sends every non-domain single segment there, and the API
   the page would call refuses the name (implementer under the operator's autonomy mandate,
   2026-10-22).
+- Review readings 2 to 4 (implementer under the operator's autonomy mandate, 2026-10-22): giving
+  RRSIGs their covered RRset's TTL through extra batches put TTLs on prism's wire that no resolver
+  served and lost them at the deadline; RRSIGs are instead left out of the TTL lint, which judges
+  the covered RRset.
 - Review of the range (implementer under the operator's autonomy mandate, 2026-10-22): fixed on
   this branch rather than split: a failed batch at the name no longer marks the zone checks
   unmeasured once the zone's replacement answered (zone batches carry `source: "zone"`); RRSIGs are

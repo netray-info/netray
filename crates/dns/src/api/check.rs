@@ -1276,9 +1276,8 @@ async fn authoritative_ttls(
             pairs.push(pair);
         }
     }
-    let lifted = rrsig_lifts(unique);
     if pairs.is_empty() {
-        return lifted;
+        return Vec::new();
     }
 
     let mut ns_ips: HashMap<String, Vec<IpAddr>> = unique
@@ -1287,7 +1286,7 @@ async fn authoritative_ttls(
         .map(|n| (n.to_ascii(), Vec::new()))
         .collect();
     if ns_ips.is_empty() {
-        return lifted;
+        return Vec::new();
     }
     raw.resolve_missing_glue(&mut ns_ips).await;
     let servers: Vec<SocketAddr> = raw
@@ -1297,7 +1296,7 @@ async fn authoritative_ttls(
         .map(|(addr, _)| addr)
         .collect();
     if servers.is_empty() {
-        return lifted;
+        return Vec::new();
     }
 
     let answers = futures::future::join_all(pairs.iter().map(|(name, rt)| {
@@ -1329,76 +1328,30 @@ async fn authoritative_ttls(
     pairs
         .iter()
         .zip(answers)
-        .filter_map(|((name, rt), answer)| answer.map(|answer| (name, *rt, answer)))
-        .flat_map(|(name, rt, (ttl, server))| {
-            // The RRset's RRSIGs carry its TTL (RFC 4034 §3): they go in an RRSIG batch, so the
-            // signature of a re-read RRset is not judged on its cached remainder.
-            let rrset = with_ttl(unique, name, rt, None, ttl, Some(server));
-            let rrsigs = with_ttl(unique, name, RecordType::RRSIG, Some(rt), ttl, Some(server));
-            [(rt, rrset), (RecordType::RRSIG, rrsigs)]
-        })
-        .filter(|(_, lookups)| !lookups.is_empty())
-        .map(|(rt, lookups)| (rt, Lookups::new(lookups)))
-        .chain(lifted)
-        .collect()
-}
-
-/// RRSIG batches that give each RRSIG the highest TTL its covered RRset shows in `unique`
-/// (RFC 4034 §3), where that is higher than the RRSIG's own cached remainder; no lookup.
-fn rrsig_lifts(unique: &Lookups) -> Vec<(RecordType, Lookups)> {
-    let mut covered: Vec<(String, RecordType)> = Vec::new();
-    for record in unique.records() {
-        if let Some(rt) = record
-            .data()
-            .rrsig()
-            .and_then(|rrsig| rrsig.type_covered().parse::<RecordType>().ok())
-        {
-            let pair = (record.name().to_ascii(), rt);
-            if !covered.contains(&pair) {
-                covered.push(pair);
-            }
-        }
-    }
-    covered
-        .into_iter()
-        .filter_map(|(name, rt)| {
-            let ttl = unique
-                .records()
-                .into_iter()
-                .filter(|r| r.record_type() == rt && same_name(&r.name().to_ascii(), &name))
-                .map(|r| r.ttl())
-                .max()?;
-            let lookups = with_ttl(unique, &name, RecordType::RRSIG, Some(rt), ttl, None);
-            (!lookups.is_empty()).then(|| (RecordType::RRSIG, Lookups::new(lookups)))
+        .filter_map(|((name, rt), answer)| {
+            let (ttl, server) = answer?;
+            let lookups = with_ttl(unique, name, *rt, ttl, server);
+            (!lookups.is_empty()).then(|| (*rt, Lookups::new(lookups)))
         })
         .collect()
 }
 
-/// Every lookup in `lookups` holding records of (`name`, `rt`) (with `covering`, only RRSIGs
-/// covering that type), reduced to those
-/// records, each carrying `ttl`, as answered by `server`. The TTL belongs to the RRset
-/// (RFC 2181 §5.2), so it covers records the authoritative answer did not repeat, such as a
-/// rotating address set.
+/// Every lookup in `lookups` holding records of (`name`, `rt`), reduced to those records, each
+/// carrying `ttl`, as answered by `server`. The TTL belongs to the RRset (RFC 2181 §5.2), so it
+/// covers records the authoritative answer did not repeat, such as a rotating address set.
 fn with_ttl(
     lookups: &Lookups,
     name: &str,
     rt: RecordType,
-    covering: Option<RecordType>,
     ttl: u32,
-    server: Option<SocketAddr>,
+    server: SocketAddr,
 ) -> Vec<mhost::resolver::Lookup> {
     use serde_json::Value;
 
     let rtype = rt.to_string();
-    let covered = covering.map(|c| c.to_string());
     let owned = |rec: &Value| {
         rec["type"].as_str() == Some(rtype.as_str())
             && rec["name"].as_str().is_some_and(|n| same_name(n, name))
-            && covered.as_deref().is_none_or(|c| {
-                rec.pointer("/data/RRSIG/type_covered")
-                    .and_then(Value::as_str)
-                    == Some(c)
-            })
     };
     // Every lookup, whatever its query type: `unique_records` keeps a record in the first
     // lookup that carried it (a CNAME in the A lookup, glue in the NS lookup).
@@ -1416,13 +1369,40 @@ fn with_ttl(
             for rec in records.iter_mut() {
                 rec["ttl"] = Value::from(ttl);
             }
-            if let Some(server) = server {
-                value["name_server"] =
-                    Value::from(mhost::nameserver::NameServerConfig::udp(server).to_string());
-            }
+            value["name_server"] =
+                Value::from(mhost::nameserver::NameServerConfig::udp(server).to_string());
             serde_json::from_value(value).ok()
         })
         .collect()
+}
+
+/// `lookups` without RRSIG records, for the TTL lint: an RRSIG carries the TTL of the RRset it
+/// covers (RFC 4034 §3), which the lint judges on that RRset, while the signature's own cached
+/// remainder would add a finding no answer stands behind.
+fn without_rrsigs(lookups: &Lookups) -> Lookups {
+    use serde_json::Value;
+
+    let rrsig = |rec: &Value| rec["type"].as_str() == Some("RRSIG");
+    let kept: Vec<mhost::resolver::Lookup> = lookups
+        .iter()
+        .map(|lookup| {
+            let Ok(mut value) = serde_json::to_value(lookup) else {
+                return lookup.clone();
+            };
+            let Some(records) = value
+                .pointer_mut("/result/Response/records")
+                .and_then(Value::as_array_mut)
+            else {
+                return lookup.clone();
+            };
+            if !records.iter().any(rrsig) {
+                return lookup.clone();
+            }
+            records.retain(|rec| !rrsig(rec));
+            serde_json::from_value(value).unwrap_or_else(|_| lookup.clone())
+        })
+        .collect();
+    Lookups::new(kept)
 }
 
 /// The synchronous record lints in emit order, run over the unique records of all resolvers,
@@ -1440,7 +1420,7 @@ pub fn lint_lookups(lookups: &Lookups) -> Vec<(&'static str, Vec<CheckResult>)> 
         ("mx", check_mx_sync(lookups)),
         ("ns", check_ns_count(lookups)),
         ("spf", check_spf(lookups)),
-        ("ttl", check_ttl(lookups)),
+        ("ttl", check_ttl(&without_rrsigs(lookups))),
     ]
     .into_iter()
     .map(|(category, results)| (category, unique_lines(results)))
