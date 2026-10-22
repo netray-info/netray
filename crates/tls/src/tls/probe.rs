@@ -27,10 +27,16 @@ const EXT_EC_POINT_FORMATS: u16 = 0x000B;
 const EXT_SIGNATURE_ALGORITHMS: u16 = 0x000D;
 const EXT_SUPPORTED_VERSIONS: u16 = 0x002B;
 
-/// Fatal alerts that refuse what the probe offered: handshake_failure, protocol_version,
-/// insufficient_security. Any other alert (internal_error, decode_error, unrecognized_name) says
-/// nothing about the version or suite and leaves the probe unanswered.
+/// Fatal alerts that refuse what a suite-group probe offered: handshake_failure,
+/// protocol_version, insufficient_security. Any other alert leaves a suite-group probe
+/// unanswered.
 const REFUSING_ALERTS: &[u8] = &[40, 70, 71];
+/// Fatal alerts that refuse a legacy-version ClientHello (SDD S44): unexpected_message,
+/// handshake_failure, illegal_parameter, decode_error, protocol_version, insufficient_security,
+/// inappropriate_fallback, unrecognized_name. close_notify at either level refuses it too, as a
+/// close does (S42). internal_error, user_canceled and any other alert say nothing about the
+/// version and leave the probe unanswered.
+const REFUSING_VERSION_ALERTS: &[u8] = &[10, 40, 47, 50, 70, 71, 86, 112];
 /// Upper bound on the bytes read from one probe connection.
 const READ_CAP: usize = 20 * 1024;
 /// Largest record payload TLS allows, with headroom for compression and padding.
@@ -545,11 +551,18 @@ fn decide(kind: ProbeKind, bytes: &[u8]) -> Option<ProbeOutcome> {
             21 => {
                 let (level, desc) = (*payload.first()?, *payload.get(1)?);
                 // A warning before the ServerHello (unrecognized_name) is not the answer; keep
-                // reading. close_notify is a close, not a verdict.
+                // reading. close_notify is a close: it refuses a version probe (S42, S44) and
+                // decides nothing for a suite group.
                 if level == 1 && desc != 0 {
                     continue;
                 }
-                let verdict = if level == 2 && REFUSING_ALERTS.contains(&desc) {
+                let refuses = if kind.is_suite_group() {
+                    level == 2 && REFUSING_ALERTS.contains(&desc)
+                } else {
+                    (desc == 0 && level == 1)
+                        || (level == 2 && (desc == 0 || REFUSING_VERSION_ALERTS.contains(&desc)))
+                };
+                let verdict = if refuses {
                     Verdict::Refused
                 } else {
                     Verdict::Unanswered

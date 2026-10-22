@@ -1,7 +1,8 @@
 // specs/features/v2-tls-versions-coop Phase 1, review finding on R2 (amended): only a fatal
-// handshake_failure, protocol_version or insufficient_security alert refuses a probe. A warning
-// alert before the ServerHello is skipped; close_notify and other fatal alerts (internal_error,
-// decode_error, unrecognized_name) leave the probe unanswered.
+// handshake_failure, protocol_version or insufficient_security alert refuses a suite-group probe.
+// A warning alert before the ServerHello is skipped; close_notify and other fatal alerts
+// (internal_error, decode_error, unrecognized_name) leave it unanswered. Version probes refuse on
+// more alerts since v2-correctness-followups (probe_version_alerts.rs).
 
 use netray_tls::tls::probe::{ProbeKind, StreamEnd, Verdict, classify};
 
@@ -49,7 +50,7 @@ fn only_refusing_fatal_alerts_refuse() {
         (2, 0, Verdict::Unanswered),
     ] {
         let o = classify(
-            ProbeKind::Tls10,
+            ProbeKind::SuitesInsecure,
             &record(21, &[level, desc]),
             StreamEnd::Eof,
         );
