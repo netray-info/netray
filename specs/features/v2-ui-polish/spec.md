@@ -95,11 +95,17 @@ V24, V25, HTTP-UI V9, IP-UI V11, site-nav V2, V4, V6, V7, V9, V10, V14, V15.
    narrower (board M), hidden wider. (d) A block with no values renders "Nothing recorded." in the
    muted tone under its title instead of an empty card body. (e) The cells of an evidence table
    row share a baseline at 390 px.
-9. **Spectrum leaders.** SDD §5.5 point 2 gains: a label goes into the lowest row where its
-   interval overlaps no label of that row, no label in a lower row covers its leader, and its box
-   covers no leader of a label already placed in a higher row (covering: the leader's x lies
-   strictly inside the box, beyond the tolerance). Placement stays greedy, in line order, at the
-   narrowest plate; rows are added as before. SDD §5.5 is amended in the same commit.
+9. **Spectrum leaders.** SDD §5.5 point 2 becomes: labels are taken right to left; each goes
+   into the lowest row where its interval overlaps no label of that row and which lies above
+   every placed label whose leader its box covers (covering: the leader's x lies more than half a
+   px inside the box), so no leader crosses a box; a box at its leader covers only leaders to its
+   right. A box pushed in from the plate's right edge, or wider than the plate, is exempt for the
+   leaders it covers to its left. Intersecting boxes form a cluster, placed on its own: when a
+   cluster's placement needs more rows than three and than its line-order placement (each label
+   in the lowest row free of overlap, the rule before), the line-order placement stands for that
+   cluster, as a dense cluster would otherwise stack every label above its neighbour; there
+   leaders pass labels. Rows are added as before (at least three); the placement is made at the
+   narrowest plate. SDD §5.5 is amended in the same commit.
 10. **Wide facts.** A `facts_grid` cell whose values' display text (joined as rendered) is longer
     than `FACT_WIDE_CHARS` (one public constant, 40) spans the grid's full width
     (`data-wide`); the decision is one pure function in Rust, used by the template. Applies to
@@ -128,7 +134,7 @@ GIVEN a live board whose page holds only its shell elements WHEN compared THEN o
 GIVEN a live board whose wait selector was not reached WHEN compared THEN one `no state` row reads "wait <selector> not reached".
 GIVEN a live board whose page holds one non-shell element WHEN compared THEN its measured rows are reported as before.
 GIVEN a board without wait whose page holds none of its elements WHEN compared THEN its rows are `missing on page` as before.
-GIVEN lines where a later label's leader falls inside an earlier label's box in row 0 WHEN placed THEN the later label goes to a row whose lower rows hold no box over its leader, and no label box in any row covers another label's leader.
+GIVEN lines where a later label's leader falls inside an earlier label's box in row 0 WHEN placed THEN the earlier label sits above the later one and no box covers a leader above it; over any input, a box at its leader covers no higher leader unless its cluster fell back to the line-order placement.
 GIVEN the existing spectrum scenarios WHEN placed THEN every label keeps a row, rows are at least three, and no two boxes of one row overlap.
 
 ## Phase 2 — Inspector shell
@@ -185,6 +191,13 @@ GIVEN every captured page at 390 px WHEN measured THEN the document is not wider
 - A live board's shell elements are named in the manifest (`shell`), not guessed from the
   result region: the TLS board's band and section heading render in a timed-out run too
   (implementer under the operator's autonomy mandate, 2026-10-22).
+- Requirement 9 rewritten during Phase 1: the drafted "a label in a lower row never covers a
+  higher leader" with line-order placement has no solution in a dense run (every box wider than
+  the pitch: each label above its neighbour, 50 rows on an all-fail card). Built: right-to-left
+  placement clear of leaders per cluster of intersecting boxes, the line-order placement where
+  a cluster would need more rows than three and than line order, and boxes pushed in from the
+  right edge exempt for the leaders to their left (implementer under the operator's autonomy
+  mandate, 2026-10-22).
 - The phone header drops the inspector name rather than shrinking it: board M draws wordmark,
   Theme and menu only, and the tab row already marks the inspector (implementer under the
   operator's autonomy mandate, 2026-10-22).

@@ -9,14 +9,14 @@ fn covers(box_start: f64, box_width: f64, x: f64) -> bool {
     x > box_start + EPS && x < box_start + box_width - EPS
 }
 
-/// No box in row r covers the leader of a label in a row above r, except where two boxes each
-/// cover the other's leader (two boxes pushed in from the plate's right edge): no row order
-/// clears both.
+/// No box in row r covers the leader of a label in a row above r, except a box pushed in from the
+/// plate's right edge (or wider than the plate), which does not stand at its own leader: no row
+/// order clears the leaders it spans to its left.
 fn assert_leaders_clear(p: &Placement) {
     for a in &p.labels {
         for b in &p.labels {
-            let mutual = covers(a.start, a.width, b.leader) && covers(b.start, b.width, a.leader);
-            if a.row < b.row && !mutual {
+            let shifted = (a.start - a.leader).abs() > 1e-6;
+            if a.row < b.row && !shifted {
                 assert!(
                     !covers(a.start, a.width, b.leader),
                     "box {a:?} covers the leader of {b:?}"
@@ -24,6 +24,60 @@ fn assert_leaders_clear(p: &Placement) {
             }
         }
     }
+}
+
+/// The line-order rows: each label, in line order, in the lowest row where its box overlaps no
+/// earlier label's box (the rule a dense cluster falls back to, SDD §5.5 point 2).
+fn line_order_rows(p: &Placement) -> Vec<usize> {
+    let mut rows: Vec<usize> = Vec::new();
+    for (i, l) in p.labels.iter().enumerate() {
+        let mut row = 0;
+        while p.labels[..i].iter().zip(&rows).any(|(o, &r)| {
+            r == row && l.start < o.start + o.width - 1e-6 && o.start < l.start + l.width - 1e-6
+        }) {
+            row += 1;
+        }
+        rows.push(row);
+    }
+    rows
+}
+
+/// The cluster index of each label: labels whose boxes intersect, directly or through others.
+fn cluster_of(p: &Placement) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..p.labels.len()).collect();
+    order.sort_by(|&i, &j| p.labels[i].start.total_cmp(&p.labels[j].start));
+    let mut out = vec![0; p.labels.len()];
+    let (mut cluster, mut end) = (0, f64::NEG_INFINITY);
+    for (k, &i) in order.iter().enumerate() {
+        let l = &p.labels[i];
+        if k == 0 || l.start >= end - 1e-6 {
+            cluster += usize::from(k > 0);
+            end = l.start + l.width;
+        } else {
+            end = end.max(l.start + l.width);
+        }
+        out[i] = cluster;
+    }
+    out
+}
+
+/// A box at its leader crosses a higher leader only inside a cluster placed in line order.
+fn crossings_only_in_line_order_clusters(p: &Placement) -> bool {
+    let rows = line_order_rows(p);
+    let clusters = cluster_of(p);
+    p.labels.iter().enumerate().all(|(i, a)| {
+        let shifted = (a.start - a.leader).abs() > 1e-6;
+        let crosses = !shifted
+            && p.labels
+                .iter()
+                .any(|b| a.row < b.row && covers(a.start, a.width, b.leader));
+        !crosses
+            || p.labels
+                .iter()
+                .enumerate()
+                .filter(|(j, _)| clusters[*j] == clusters[i])
+                .all(|(j, l)| l.row == rows[j])
+    })
 }
 
 fn assert_row_disjoint(p: &Placement) {
@@ -93,6 +147,7 @@ proptest! {
         prop_assert_eq!(p.labels.len(), flagged);
         prop_assert!(p.rows >= 3);
         assert_row_disjoint(&p);
-        assert_leaders_clear(&p);
+        // leaders clear, or a dense cluster that falls back to the line-order placement
+        prop_assert!(crossings_only_in_line_order_clusters(&p), "{p:?}");
     }
 }

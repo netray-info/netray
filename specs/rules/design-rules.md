@@ -37,7 +37,10 @@ it "<title> [<state>]". An optional `click` names a board selector and a page se
 optional) clicked in that order before the board and the page are measured, for a state behind a
 control: board M's menu sheet, the header's open Inspectors menu. An optional `wait` is a selector the page reaches when it is complete (an
 inspector's live run: `form[data-stream-state="done"]`); the check waits for it, up to 60 s, before
-it measures.
+it measures. An element may carry `"shell": true` when it renders whether or not the board's state
+was reached (header, form, band, footer). A board with `wait` is one `no state` row instead of its
+measured rows when the selector was not reached, or when no element without `shell` is on the
+page: a timed-out live run never passes on the shell alone.
 
 ## Five classes
 
