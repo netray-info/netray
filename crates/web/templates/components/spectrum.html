@@ -1,15 +1,15 @@
 {% macro spectrum(view, live, slim) %}
-<div class="spectrum"{% if slim %} data-slim{% endif %}>
+<div class="spectrum"{% if slim %} data-slim{% else %} style="--label-extra-phone: {{ view.phone_extra() }}"{% endif %}>
   <div class="spectrum__box" style="--spectrum-lines: {{ view.line_count }}">
     {%- if !slim %}
     <div class="spectrum__label-band" style="height: {{ view.band_height() }}">
       {% for set in view.label_sets %}
       <div class="spectrum__labels" data-run="{{ set.run }}"{% if set.shown %} data-shown{% endif %}>
         {% for label in set.labels %}
-        <span class="spectrum__leader" data-tone="{{ label.tone.as_str() }}" style="left: {{ label.x_pct() }}%; height: {{ label.rise() }}"></span>
+        <span class="spectrum__leader" data-tone="{{ label.tone.as_str() }}" style="left: {{ label.x_pct() }}%; height: {{ label.rise() }}; --row-phone: {{ label.phone_row }}"></span>
         {% endfor %}
         {% for label in set.labels %}
-        <span class="spectrum__line-label" data-tone="{{ label.tone.as_str() }}" data-code="{{ label.code }}" style="left: clamp(0px, {{ label.x_pct() }}%, calc(100% - {{ label.width_px() }}px)); bottom: calc(var(--spectrum-label-leader) + {{ label.row }} * var(--spectrum-label-row))">{{ label.text }}</span>
+        <span class="spectrum__line-label" data-tone="{{ label.tone.as_str() }}" data-code="{{ label.code }}" style="left: clamp(0px, {{ label.x_pct() }}%, calc(100% - {{ label.width_px() }}px)); bottom: calc(var(--spectrum-label-leader) + {{ label.row }} * var(--spectrum-label-row)); --x: {{ label.x_pct() }}%; --row-phone: {{ label.phone_row }}; --width-phone: {{ label.phone_width_px() }}px">{{ label.text }}</span>
         {% endfor %}
       </div>
       {% endfor %}

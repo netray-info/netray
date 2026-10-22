@@ -303,6 +303,7 @@ mod spectrum_catalogue_props;
 mod spectrum_component;
 mod spectrum_layout;
 mod spectrum_leaders;
+mod spectrum_phone;
 mod spectrum_runs;
 mod spectrum_scenarios;
 mod spectrum_styles;

@@ -178,6 +178,18 @@
   .spectrum__box {
     min-width: 0;
   }
+  .spectrum__label-band {
+    /* The phone draws the phone placement (SDD §5.5 point 2): the inline geometry is the
+       desktop placement's, so these rules override it with the values the component writes. */
+    height: calc(var(--spectrum-label-band) + var(--label-extra-phone) * var(--spectrum-label-row)) !important;
+  }
+  .spectrum__leader {
+    height: calc(var(--spectrum-label-leader) + var(--row-phone) * var(--spectrum-label-row)) !important;
+  }
+  .spectrum__line-label {
+    bottom: calc(var(--spectrum-label-leader) + var(--row-phone) * var(--spectrum-label-row)) !important;
+    left: clamp(0px, var(--x), calc(100% - var(--width-phone))) !important;
+  }
   .spectrum__axis {
     height: 26px;
   }
