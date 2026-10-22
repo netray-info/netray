@@ -188,6 +188,14 @@ GIVEN the cleaned tree WHEN it runs THEN it passes, and `cargo build --workspace
   each is a few lines inside this feature's scope (implementer under the operator's autonomy
   mandate, 2026-10-22).
 
+- The serve-test port race (main CI on e2bb5899, `serve_hosts.rs`, AddrInUse) is fixed in this
+  feature at the coordinator's request, in its own `test:` commit. Retry over port 0: port 0
+  needs serve to log its bound addresses and every test to parse them, while a retry stays inside
+  the tests; a test accepts a server only once its own log shows both listeners bound, so a
+  healthy server of a parallel test on the same port is never mistaken for its own. The same
+  retry goes into all ten serve-spawning tests (implementer under the operator's autonomy
+  mandate, 2026-10-22).
+
 ## Open decisions
 
 None.

@@ -116,3 +116,7 @@ PASS: test_v1_remnants
 - `docs/ip-enrichment.md`: `user_agent_regexes` must load when configured (load error at startup, the whole previous data kept on reload).
 - `tests/repo/test_v1_remnants.sh` reads `crates/tls/src/lib.rs` (`pub mod inspection;`, no `routes` or `#[path]`), `crates/tls/CLAUDE.md` and the old module path in the tls and web crates; `#[path = "inspection.rs"] pub mod routes;` and `src/routes.rs` in CLAUDE.md each fail it.
 - `tests/repo/test_crate_docs.sh` matches record files with `:(glob)` pathspecs, so only `crates/<crate>/docs/` and `specs/` count.
+
+## Serve-test port race (coordinator, 2026-10-22)
+
+`crates/netray/tests/support/mod.rs` (`listening`, `bind_failed`, `ATTEMPTS`) and a labelled retry loop in the ten tests that spawn `netray serve` on `free_port` ports: serve_api_inspect_tables, serve_api_metrics, serve_entries_gone, serve_hosts, serve_inspector_hosts, serve_inspector_links, serve_metrics, serve_probe_headers, serve_reserved_paths, serve_startup. All ten pass; a serve started on an occupied port exits with `AddrInUse` in its log, which `bind_failed` reads.
