@@ -63,7 +63,7 @@ netray_admission_rejections_total{reason="image_budget"} 2
 Three earlier tests encoded "no absolute URL in the header" and "logo inside a link to /"
 (`fidelity_header.rs`, `pages_frame.rs`, `site_nav_links.rs`); requirement 7 supersedes them for
 the logo only, so each now exempts exactly the logo's apex link and keeps its rule for every other
-link. The apex `/` is absent from the logo test's path list: the router built without a store
+link. The apex `/` is absent from the logo test's path list: the test's router (no store)
 answers it 404, and `pages_frame.rs` covers the landing page.
 
 ### Runs
@@ -96,3 +96,44 @@ destinations; `[modules.ip]` rows are written with both GeoIP databases, which t
 ### Behavioural verification
 
 skipped: the check is the unit test itself (`cargo test -p netray --bin netray legacy`, 4 passed).
+
+## Phase 4 — Crate docs describe V2
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R9: README and CLAUDE.md of dns, tls, http, email, ip, common describe the V2 module or library, its keys, checks or exports and root-verb testing, and name no V1 service as current | green | tests/repo/test_crate_docs.sh |
+| C2 | R10: each CHANGELOG keeps its history and opens with the pointer to the root CHANGELOG | green | tests/repo/test_crate_docs.sh |
+| C3 | R11: the repo check enforces the pointer and the stale-string list | green | tests/repo/test_crate_docs.sh |
+| C4 | today's docs fail the check naming each file | green | tests/repo/test_crate_docs.sh |
+| C5 | the rewritten docs pass | green | tests/repo/test_crate_docs.sh |
+| C6 | every old CHANGELOG entry stays below the pointer | green | tests/repo/test_crate_docs.sh (git diff: each CHANGELOG +2 lines, 0 removed) |
+| C7 | a README naming a V1 subcommand and config file fails | green | tests/repo/test_crate_docs.sh |
+
+One writer per crate traced each claim to the code; corrections found on the way (the old docs
+said otherwise): DNS check cost is 19 tokens (`CHECK_TOTAL_STEPS`), authcompare charges types x 2
++ 16, the DNS crate is MIT only; the HTTP module reads no body (`read_body: false`) and a refused
+or reset HTTPS probe is a measured fail; email's `ModuleConfig` has no `backends` key.
+
+Leftovers noticed outside the three files (mentioned, not changed): crate doc comments in
+`crates/email/src/lib.rs` ("fifth pillar") and `crates/common/src/lib.rs` ("service ecosystem"),
+`crates/common/src/server.rs` (a static file handler that no longer exists), `crates/common`
+`Cargo.toml` description and repository URL; unused `netray_common::ecosystem` and
+`netray_common::metrics`; unused `netray_tls::RequestId` re-export; `crates/tls/src/routes.rs`
+holds no router; the per-crate `docs/`, `specs/` and `ROADMAP.md` are V1 records.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 dns docs | 1 | writer agent | 116908 | 163 |
+| G2 tls docs | 1 | writer agent | 115630 | 187 |
+| G3 http docs | 1 | writer agent | 96909 | 108 |
+| G4 email docs | 1 | writer agent | 92639 | 104 |
+| G5 ip docs | 1 | writer agent | 123374 | 203 |
+| G6 common docs | 1 | writer agent | 98649 | 134 |
+
+### Behavioural verification
+
+skipped: documentation; `bash tests/repo/test_crate_docs.sh` passes.

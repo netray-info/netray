@@ -28,3 +28,14 @@
 - `crates/web/src/config.rs` `default_badge_label`, `crates/web/src/og/layout.rs` `DEFAULT_LABEL`: "netray".
 - `crates/web/templates/base.html`: the logo's `href` through `frame.origin()`.
 - `crates/netray/netray.example.toml`: `default_label = "netray"`.
+
+## Phase 4 — Crate docs describe V2
+
+## Groups
+
+- G1 to G6: one crate each (dns, tls, http, email, ip, common); no shared file.
+
+## Plan
+
+- `crates/<c>/README.md`, `CLAUDE.md`: rewritten from the code (module type, checks, `[modules.<c>]`, `[api.<c>]`, `[inspect.<c>]`, root verbs).
+- `crates/<c>/CHANGELOG.md`: pointer paragraph before the first entry, history unchanged.

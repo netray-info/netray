@@ -3,6 +3,8 @@
 All notable changes to spectra are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+This crate ships inside `netray` since 0.30.0 and has no release of its own; its changes are recorded in the root [CHANGELOG.md](../../CHANGELOG.md). The entries below are the history of the standalone service spectra.
+
 ## [0.3.0] - 2026-10-07
 
 ### Changed (BREAKING)

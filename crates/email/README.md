@@ -1,81 +1,72 @@
-# beacon
+# netray-email
 
-DNS-only email security inspector for the [netray.info](https://netray.info) suite. Given a domain, beacon checks 12 email security categories (MX, SPF, DKIM, DMARC, MTA-STS, TLS-RPT, DANE, DNSSEC, BIMI, FCrDNS, DNSBL, cross-validation) and streams results incrementally via SSE, computing an aggregate grade A–F.
+The email module of `netray serve` (V1 codename beacon): a library crate with no binary of its own.
+Given a domain, it inspects the domain's mail posture over DNS, plus the HTTPS fetches of the
+MTA-STS policy and the BIMI logo.
 
-## Prerequisites
+## What it provides
 
-- Rust (pinned by the root `rust-toolchain.toml`)
-- Node 20+
-- `just adlc-setup` once per checkout, from the repository root (npm workspaces, frontend builds)
+- `EmailModule`: the V2 engine module (`netray_engine::Module`, protocol `Email`). It runs the
+  category checks in-process and `module::translate` maps their results onto the `email.*` checks
+  and evidence blocks (`module::REGISTER`).
+- `EmailInspector` and the `job` types: the inspection netray-web runs for `POST /api/v1/email/inspect`
+  and the `/inspect/email` page.
 
-## Quick Start
+## Check ids
 
-```sh
-# Backend (from the repository root, after `just build`)
-netray email crates/email/beacon.dev.toml
+`EmailModule::checks()` emits the ten ids in `module::BUCKETED`, each with its texts in
+`crates/engine/catalogue/checks.toml`:
 
-# Frontend (separate terminal)
-npm run dev -w beacon-frontend   # Vite dev server on :5176
-```
+`email.mx`, `email.spf`, `email.dkim`, `email.dmarc`, `email.mta_sts`, `email.tls_rpt`,
+`email.bimi`, `email.dane`, `email.dnsbl`, `email.fcrdns`.
 
-Copy `beacon.toml.example` to `beacon.toml` and adjust settings as needed.
+The inspection also measures DNSSEC (DNSKEY presence) and cross-validation; neither is an email
+check (`module::EXCLUDED`): DNSSEC is scored in the DNS section, and each cross-validation sub-check
+is routed to the email check it concerns (`module::route_cross_validation`).
 
 ## Configuration
 
-Beacon loads configuration from a TOML file and allows every value to be overridden via environment variables.
+All keys live in `netray.toml` (`crates/netray/netray.example.toml`); every table is optional and
+falls back to the defaults below.
 
-- **`beacon.toml.example`** — template, committed to the repo. Copy this as a starting point.
-- **`beacon.toml`** — production config. Deployed to the server, not checked into the repo with real values.
-- **`beacon.dev.toml`** — local development config. Used with `netray email crates/email/beacon.dev.toml`.
+`[modules.email]` (`ModuleConfig`, `src/config.rs`; `deadline_ms` is the section window, read by
+`crates/netray/src/config.rs`):
 
-### Environment variables
+| Key | Default |
+|---|---|
+| `deadline_ms` | `2000` |
+| `dns.resolvers` | `["cloudflare"]` |
+| `dns.timeout_ms` | `5000` |
+| `dnsbl.zones` | `["zen.spamhaus.org", "b.barracudacentral.org", "bl.spamcop.net", "dbl.spamhaus.org"]` |
+| `dnsbl.timeout_ms` | `2000` |
+| `dnsbl.resolvers` | `["system"]` |
+| `http.timeout_ms` | `10000` |
+| `dkim.max_user_selectors` | `5` |
+| `inspections.max_concurrent` | `16` (1 up to tokio's semaphore maximum) |
 
-Environment variables use the `NETRAY_EMAIL_` prefix and `__` (double underscore) to traverse nested sections; the config file path is `NETRAY_EMAIL_CONFIG`. The retired `BEACON__*` and `BEACON_CONFIG` variables fail startup, naming the new prefix:
+`[api.email]` (`ApiEmailConfig`, `crates/web/src/api/config.rs`), the per-client limits of
+`POST /api/v1/email/inspect`; each must be non-zero:
 
-```sh
-# [backends] ip_url = "..."
-NETRAY_EMAIL_BACKENDS__IP_URL=http://ip.netray.info
+| Key | Default |
+|---|---|
+| `per_ip_per_minute` | `10` |
+| `per_ip_burst` | `10` |
+| `max_concurrent_inspections` | `16` |
 
-# [telemetry] log_format = "..."
-NETRAY_EMAIL_TELEMETRY__LOG_FORMAT=json
-```
+`[inspect.email]` (`InspectLimits`, `crates/web/src/pages/inspect.rs`), the `/inspect/email` page's
+budget; each must be at least 1:
 
-## API
+| Key | Default |
+|---|---|
+| `deadline_ms` | `35000` (past the inspection's own 30 s cap) |
+| `max_concurrent` | `8` |
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/inspect` | Start an inspection from a JSON body; streams SSE results |
-| `GET`  | `/inspect/{domain}` | Start an inspection from a path parameter; streams SSE results |
-| `GET`  | `/api/meta` | Ecosystem metadata (version, sibling services) |
-| `GET`  | `/health` | Liveness probe |
-| `GET`  | `/ready` | Readiness probe |
-| `GET`  | `/docs` | Scalar UI over the OpenAPI schema |
-| `GET`  | `/api-docs/openapi.json` | OpenAPI 3.1 schema |
+## Testing
 
-### SSE example
+From the repository root: `just adlc-verify` (the gate) or `just check` (adds the full Rust suite).
+For this crate alone:
 
-```sh
-curl -N https://email.netray.info/inspect/example.com
-```
-
-Each category emits its own SSE event as it completes; a final `summary` event carries the aggregate grade.
-
-## Testing & Build
-
-The verbs live in the root `justfile`; see the root `README.md`. For this crate alone:
-
-```sh
-cargo test -p netray-email               # Rust tests
-npm test -w beacon-frontend        # frontend tests
-```
-
-## Architecture
-
-Beacon is an Axum 0.8 service with an embedded SolidJS 1.9 frontend (built with Vite, served via rust-embed).
-
-Inspection runs in three phases over SSE:
-- **Phase 0** (parallel): MX, SPF, DMARC, TLS-RPT, DNSSEC, BIMI — domain-only checks, no MX dependency
-- **Phase 1** (parallel, after Phase 0): DKIM, MTA-STS, DANE, FCrDNS, DNSBL — require MX hosts/IPs from Phase 0
-- **Phase 2** (sequential): cross-validation, grade computation
-
-Each check result is streamed to the client immediately on completion. The aggregate grade A–F is sent in a final `summary` SSE event. A shared `DnsResolver` (built once at startup using `Vec<Resolver>` + round-robin `AtomicUsize`) handles all DNS lookups without per-request resolver creation.
+- `cargo test -p netray-email --test it <module>` runs one module of the merged integration binary
+  (`tests/it/`).
+- The tests declared with `required-features = ["testing"]` in `Cargo.toml` need
+  `--features testing`, e.g. `cargo test -p netray-email --features testing --test evidence`.
