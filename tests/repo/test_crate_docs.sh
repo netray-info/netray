@@ -33,7 +33,7 @@ done
 MONOREPO='https://github.com/netray-info/netray'
 CODENAMES='\b(prism|tlsight|spectra|beacon|ifconfig-rs|lens)\b|service ecosystem|pillar'
 
-records=$(git ls-files 'crates/*/docs/*' 'crates/*/specs/*' 'crates/*/ROADMAP.md' 'crates/*/SECURITY.md' | head -5)
+records=$(git ls-files ':(glob)crates/*/docs/**' ':(glob)crates/*/specs/**' ':(glob)crates/*/ROADMAP.md' ':(glob)crates/*/SECURITY.md' | head -5)
 [ -z "$records" ] || fail "V1 record files are tracked: $records"
 
 for manifest in $(git ls-files 'crates/*/Cargo.toml'); do

@@ -40,6 +40,14 @@ reexports=$(git ls-files 'crates/*/src/lib.rs' | xargs grep -nE 'pub use (netray
 
 git ls-files --error-unmatch crates/tls/src/inspection.rs >/dev/null 2>&1 \
     || fails+=("crates/tls/src/inspection.rs is not tracked")
+grep -qxF 'pub mod inspection;' crates/tls/src/lib.rs \
+    || fails+=("crates/tls/src/lib.rs does not declare pub mod inspection;")
+grep -nE '#\[path|mod routes' crates/tls/src/lib.rs >/dev/null \
+    && fails+=("crates/tls/src/lib.rs still declares a routes module or a #[path] attribute")
+grep -qF '`src/inspection.rs`' crates/tls/CLAUDE.md || fails+=("crates/tls/CLAUDE.md does not name src/inspection.rs")
+users=$(git ls-files 'crates/tls/*.rs' 'crates/tls/*.md' 'crates/web/*.rs' | grep -v '/CHANGELOG.md$' \
+    | xargs grep -nE 'netray_tls::routes|crate::routes::|src/routes\.rs|`routes::plan' 2>/dev/null | head -3)
+[ -z "$users" ] || fails+=("the old TLS module path is still named: $users")
 
 if [ ${#fails[@]} -gt 0 ]; then
     printf 'FAIL: %s\n' "${fails[@]}"
