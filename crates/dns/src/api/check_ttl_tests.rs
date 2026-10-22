@@ -796,3 +796,36 @@ async fn c10_rrsig_is_not_reread_for_ttl() {
         "no RRSIG query for example.com may reach a nameserver (lookup seam)"
     );
 }
+
+/// C11: an RRSIG carries the TTL of the RRset it covers (RFC 4034 §3): once the covered A is
+/// re-read at 60 s, its signature's cached 29 s is no low TTL either.
+#[tokio::test]
+async fn c11_rrsig_takes_the_covered_rrsets_authoritative_ttl() {
+    let apex = |ttl, rd| Rr {
+        owner: "example.com.",
+        ttl,
+        rd,
+    };
+    let ran = run_world(World {
+        domain: "example.com",
+        zone: "example.com",
+        ns: EXAMPLE_NS.to_vec(),
+        recursive: vec![
+            answer(
+                "example.com",
+                RecordType::A,
+                vec![apex(29, Rd::A("192.0.2.10"))],
+            ),
+            answer("example.com", RecordType::RRSIG, vec![apex(29, Rd::Rrsig)]),
+        ],
+        authoritative: vec![answer(
+            "example.com",
+            RecordType::A,
+            vec![apex(60, Rd::A("192.0.2.10"))],
+        )],
+    })
+    .await;
+
+    let (status, findings) = ran.ttl_check();
+    assert_eq!(status, Status::Pass, "{findings:?}");
+}
