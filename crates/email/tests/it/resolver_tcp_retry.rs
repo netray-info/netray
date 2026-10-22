@@ -4,8 +4,8 @@
 // at loopback, so the address-with-port entry covers the transport (the entry kinds share it).
 
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use hickory_proto::op::{Message, MessageType, OpCode};
 use hickory_proto::rr::rdata::TXT;

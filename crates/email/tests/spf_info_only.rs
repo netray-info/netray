@@ -37,7 +37,10 @@ fn rows() -> Vec<Row> {
             name: "C7 two a: names on one address, Info overlap only",
             dns: || {
                 TestDnsResolver::new()
-                    .with_txt(DOMAIN, vec!["v=spf1 a:mail.example.com a:www.example.com -all"])
+                    .with_txt(
+                        DOMAIN,
+                        vec!["v=spf1 a:mail.example.com a:www.example.com -all"],
+                    )
                     .with_ips("mail.example.com", vec![ip("192.0.2.10")])
                     .with_ips("www.example.com", vec![ip("192.0.2.10")])
             },
@@ -130,12 +133,18 @@ fn spf_info_only_is_pass_with_spf_ok() {
         let names: Vec<&str> = spf.sub_checks.iter().map(|s| s.name.as_str()).collect();
         for want in row.present {
             if !names.contains(want) {
-                problems.push(format!("{}: sub-check {want} missing in {names:?}", row.name));
+                problems.push(format!(
+                    "{}: sub-check {want} missing in {names:?}",
+                    row.name
+                ));
             }
         }
         for no in row.absent {
             if names.contains(no) {
-                problems.push(format!("{}: sub-check {no} must be absent in {names:?}", row.name));
+                problems.push(format!(
+                    "{}: sub-check {no} must be absent in {names:?}",
+                    row.name
+                ));
             }
         }
         if let Some(ok) = spf.sub_checks.iter().find(|s| s.name == "spf_ok")
