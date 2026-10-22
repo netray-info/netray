@@ -6,6 +6,7 @@ mod duration;
 mod findings_identical;
 mod head;
 mod record;
+mod record_metrics;
 mod schema;
 mod seed;
 mod sweep;

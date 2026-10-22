@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, UNIX_EPOCH};
 
-#[path = "../../web/tests/common/mod.rs"]
+#[path = "../../web/tests/it/common/mod.rs"]
 mod common;
 
 use axum::Router;

@@ -4,7 +4,7 @@
 pub mod record;
 pub mod seed;
 
-pub use record::{now_unix, record, run_sweep_loop, set_gauges};
+pub use record::{now_unix, record, record_timed, run_sweep_loop, set_gauges};
 
 use std::fmt;
 use std::path::Path;

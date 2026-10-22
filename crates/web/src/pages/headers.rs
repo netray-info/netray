@@ -12,7 +12,7 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use sha2::{Digest, Sha256};
 
-use super::SPECULATION_RULES;
+use super::{ORIGIN, SPECULATION_RULES};
 
 static CSP: LazyLock<HeaderValue> = LazyLock::new(|| {
     let hash = STANDARD.encode(Sha256::digest(SPECULATION_RULES.as_bytes()));
@@ -20,7 +20,7 @@ static CSP: LazyLock<HeaderValue> = LazyLock::new(|| {
         "default-src 'self'; script-src 'self' 'sha256-{hash}'; style-src 'self' 'unsafe-inline'; \
          font-src 'self'; img-src 'self' data:; connect-src 'self' https://stats.uptimerobot.com; \
          frame-ancestors 'none'; base-uri 'self'; object-src 'none'; \
-         form-action 'self' https://netray.info https://*.netray.info"
+         form-action 'self' {ORIGIN} https://*.netray.info"
     );
     HeaderValue::from_str(&policy).expect("the policy is a header value")
 });

@@ -5,7 +5,7 @@
 //! Copied from crates/lens/tests/catalogue_emitters.rs (spec v2-cutover, Phase 6) onto
 //! netray-web's test harness; assertions unchanged.
 
-#[path = "../../web/tests/common/mod.rs"]
+#[path = "../../web/tests/it/common/mod.rs"]
 mod common;
 
 use std::collections::BTreeSet;

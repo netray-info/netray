@@ -53,10 +53,16 @@ impl IntoResponse for AppError {
 }
 
 /// Validates and normalizes a domain name: trimmed, lowercased, without a trailing dot; refuses
-/// empty input, IP addresses, wildcards, labels over 63 and names over 253 characters. Resolves
-/// nothing.
+/// empty input, IP addresses, wildcards, single-label names, labels over 63 and names over 253
+/// characters. Resolves nothing.
 pub fn validate_domain(input: &str) -> Result<String, AppError> {
-    netray_common::domain::validate(input).map_err(AppError::DomainInvalid)
+    let domain = netray_common::domain::validate(input).map_err(AppError::DomainInvalid)?;
+    if !domain.contains('.') {
+        return Err(AppError::DomainInvalid(
+            "a domain needs at least two labels".into(),
+        ));
+    }
+    Ok(domain)
 }
 
 #[cfg(test)]

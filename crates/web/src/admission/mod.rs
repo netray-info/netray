@@ -2,8 +2,7 @@
 //! (specs/features/v2-admission/spec.md). A run is a task of its own, so a caller that goes
 //! away does not stop it; callers read its sections, its published result and its history
 //! record from a [`RunStream`]. Copied from lens's `admission.rs` (spec v2-cutover, Phase 6)
-//! without the V1 parts: the DKIM-selector run, joining a recording run, the snapshot and the
-//! V1 cache.
+//! without the V1 parts: joining a recording run, the snapshot and the V1 cache.
 
 mod head;
 mod rate_limit;
@@ -387,19 +386,38 @@ pub fn admit_uncounted(
     runs.insert(key.clone(), rx.clone());
     drop(runs);
     let live = state.runs.track();
+    let input = CheckInput {
+        domain: domain.to_string(),
+        dkim_selectors: None,
+    };
     tokio::spawn(
-        run_task(
-            state.clone(),
-            domain.to_string(),
-            trigger,
-            key,
-            tx,
-            live,
-            ticket,
-        )
-        .instrument(tracing::Span::current()),
+        run_task(state.clone(), input, trigger, Some(key), tx, live, ticket)
+            .instrument(tracing::Span::current()),
     );
     Admit::Admitted(RunStream::new(rx, false))
+}
+
+/// A run with caller-supplied DKIM selectors: never joins and is never joined, and is not
+/// recorded (lens's `admit_dkim`). It is bound by the throttle, the slots and the budget like
+/// any fresh run, and counts as a visit.
+pub fn admit_dkim(
+    state: &ApexState,
+    domain: &str,
+    client: IpAddr,
+    dkim_selectors: Vec<String>,
+) -> Result<RunStream, Refusal> {
+    let ticket = gate(state, cache_key(domain), client, true, None).inspect_err(count_rejection)?;
+    let (tx, rx) = watch::channel(RunState::default());
+    let live = state.runs.track();
+    let input = CheckInput {
+        domain: domain.to_string(),
+        dkim_selectors: Some(dkim_selectors),
+    };
+    tokio::spawn(
+        run_task(state.clone(), input, Trigger::Visit, None, tx, live, ticket)
+            .instrument(tracing::Span::current()),
+    );
+    Ok(RunStream::new(rx, false))
 }
 
 /// Reads `stream` to its `Done`.
@@ -434,33 +452,30 @@ impl Drop for Deregister {
 
 async fn run_task(
     state: ApexState,
-    domain: String,
+    input: CheckInput,
     trigger: Trigger,
-    key: String,
+    key: Option<String>,
     tx: watch::Sender<RunState>,
     _live: LiveRun,
     ticket: Ticket,
 ) {
-    let deregister = Deregister {
+    let deregister = key.map(|key| Deregister {
         runs: Arc::clone(&state.runs),
         key,
         rx: tx.subscribe(),
-    };
+    });
+    let dkim = input.dkim_selectors.is_some();
     let guard = trigger.counted().then(RunGuard::new);
     let started = Instant::now();
 
     let mut first_section = true;
     let (output, facts, run) = match (&state.badge_check_fn, trigger) {
         (Some(f), Trigger::Badge | Trigger::Og) => {
-            let output = f(domain).await;
+            let output = f(input.domain).await;
             let run = build_run(&state.scoring_profile, &output, &[]);
             (output, Vec::new(), run)
         }
         _ => {
-            let input = CheckInput {
-                domain,
-                dkim_selectors: None,
-            };
             let done = run_domain(
                 &state.registry,
                 &state.plan,
@@ -480,9 +495,10 @@ async fn run_task(
             (done.output, done.facts, done.run)
         }
     };
-    metrics::histogram!("netray_time_to_result_seconds").record(started.elapsed().as_secs_f64());
+    let elapsed = started.elapsed();
+    metrics::histogram!("netray_time_to_result_seconds").record(elapsed.as_secs_f64());
     if trigger.counted() {
-        observe_run(started.elapsed());
+        observe_run(elapsed);
     }
     drop(guard);
     state
@@ -498,12 +514,13 @@ async fn run_task(
         Some(store) => {
             let volatile = netray_engine::domain_run::volatile(&state.registry);
             let profile = &state.scoring_profile;
-            netray_store::record(
+            netray_store::record_timed(
                 store,
                 &domain,
-                false,
+                dkim,
                 &published.run,
                 &volatile,
+                u64::try_from(elapsed.as_millis()).ok(),
                 |previous, current| {
                     netray_engine::history::diff(previous, current, &volatile, profile)
                 },

@@ -28,8 +28,8 @@ pub use errors::{not_found, query_redirect, query_redirect_absolute, server_erro
 pub use evidence::{EvidenceDeps, evidence_router};
 pub use inspect::{
     CachedDns, CallerRequest, DnsResults, InspectConfig, InspectDeps, InspectLimits, InspectorJobs,
-    Job, JobPart, JobRequest, Refusal, SharedRuns, Tool, email_input, inspect_host_router, inspect_router,
-    registrable_domain,
+    Job, JobPart, JobRequest, Refusal, SharedRuns, Tool, email_input, inspect_host_router,
+    inspect_router, registrable_domain,
 };
 
 /// The speculation rules every page embeds; the CSP allows exactly their hash.

@@ -41,6 +41,9 @@ pub struct HostRouters {
     pub tls: Option<Router>,
     pub http: Option<Router>,
     pub ip: Option<Router>,
+    /// `ip.`'s V1 command-line paths (`netray_web::api::ip_host`), tried before its `410` rows;
+    /// `None` leaves them to the rows.
+    pub ip_api: Option<crate::api::ApiState>,
 }
 
 struct Hosts {
@@ -53,6 +56,7 @@ struct Hosts {
     tls: Option<Router>,
     http: Option<Router>,
     ip: Option<Router>,
+    ip_api: Option<crate::api::ApiState>,
 }
 
 fn file(content_type: &'static str, cache_control: &'static str, body: &'static [u8]) -> Response {
@@ -96,6 +100,7 @@ pub fn router(routers: HostRouters) -> Router {
         tls: routers.tls,
         http: routers.http,
         ip: routers.ip,
+        ip_api: routers.ip_api,
     };
     Router::new().fallback(dispatch).with_state(Arc::new(hosts))
 }
@@ -184,14 +189,28 @@ async fn dispatch(State(hosts): State<Arc<Hosts>>, req: Request) -> Response {
             Some(response) => response,
             None => inspector(&hosts.http, req).await,
         },
-        Some("ip") => match legacy
-            .ip_successor()
-            .or_else(|| legacy.subdomain_common())
-            .or_else(|| legacy.to_apex())
-        {
-            Some(response) => response,
-            None => inspector(&hosts.ip, req).await,
-        },
+        Some("ip") => {
+            let req = match &hosts.ip_api {
+                Some(state) => match crate::api::ip_host(state, req).await {
+                    Ok(response) => return response,
+                    Err(req) => req,
+                },
+                None => req,
+            };
+            let legacy = legacy::Legacy {
+                apex: &hosts.apex,
+                method: req.method(),
+                uri: req.uri(),
+            };
+            match legacy
+                .ip_successor()
+                .or_else(|| legacy.subdomain_common())
+                .or_else(|| legacy.to_apex())
+            {
+                Some(response) => response,
+                None => inspector(&hosts.ip, req).await,
+            }
+        }
         Some("mta-sts") => call(&hosts.mta_sts, req).await,
         _ => not_found(),
     }

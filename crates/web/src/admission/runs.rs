@@ -1,5 +1,5 @@
 //! The [`DomainRuns`] the result page and API v1 run domains through, over admission. Copied
-//! from lens's `api_v1.rs`.
+//! from lens's `api_v1.rs`, `start_with` included.
 
 use std::net::IpAddr;
 
@@ -55,6 +55,37 @@ impl DomainRuns for AdmittedRuns {
                 }
                 Admit::Refused(r) => RunStart::Refused(refusal(r)),
                 Admit::NotStarted => RunStart::NotStarted,
+            }
+        })
+    }
+
+    /// A run with DKIM selectors: never joins and is never joined, not recorded; a prefetch
+    /// starts none.
+    fn start_with<'a>(
+        &'a self,
+        domain: &'a str,
+        client: IpAddr,
+        trigger: RunTrigger,
+        prefetch: bool,
+        dkim_selectors: &'a [String],
+    ) -> BoxFuture<'a, RunStart> {
+        if dkim_selectors.is_empty() {
+            return self.start(domain, client, trigger, prefetch);
+        }
+        Box::pin(async move {
+            if let Err(r) = super::check_limits(&self.state, client) {
+                super::count_rejection(&r);
+                return RunStart::Refused(refusal(r));
+            }
+            if prefetch {
+                return RunStart::NotStarted;
+            }
+            match super::admit_dkim(&self.state, domain, client, dkim_selectors.to_vec()) {
+                Ok(stream) => {
+                    self.state.client_runs.record(client);
+                    RunStart::Admitted(Box::pin(futures::stream::unfold(stream, events)))
+                }
+                Err(r) => RunStart::Refused(refusal(r)),
             }
         })
     }

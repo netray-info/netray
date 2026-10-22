@@ -478,7 +478,12 @@ pub fn build_run(profile: &Profile, output: &CheckOutput, facts: &[Block]) -> Ru
                     })
                 }));
                 blocks.extend(result.evidence.iter().cloned());
-                (SectionKind::Measured, None)
+                crate::measured_kind_and_reason(
+                    result
+                        .checks
+                        .iter()
+                        .map(|c| (Status::from(c.verdict.clone()), c.messages.as_slice())),
+                )
             }
             Err(SectionError::NotApplicable { reason }) => {
                 checks.extend(catalogue_checks(protocol, Status::NotApplicable));

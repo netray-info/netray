@@ -27,11 +27,31 @@ pub async fn record<F>(
 where
     F: FnOnce(&Run, &Run) -> Diff,
 {
+    record_timed(store, domain, dkim_selectors, run, volatile, None, diff).await
+}
+
+/// As [`record`], storing the run's measured `duration_ms` on a new entry
+/// ([`HistoryStore::record_timed`]).
+pub async fn record_timed<F>(
+    store: &HistoryStore,
+    domain: &str,
+    dkim_selectors: bool,
+    run: &Run,
+    volatile: &[&str],
+    duration_ms: Option<u64>,
+    diff: F,
+) -> Option<Recorded>
+where
+    F: FnOnce(&Run, &Run) -> Diff,
+{
     if dkim_selectors {
         return None;
     }
     let previous = store.head(domain).await.ok().flatten();
-    match store.record(domain, run, volatile, now_unix(), diff).await {
+    match store
+        .record_timed(domain, run, volatile, now_unix(), duration_ms, diff)
+        .await
+    {
         Ok(recorded) => {
             observe_recorded(previous.as_ref(), &recorded);
             Some(recorded)

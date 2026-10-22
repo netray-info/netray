@@ -105,6 +105,7 @@ pub async fn run(path: Option<String>) -> anyhow::Result<()> {
         tls,
         http,
         ip,
+        api,
         client_runs,
         runs,
     } = netray_web::host::build(
@@ -124,6 +125,7 @@ pub async fn run(path: Option<String>) -> anyhow::Result<()> {
         tls: Some(tls),
         http: Some(http),
         ip: Some(ip),
+        ip_api: Some(api),
     });
     let app = netray_web::host::layers(app, api_enabled);
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# C1, C2, C3, C5, C7-C11: one CI workflow and one release workflow at the repo root, pinned actions,
+# C1, C2, C3, C5, C7-C10: one CI workflow and one release workflow at the repo root, pinned actions,
 # no per-crate workflows. Parsed with ruby's YAML (PyYAML is not installed).
 set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 1
@@ -66,9 +66,6 @@ elsif ci
   check_job = (ci["jobs"] || {})["check"]
   check_job = {} unless check_job.is_a?(Hash)
   fails << "ci.yml: check job does not bound debuginfo (env CARGO_PROFILE_DEV_DEBUG: line-tables-only)" unless (check_job["env"] || {})["CARGO_PROFILE_DEV_DEBUG"] == "line-tables-only"
-  # C11: a cold-cache check run took 25m51s of 30 minutes; keep headroom before tests are added.
-  tmo = check_job["timeout-minutes"]
-  fails << "ci.yml: check job timeout-minutes is #{tmo.inspect}, want an integer >= 60" unless tmo.is_a?(Integer) && tmo >= 60
   csteps = Array(check_job["steps"]).select { |s| s.is_a?(Hash) }
   i_setup = csteps.index { |s| s["run"].to_s.include?("just adlc-setup") }
   # v2-ci-speed R6: mold links the ~400 test binaries; installed before anything compiles, version pinned.

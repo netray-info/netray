@@ -29,6 +29,8 @@ pub struct Apex {
     pub tls: Router,
     pub http: Router,
     pub ip: Router,
+    /// The API v1 state `ip.`'s command-line paths answer from ([`super::HostRouters::ip_api`]).
+    pub api: ApiState,
     /// Flushed hourly into `netray_client_hourly_runs`.
     pub client_runs: Arc<ClientRunCounter>,
     /// Drained on shutdown (`Runs::drain`).
@@ -54,11 +56,12 @@ pub fn build(
     let api = api_state(&state);
     let inspect = inspect_deps(&state, api.clone());
     Apex {
-        apex_router: routes_with(state.clone(), inspect.clone(), api),
+        apex_router: routes_with(state.clone(), inspect.clone(), api.clone()),
         dns: crate::pages::inspect_host_router(Tool::Dns, inspect.clone()),
         tls: crate::pages::inspect_host_router(Tool::Tls, inspect.clone()),
         http: crate::pages::inspect_host_router(Tool::Http, inspect.clone()),
         ip: crate::pages::inspect_host_router(Tool::Ip, inspect),
+        api,
         client_runs: Arc::clone(&state.client_runs),
         runs: Arc::clone(&state.runs),
     }
@@ -82,11 +85,14 @@ pub fn api_state(state: &ApexState) -> ApiState {
 /// the apex and the inspector hosts share them, slots included. Pass the `ApiState` `/api/v1`
 /// is built over: its clones share the per-tool limiters (v2-inspectors requirement 14).
 pub fn inspect_deps(state: &ApexState, api: ApiState) -> InspectDeps {
+    let dns_results = api.dns_results().clone();
     InspectDeps::new(
         Arc::new(InspectJobs::new(api)),
         state.config.inspect.clone(),
     )
     .with_ip_extractor(state.ip_extractor.clone())
+    .with_history(state.history_store.clone())
+    .with_dns_results(dns_results)
 }
 
 /// The apex's routes over `state` with the `http_metrics` layer, which needs the `MatchedPath`

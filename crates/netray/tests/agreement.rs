@@ -194,6 +194,7 @@ async fn world(dns: Plan, email: Plan) -> World {
             tls: None,
             http: None,
             ip: None,
+            ip_api: None,
         }),
         api_enabled,
     )
