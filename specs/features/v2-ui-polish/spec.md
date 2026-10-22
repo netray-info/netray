@@ -1,7 +1,8 @@
 # Spec: v2-ui-polish
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-22
+Finished: 2026-10-22
 
 ## Goal
 
@@ -233,6 +234,12 @@ GIVEN every captured page at 390 px WHEN measured THEN the document is not wider
 - The guide column uses a `ch` width, not a token: the gate tokens colours, radii, fonts and
   lines, and no board draws a guide (implementer under the operator's autonomy mandate,
   2026-10-22).
+
+- Finish: the distilled entries (two CLAUDE.md bullets, one solutions note, two checks to build)
+  are written without the operator's confirmation, under the autonomy mandate; the operator may
+  drop any of them. Deferred review-3 (email busy answers 503) is dropped; review-1 and review-2
+  (two test guards that cannot fail) stay open (implementer under the operator's autonomy
+  mandate, 2026-10-22).
 
 ## Open decisions
 

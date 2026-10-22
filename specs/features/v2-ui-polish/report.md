@@ -195,3 +195,9 @@ A reader with no part in the build read 40 captures (DNS idle, `+check`, run, re
 | N20 | dangling "· FIRST RUN" in the long-domain run title at 390 | green | proposal: run-title wrapping (v2-result-polish) |
 | N21 | guide tool card: 50 px above its heading, 36 px controls at 1280 | green | rebuild: heading margin 0, 44 px field and button |
 | N22 | TLS Ports row ends short of the card edge at 390 | green | proposal: port chooser phone layout (v2-tls-ui) |
+
+### Checks to build
+
+- CSS-reading tests: one shared rule reader in `crates/web/tests/it/` that strips comments before splitting selectors; three polish tests broke on a comment in front of a rule (`polish_check_card.rs`, `polish_guides.rs`, `polish_run_actions.rs` each carry their own parser).
+- `tests/repo/test_spectrum_module.sh` `expect()`: `printf … | grep -q` under `pipefail` fails on SIGPIPE when grep exits first (one flaky `adlc verify` run on this branch); capture the output first, then grep it.
+- A row bound beside every spectrum placement rule (see `specs/solutions/2026-10-22-leader-clear-labels-had-no-solution-in-a-dense-run.md`).
