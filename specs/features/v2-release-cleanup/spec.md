@@ -64,7 +64,7 @@ describe V2 modules, not V1 services, and a repository check holds them to it.
 ## Requirements
 
 1. A badge or OG request that would start a fresh run takes one token from a site-wide image-run
-   budget, `[admission] image_runs_per_minute`, default 20: a token bucket holding at most that
+   budget, `[admission] image_runs_per_minute`, default 10: a token bucket holding at most that
    many tokens, refilled continuously at that rate per minute. Joining a run in flight, a cache
    hit and a prefetch take none.
 2. With the budget empty, the request starts no run and answers as any other badge or OG refusal:
@@ -116,13 +116,13 @@ GIVEN an apex state with `image_runs_per_minute = 2` and no head entries WHEN ba
 GIVEN that state with the budget spent and a head entry for the third domain WHEN its badge is requested THEN it answers 200 with the head's grade and the short Cache-Control.
 GIVEN that state with the budget spent WHEN an OG card of a domain without a head is requested THEN it answers 200 image/png (the `?` card), never an error status.
 GIVEN the budget spent (tokio clock paused) WHEN 30 s pass THEN one more badge run starts.
-GIVEN `image_runs_per_minute = 1` and a run of example.com in flight WHEN a second badge of example.com arrives THEN it joins the run and the budget still admits a run of example.net.
+GIVEN `image_runs_per_minute = 2` and a badge run of example.com in flight WHEN a second badge of example.com arrives THEN it joins the run, and a run of example.net still starts.
 GIVEN `image_runs_per_minute = 1` WHEN a prefetch badge of example.com arrives THEN no run starts and a badge of example.net still starts one.
 GIVEN `image_runs_per_minute = 1` and a badge of example.com refused by its throttle minute WHEN a badge of example.net arrives THEN it starts a run (the throttle refusal spent no budget).
 GIVEN `image_runs_per_minute = 1`, spent WHEN a badge of example.net is refused THEN a later badge of example.net, after a refill, starts a run (the budget refusal spent no recompute token).
 GIVEN the budget spent WHEN a visit of a new domain arrives THEN its run starts.
 GIVEN a config with `[admission] image_runs_per_minute = 0` WHEN `serve --check-config` runs THEN it exits 1 naming `admission.image_runs_per_minute`.
-GIVEN no `image_runs_per_minute` WHEN the config loads THEN the budget is 20; GIVEN `NETRAY_ADMISSION__IMAGE_RUNS_PER_MINUTE=5` THEN it is 5.
+GIVEN no `image_runs_per_minute` WHEN the config loads THEN the budget is 10; GIVEN `NETRAY_ADMISSION__IMAGE_RUNS_PER_MINUTE=5` THEN it is 5.
 GIVEN `netray serve` started WHEN `/metrics` is read THEN `netray_admission_rejections_total{reason="image_budget"} 0` is present.
 
 ## Phase 2 — Label and logo
@@ -176,10 +176,11 @@ GIVEN a README naming `netray dns crates/dns/prism.toml` WHEN the check runs THE
   the details are the implementer's.
 - Independent reading of the Draft skipped: the review step reads the whole range against the spec
   (implementer under the operator's autonomy mandate, 2026-10-22).
-- Default 20 image runs per minute over 10 or 60: 8 slots at the 20 s hard deadline admit at least
-  24 runs a minute in the worst case; 20 badge or OG runs leave most slots to visits even when
-  every badge run hits the deadline, and with the per-domain recompute limiter (one per hour) it
-  still covers 1200 distinct badged domains an hour (implementer under the operator's autonomy
+- Default 10 image runs per minute over 20 or 60: production's section windows let one run take
+  17 s (15 s for the first wave, 2 s for IP), so 10 runs a minute that all hit their windows hold
+  under 3 of the 8 slots and leave the rest to visits; with the per-domain recompute limiter (one
+  per hour) 10 a minute still cover 600 distinct badged domains an hour. 20 was the first draft
+  and could hold 6 of 8 slots in that worst case (implementer under the operator's autonomy
   mandate, 2026-10-22).
 - An own token bucket under the gate's mutex over a governor limiter: governor spends on `check`,
   and either order with the per-domain recompute limiter would spend one limiter on the other's

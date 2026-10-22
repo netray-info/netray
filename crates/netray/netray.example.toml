@@ -25,6 +25,7 @@
 # global_burst = 20
 # cache_enabled = true
 # cache_window_seconds = 300
+# image_runs_per_minute = 10         # badge and OG fresh runs site-wide; above it they answer the stored grade or ?
 
 [badges]
 # enabled = true

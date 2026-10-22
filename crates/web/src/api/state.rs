@@ -32,6 +32,8 @@ pub struct AdmissionLimits {
     pub rate_limit_per_ip_burst: u32,
     pub rate_limit_global_per_minute: u32,
     pub rate_limit_global_burst: u32,
+    /// Badge and OG fresh runs site-wide per minute (a token bucket of that size).
+    pub image_runs_per_minute: u32,
 }
 
 /// Module-side parts handed in by `crates/netray`.

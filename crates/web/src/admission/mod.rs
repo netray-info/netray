@@ -5,11 +5,13 @@
 //! without the V1 parts: joining a recording run, the snapshot and the V1 cache.
 
 mod head;
+mod image_budget;
 mod rate_limit;
 mod runs;
 mod state;
 
 pub use head::{HeadLookup, cache_key, head};
+pub use image_budget::ImageBudget;
 pub use rate_limit::{GlobalRateLimiter, PerIpRateLimiter, check_rate_limit};
 pub use runs::AdmittedRuns;
 pub use state::{
@@ -81,6 +83,8 @@ pub enum Reason {
     IpLimit,
     GlobalLimit,
     Slots,
+    /// The site-wide budget of badge and OG runs is spent (`[admission] image_runs_per_minute`).
+    ImageBudget,
 }
 
 /// Why a request got no run, and when to ask again.
@@ -262,6 +266,7 @@ pub fn count_rejection(refusal: &Refusal) {
         Reason::Budget => "budget",
         Reason::IpLimit | Reason::GlobalLimit => "limit",
         Reason::Slots => "slots",
+        Reason::ImageBudget => "image_budget",
     };
     metrics::counter!("netray_admission_rejections_total", "reason" => label).increment(1);
 }
@@ -279,8 +284,9 @@ pub fn check_limits(state: &ApexState, client: IpAddr) -> Result<(), Refusal> {
     })
 }
 
-/// Throttle, then slot, then the client's budget (when `budgeted`) or the domain's badge
-/// recompute limiter (when `recompute` names a scope); a refusal spends nothing.
+/// Throttle, then slot, then the client's budget (when `budgeted`) or, when `recompute` names a
+/// scope, the site-wide image budget (peeked), the domain's badge recompute limiter and then the
+/// image budget's token; a refusal spends nothing.
 fn gate(
     state: &ApexState,
     key: String,
@@ -314,16 +320,20 @@ fn gate(
             return Err(refused(Reason::Budget, wait.as_secs().max(1), None, false));
         }
     }
-    if let Some(scope) = recompute
-        && let Err(r) = netray_common::rate_limit::check_keyed_cost(
+    if let Some(scope) = recompute {
+        if let Err(retry) = state.image_budget.peek() {
+            return Err(refused(Reason::ImageBudget, retry, None, false));
+        }
+        if let Err(r) = netray_common::rate_limit::check_keyed_cost(
             &state.badge_recompute_limiter,
             &key,
             NonZeroU32::new(1).unwrap(),
             scope,
             "netray",
-        )
-    {
-        return Err(refused(Reason::Throttle, r.retry_after_secs, None, false));
+        ) {
+            return Err(refused(Reason::Throttle, r.retry_after_secs, None, false));
+        }
+        state.image_budget.take();
     }
     throttle.insert(
         key.clone(),
@@ -342,7 +352,7 @@ fn gate(
 /// Starts or joins the domain's run. `domain` is validated; a `prefetch` request that finds no run in
 /// flight gets `NotStarted`, with no throttle record and no budget token.
 /// Order: join, prefetch, throttle, slot, then the budget (visit, recheck, api) or
-/// the recompute limiter (badge, og), then start. Must be called inside a tokio runtime.
+/// the image budget and the recompute limiter (badge, og), then start. Must be called inside a tokio runtime.
 pub fn admit(
     state: &ApexState,
     domain: &str,

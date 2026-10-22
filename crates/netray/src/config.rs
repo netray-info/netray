@@ -29,6 +29,8 @@ const DEFAULT_PER_IP_BURST: u32 = 3;
 const DEFAULT_GLOBAL_PER_MINUTE: u32 = 100;
 const DEFAULT_GLOBAL_BURST: u32 = 20;
 const DEFAULT_CACHE_WINDOW_SECONDS: u64 = 300;
+/// Badge and OG fresh runs site-wide per minute (v2-release-cleanup).
+const DEFAULT_IMAGE_RUNS_PER_MINUTE: u32 = 10;
 
 /// The repository tooling's own `NETRAY_` variables, which reach every process its scripts start
 /// and are no config keys: the live-test switch, a prebuilt binary (`tests/repo/lib/netray.sh`)
@@ -132,6 +134,7 @@ pub struct AdmissionConfig {
     pub global_burst: u32,
     pub cache_enabled: bool,
     pub cache_window_seconds: u64,
+    pub image_runs_per_minute: u32,
 }
 
 impl Default for AdmissionConfig {
@@ -145,6 +148,7 @@ impl Default for AdmissionConfig {
             global_burst: DEFAULT_GLOBAL_BURST,
             cache_enabled: true,
             cache_window_seconds: DEFAULT_CACHE_WINDOW_SECONDS,
+            image_runs_per_minute: DEFAULT_IMAGE_RUNS_PER_MINUTE,
         }
     }
 }
@@ -203,6 +207,7 @@ impl Config {
             ("admission.global_per_minute", a.global_per_minute),
             ("admission.global_burst", a.global_burst),
             ("admission.domain_run_slots", a.domain_run_slots),
+            ("admission.image_runs_per_minute", a.image_runs_per_minute),
         ] {
             reject_zero(name, u64::from(value))?;
         }
@@ -269,6 +274,7 @@ impl Config {
                 rate_limit_per_ip_burst: a.per_ip_burst,
                 rate_limit_global_per_minute: a.global_per_minute,
                 rate_limit_global_burst: a.global_burst,
+                image_runs_per_minute: a.image_runs_per_minute,
             },
             cache_enabled: a.cache_enabled,
             cache_window_seconds: a.cache_window_seconds,

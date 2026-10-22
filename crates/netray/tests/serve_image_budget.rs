@@ -90,7 +90,7 @@ fn image_runs_per_minute_loads_and_refuses_zero() {
 }
 
 #[test]
-fn the_example_shows_the_default_of_20() {
+fn the_example_shows_the_default_of_10() {
     let example =
         std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/netray.example.toml"))
             .unwrap();
@@ -99,17 +99,17 @@ fn the_example_shows_the_default_of_20() {
         .find(|t| t.starts_with("admission]"))
         .expect("[admission] table");
     assert!(
-        admission.contains("# image_runs_per_minute = 20"),
-        "[admission] must show image_runs_per_minute at its default 20:\n{admission}"
+        admission.contains("# image_runs_per_minute = 10"),
+        "[admission] must show image_runs_per_minute at its default 10:\n{admission}"
     );
 }
 
 #[test]
-fn the_web_default_is_20() {
+fn the_web_default_is_10() {
     assert_eq!(
         netray_web::config::ApexConfig::default()
             .limits
             .image_runs_per_minute,
-        20
+        10
     );
 }

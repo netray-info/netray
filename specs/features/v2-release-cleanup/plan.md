@@ -1,0 +1,18 @@
+# Plan: v2-release-cleanup
+
+## Phase 1 — Image-run budget
+
+## Groups
+
+- G1: C1 to C17 (one group: every criterion hangs on `gate`, its state and its config).
+
+## Plan
+
+- `crates/web/src/admission/image_budget.rs`: `ImageBudget` token bucket (`peek`, `take`) on tokio's clock.
+- `crates/web/src/admission/mod.rs`: `Reason::ImageBudget`, `count_rejection` label `image_budget`, `gate` peeks the budget before the recompute limiter and takes it after.
+- `crates/web/src/admission/state.rs`: `ApexState::image_budget` from `AdmissionLimits::image_runs_per_minute`.
+- `crates/web/src/admission/runs.rs`: map `ImageBudget` (unreachable for `DomainRuns`).
+- `crates/web/src/api/state.rs`, `crates/web/src/config.rs`: the field and its default 10.
+- `crates/web/src/metrics.rs`: zero series `image_budget`.
+- `crates/netray/src/config.rs`: `[admission] image_runs_per_minute`, default, `validate` zero, `apex_config`; `serve.rs` startup log; `netray.example.toml`.
+- `specs/sdd/v2.md`: S44 and §4.4.

@@ -107,7 +107,8 @@ fn refusal(r: Refusal) -> RunRefusal {
             Reason::Budget => RefusalReason::Budget,
             Reason::IpLimit => RefusalReason::IpLimit,
             Reason::GlobalLimit => RefusalReason::GlobalLimit,
-            Reason::Slots => RefusalReason::Slots,
+            // Badge and OG runs only, which never go through `DomainRuns`.
+            Reason::Slots | Reason::ImageBudget => RefusalReason::Slots,
         },
         retry_after_s: r.retry_after_s,
         last_run_ago_s: r.last_run_ago_s,
