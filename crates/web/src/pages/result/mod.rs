@@ -357,6 +357,7 @@ fn entry_export(entry: &Entry) -> Option<String> {
         band: Some((&PROTOCOLS, &checks)),
         blocks: &entry.run.blocks,
         errors: &errors,
+        ports: &[],
     };
     export_slot(
         format!("netray-{}-{}", export::slug(&entry.domain), entry.id),

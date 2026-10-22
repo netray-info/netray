@@ -282,7 +282,14 @@ async fn c4_csv_export_adds_checks_at_port_rows_after_the_checks_rows() {
     let p443 = at("checks@443,tls.chain_trusted,status,pass");
     let p465 = at("checks@465,tls.chain_trusted,status,fail");
     assert!(band < p443 && p443 < p465, "{lines:?}");
-    at("checks@465,tls.chain_trusted,finding,");
+    // As in `checks`, a failing check without findings carries the catalogue finding.
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.starts_with("checks@465,tls.chain_trusted,finding,")
+                && l.len() > "checks@465,tls.chain_trusted,finding,".len()),
+        "{lines:?}"
+    );
 }
 
 #[tokio::test]

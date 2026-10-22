@@ -28,6 +28,7 @@ fn markdown_text_never_starts_a_list_or_an_entity() {
             band: None,
             blocks: &blocks,
             errors: &[],
+            ports: &[],
         });
         assert!(md.contains(want), "{text}: {md}");
     }

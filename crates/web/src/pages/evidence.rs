@@ -136,6 +136,7 @@ fn view_export(entry: &Entry, protocol: Protocol, target: &str) -> Option<String
         band: Some((&[protocol], &checks)),
         blocks: &blocks,
         errors: &errors,
+        ports: &[],
     };
     export_slot(
         format!(

@@ -16,3 +16,16 @@
 Written and coded by the orchestrator directly: the change is a few functions whose shape the spec
 fixes, so no planner or coder agent was spawned (implementer under the operator's autonomy
 mandate, 2026-10-22).
+
+## Phase 2 — Per-port checks in multi-port TLS exports
+
+### Groups
+
+1. G1 (C1-C9): `crates/web/src/export.rs` (`ExportInput.ports`, `PortChecks`, the three formats),
+   `crates/web/src/pages/inspect.rs` (`port_checks`, `export_html`, `pending_export_html`),
+   `ExportInput` literals in `pages/evidence.rs` and `pages/result/mod.rs`; SDD §6.1.
+
+### Plan
+
+Coded by the orchestrator directly, as in Phase 1 (implementer under the operator's autonomy
+mandate, 2026-10-22).

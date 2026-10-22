@@ -41,7 +41,7 @@ use crate::entries::view::grade_letter;
 use crate::evidence::{
     Badge, EvidenceRow, block_feeds, live_rows, live_run_title, shared_run_title, slot,
 };
-use crate::export::{self, ExportInput};
+use crate::export::{self, ExportInput, PortChecks};
 use crate::links;
 use crate::pages::result::views::line_code;
 use crate::pages::views;
@@ -946,7 +946,7 @@ fn caller_html(
                 .map(|(label, r)| (label.as_str(), Some(r))),
             band.as_ref().map(|(_, r)| r),
         ),
-        true,
+        &[],
     )?;
     finished_html(
         live_run_title(now),
@@ -1005,7 +1005,7 @@ async fn shared_result(deps: &InspectDeps, tool: Tool, key: &str) -> Shared {
                 std::iter::once((dns_label(&cached.mode), Some(&blocks))),
                 None::<&Result<(), String>>,
             ),
-            true,
+            &[],
         )?;
         finished_html(
             title,
@@ -1523,7 +1523,15 @@ fn share_html(tool: Tool, key: Option<String>) -> Option<String> {
     .ok()
 }
 
-/// The export slot: disabled while the run streams, with the three exports once it is `ready`.
+/// The export slot while the run streams: disabled, without exports.
+fn pending_export_html(tool: Tool, target: &str) -> Option<String> {
+    super::export_slot(
+        format!("netray-{}-{}", tool.as_str(), export::slug(target)),
+        None,
+    )
+}
+
+/// The export slot of a finished run, with its three exports.
 fn export_html(
     tool: Tool,
     target: &str,
@@ -1531,7 +1539,7 @@ fn export_html(
     band: Option<(Protocol, &[CheckResult])>,
     blocks: &[Block],
     errors: &[(String, String)],
-    ready: bool,
+    ports: &[PortChecks<'_>],
 ) -> Option<String> {
     let title: Vec<String> = title.parts.iter().map(|p| p.to_uppercase()).collect();
     let band = band.map(|(p, c)| ([p], c));
@@ -1541,18 +1549,44 @@ fn export_html(
         band: band.as_ref().map(|(p, c)| (&p[..], *c)),
         blocks,
         errors,
+        ports,
     };
-    let exports = ready.then(|| {
-        (
+    super::export_slot(
+        format!("netray-{}-{}", tool.as_str(), export::slug(target)),
+        Some((
             export::markdown(&input),
             export::csv(&input),
             export::json(&input),
-        )
-    });
-    super::export_slot(
-        format!("netray-{}-{}", tool.as_str(), export::slug(target)),
-        exports,
+        )),
     )
+}
+
+/// Each port's own checks for the exports when the run shows port panels, in part order; a port
+/// whose checks never arrived reads "timed out" (Rule M).
+fn port_checks<'a>(
+    names: Option<&'a [String]>,
+    checked: &BTreeSet<usize>,
+    part_checks: &'a [Option<BandResult>],
+    protocol: Option<Protocol>,
+) -> Vec<PortChecks<'a>> {
+    let (Some(names), Some(protocol)) = (names, protocol) else {
+        return Vec::new();
+    };
+    checked
+        .iter()
+        .filter_map(|&n| {
+            let checks = match part_checks.get(n).and_then(Option::as_ref) {
+                Some(Ok(checks)) => Ok(checks.as_slice()),
+                Some(Err(e)) => Err(e.as_str()),
+                None => Err("timed out"),
+            };
+            Some(PortChecks {
+                port: names.get(n)?.as_str(),
+                protocol,
+                checks,
+            })
+        })
+        .collect()
 }
 
 /// The sections of a run that ended without a result, for the exports (Rule M): a part with its
@@ -1670,7 +1704,7 @@ fn shared_html(run: &SharedRun, key: &str) -> Option<String> {
             run.parts.iter().map(|(label, r)| (label.as_str(), Some(r))),
             run.band.as_ref().map(|(_, r)| r),
         ),
-        true,
+        &port_checks(names.as_deref(), &checked, &run.part_checks, protocol),
     )?;
     finished_html(
         shared_run_title(Some(run.started)),
@@ -1867,15 +1901,7 @@ fn stream_job(
         },
         ports,
         share: share_html(head.tool, None)?,
-        export: export_html(
-            head.tool,
-            &head.target,
-            &live_run_title(now),
-            None,
-            &[],
-            &[],
-            false,
-        )?,
+        export: pending_export_html(head.tool, &head.target)?,
         related: related_box(head.tool, &head.input, None),
         own: own_link(head.tool, &head.input),
     }
@@ -2004,7 +2030,12 @@ fn stream_job(
                                 .map(|(label, r)| (label.as_str(), r.as_ref())),
                             run.band_out.as_ref().map(|(_, r)| r),
                         ),
-                        true,
+                        &port_checks(
+                            panel_names(&run.labels, &run.checked).as_deref(),
+                            &run.checked,
+                            &run.part_checks,
+                            run.band_out.as_ref().map(|(p, _)| *p).or(run.protocol),
+                        ),
                     );
                     if let Some(key) = run.share_key.take() {
                         let finished = run.finished();

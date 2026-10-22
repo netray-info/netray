@@ -46,3 +46,38 @@ repaired in the spec in this phase), 2 nits (C20 status corrected; the protected
 skipped: a worktree binary has no network, and the HTTP module is reached through
 `assemble_response` in the offline tests; the five history fixtures were recomputed
 (`UPDATE_FIXTURES=1 ... every_history_fixture`) and gained the `max-age=300` directive.
+
+## Phase 2 — Per-port checks in multi-port TLS exports
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R6 multi-port TLS exports keep the band checks and add each port's checks, errors as checks@port rows; live equals shared | green | crates/web/tests/it/export_tls_ports.rs |
+| C2 | R7 one-port TLS and other inspectors' exports unchanged | green | crates/web/tests/it/export_tls_ports.rs |
+| C3 | JSON checks hold the band checks and ports hold 443 then 465 with their own checks | green | crates/web/tests/it/export_tls_ports.rs |
+| C4 | CSV rows checks@443 and checks@465 follow checks with each port's status | green | crates/web/tests/it/export_tls_ports.rs |
+| C5 | Markdown sections Checks · port 443 and Checks · port 465 follow Checks | green | crates/web/tests/it/export_tls_ports.rs |
+| C6 | a port whose checks timed out gives the checks@465 error row in all three exports and no checks of 465 | green | crates/web/tests/it/export_tls_ports.rs |
+| C7 | a one-port TLS run exports as today | already_implemented | crates/web/tests/it/export_tls_ports.rs |
+| C8 | a DNS or HTTP run exports as today | already_implemented | crates/web/tests/it/export_tls_ports.rs |
+| C9 | a finished two-port run and its shared copy export equally | green | crates/web/tests/it/export_tls_ports.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 export.rs + inspect.rs | 1 | orchestrator | 0 | 0 |
+
+### Review
+
+Reader: 0 blockers, 0 amendments, 2 nits. The c4 test's empty-finding expectation contradicted
+R6 ("same columns as checks": a failing check without findings carries the catalogue finding);
+corrected with an `ADLC-Test-Change` trailer, as are the `ports: &[]` additions to four protected
+test files. c7 and c8 assert the absence of every per-port part, not byte equality with the old
+output; the reader traced byte identity by code.
+
+### Behavioural verification
+
+skipped: a worktree binary has no network; the inspector route with a stub job is exercised end to
+end by `crates/web/tests/it/export_tls_ports.rs` (live stream and shared page).
