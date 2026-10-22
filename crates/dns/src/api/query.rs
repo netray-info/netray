@@ -17,8 +17,8 @@ use axum::http::HeaderMap;
 use axum::response::Response;
 use axum::response::sse::Event;
 use mhost::RecordType;
-use mhost::nameserver::NameServerConfig;
 use mhost::nameserver::predefined::PredefinedProvider;
+use mhost::nameserver::{NameServerConfig, NameServerConfigGroup};
 use mhost::resolver::{Lookups, ResolverGroup, ResolverGroupBuilder};
 use serde::Deserialize;
 
@@ -357,6 +357,7 @@ pub(crate) async fn build_resolver_group(
         builder = builder.deny_non_global(true);
     }
     let mut breaker_keys: Vec<String> = Vec::new();
+    let mut system_added = false;
 
     for server in &servers {
         match server {
@@ -375,8 +376,15 @@ pub(crate) async fn build_resolver_group(
                 }
             }
             ServerSpec::System => {
-                builder = builder.system();
-                breaker_keys.push("system".to_string());
+                if !system_added {
+                    system_added = true;
+                    let system = NameServerConfigGroup::from_system_config()
+                        .map_err(|e| ApiError::ResolverError(e.to_string()))?;
+                    for ns_config in system {
+                        builder = builder.nameserver(ns_config);
+                        breaker_keys.push("system".to_string());
+                    }
+                }
             }
             ServerSpec::Ip { addr, port } => {
                 let sock = SocketAddr::new(*addr, *port);

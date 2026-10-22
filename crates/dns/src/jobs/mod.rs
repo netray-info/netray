@@ -406,7 +406,7 @@ impl DnsJobs {
 
         let warnings = parsed.warnings.clone();
         let record_types = parsed.record_types.clone();
-        let domain = parsed.domain.clone();
+        let domain = crate::parser::lookup_name(&parsed.domain);
         let rid = request_id;
         let circuit_breakers = self.circuit_breakers.clone();
         let query_semaphore = self.query_semaphore.clone();
@@ -669,7 +669,7 @@ impl DnsJobs {
         let rid = request_id;
         let warnings = parsed.warnings.clone();
         let record_types = parsed.record_types.clone();
-        let domain = parsed.domain.clone();
+        let domain = crate::parser::lookup_name(&parsed.domain);
         let circuit_breakers = self.circuit_breakers.clone();
         let enrichment_svc = self.ip_enrichment.clone();
         let config = self.config.clone();

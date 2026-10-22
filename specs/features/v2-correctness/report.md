@@ -134,3 +134,33 @@ nginx.org       incomplete: dns.ttl pass (was warn 52s); tls.legacy_versions unm
 ```
 
 Evidence: netray.info `specs/inventory/evidence/correctness/1022/fixed/`.
+
+## Phase 4 — DNS inspector: reverse names and `@system`
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R8: a DNS inspector query whose domain is an IP address queries PTR at its reverse name (in-addr.arpa for IPv4, nibble ip6.arpa for IPv6); the batch's lookups name it | green | crates/dns/tests/it/query_reverse_system.rs |
+| C2 | R9: a DNS job's resolver group carries one breaker key per resolver; @system adds one key per system nameserver; jobs with @system answer batches and done instead of ending empty | green | crates/dns/tests/it/query_reverse_system.rs |
+| C3 | GIVEN the query 192.0.2.1 WHEN parsed into a job THEN the PTR lookup is made for 1.2.0.192.in-addr.arpa. | green | crates/dns/tests/it/query_reverse_system.rs |
+| C4 | GIVEN the query 2001:db8::1 WHEN parsed into a job THEN the PTR lookup is for the nibble name ending in 8.b.d.0.1.0.0.2.ip6.arpa. | green | crates/dns/tests/it/query_reverse_system.rs |
+| C5 | GIVEN the query example.com PTR WHEN parsed THEN the lookup name stays example.com | already_implemented | crates/dns/tests/it/query_reverse_system.rs |
+| C6 | GIVEN system resolvers allowed and a system configuration with two nameservers WHEN the @system group is built THEN it holds as many breaker keys as resolvers | green | crates/dns/src/api/query_system_keys_tests.rs |
+| C7 | GIVEN a query job over a group with more resolvers than the system entry WHEN the job runs THEN it sends batches and done and does not panic | green | crates/dns/tests/it/query_reverse_system.rs |
+
+C5 held before the change. C6 and C7 depend on the machine's system resolver configuration: with two or more system nameservers (this Mac) they fail without the fix; with one (a CI runner) they pass either way and never fail wrongly.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1+G2 | 2 | sonnet | 50251 | 102 |
+
+### Review
+
+Read by the implementer (small diff): `@system` keeps bypassing `deny_non_global` (the builder enables it only without a system entry), one breaker key per system nameserver in resolver order; `+compare` also reverses an address (same lookup path); authcompare keeps the raw name, since it discovers the authoritative servers of the name itself (DEFERRED: an address in authcompare).
+
+### Behavioural verification
+
+skipped: a worktree binary has no egress, and the live review instance runs main's code; the offline job tests drive the real query job and resolver group. `curl -G --data-urlencode 'q=1.1.1.1' http://127.0.0.1:8787/api/v1/dns/query` on main shows the defect (PTR at the literal `1.1.1.1`, NXDOMAIN).

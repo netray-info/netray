@@ -36,3 +36,14 @@ G1: C1-C5 (`crates/dns/src/api/check.rs`).
 - After the zone phase, before the lints: collect the (name, type) pairs whose highest TTL in the unique records is below 60 s (and above 0, as `check_ttl` judges). None: nothing more. Otherwise resolve the zone's nameserver addresses as the lame check does (`resolve_missing_glue`, `build_server_list`), query each pair at those servers (RD=0 raw queries, `RawOutbound::parallel_queries`) and, for answers with AA=1, take the highest TTL per record. Build mhost `Lookups` for those answers through the serde form (as `unique_records` rewrites lookups), send them as a batch of the pair's type and merge them into what the lints read, so `check_ttl` and the records block see the authoritative TTL. No answer: nothing is sent (the recursive TTL stays).
 - Bounded by the stream deadline, like the zone phase.
 - Review: names compare as A-labels; every lookup is searched for the pair's records; only names at or below the zone are re-read; the authoritative TTL covers the RRset.
+
+## Phase 4 — DNS inspector: reverse names and `@system`
+
+### Groups
+
+G1: C1, C3, C4, C5 (`crates/dns/src/parser.rs`, where an IP domain becomes a PTR query) · G2: C2, C6, C7 (`crates/dns/src/api/query.rs` `build_resolver_group`).
+
+### Plan
+
+- G1: when the parsed domain is an IP address, the query's lookup name becomes its reverse name (`hickory_proto::rr::Name::from(IpAddr)` gives `…in-addr.arpa.` / nibble `ip6.arpa.`); keep the record-type defaulting. Check every consumer of `ParsedQuery.domain` that expects the IP form (warnings, policy checks, page labels) and keep their behaviour.
+- G2: after `builder.build()`, one breaker key per resolver: for `@system`, push "system" once per resolver the system entry added (compute from the group's resolver count minus the keys of the other entries, or build the system configs explicitly via `NameServerConfigGroup::from_system_config` and add each with its own "system" key).
