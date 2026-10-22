@@ -44,7 +44,7 @@ use crate::api::{AppState, BatchEvent, CollectedResponse, STREAM_TIMEOUT_SECS};
 use crate::circuit_breaker::{BreakerState, CircuitBreakerRegistry};
 use crate::dns_raw::{self, NOT_PUBLIC, RawOutbound};
 use crate::error::{ApiError, ErrorResponse};
-use crate::jobs::DnsEnrichmentEvent;
+use crate::jobs::{DnsBackend, DnsEnrichmentEvent, ResolverLookup};
 use crate::parser::ParsedQuery;
 use crate::record_format;
 use crate::result_cache::{CachedEvent, CachedResult, ResultCache};
@@ -451,6 +451,17 @@ fn push_cached(cached: &mut Vec<CachedEvent>, event_type: &str, payload: &impl S
 /// MTA-STS checks and the lints, sent on `tx` in stream order and closed by a `done` event
 /// (no `done` after the stream deadline). Stops when `tx` is closed.
 pub async fn run_check(run: CheckRun, tx: mpsc::Sender<CheckEvent>) {
+    run_check_on(run, tx, DnsBackend::production(), Outbound::production()).await
+}
+
+/// [`run_check`] over the given lookup and raw-query backend and MTA-STS fetch settings: the
+/// seam tests drive without network.
+pub(crate) async fn run_check_on(
+    run: CheckRun,
+    tx: mpsc::Sender<CheckEvent>,
+    backend: DnsBackend,
+    outbound: Outbound,
+) {
     let CheckRun {
         request_id: rid,
         domain,
@@ -460,8 +471,10 @@ pub async fn run_check(run: CheckRun, tx: mpsc::Sender<CheckEvent>) {
         query_semaphore,
         ip_enrichment: enrichment_svc,
     } = run;
-    let outbound = Outbound::production();
-    let raw_outbound = RawOutbound::production();
+    let DnsBackend {
+        lookup,
+        raw: raw_outbound,
+    } = backend;
 
     let _active = ActiveCheck::new();
     let start = Instant::now();
@@ -496,8 +509,10 @@ pub async fn run_check(run: CheckRun, tx: mpsc::Sender<CheckEvent>) {
         let circuit_breakers = Arc::clone(&circuit_breakers);
         let tx_err = tx.clone();
         let semaphore = Arc::clone(&query_semaphore);
+        let lookup = Arc::clone(&lookup);
         futs.push(Box::pin(async move {
             let lookups = fan_out_lookup(
+                &lookup,
                 &domain,
                 rt,
                 &resolvers,
@@ -521,8 +536,10 @@ pub async fn run_check(run: CheckRun, tx: mpsc::Sender<CheckEvent>) {
         let circuit_breakers = Arc::clone(&circuit_breakers);
         let tx_err = tx.clone();
         let semaphore = Arc::clone(&query_semaphore);
+        let lookup = Arc::clone(&lookup);
         futs.push(Box::pin(async move {
             let lookups = fan_out_lookup(
+                &lookup,
                 &sub_domain,
                 RecordType::TXT,
                 &resolvers,
@@ -736,7 +753,11 @@ impl Drop for ActiveCheck {
 
 /// Fan out a single-type DNS query across all resolvers concurrently,
 /// applying circuit breaker pre-checks. Returns merged lookups.
+// One argument per seam and shared limiter, as `dispatch_mechanism` in netray-email does; a
+// struct for one private call site would only move the list.
+#[allow(clippy::too_many_arguments)]
 async fn fan_out_lookup(
+    lookup: &Arc<dyn ResolverLookup>,
     domain: &str,
     rt: RecordType,
     resolvers: &[Resolver],
@@ -775,9 +796,10 @@ async fn fan_out_lookup(
         let r = resolver.clone();
         let q = query.clone();
         let sem = Arc::clone(semaphore);
+        let lookup = Arc::clone(lookup);
         handles.push(tokio::spawn(async move {
             let _permit = sem.acquire().await;
-            r.lookup(q).await
+            lookup.lookup(&r, q).await
         }));
     }
 
