@@ -1,0 +1,3 @@
+<nav id="evidence-nav" class="evidence-tabs__nav" aria-label="Evidence views">
+{% for tab in tabs %}<a class="evidence-tabs__tab marker" href="#evidence-{{ tab.protocol }}" data-tab="{{ tab.protocol }}"{% if tab.current %} aria-current="true"{% endif %}>{{ tab.label }}</a>
+{% endfor %}</nav>

@@ -62,7 +62,7 @@ elsif ci
   fails << "ci.yml: checkout does not fetch the full history (fetch-depth: 0)" unless co && co.dig("with", "fetch-depth").to_s == "0"
   # The data image also carries tracked files (asn_patterns.toml); CI must test the committed ones.
   fails << "ci.yml: GeoIP data copy may overwrite tracked files (copy without clobbering)" if raw =~ %r{docker cp \S+ crates/ip/data} || raw !~ /cp (-n|--no-clobber|--update=none)/
-  # Two debug test-binary trees outgrow the runner disk (ci-disk-space): bound debuginfo, free disk first.
+  # Bounded debuginfo links faster and is part of the rust-cache key (v2-ci-speed).
   check_job = (ci["jobs"] || {})["check"]
   check_job = {} unless check_job.is_a?(Hash)
   fails << "ci.yml: check job does not bound debuginfo (env CARGO_PROFILE_DEV_DEBUG: line-tables-only)" unless (check_job["env"] || {})["CARGO_PROFILE_DEV_DEBUG"] == "line-tables-only"
@@ -70,13 +70,15 @@ elsif ci
   tmo = check_job["timeout-minutes"]
   fails << "ci.yml: check job timeout-minutes is #{tmo.inspect}, want an integer >= 60" unless tmo.is_a?(Integer) && tmo >= 60
   csteps = Array(check_job["steps"]).select { |s| s.is_a?(Hash) }
-  i_free = csteps.index do |s|
-    r = s["run"].to_s
-    rm = r.lines.find { |l| l =~ /\brm -rf\b/ }.to_s
-    %w[/usr/share/dotnet /opt/ghc /usr/local/lib/android].all? { |p| rm.include?(p) } && r.scan("df -h /").size >= 2
-  end
   i_setup = csteps.index { |s| s["run"].to_s.include?("just adlc-setup") }
-  fails << "ci.yml: no step frees runner disk (dotnet, ghc, android; df -h /) before just adlc-setup" unless i_free && i_setup && i_free < i_setup
+  # v2-ci-speed R6: mold links the ~400 test binaries; installed before anything compiles, version pinned.
+  i_mold = csteps.index { |s| s["uses"].to_s.start_with?("rui314/setup-mold@") }
+  if i_mold.nil?
+    fails << "ci.yml: no rui314/setup-mold step"
+  else
+    fails << "ci.yml: setup-mold does not pin mold-version to X.Y.Z" unless csteps[i_mold].dig("with", "mold-version").to_s =~ /\A\d+\.\d+\.\d+\z/
+    fails << "ci.yml: setup-mold does not come before just adlc-setup" unless i_setup && i_mold < i_setup
+  end
 end
 
 # C9 / C2: release.yml

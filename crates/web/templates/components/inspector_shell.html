@@ -1,0 +1,47 @@
+{% import "components/query_input.html" as c %}
+{% macro inspector_shell(shell) %}
+<div class="inspector-shell" data-island="shell" data-tool="{{ shell.tool }}" data-field="{{ shell.field }}"{% if let Some(s) = shell.suggest %} data-suggest="{{ s.name }}" data-suggest-types="{{ s.types }}" data-suggest-flags="{{ s.flags }}" data-suggest-servers="{{ s.servers }}" data-suggest-parse="{{ s.parse }}"{% endif %}>
+{{ shell.tabs|safe }}
+{% call c::query_input(shell.query, shell.stream_url, shell.autostart, true, false, shell.between) %}{% endcall %}
+{% if shell.suggest.is_some() %}<p class="inspector-shell__hint" id="inspector-parse-hint" hidden></p>
+{% endif %}{% if let Some(slot) = shell.slot %}{{ slot|safe }}{% endif %}
+<noscript><p>A live run needs JavaScript. Enable it, or read the guides.</p></noscript>
+{% if let Some(r) = shell.result %}{{ r|safe }}{% else %}<div id="inspect-result"><h1 class="visually-hidden">{{ shell.name }}</h1>{% if let Some(n) = shell.notice %}<p class="inspector-notice">{{ n }}</p>{% endif %}<ul class="inspector-examples">
+{% for example in shell.examples %}<li><a class="inspector-examples__chip" href="{{ example.href }}" data-example="{{ example.text }}">{{ example.text }}</a></li>
+{% endfor %}</ul></div>{% endif %}
+<dialog class="inspector-help" id="inspector-help" aria-labelledby="inspector-help-title">
+<h2 id="inspector-help-title">{{ shell.name }}</h2>
+<p class="inspector-help__what">{{ shell.help.what }}</p>
+<h3>Input</h3>
+<p class="inspector-help__syntax">{{ shell.help.syntax }}</p>
+<ul class="inspector-help__examples">
+{% for example in shell.examples %}<li><code>{{ example.text }}</code></li>
+{% endfor %}</ul>
+{% if !shell.help.resolvers.is_empty() %}<h3>Resolvers</h3>
+<ul class="inspector-help__resolvers">
+{% for r in shell.help.resolvers %}<li><code>@{{ r }}</code></li>
+{% endfor %}</ul>
+{% endif %}{% if !shell.help.flags.is_empty() %}<h3>Flags</h3>
+<ul class="inspector-help__flags">
+{% for f in shell.help.flags %}<li><code>{{ f }}</code></li>
+{% endfor %}</ul>
+{% endif %}{% if !shell.help.types.is_empty() %}<h3>Record types</h3>
+<ul class="inspector-help__types">
+{% for t in shell.help.types %}<li><code>{{ t }}</code></li>
+{% endfor %}</ul>
+{% endif %}<h3>Keyboard</h3>
+<table class="inspector-help__keys"><tbody>
+<tr><th scope="row"><kbd>/</kbd></th><td>Focus the input</td></tr>
+<tr><th scope="row"><kbd>Ctrl</kbd> <kbd>L</kbd></th><td>Focus and select the input</td></tr>
+<tr><th scope="row"><kbd>r</kbd></th><td>Run again</td></tr>
+<tr><th scope="row"><kbd>j</kbd> / <kbd>k</kbd></th><td>Next or previous check or evidence block</td></tr>
+<tr><th scope="row"><kbd>Enter</kbd></th><td>Open the guide of the focused check</td></tr>
+<tr><th scope="row"><kbd>h</kbd> / <kbd>l</kbd></th><td>Previous or next inspector</td></tr>
+<tr><th scope="row"><kbd>?</kbd></th><td>Open this help</td></tr>
+<tr><th scope="row"><kbd>Esc</kbd></th><td>Close this help or the suggestions</td></tr>
+</tbody></table>
+<p class="inspector-help__guide"><a href="{{ shell.help.guide_href }}">{{ shell.help.guide_label }} &rarr;</a></p>
+<form method="dialog"><button class="inspector-help__close" value="close">Close</button></form>
+</dialog>
+</div>
+{% endmacro %}

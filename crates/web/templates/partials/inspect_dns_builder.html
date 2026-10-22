@@ -1,0 +1,22 @@
+<div class="dns-builder" data-island="dns">
+  <div class="dns-builder__row" role="group" aria-labelledby="dns-builder-types">
+    <span class="dns-builder__label" id="dns-builder-types">Types</span>
+    <div class="dns-builder__toggles">{% for t in ["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SOA", "CAA", "SRV", "HTTPS"] %}<label class="dns-builder__toggle"><input type="checkbox" name="dns-type" value="{{ t }}"> {{ t }}</label>{% endfor %}</div>
+  </div>
+  <div class="dns-builder__row" role="group" aria-labelledby="dns-builder-job">
+    <span class="dns-builder__label" id="dns-builder-job">Job</span>
+    <div class="dns-builder__toggles">{% for j in ["query", "trace", "dnssec", "compare", "auth"] %}<label class="dns-builder__toggle"><input type="radio" name="dns-job" value="{{ j }}"{% if loop.first %} checked{% endif %}> {{ j }}</label>{% endfor %}</div>
+  </div>
+  <div class="dns-builder__row" role="group" aria-labelledby="dns-builder-resolver">
+    <span class="dns-builder__label" id="dns-builder-resolver">Resolver</span>
+    <select name="dns-resolver" class="dns-builder__select" aria-labelledby="dns-builder-resolver">
+      <option value="" selected>default</option>
+      <option value="cloudflare">cloudflare</option>
+      <option value="google">google</option>
+      <option value="quad9">quad9</option>
+      <option value="mullvad">mullvad</option>
+      <option value="public">public</option>
+    </select>
+  </div>
+  <p class="dns-builder__note"{% if !check_note %} hidden{% endif %}>+check is not a separate job: the DNS band covers its checks.</p>
+</div>

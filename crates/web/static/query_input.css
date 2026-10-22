@@ -41,3 +41,172 @@
 .query-input__error[hidden] {
   display: none;
 }
+.query-input--card {
+  padding: 18px;
+  background: var(--color-surface);
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+}
+.query-input--card .query-input__label {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-label);
+  letter-spacing: normal;
+  text-transform: none;
+}
+.query-input__box {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+.query-input--card .query-input__field {
+  height: 44px;
+  box-sizing: border-box;
+  padding-right: 44px;
+  background: var(--color-bg);
+  font-size: var(--font-size-input);
+}
+.query-input--card .query-input__submit {
+  height: 44px;
+  padding: 0 22px;
+  box-sizing: border-box;
+  font-size: var(--font-size-button);
+  font-weight: 600;
+}
+.query-input__clear {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: 44px;
+  height: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: var(--font-size-input);
+  cursor: pointer;
+}
+.query-input__clear[hidden] {
+  display: none;
+}
+.query-input__selectors {
+  flex-basis: 100%;
+  margin-top: var(--space-2);
+}
+.query-input__selectors summary {
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+  cursor: pointer;
+}
+.query-input__hint {
+  margin: var(--space-1) 0 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+}
+.query-input--card {
+  align-items: flex-end;
+}
+.query-input__box:has(+ .port-chooser:not([hidden])) {
+  flex: 999 1 320px;
+}
+.port-chooser {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+.port-chooser[hidden],
+.port-chooser__menu[hidden],
+.port-chooser__note[hidden] {
+  display: none;
+}
+.port-chooser__label {
+  /* board G: "Ports" stands on the "Host" label's line, above the toggles */
+  position: absolute;
+  bottom: 100%;
+  margin-bottom: var(--space-2);
+  color: var(--color-muted);
+  font-size: var(--font-size-label);
+  white-space: nowrap;
+}
+.port-chooser__toggles,
+.port-chooser__menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.port-chooser__port,
+.port-chooser__preset,
+.port-chooser__add {
+  min-width: 44px;
+  min-height: 44px;
+  box-sizing: border-box;
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: transparent;
+  color: var(--color-muted);
+  font-size: var(--font-size-button);
+  cursor: pointer;
+}
+.port-chooser__port {
+  padding: 0 14px 0 18px;
+  font-family: var(--font-mono);
+  font-weight: var(--font-weight-regular);
+}
+.port-chooser__port[aria-pressed="true"] {
+  padding-inline-start: calc(18px + var(--line-hair) - var(--line-marker));
+  border-color: var(--color-ink);
+  border-inline-start-width: var(--line-marker);
+  color: var(--color-ink);
+  font-weight: var(--font-weight-bold);
+}
+.port-chooser__add {
+  padding: 0;
+  border-style: dashed;
+  font-size: var(--font-size-input);
+}
+.port-chooser__preset {
+  padding: 0 14px;
+  font-family: var(--font-sans);
+}
+.port-chooser__field {
+  width: 8em;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 var(--space-3);
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-input);
+}
+.port-chooser__note {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: var(--font-size-label);
+}
+.guide-tool .query-input__field,
+.guide-tool .query-input__submit {
+  min-height: 44px;
+  box-sizing: border-box;
+}
+@media (max-width: 480px) {
+  .guide-tool .query-input__field {
+    flex-basis: 100%;
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+  .guide-tool .query-input__submit {
+    flex-basis: 100%;
+    min-height: 44px;
+  }
+  /* the chooser wraps under the host field: its label returns above its toggles */
+  .port-chooser__label {
+    position: static;
+    margin-bottom: 0;
+  }
+}

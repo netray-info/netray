@@ -1,0 +1,4 @@
+{% import "components/evidence_block.html" as evidence_block %}
+{% macro facts_grid(view, trails) %}
+<div class="facts-grid"{% if view.toned() %} data-toned{% endif %}>{% for cell in view.cells %}{% let at = loop.index0 %}<div class="facts-grid__cell"{% if cell.wide() %} data-wide{% endif %}{% if let Some(tone) = cell.tone %} data-tone="{{ tone.as_str() }}"{% endif %}><span class="facts-grid__label">{{ cell.label }}</span><span class="facts-grid__value">{% for value in cell.values %}{% if cell.chips %}<span class="facts-grid__chip">{% call evidence_block::evidence_cell(value) %}{% endcall %}</span>{% else %}{% if !loop.first %}, {% endif %}{% call evidence_block::evidence_cell(value) %}{% endcall %}{% endif %}{% endfor %}{% if let Some(trail) = trails.get(**at) %}{{ trail|safe }}{% endif %}</span></div>{% endfor %}</div>
+{% endmacro %}

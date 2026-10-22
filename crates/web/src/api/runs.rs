@@ -4,8 +4,8 @@ use std::pin::Pin;
 
 use axum::Extension;
 use axum::Json;
-use axum::extract::rejection::PathRejection;
-use axum::extract::{ConnectInfo, Path, State};
+use axum::extract::rejection::{PathRejection, QueryRejection};
+use axum::extract::{ConnectInfo, Path, Query, State};
 use axum::http::{HeaderMap, header};
 use axum::response::sse::{Event, Sse};
 use axum::response::{IntoResponse, Response};
@@ -18,8 +18,8 @@ use netray_model::diff::Diff;
 use netray_model::evidence::Block;
 use netray_model::run::{Run, RunCheck, SectionKind};
 use netray_store::Recorded;
-use serde::Serialize;
-use utoipa::ToSchema;
+use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
 
 use super::error::V1Error;
 use super::limit::client;
@@ -36,6 +36,23 @@ pub trait DomainRuns: Send + Sync + 'static {
         trigger: RunTrigger,
         prefetch: bool,
     ) -> BoxFuture<'a, RunStart>;
+
+    /// `start` with the run's DKIM selectors (spec v2-dkim-legacy-urls): an empty list is a plain
+    /// run. A run with selectors answers a different question than the stored head: it never
+    /// joins, is never joined and is not recorded. The default ignores the list and exists for
+    /// test stubs; every production implementation overrides it
+    /// (`tests/repo/test_domain_runs_selectors.sh`).
+    fn start_with<'a>(
+        &'a self,
+        domain: &'a str,
+        client: IpAddr,
+        trigger: RunTrigger,
+        prefetch: bool,
+        dkim_selectors: &'a [String],
+    ) -> BoxFuture<'a, RunStart> {
+        let _ = dkim_selectors;
+        self.start(domain, client, trigger, prefetch)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -132,7 +149,8 @@ pub(super) struct RunSectionEvent {
 impl From<SectionEvent> for RunSectionEvent {
     fn from(event: SectionEvent) -> Self {
         let SectionEvent { protocol, outcome } = event;
-        let (outcome, reason, checks, blocks) = match outcome {
+        let (outcome_kind, reason) = outcome.kind_and_reason();
+        let (checks, blocks) = match outcome {
             SectionOutcome::Measured { checks, evidence } => {
                 let checks = checks
                     .into_iter()
@@ -143,19 +161,13 @@ impl From<SectionEvent> for RunSectionEvent {
                         evidence: c.evidence,
                     })
                     .collect();
-                (SectionKind::Measured, None, checks, evidence)
+                (checks, evidence)
             }
-            SectionOutcome::NotApplicable { reason } => {
-                (SectionKind::NotApplicable, Some(reason), vec![], vec![])
-            }
-            SectionOutcome::Incomplete { reason } => {
-                (SectionKind::Incomplete, Some(reason), vec![], vec![])
-            }
-            SectionOutcome::TimedOut => (SectionKind::TimedOut, None, vec![], vec![]),
+            _ => (vec![], vec![]),
         };
         Self {
             protocol,
-            outcome,
+            outcome: outcome_kind,
             reason,
             checks,
             blocks,
@@ -244,12 +256,23 @@ async fn answer(mut events: RunEvents) -> Result<Json<RunAnswer>, V1Error> {
     Err(V1Error::Internal("the run ended without an answer".into()))
 }
 
+/// The query of `POST /domains/{domain}/runs`.
+#[derive(Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub(super) struct RunQuery {
+    /// Custom DKIM selectors, comma-separated: 1 to 5, each 1-63 of `[A-Za-z0-9-]`; empty means
+    /// none. A run with selectors is never joined, never answered from the history and never
+    /// recorded (`recorded: not_stored`).
+    #[param(example = "google,selector1")]
+    dkim_selectors: Option<String>,
+}
+
 /// Start a fresh run of a domain and answer with it; takes no body.
 #[utoipa::path(
     post,
     path = "/domains/{domain}/runs",
     tag = "runs",
-    params(("domain" = String, Path, description = "The domain to check")),
+    params(("domain" = String, Path, description = "The domain to check"), RunQuery),
     responses(
         (
             status = 200,
@@ -259,7 +282,7 @@ async fn answer(mut events: RunEvents) -> Result<Json<RunAnswer>, V1Error> {
                 (RunSectionEvent = "text/event-stream"),
             )
         ),
-        (status = 400, description = "Not a valid domain", body = ErrorResponse),
+        (status = 400, description = "Not a valid domain, or an invalid `dkim_selectors` list", body = ErrorResponse),
         (status = 413, description = "Request body over the 8 KiB limit", body = ErrorResponse),
         (status = 429, description = "Throttled, budget spent, rate limited or no free run slot", body = ErrorResponse),
         (status = 503, description = "A prefetch does not start a run", body = ErrorResponse),
@@ -270,12 +293,17 @@ pub(super) async fn start_run(
     peer: Option<Extension<ConnectInfo<SocketAddr>>>,
     headers: HeaderMap,
     domain: Result<Path<String>, PathRejection>,
+    query: Result<Query<RunQuery>, QueryRejection>,
 ) -> Result<Response, V1Error> {
     let Path(raw) = domain.map_err(|e| V1Error::InvalidInput(e.body_text()))?;
     let domain = state
         .runs()
         .validate(&raw)
         .map_err(|refusal| V1Error::DomainInvalid(refusal.message))?;
+    let Query(RunQuery { dkim_selectors }) =
+        query.map_err(|e| V1Error::InvalidInput(e.body_text()))?;
+    let selectors = crate::selectors::parse_dkim_selectors(dkim_selectors.as_deref())
+        .map_err(V1Error::InvalidInput)?;
     let client = client(
         &state,
         &headers,
@@ -284,7 +312,7 @@ pub(super) async fn start_run(
     let prefetch = netray_common::prefetch::is_prefetch(&headers);
     match state
         .runs()
-        .start(&domain, client, RunTrigger::Api, prefetch)
+        .start_with(&domain, client, RunTrigger::Api, prefetch, &selectors)
         .await
     {
         RunStart::Refused(refusal) => Err(refusal_error(refusal)),

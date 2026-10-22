@@ -9,8 +9,12 @@ default: adlc-verify
 # The ADLC gate: offline, no browser. Needs `just adlc-setup` once (frontend/dist is embedded by the crates).
 adlc-verify: test-repo check-frontend-dist fmt-check clippy test-rust-offline test-frontend validate-site check-sitemap
 
-# Everything the gate runs, plus the full Rust suite (ifconfig-rs integration tests need `just ifconfig-data`).
-check: adlc-verify deny test-rust
+# Every test the gate runs, plus the full Rust suite (ifconfig-rs integration tests need `just ifconfig-data`).
+# test-rust stands in for test-rust-offline: one feature set, so the workspace tests compile once
+# (tests/repo/lib/verbs.sh holds it to a superset). With GeoIP data the tests run under the unified
+# workspace features only; the gate's own feature sets (--exclude netray-ip, -p netray-ip) run in
+# `adlc verify`, whose receipt every push needs.
+check: test-repo check-frontend-dist fmt-check clippy test-frontend validate-site check-sitemap deny test-rust
 
 # Deterministic supply-chain checks; advisories run on a schedule elsewhere (workflow-rules R-J6).
 deny:
@@ -47,10 +51,13 @@ clippy:
     cargo clippy --workspace --all-features -- -D warnings
 
 # ifconfig-rs integration tests need GeoIP data (`just ifconfig-data`), so offline only its unit tests and the module tests run.
+# adlc counts a test file as run when it is a target's src_path; each crate's `it` target also ran its
+# tests/it module files (tests/repo/test_test_binaries.sh holds every one to a mod line): ADLC-RAN names them.
 test-rust-offline:
     cargo test --workspace --exclude netray-ip
     cargo test -p netray-ip --lib
     cargo test -p netray-ip --features testing --test module --test module_data --test module_ua --test module_v3 --test contract_status --test evidence --test offline_routes
+    @git ls-files 'crates/*/tests/it/*.rs' 'crates/*/tests/it/**/*.rs' | grep -v '/main\.rs$' | sed 's/^/ADLC-RAN /'
 
 # The full Rust suite. Most ifconfig-rs integration tests need GeoIP data (`just ifconfig-data`,
 # MaxMind licence); without it they are skipped with a notice and run in CI with the data image.
@@ -61,8 +68,7 @@ test-rust:
         cargo test --workspace
     else
         echo "notice: no GeoIP data; ifconfig-rs integration tests skipped (just ifconfig-data, then just test-ifconfig-data)" >&2
-        cargo test --workspace --exclude netray-ip
-        cargo test -p netray-ip --lib
+        just test-rust-offline
     fi
 
 # ifconfig-rs including the tests that need GeoIP data.
@@ -172,6 +178,29 @@ acceptance-local *args:
     TEST_ENV=local npx playwright test --no-deps "${specs[@]}"
     status=$?
     exit $status
+
+# V2 pages against the private design canvas (specs/rules/design-rules.md): seeds lens's history,
+# starts lens and the manifest's inspectors on free ports, writes target/design/. Exit 0 within
+# tolerance, 1 deviations, 2 setup error. Manifest: the argument, else $NETRAY_DESIGN_DIR/manifest.json
+# (default: the netray.info checkout beside the main checkout).
+design-check manifest="":
+    #!/usr/bin/env bash
+    set -uo pipefail
+    source tests/repo/lib/netray.sh
+    source tests/acceptance/design/stack.sh
+    main_checkout=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
+    export NETRAY_DESIGN_DIR="${NETRAY_DESIGN_DIR:-$main_checkout/../netray.info/specs/design/canvas}"
+    m={{quote(manifest)}}
+    [ -n "$m" ] || m="$NETRAY_DESIGN_DIR/manifest.json"
+    loader=tests/acceptance/design/manifest.mjs
+    node "$loader" "$m" >/dev/null || exit 2
+    fixtures=$(node "$loader" --fixtures "$m") || exit 2
+    hosts=$(node "$loader" --hosts "$m") || exit 2
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"; _netray_cleanup' EXIT
+    # shellcheck disable=SC2086
+    design_stack_up "$tmp" "$fixtures" $hosts || exit 2
+    node tests/acceptance/design/check.mjs "$m" "$REPO_ROOT/target/design"
 
 # Set the workspace version, open a changelog section, commit and tag. Never pushes.
 release version:

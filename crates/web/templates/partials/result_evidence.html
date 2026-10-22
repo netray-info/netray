@@ -1,3 +1,20 @@
-<div id="evidence-{{ protocol }}">
-{% match inner %}{% when EvidenceInner::Empty %}{% when EvidenceInner::Link with { href, outcome } %}<a href="{{ href }}">{{ protocol }}</a> <span>{{ outcome }}</span>{% when EvidenceInner::Section(html) %}{{ html|safe }}{% endmatch %}
+{% import "components/evidence_block.html" as evidence_block %}
+<div id="evidence-{{ protocol }}" class="evidence-tabs__panel" data-panel="{{ protocol }}"{% if shown %} data-shown{% endif %}>
+{% if let Some(panel) = panel %}
+{% if let Some(reason) = panel.reason %}<p class="evidence-tabs__reason">{{ reason }}</p>{% endif %}
+{% if let Some(compact) = panel.compact %}<p class="evidence-tabs__caption">{{ compact.caption }}</p>
+<div class="evidence-tabs__scroll"><table class="evidence-tabs__compact"><thead><tr>{% for column in compact.columns %}<th>{{ column }}</th>{% endfor %}</tr></thead><tbody>{% for row in compact.rows %}<tr>{% for cell in row %}<td{% if let Some(title) = cell.title %} title="{{ title }}"{% endif %}>{% if cell.strong %}<strong>{{ cell.text }}</strong>{% else %}{{ cell.text }}{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>
+<p class="evidence-tabs__swipe">← swipe the table</p>
+{% endif %}{% if let Some(a) = panel.attribution %}{{ a|safe }}{% endif %}
+<div class="evidence-tabs__links">
+{% if !panel.feeds.is_empty() %}<p class="evidence-tabs__feeds">Feeds lines: {% for feed in panel.feeds %}{% if !loop.first %} · {% endif %}{% if let Some(code) = feed.code %}<code>{{ code }}</code> {% endif %}{{ feed.short }}{% endfor %}</p>{% endif %}
+{% if let Some(href) = panel.all_href %}<a class="evidence-tabs__all" href="{{ href }}">All evidence →</a>{% endif %}
+<a class="evidence-tabs__explore" href="{{ panel.explore.href }}">{{ panel.explore.label }} →</a>
 </div>
+{% if panel.all_href.is_none() && !panel.blocks.is_empty() %}<details class="evidence-tabs__blocks"><summary>All evidence</summary>
+{% for block in panel.blocks %}{% if let Some(html) = block.view %}{{ html|safe }}{% else %}{% call evidence_block::evidence_block(block.block) %}{% endcall %}{% endif %}
+{% endfor %}</details>
+{% endif %}
+{% endif %}
+</div>
+{% if let Some(form) = selector_form %}<div class="selector-panel" data-panel="{{ protocol }}"{% if shown %} data-shown{% endif %}>{{ form|safe }}</div>{% endif %}

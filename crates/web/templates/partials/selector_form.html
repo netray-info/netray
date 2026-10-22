@@ -1,0 +1,1 @@
+<form class="selector-form" action="{{ action }}" method="get"><label for="selector-form-input">Check custom DKIM selectors</label><input id="selector-form-input" type="text" name="dkim_selectors" placeholder="selector1, selector2"{% if let Some(v) = value %} value="{{ v }}"{% endif %}><button class="button button--secondary" type="submit">Run with selectors</button></form>

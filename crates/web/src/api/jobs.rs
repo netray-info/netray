@@ -8,9 +8,11 @@ use futures::FutureExt;
 use futures::future::BoxFuture;
 use netray_dns::parser::ParsedQuery;
 use netray_dns::{
-    DnsAuthCompareResult, DnsCompareResult, DnsDnssecResult, DnsErrorEvent, DnsJob, DnsJobEvent,
-    DnsQueryResult, DnsRefusal, DnsTraceResult, DnssecRequest, TraceRequest, blocks,
+    DnsAuthCompareResult, DnsCachedJob, DnsCachedResult, DnsCompareResult, DnsDnssecResult,
+    DnsErrorEvent, DnsJob, DnsJobEvent, DnsQueryResult, DnsRefusal, DnsResultCache, DnsTraceResult,
+    DnssecRequest, TraceRequest, blocks,
 };
+use netray_email::{EmailInspectRequest, EmailRefusal};
 use netray_engine::{Domain, Facts, Module, RunContext, SectionOutcome};
 use netray_model::evidence::Block;
 use netray_model::{CheckResult, Protocol};
@@ -18,11 +20,16 @@ use netray_tls::input::Target;
 use netray_tls::security::rate_limit::{Quotas, Scopes};
 
 use super::dns::DNS_OFF;
+use super::email::EMAIL_OFF;
 use super::error::V1Error;
 use super::inspectors::{HTTP_OFF, TLS_OFF};
-use super::ip::charge;
+use super::ip::{charge, shown_headers};
 use super::state::ApiState;
-use crate::pages::{InspectorJobs, Job, JobPart, JobRequest, Refusal, Tool, registrable_domain};
+use crate::evidence::{Badge, BadgeTone};
+use crate::pages::{
+    CachedDns, CallerRequest, DnsResults, InspectorJobs, Job, JobPart, JobRequest, Refusal, Tool,
+    registrable_domain,
+};
 
 const NO_STARTTLS: &str = "STARTTLS for IMAP and FTP is not supported";
 const IP_OFF: &str = "IP lookups are unavailable";
@@ -67,6 +74,52 @@ fn job(label: &str, protocol: Protocol, run: BoxFuture<'static, Measured>) -> Jo
     Job::new(vec![part]).with_band(
         protocol,
         Box::pin(async move { shared.await.map(|(_, checks)| checks) }),
+    )
+}
+
+/// The TLS inspection split per port: one part per port in `ports` (labelled `handshake` for
+/// one port, `port <n>` for several) and the band of port 443, else the lowest port.
+fn port_jobs(
+    ports: &[u16],
+    run: BoxFuture<'static, Result<Vec<(u16, SectionOutcome)>, String>>,
+) -> Job {
+    let shared = run.shared();
+    let outcome_of = |shared: futures::future::Shared<_>, port: u16| async move {
+        let outcomes: Vec<(u16, SectionOutcome)> = shared.await?;
+        let outcome = outcomes
+            .into_iter()
+            .find(|(p, _)| *p == port)
+            .map(|(_, outcome)| outcome)
+            .ok_or_else(|| format!("port {port} was not inspected"))?;
+        measured(outcome)
+    };
+    let parts = ports
+        .iter()
+        .map(|&port| {
+            let label = if ports.len() == 1 {
+                "handshake".to_string()
+            } else {
+                format!("port {port}")
+            };
+            let output = outcome_of(shared.clone(), port);
+            JobPart {
+                label,
+                output: Box::pin(async move { output.await.map(|(blocks, _)| blocks) }),
+            }
+        })
+        .collect();
+    let mut job = Job::new(parts);
+    for (n, &port) in ports.iter().enumerate() {
+        let checks = outcome_of(shared.clone(), port);
+        job = job.with_part_checks(
+            n,
+            Box::pin(async move { checks.await.map(|(_, checks)| checks) }),
+        );
+    }
+    let band = outcome_of(shared, netray_tls::module::band_port(ports.iter().copied()));
+    job.with_band(
+        Protocol::Tls,
+        Box::pin(async move { band.await.map(|(_, checks)| checks) }),
     )
 }
 
@@ -162,11 +215,14 @@ const UNFINISHED: &str = "the job ended before it finished";
 
 /// A part that awaits its started job, collects it and maps the result to blocks. A job with
 /// no block, or no answer that failed or did not finish, is the part's error, never an empty
-/// part; a job that answered and failed shows its blocks and its errors (Rule M).
+/// part; a job that answered and failed shows its blocks and its errors (Rule M). A finished
+/// job is stored in the result cache under the share key, when the run has one.
 fn dns_part<E: DnsJobEvent>(
     label: &str,
     started: tokio::sync::oneshot::Receiver<DnsJob<E>>,
     to_blocks: fn(&E::Collected) -> Vec<Block>,
+    notes: Vec<String>,
+    store: Option<(DnsResultCache, String, String)>,
 ) -> JobPart
 where
     E::Collected: Ended,
@@ -176,6 +232,18 @@ where
         output: Box::pin(async move {
             let job = started.await.map_err(|_| "not started".to_string())?;
             let collected = job.collect().await;
+            if let Some((cache, key, query)) = store
+                && collected.ended().2
+            {
+                cache
+                    .insert(DnsCachedResult {
+                        key,
+                        mode: E::MODE.to_owned(),
+                        query,
+                        result: collected.clone().into(),
+                    })
+                    .await;
+            }
             let mut blocks = to_blocks(&collected);
             let (empty, errors, done) = collected.ended();
             if blocks.is_empty() || (empty && (!errors.is_empty() || !done)) {
@@ -193,7 +261,11 @@ where
                 });
             }
             blocks.extend(errors_block(&errors));
-            blocks.extend(warnings_block(collected.warnings()));
+            let warnings: Vec<String> = notes
+                .into_iter()
+                .chain(collected.warnings().iter().cloned())
+                .collect();
+            blocks.extend(warnings_block(&warnings));
             Ok(blocks)
         }),
     }
@@ -232,14 +304,29 @@ impl InspectJobs {
         };
         let limiters = self.state.tls_limiters();
         limiters.prune_if_due();
-        limiters
-            .check_cost(client, &target, parsed.ports.len().max(1) as u32)
-            .map_err(|e| match e {
-                netray_tls::error::AppError::RateLimited {
-                    retry_after_secs, ..
-                } => Duration::from_secs(retry_after_secs),
-                _ => Duration::ZERO,
-            })
+        // One address on every port with its probes, as the plan charges it; a port count beyond
+        // the burst still costs the ports alone and is answered by the job start.
+        let (inspected, probed) = netray_tls::routes::plan_counts(
+            1,
+            parsed.ports.len(),
+            limiters.remaining_budget(client),
+            inspector.probe_connections(),
+        );
+        let cost = netray_tls::routes::plan_cost(
+            parsed.ports.len(),
+            inspected,
+            probed,
+            inspector.probe_connections(),
+        );
+        match limiters.check_cost(client, &target, cost) {
+            // Charged nothing and no wait admits it: the job start answers it as the notice.
+            Err(netray_tls::error::AppError::CostExceedsLimit { .. }) => Ok(()),
+            Err(netray_tls::error::AppError::RateLimited {
+                retry_after_secs, ..
+            }) => Err(Duration::from_secs(retry_after_secs)),
+            Err(_) => Err(Duration::ZERO),
+            Ok(()) => Ok(()),
+        }
     }
 
     fn admit_http(&self, client: IpAddr, input: &str) -> Result<(), Duration> {
@@ -267,7 +354,9 @@ impl InspectJobs {
         }
         let limiters = self.state.ip_limiters();
         limiters.prune_if_due();
-        charge(&limiters.per_ip, client, 1, "api_v1_ip").map_err(retry_after)?;
+        limiters
+            .charge_per_ip(client, 1)
+            .map_err(Duration::from_secs)?;
         let input = input.trim();
         let target = if input.is_empty() {
             Some(client)
@@ -292,11 +381,16 @@ impl InspectJobs {
         if starttls_port(&parsed.ports) {
             return Err(NO_STARTTLS.into());
         }
+        self.state
+            .tls_limiters()
+            .cost_within_bursts(parsed.ports.len().max(1) as u32)
+            .map_err(|e| e.to_string())?;
+        // The job plans against the budget its admission planned against (the smaller burst),
+        // so the probes it runs are the ones admission charged.
         let burst = self
             .state
-            .config()
-            .tls
-            .per_ip_burst
+            .tls_limiters()
+            .remaining_budget(req.client)
             .max(parsed.ports.len() as u32)
             .max(1);
         let limiters = netray_tls::security::RateLimitState::scoped(
@@ -313,9 +407,8 @@ impl InspectJobs {
             },
         );
         let client = req.client;
-        Ok(job(
-            "handshake",
-            Protocol::Tls,
+        let ports = parsed.ports.clone();
+        let run: BoxFuture<'static, Result<Vec<(u16, SectionOutcome)>, String>> =
             Box::pin(async move {
                 let resp = inspector
                     .inspect_parsed(parsed, client, &limiters, String::new())
@@ -326,9 +419,9 @@ impl InspectJobs {
                         } => format!("too many requests; try again in {retry_after_secs} s"),
                         other => other.to_string(),
                     })?;
-                measured(netray_tls::module::translate(&resp))
-            }),
-        ))
+                Ok(netray_tls::module::translate_ports(&resp))
+            });
+        Ok(port_jobs(&ports, run))
     }
 
     fn start_http(&self, req: JobRequest) -> Result<Job, String> {
@@ -352,6 +445,48 @@ impl InspectJobs {
         ))
     }
 
+    fn start_email(&self, req: JobRequest) -> Result<Job, String> {
+        let inspect = self
+            .state
+            .email_inspect()
+            .ok_or_else(|| EMAIL_OFF.to_string())?
+            .clone();
+        let (domain, dkim_selectors) = crate::pages::email_input(&req.input);
+        let request = EmailInspectRequest {
+            domain,
+            dkim_selectors,
+        };
+        self.state.email_limiter().prune_if_due();
+        let events = match inspect.inspect(
+            &request,
+            req.client,
+            self.state.email_limiter(),
+            self.state.email_slots(),
+        ) {
+            Ok(events) => events,
+            Err(EmailRefusal::RateLimited { retry_after_secs }) => {
+                return Ok(Job::new(Vec::new()).with_gate(Box::pin(async move {
+                    Err(Refusal::RateLimited(Duration::from_secs(retry_after_secs)))
+                })));
+            }
+            Err(busy @ EmailRefusal::Busy) => {
+                let message = busy.to_string();
+                return Ok(Job::new(Vec::new())
+                    .with_gate(Box::pin(async move { Err(Refusal::Busy(message)) })));
+            }
+            Err(other) => return Err(other.to_string()),
+        };
+        Ok(job(
+            "inspection",
+            Protocol::Email,
+            Box::pin(async move {
+                let events: Vec<netray_email::quality::types::SseEvent> =
+                    futures::StreamExt::collect::<Vec<_>>(events).await;
+                measured(netray_email::module::translate(&events))
+            }),
+        ))
+    }
+
     fn start_ip(&self, req: JobRequest) -> Result<Job, String> {
         let ip = self
             .state
@@ -370,17 +505,78 @@ impl InspectJobs {
             "lookup",
             Protocol::Ip,
             Box::pin(async move {
-                let result = if caller {
-                    ip.lookup_caller(SocketAddr::new(addr, 0), None).await
-                } else {
-                    ip.lookup(addr).await
-                };
-                measured(netray_ip::translate(
-                    &[(addr, result.map_err(|e| e.to_string()))],
-                    1,
+                let remote = SocketAddr::new(addr, 0);
+                let result = bounded_reverse(req.deadline, |options| {
+                    if caller {
+                        ip.lookup_caller_with(remote, None, options)
+                    } else {
+                        ip.lookup_with(addr, options)
+                    }
+                })
+                .await;
+                measured(netray_ip::module::translate_lookup(
+                    addr,
+                    result.map_err(|e| e.to_string()),
                 ))
             }),
         ))
+    }
+
+    fn caller_job(&self, req: CallerRequest) -> Result<Job, String> {
+        let ip = self
+            .state
+            .ip_lookup()
+            .ok_or_else(|| IP_OFF.to_string())?
+            .clone();
+        let shown = shown_headers(&self.state, &req.headers);
+        let headers = netray_ip::module::headers_block(&shown.xff, &shown.headers);
+        let CallerRequest {
+            remote,
+            user_agent,
+            deadline,
+            ..
+        } = req;
+        Ok(job(
+            "lookup",
+            Protocol::Ip,
+            Box::pin(async move {
+                let result = bounded_reverse(deadline, |options| {
+                    ip.lookup_caller_with(remote, user_agent.as_deref(), options)
+                })
+                .await;
+                measured(netray_ip::module::translate_lookup(
+                    remote.ip(),
+                    result.map_err(|e| e.to_string()),
+                ))
+                .map(|(mut evidence, checks)| {
+                    evidence.push(headers);
+                    (evidence, checks)
+                })
+            }),
+        ))
+    }
+}
+
+/// A lookup with reverse DNS within three quarters of the time left before `deadline`; past that
+/// budget the PTR query is given up and the address is looked up without it, so a reverse zone
+/// that never answers costs the host name, never the card (v2-ip-ui).
+async fn bounded_reverse<'a, F>(
+    deadline: std::time::Instant,
+    lookup: F,
+) -> Result<netray_ip::backend::Ifconfig, netray_ip::IpRefusal>
+where
+    F: Fn(
+        netray_ip::lookup::LookupOptions,
+    ) -> BoxFuture<'a, Result<netray_ip::backend::Ifconfig, netray_ip::IpRefusal>>,
+{
+    let options = |reverse_dns| netray_ip::lookup::LookupOptions {
+        reverse_dns,
+        lang: None,
+    };
+    let budget = deadline.saturating_duration_since(std::time::Instant::now()) * 3 / 4;
+    match tokio::time::timeout(budget, lookup(options(true))).await {
+        Ok(result) => result,
+        Err(_) => lookup(options(false)).await,
     }
 }
 
@@ -489,35 +685,52 @@ impl InspectJobs {
             .map(str::to_ascii_lowercase)
             .collect();
         let flagged = |name: &str| flags.iter().any(|f| f == name);
+        let store = req
+            .share_key
+            .clone()
+            .map(|key| (self.state.dns_results().clone(), key, req.input.clone()));
 
+        let trace_notes: Vec<String> = trace_note(&req.input).into_iter().collect();
         let (part, start) = if flagged("trace") {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("trace", rx, blocks::trace_blocks),
+                dns_part("trace", rx, blocks::trace_blocks, trace_notes, store),
                 DnsStart::Trace(tx),
             )
         } else if parsed.dnssec || flagged("dnssec") {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("dnssec", rx, blocks::dnssec_blocks),
+                dns_part("DNSSEC", rx, blocks::dnssec_blocks, Vec::new(), store),
                 DnsStart::Dnssec(tx),
             )
         } else if flagged("compare") {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("compare", rx, blocks::compare_blocks),
+                dns_part(
+                    "transport comparison",
+                    rx,
+                    blocks::compare_page_blocks,
+                    Vec::new(),
+                    store,
+                ),
                 DnsStart::Compare(tx),
             )
         } else if flagged("auth") {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("authcompare", rx, blocks::authcompare_blocks),
+                dns_part(
+                    "authoritative and recursive",
+                    rx,
+                    blocks::authcompare_page_blocks,
+                    Vec::new(),
+                    store,
+                ),
                 DnsStart::AuthCompare(tx),
             )
         } else {
             let (tx, rx) = tokio::sync::oneshot::channel();
             (
-                dns_part("query", rx, blocks::query_blocks),
+                dns_part("query", rx, blocks::query_page_blocks, Vec::new(), store),
                 DnsStart::Query(tx),
             )
         };
@@ -540,7 +753,17 @@ impl InspectJobs {
                         let outcome = (&mut run.0)
                             .await
                             .map_err(|e| format!("the DNS band failed: {e}"))?;
-                        measured(outcome).map(|(_, checks)| checks)
+                        // The band judges the registrable domain; the page shows the queried
+                        // name's records, so the checks link none of them.
+                        measured(outcome).map(|(_, checks)| {
+                            checks
+                                .into_iter()
+                                .map(|c| CheckResult {
+                                    evidence: Vec::new(),
+                                    ..c
+                                })
+                                .collect()
+                        })
                     }),
                     Some((band_tx, module, domain, req.deadline)),
                 ),
@@ -560,13 +783,99 @@ impl InspectJobs {
     }
 }
 
+impl InspectJobs {
+    /// A fresh key for a run's share link, in the DNS result cache's key shape.
+    pub(crate) fn share_key() -> String {
+        DnsResultCache::fresh_key()
+    }
+
+    pub(crate) fn is_share_key(key: &str) -> bool {
+        netray_dns::is_key(key)
+    }
+
+    /// The DNS shell's autocomplete tables, each space-separated: the record types, the flags
+    /// with their `+`, the provider and group names.
+    pub(crate) fn dns_tables() -> (String, String, String) {
+        let types = netray_dns::record_types()
+            .record_types
+            .into_iter()
+            .map(|t| t.name)
+            .collect::<Vec<_>>()
+            .join(" ");
+        let flags = netray_dns::parser::FLAGS
+            .iter()
+            .map(|f| format!("+{f}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let catalogue = netray_dns::server_catalogue();
+        let servers = catalogue
+            .providers
+            .iter()
+            .map(|p| p.name().to_string())
+            .chain(catalogue.groups.into_iter().map(|g| g.name))
+            .collect::<Vec<_>>()
+            .join(" ");
+        (types, flags, servers)
+    }
+}
+
+/// "Only the first type is traced: <type>." for a `+trace` query that names more than one record
+/// type; the parser's default types of a query naming none do not count.
+fn trace_note(input: &str) -> Option<String> {
+    input
+        .split_whitespace()
+        .any(|t| t.eq_ignore_ascii_case("+trace"))
+        .then(|| types_note(input))
+        .flatten()
+}
+
+/// The note of a trace over `input`: the types it names, as the parser reads them (duplicates
+/// dropped, aliases resolved), when there is more than one.
+fn types_note(input: &str) -> Option<String> {
+    let named = netray_dns::parser::named_record_types(input);
+    (named.len() > 1).then(|| format!("Only the first type is traced: {}.", named[0]))
+}
+
+impl DnsResults for DnsResultCache {
+    fn result<'a>(&'a self, key: &'a str) -> BoxFuture<'a, Option<CachedDns>> {
+        Box::pin(async move {
+            let cached = self.get(key).await?;
+            // The errors and warnings the live part adds, so a replayed failure stays visible
+            // (Rule M).
+            let mut blocks = cached.result.page_blocks();
+            let mut notes = Vec::new();
+            let (errors, warnings): (&[DnsErrorEvent], &[String]) = match &cached.result {
+                DnsCachedJob::Query(r) => (&r.errors, r.warnings()),
+                DnsCachedJob::Compare(r) => (&r.errors, r.warnings()),
+                DnsCachedJob::AuthCompare(r) => (&r.errors, r.warnings()),
+                DnsCachedJob::Trace(r) => {
+                    // A trace from the API's own route carries no `+trace` token.
+                    notes.extend(types_note(&cached.query));
+                    (&r.errors, &notes[..])
+                }
+                DnsCachedJob::Dnssec(r) => (&r.errors, &[]),
+                DnsCachedJob::Check(_) => (&[], &[]),
+            };
+            if !blocks.is_empty() {
+                blocks.extend(errors_block(errors));
+                blocks.extend(warnings_block(warnings));
+            }
+            Some(CachedDns {
+                blocks,
+                query: cached.query,
+                mode: cached.mode,
+            })
+        })
+    }
+}
+
 impl InspectorJobs for InspectJobs {
     fn admit(&self, tool: Tool, client: IpAddr, input: &str) -> Result<(), Duration> {
         match tool {
             Tool::Tls => self.admit_tls(client, input),
             Tool::Http => self.admit_http(client, input),
             Tool::Ip => self.admit_ip(client, input),
-            Tool::Dns => Ok(()),
+            Tool::Dns | Tool::Email => Ok(()),
         }
     }
 
@@ -575,7 +884,77 @@ impl InspectorJobs for InspectJobs {
             Tool::Tls => self.start_tls(req),
             Tool::Http => self.start_http(req),
             Tool::Ip => self.start_ip(req),
+            Tool::Email => self.start_email(req),
             Tool::Dns => self.start_dns(req),
         }
     }
+
+    fn max_ports(&self) -> usize {
+        self.state
+            .tls_inspector()
+            .map_or(7, netray_tls::TlsInspector::max_ports)
+    }
+
+    fn caller(&self, req: CallerRequest) -> Option<Result<Job, String>> {
+        Some(self.caller_job(req))
+    }
+
+    fn enrich(&self, addrs: Vec<IpAddr>) -> BoxFuture<'static, Vec<(IpAddr, Vec<Badge>)>> {
+        let Some(ip) = self.state.ip_lookup().cloned() else {
+            return Box::pin(async { Vec::new() });
+        };
+        let mut unique: Vec<IpAddr> = Vec::new();
+        for addr in addrs {
+            if !unique.contains(&addr) {
+                unique.push(addr);
+            }
+        }
+        Box::pin(async move {
+            let lookups = unique.into_iter().map(|addr| {
+                let ip = ip.clone();
+                async move { (addr, ip.lookup(addr).await) }
+            });
+            futures::future::join_all(lookups)
+                .await
+                .into_iter()
+                .filter_map(|(addr, found)| {
+                    let badges = badges(&found.ok()?.network);
+                    (!badges.is_empty()).then_some((addr, badges))
+                })
+                .collect()
+        })
+    }
+}
+
+/// The badges of a looked-up address: organisation, network type, then the threat flags.
+fn badges(network: &netray_ip::backend::Network) -> Vec<Badge> {
+    let muted = |label: &str| Badge {
+        label: label.to_string(),
+        tone: BadgeTone::Muted,
+    };
+    let mut out: Vec<Badge> = network.org.iter().map(|org| muted(org)).collect();
+    out.extend(
+        // The infrastructure, apart from the threat classification `network_type` holds.
+        match network.infra_type.as_str() {
+            "cloud" => Some("cloud"),
+            "datacenter" => Some("hosting"),
+            "residential" => Some("residential"),
+            _ => None,
+        }
+        .map(muted),
+    );
+    for (flag, label, tone) in [
+        (network.is_tor, "Tor", BadgeTone::Fail),
+        (network.is_vpn, "VPN", BadgeTone::Warn),
+        (network.is_spamhaus, "Spamhaus", BadgeTone::Fail),
+        (network.is_c2, "C2", BadgeTone::Fail),
+    ] {
+        if flag {
+            out.push(Badge {
+                label: label.to_string(),
+                tone,
+            });
+        }
+    }
+    out
 }

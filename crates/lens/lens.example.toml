@@ -139,8 +139,9 @@ per_ip_burst = 10
 # [inspect.dns]
 # [inspect.tls]
 # [inspect.http]
+# [inspect.email]
 # [inspect.ip]
-# deadline_ms = 30000                 # per inspection, at least 1; defaults: dns 30000, tls 15000, http 30000, ip 5000
+# deadline_ms = 30000                 # per inspection, at least 1; defaults: dns 30000, tls 15000, http 30000, email 35000, ip 5000
 # max_concurrent = 8                  # at least 1
 
 [scoring]

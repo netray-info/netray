@@ -1,10 +1,17 @@
-<header id="result-header">
+<header id="result-header" class="result-hero">
 {{ grade|safe }}
-<h1>{{ domain }}</h1>
+<div class="result-hero__title">
 {{ run_line|safe }}
+{% let display = crate::idn::unicode(domain) %}<h1>{% for label in display.as_deref().unwrap_or(domain).split('.') %}{% if !loop.first %}<wbr>{% endif %}<span class="result-hero__label">{{ label }}{% if !loop.last %}.{% endif %}</span>{% endfor %}{% if display.is_some() %} <span class="idn-alabel">{{ domain }}</span>{% endif %}</h1>
 {{ progress|safe }}
+</div>
+<div class="result-hero__actions">
 <form id="recheck" class="recheck" method="post" action="/{{ href }}/run" data-island="stream" data-stream-url="/{{ href }}/run"{% if autostart %} data-stream-autostart="visit"{% endif %}>
 {{ button|safe }}
+{%- if let Some(selectors) = dkim_selectors %}
+<input type="hidden" name="dkim_selectors" value="{{ selectors }}">{% endif %}
 </form>
+{% include "partials/help_button.html" %}
 {{ share|safe }}
+</div>
 </header>

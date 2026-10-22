@@ -14,18 +14,19 @@ use netray_engine::{
     BoxFuture, Domain, EvidencePath, Facts, FactsProvider, Module, ResolveError, RunContext,
     SectionOutcome,
 };
+use netray_model::evidence::{Block, Shape, Value as EvValue};
 use netray_model::{CheckId, Protocol};
 use serde::de::DeserializeOwned;
 
 use crate::api::check::{
-    LintEvent, check_ns_delegation_consistency, check_ns_lame_delegation, unanswered_events,
-    unique_lines,
+    CHECK_RECORD_TYPES, CHECK_TOTAL_STEPS, LintEvent, check_ns_delegation_consistency,
+    check_ns_lame_delegation, lint_lookups, unanswered_events, unique_lines, unique_records,
 };
-use crate::api::{AppState, CheckEvent, QUERY_SEMAPHORE_PERMITS};
+use crate::api::{AppState, BatchEvent, CheckEvent, QUERY_SEMAPHORE_PERMITS};
 use crate::config::{Config, ModuleConfig};
 use crate::dns_raw::{RawError, RawOutbound, RawResponse, RawSend, SendFuture};
 use crate::jobs::{DnsBackend, DnsJobs, ResolverLookup};
-use crate::module::{dns_checks, facts_from_lookups, translate};
+use crate::module::{block_id, dns_checks, facts_from_lookups, translate};
 
 struct GoldenModule(SectionOutcome);
 
@@ -199,6 +200,313 @@ pub async fn ns_check_outcomes(
         .collect()
 }
 
+/// The DNS section rebuilt from its `dns.*` evidence blocks, as the check run measures it: one
+/// batch per record type of the run, its lookup answering the block's records (an empty block a
+/// definite NODATA, a missing block no answer), DNSKEY key tags computed from the key data; the
+/// NS checks against nameservers that each answer authoritatively with the zone's SOA and NS
+/// set; the lints; then `translate`. No network, no clock.
+pub async fn from_evidence(domain: &str, blocks: &[Block]) -> SectionOutcome {
+    let domain = domain.to_ascii_lowercase();
+    let fqdn = format!("{}.", domain.trim_end_matches('.'));
+    let mut events: Vec<CheckEvent> = Vec::new();
+    let mut all = Lookups::empty();
+    for (record_type, completed) in CHECK_RECORD_TYPES.iter().zip(1u32..) {
+        let label = record_type.to_string();
+        let id = block_id(&label);
+        let lookups = evidence_lookups(&fqdn, &label, blocks.iter().find(|b| b.id == id));
+        all = all.merge(lookups.clone());
+        events.push(CheckEvent::Batch(BatchEvent {
+            request_id: String::new(),
+            record_type: label,
+            lookups,
+            completed,
+            total: CHECK_TOTAL_STEPS,
+            transport: None,
+            source: None,
+        }));
+    }
+
+    let unique = unique_records(&all);
+    let raw = authoritative_outbound(&fqdn, &unique);
+    let timeout = Duration::from_secs(1);
+    let (lame, delegation) = tokio::join!(
+        check_ns_lame_delegation(&unique, &domain, timeout, &raw),
+        check_ns_delegation_consistency(&unique, &domain, timeout, &raw),
+    );
+
+    let lint = |category: &'static str, results| {
+        CheckEvent::Lint(LintEvent {
+            request_id: String::new(),
+            category,
+            results: unique_lines(results),
+        })
+    };
+    for (category, results) in lint_lookups(&all) {
+        events.push(lint(category, results));
+        if category == "ns" {
+            events.push(lint("ns_lame", lame.results.clone()));
+            events.push(lint("ns_delegation", delegation.results.clone()));
+        }
+    }
+    events.extend(unanswered_events(&lame, &delegation));
+    translate(&events)
+}
+
+/// The lookups of one batch from its block: none for a missing block, a NODATA answer for an
+/// empty one, else a response with the block's records. A row mhost can not hold is dropped.
+fn evidence_lookups(fqdn: &str, record_type: &str, block: Option<&Block>) -> Lookups {
+    let Some(Block {
+        shape: Shape::Records(rows),
+        ..
+    }) = block
+    else {
+        return Lookups::empty();
+    };
+    let response_time = serde_json::json!({ "secs": 0, "nanos": 10_000_000 });
+    let records: Vec<serde_json::Value> = rows
+        .iter()
+        .filter_map(|row| {
+            let (
+                EvValue::Text(owner),
+                EvValue::Text(rtype),
+                EvValue::Int(ttl),
+                EvValue::Text(data),
+            ) = (&row.owner, &row.rtype, &row.ttl, &row.data)
+            else {
+                return None;
+            };
+            let record = serde_json::json!({
+                "name": owner,
+                "type": rtype,
+                "ttl": ttl,
+                "data": serde_json::to_value(evidence_rdata(rtype, data)?).ok()?,
+            });
+            serde_json::from_value::<mhost::resources::Record>(record.clone())
+                .is_ok()
+                .then_some(record)
+        })
+        .collect();
+    let result = if records.is_empty() {
+        serde_json::json!({ "NxDomain": {
+            "response_time": response_time,
+            "response_code": "NOERROR"
+        }})
+    } else {
+        serde_json::json!({ "Response": {
+            "records": records,
+            "response_time": response_time,
+            "valid_until": "2099-01-01T00:00:00Z"
+        }})
+    };
+    serde_json::from_value(serde_json::json!({
+        "lookups": [{
+            "query": { "name": fqdn, "record_type": record_type },
+            "name_server": "udp:192.0.2.53:53",
+            "result": result
+        }]
+    }))
+    .expect("evidence lookups decode")
+}
+
+/// The record data of a records row: `data` in the zone-file form the module renders, read
+/// back per record type. `None` for a type or form it does not render, or a name mhost's serde
+/// form does not hold (an escaped `\000` label).
+fn evidence_rdata(record_type: &str, data: &str) -> Option<mhost::resources::RData> {
+    use mhost::resources::RData as R;
+    use mhost::resources::rdata::{
+        CAA, DNSKEY, DS, DigestType, DnssecAlgorithm, MX, NSEC, NSEC3, Name as MName, RRSIG, SOA,
+        SVCB, SvcParam, TXT,
+    };
+
+    let name = |s: &str| MName::from_ascii(s).ok();
+    let mut fields = data.split_whitespace();
+    let mut next = || fields.next();
+    Some(match record_type {
+        "A" => R::A(data.parse().ok()?),
+        "AAAA" => R::AAAA(data.parse().ok()?),
+        "CNAME" => R::CNAME(name(data)?),
+        "NS" => R::NS(name(data)?),
+        "PTR" => R::PTR(name(data)?),
+        "ANAME" => R::ANAME(name(data)?),
+        "MX" => R::MX(MX::new(next()?.parse().ok()?, name(next()?)?)),
+        "CAA" => {
+            let (flags, rest) = data.split_once(' ')?;
+            let (tag, value) = rest.split_once(' ')?;
+            let value = value.strip_prefix('"')?.strip_suffix('"')?;
+            R::CAA(CAA::new(
+                flags.parse::<u8>().ok()? & 128 != 0,
+                tag.to_string(),
+                value.to_string(),
+            ))
+        }
+        "HTTPS" | "SVCB" => {
+            let priority = next()?.parse().ok()?;
+            let target = name(next()?)?;
+            let params = fields
+                .map(|param| {
+                    let (key, value) = param.split_once('=')?;
+                    Some(SvcParam::new(key.to_string(), value.to_string()))
+                })
+                .collect::<Option<Vec<_>>>()?;
+            let svcb = SVCB::new(priority, target, params);
+            if record_type == "HTTPS" {
+                R::HTTPS(svcb)
+            } else {
+                R::SVCB(svcb)
+            }
+        }
+        "SOA" => R::SOA(SOA::new(
+            name(next()?)?,
+            name(next()?)?,
+            next()?.parse().ok()?,
+            next()?.parse().ok()?,
+            next()?.parse().ok()?,
+            next()?.parse().ok()?,
+            next()?.parse().ok()?,
+        )),
+        "TXT" => {
+            let strings = if data.is_empty() {
+                Vec::new()
+            } else {
+                data.strip_prefix('"')?
+                    .strip_suffix('"')?
+                    .split("\" \"")
+                    .map(str::to_string)
+                    .collect()
+            };
+            R::TXT(TXT::new(strings))
+        }
+        "DNSKEY" => {
+            let flags: u16 = next()?.parse().ok()?;
+            let protocol: u8 = next()?.parse().ok()?;
+            let algorithm: u8 = next()?.parse().ok()?;
+            let key = next()?;
+            R::DNSKEY(DNSKEY::new(
+                flags,
+                protocol,
+                DnssecAlgorithm::from(algorithm),
+                key.to_string(),
+                key_tag(flags, protocol, algorithm, key),
+                flags & 0x0100 != 0,
+                flags & 0x0001 != 0,
+                flags & 0x0080 != 0,
+            ))
+        }
+        "DS" => R::DS(DS::new(
+            next()?.parse().ok()?,
+            DnssecAlgorithm::from(next()?.parse::<u8>().ok()?),
+            DigestType::from(next()?.parse::<u8>().ok()?),
+            next()?.to_string(),
+        )),
+        "RRSIG" => R::RRSIG(RRSIG::new(
+            next()?.to_string(),
+            DnssecAlgorithm::from(next()?.parse::<u8>().ok()?),
+            next()?.parse().ok()?,
+            next()?.parse().ok()?,
+            next()?.parse().ok()?,
+            next()?.parse().ok()?,
+            next()?.parse().ok()?,
+            name(next()?)?,
+            next()?.to_string(),
+        )),
+        "NSEC" => {
+            let next_name = name(next()?)?;
+            R::NSEC(NSEC::new(next_name, fields.map(str::to_string).collect()))
+        }
+        "NSEC3" => {
+            let hash_algorithm = next()?.to_string();
+            let opt_out = next()? == "1";
+            let iterations = next()?.parse().ok()?;
+            let salt = next()?.to_string();
+            let next_hashed_owner = next()?.to_string();
+            R::NSEC3(NSEC3::new(
+                hash_algorithm,
+                opt_out,
+                iterations,
+                salt,
+                next_hashed_owner,
+                fields.map(str::to_string).collect(),
+            ))
+        }
+        _ => return None,
+    })
+}
+
+/// The RFC 4034 Appendix B key tag of a DNSKEY, as hickory computes it; `None` when the key is
+/// not base64.
+fn key_tag(flags: u16, protocol: u8, algorithm: u8, key: &str) -> Option<u16> {
+    let mut rdata = flags.to_be_bytes().to_vec();
+    rdata.extend([protocol, algorithm]);
+    rdata.extend(base64_decode(key)?);
+    let mut acc: u32 = 0;
+    for (i, byte) in rdata.iter().enumerate() {
+        acc += u32::from(*byte) << if i % 2 == 0 { 8 } else { 0 };
+    }
+    acc += acc >> 16;
+    Some((acc & 0xffff) as u16)
+}
+
+/// Standard base64 with optional padding.
+fn base64_decode(s: &str) -> Option<Vec<u8>> {
+    let mut out = Vec::new();
+    let (mut acc, mut bits) = (0u32, 0u32);
+    for c in s.trim_end_matches('=').bytes() {
+        let v = match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            _ => return None,
+        };
+        acc = (acc << 6) | u32::from(v);
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((acc >> bits) as u8);
+            acc &= (1 << bits) - 1;
+        }
+    }
+    Some(out)
+}
+
+/// A raw outbound whose nameservers are the NS hosts of `lookups`, host `n` (from 1) at
+/// 192.0.2.n, each answering authoritatively for `zone` with its SOA and the NS set.
+fn authoritative_outbound(zone: &str, lookups: &Lookups) -> RawOutbound {
+    let mut ns_names: Vec<String> = Vec::new();
+    for ns in lookups.ns() {
+        let name = ns.to_ascii();
+        if !ns_names.contains(&name) {
+            ns_names.push(name);
+        }
+    }
+    let hosts: Vec<(String, IpAddr)> = ns_names
+        .iter()
+        .zip(1u8..)
+        .map(|(host, n)| (host.clone(), IpAddr::V4(Ipv4Addr::new(192, 0, 2, n))))
+        .collect();
+    RawOutbound {
+        allow: |ip| !matches!(ip, IpAddr::V4(v4) if v4.is_private()),
+        resolver: Arc::new(StubResolve(
+            hosts
+                .iter()
+                .flat_map(|(host, ip)| {
+                    let host = host.trim_end_matches('.');
+                    [(host.to_string(), *ip), (host.to_ascii_lowercase(), *ip)]
+                })
+                .collect(),
+        )),
+        sender: Arc::new(StubSend {
+            zone: zone.to_string(),
+            ns_names,
+            stubs: hosts
+                .iter()
+                .map(|(_, ip)| (*ip, NsStub::Authoritative))
+                .collect(),
+        }),
+    }
+}
+
 struct StubResolve(HashMap<String, IpAddr>);
 
 impl Resolve for StubResolve {
@@ -291,6 +599,11 @@ const PARTIAL_NAME: &str = "partial.example.net";
 const TYPES_NAME: &str = "types.example.com";
 /// This name's NS are the zone's; its authoritative servers answer every query REFUSED.
 const LAME_NAME: &str = "lame.example.com";
+/// This name's A lookup answers 192.0.2.10 from the server at 8.8.8.8 and 192.0.2.20 from any
+/// other.
+const DIVERGE_NAME: &str = "diverge.example.com";
+/// This name's SOA lookup answers a zone apex SOA with serial 2026101501.
+const SOA_NAME: &str = "soa.example.com";
 
 fn named(name: &str, wanted: &str) -> bool {
     name.trim_end_matches('.').eq_ignore_ascii_case(wanted)
@@ -381,6 +694,19 @@ impl ResolverLookup for ZoneLookup {
                     types_data(&record_type)
                 } else if named(&name, LAME_NAME) && record_type == "NS" {
                     zone_data("NS")
+                } else if named(&name, DIVERGE_NAME) && record_type == "A" {
+                    let address = if name_server.contains("8.8.8.8") {
+                        "192.0.2.10"
+                    } else {
+                        "192.0.2.20"
+                    };
+                    vec![serde_json::json!({ "A": address })]
+                } else if named(&name, SOA_NAME) && record_type == "SOA" {
+                    vec![serde_json::json!({ "SOA": {
+                        "mname": "ns1.example.com.", "rname": "hostmaster.example.com.",
+                        "serial": 2_026_101_501u32, "refresh": 7200, "retry": 3600,
+                        "expire": 1_209_600, "minimum": 300
+                    }})]
                 } else {
                     Vec::new()
                 };
@@ -503,7 +829,9 @@ impl RawSend for ZoneSend {
 /// A backend serving a fixed `example.com.` zone with no network: A 192.0.2.10, MX, TXT, NS
 /// (`ns1`, `ns2`) and CAA; every lookup of `dnssec-failed.org` is SERVFAIL; `partial.example.net`
 /// answers A (192.0.2.10) and SERVFAILs AAAA; `types.example.com` answers SRV, TLSA, SSHFP, NAPTR
-/// and HINFO; `lame.example.com` has the zone's NS, which answer REFUSED; every other name and
+/// and HINFO; `lame.example.com` has the zone's NS, which answer REFUSED; `diverge.example.com`
+/// answers A 192.0.2.10 from the server at 8.8.8.8 and 192.0.2.20 from any other;
+/// `soa.example.com` answers an SOA with serial 2026101501; every other name and
 /// type is NODATA. The raw outbound answers every
 /// server authoritatively from the same zone, unsigned.
 pub fn stub_backend() -> DnsBackend {
@@ -548,10 +876,13 @@ pub fn stub_state() -> AppState {
     }
 }
 
-/// The jobs over the default configuration and [`stub_backend`]: fresh circuit breakers, the
-/// query semaphore, no enrichment, no `prism_*` metrics.
+/// The jobs over the default configuration, with system resolvers off as in production, and
+/// [`stub_backend`]: fresh circuit breakers, the query semaphore, no enrichment, no `prism_*`
+/// metrics.
 pub fn stub_jobs() -> DnsJobs {
-    let config: ModuleConfig = serde_json::from_str("{}").expect("default module config");
+    let config: ModuleConfig =
+        serde_json::from_str(r#"{"dns": {"allow_system_resolvers": false}}"#)
+            .expect("default module config");
     stub_jobs_with(
         config
             .into_config()

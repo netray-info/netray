@@ -17,8 +17,8 @@ use axum::http::HeaderMap;
 use axum::response::Response;
 use axum::response::sse::Event;
 use mhost::RecordType;
-use mhost::nameserver::NameServerConfig;
 use mhost::nameserver::predefined::PredefinedProvider;
+use mhost::nameserver::{NameServerConfig, NameServerConfigGroup};
 use mhost::resolver::{Lookups, ResolverGroup, ResolverGroupBuilder};
 use serde::Deserialize;
 
@@ -357,6 +357,7 @@ pub(crate) async fn build_resolver_group(
         builder = builder.deny_non_global(true);
     }
     let mut breaker_keys: Vec<String> = Vec::new();
+    let mut system_added = false;
 
     for server in &servers {
         match server {
@@ -375,8 +376,15 @@ pub(crate) async fn build_resolver_group(
                 }
             }
             ServerSpec::System => {
-                builder = builder.system();
-                breaker_keys.push("system".to_string());
+                if !system_added {
+                    system_added = true;
+                    let system = NameServerConfigGroup::from_system_config()
+                        .map_err(|e| ApiError::ResolverError(e.to_string()))?;
+                    for ns_config in system {
+                        builder = builder.nameserver(ns_config);
+                        breaker_keys.push("system".to_string());
+                    }
+                }
             }
             ServerSpec::Ip { addr, port } => {
                 let sock = SocketAddr::new(*addr, *port);
@@ -434,14 +442,14 @@ pub(crate) fn make_error_event(code: &str, message: &str) -> Event {
 }
 
 #[cfg(test)]
-mod build_resolver_group_tests {
+pub(super) mod build_resolver_group_tests {
     use super::*;
     use crate::config::{
         CircuitBreakerConfig, DnsConfig, EcosystemConfig, LimitsConfig, ServerConfig,
         TelemetryConfig, TraceConfig,
     };
 
-    fn config(allow_system_resolvers: bool) -> Config {
+    pub(super) fn config(allow_system_resolvers: bool) -> Config {
         Config {
             site_name: "prism".to_string(),
             server: ServerConfig {
@@ -483,7 +491,7 @@ mod build_resolver_group_tests {
         }
     }
 
-    fn parsed(servers: Vec<ServerSpec>) -> ParsedQuery {
+    pub(super) fn parsed(servers: Vec<ServerSpec>) -> ParsedQuery {
         ParsedQuery {
             domain: "example.com".to_string(),
             record_types: vec![RecordType::A],
@@ -529,3 +537,7 @@ mod build_resolver_group_tests {
         assert!(res.is_ok(), "cloudflare: {:?}", res.err());
     }
 }
+
+#[cfg(test)]
+#[path = "query_system_keys_tests.rs"]
+mod query_system_keys_tests;

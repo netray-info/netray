@@ -1,7 +1,8 @@
 # Shared helpers for the tests/repo smoke tests. Source it; it is not a test itself.
 #
 #   source "$(dirname "$0")/lib/netray.sh"
-#   netray_bin            -> path of the debug `netray` binary, built on first use
+#   netray_bin            -> path of the debug `netray` binary, built on first use; NETRAY_BIN
+#                            names a prebuilt one instead (a path the local firewall lets out)
 #   free_port             -> prints an unused TCP port on 127.0.0.1
 #   start_bg <log> cmd... -> starts cmd in the background, records its pid for cleanup
 #   wait_http <url> [s]   -> waits until <url> answers (any status), default 30 s
@@ -21,6 +22,10 @@ trap _netray_cleanup EXIT
 REPO_ROOT=$(git rev-parse --show-toplevel)
 
 netray_bin() {
+    if [ -n "${NETRAY_BIN:-}" ]; then
+        echo "$NETRAY_BIN"
+        return 0
+    fi
     if ! cargo build -q -p netray --bin netray >&2; then
         echo "FAIL: cannot build the netray binary (cargo build -p netray)" >&2
         return 1

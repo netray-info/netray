@@ -68,13 +68,13 @@
 
   <section class="guide-tool">
     <h2>Check your domain's HSTS and TLS configuration</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://tls.netray.info/", "h", "example.com", "Check")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/tls", "h", "example.com", "Check")) %}{% endcall %}
     <p class="guide-tool__hint">Checks HSTS header, redirect chain, and TLS configuration for your domain.</p>
   </section>
 
   <section class="guide-tool">
     <h2>Check your site's HTTP headers with the HTTP inspector</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://http.netray.info/", "url", "https://example.com", "Inspect Headers")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/http", "url", "https://example.com", "Inspect Headers")) %}{% endcall %}
   </section>
 
   <section id="fix">

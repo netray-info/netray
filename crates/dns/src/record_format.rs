@@ -9,6 +9,7 @@
 //! [`enrich_lookups_json`] injects both fields into serialized `BatchEvent`
 //! JSON values.
 
+use mhost::resources::RData;
 use mhost::resources::rdata::TXT;
 use mhost::resources::rdata::parsed_txt::{Mechanism, Modifier, ParsedTxt, Qualifier, Word};
 
@@ -777,6 +778,38 @@ fn friendly_alpn(alpn: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+/// The human and explain texts of one record's data; `None` for a type with no formatter.
+pub fn rdata_texts(data: &RData) -> (Option<String>, Option<String>) {
+    if let RData::TXT(txt) = data {
+        let joined: String = txt
+            .iter()
+            .map(|chunk| String::from_utf8_lossy(chunk).into_owned())
+            .collect();
+        let txt = TXT::new(vec![joined]);
+        return (Some(format_txt_human(&txt)), format_txt_explain(&txt));
+    }
+    let Ok(serde_json::Value::Object(variant)) = serde_json::to_value(data) else {
+        return (None, None);
+    };
+    let Some((key, inner)) = variant.iter().next() else {
+        return (None, None);
+    };
+    type Formatter = fn(&serde_json::Value) -> Option<String>;
+    let (human, explain): (Formatter, Formatter) = match key.as_str() {
+        "CAA" => (format_caa_human, format_caa_explain),
+        "MX" => (format_mx_human, format_mx_explain),
+        "SOA" => (format_soa_human, format_soa_explain),
+        "SVCB" | "HTTPS" => (format_svcb_human, format_svcb_explain),
+        "TLSA" => (format_tlsa_human, format_tlsa_explain),
+        "NAPTR" => (format_naptr_human, format_naptr_explain),
+        "DNSKEY" => (format_dnskey_human, format_dnskey_explain),
+        "DS" => (format_ds_human, format_ds_explain),
+        "NSEC" => (format_nsec_human, format_nsec_explain),
+        _ => return (None, None),
+    };
+    (human(inner), explain(inner))
 }
 
 // ---------------------------------------------------------------------------

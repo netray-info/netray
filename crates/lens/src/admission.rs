@@ -34,16 +34,6 @@ pub enum Trigger {
 }
 
 impl Trigger {
-    fn label(self) -> &'static str {
-        match self {
-            Trigger::Visit => "visit",
-            Trigger::Recheck => "recheck",
-            Trigger::Api => "api",
-            Trigger::Badge => "badge",
-            Trigger::Og => "og",
-        }
-    }
-
     fn counted(self) -> bool {
         matches!(self, Trigger::Visit | Trigger::Recheck | Trigger::Api)
     }
@@ -237,8 +227,7 @@ struct Ticket {
     _permit: OwnedSemaphorePermit,
 }
 
-/// A refusal, not yet counted: the caller counts it with [`count_rejection`], or answers it
-/// another way.
+/// A refusal, not yet counted.
 fn refused(
     reason: Reason,
     retry_after_s: u64,
@@ -253,7 +242,7 @@ fn refused(
     }
 }
 
-/// Counts a refusal in `netray_admission_rejections_total`.
+/// Counts a refusal in `lens_admission_rejections_total`.
 pub(crate) fn count_rejection(refusal: &Refusal) {
     let label = match refusal.reason {
         Reason::Throttle => "throttle",
@@ -261,11 +250,10 @@ pub(crate) fn count_rejection(refusal: &Refusal) {
         Reason::IpLimit | Reason::GlobalLimit => "limit",
         Reason::Slots => "slots",
     };
-    metrics::counter!("netray_admission_rejections_total", "reason" => label).increment(1);
+    metrics::counter!("lens_admission_rejections_total", "reason" => label).increment(1);
 }
 
-/// The per-IP and global limiters. The caller that refuses on the result counts it with
-/// [`count_rejection`] (a limit check called twice for one request must not count twice).
+/// The per-IP and global limiters.
 pub fn check_limits(state: &AppState, client: IpAddr) -> Result<(), Refusal> {
     crate::security::check_rate_limit(&state.per_ip_limiter, &state.global_limiter, client).map_err(
         |r| {
@@ -274,7 +262,9 @@ pub fn check_limits(state: &AppState, client: IpAddr) -> Result<(), Refusal> {
             } else {
                 Reason::IpLimit
             };
-            refused(reason, r.retry_after_secs, None, false)
+            let refusal = refused(reason, r.retry_after_secs, None, false);
+            count_rejection(&refusal);
+            refusal
         },
     )
 }
@@ -320,7 +310,7 @@ fn gate(
             &key,
             NonZeroU32::new(1).unwrap(),
             scope,
-            "netray",
+            "lens",
         )
     {
         return Err(refused(Reason::Throttle, r.retry_after_secs, None, false));
@@ -424,7 +414,7 @@ pub(crate) fn admit_dkim(state: &AppState, input: CheckInput) -> Result<RunStrea
     let (tx, rx) = watch::channel(RunState::default());
     let live = state.runs.track();
     tokio::spawn(
-        run_task(state.clone(), input, Trigger::Api, None, tx, live, ticket)
+        run_task(state.clone(), input, Trigger::Visit, None, tx, live, ticket)
             .instrument(tracing::Span::current()),
     );
     Ok(RunStream::new(rx, false))
@@ -478,23 +468,18 @@ async fn run_task(
     let started = Instant::now();
     let dkim = input.dkim_selectors.is_some();
 
-    let mut first_section = true;
     let (output, facts) = match (&state.badge_check_fn, trigger) {
         (Some(f), Trigger::Badge | Trigger::Og) => (f(input.domain.clone()).await, Vec::new()),
         _ => {
             run_check_streaming(&state, input, HARD_DEADLINE, |ev| {
-                if std::mem::take(&mut first_section) {
-                    metrics::histogram!("netray_time_to_first_section_seconds")
-                        .record(started.elapsed().as_secs_f64());
-                }
                 tx.send_modify(|s| s.sections.push(ev.clone()));
             })
             .await
         }
     };
-    metrics::histogram!("netray_time_to_result_seconds").record(started.elapsed().as_secs_f64());
+    let elapsed = started.elapsed();
     if trigger.counted() {
-        observe_run(started.elapsed());
+        observe_run(elapsed);
     }
     drop(guard);
     state
@@ -507,7 +492,6 @@ async fn run_task(
         None
     };
     let run = crate::history::build_run(&state, &output, &facts);
-    crate::metrics::count_run(trigger.label(), &run, &state.scoring_profile);
     let domain = output.domain.clone();
     let published = Arc::new(Published {
         output,
@@ -517,7 +501,7 @@ async fn run_task(
     });
     tx.send_modify(|s| s.done = Some(Arc::clone(&published)));
 
-    let recorded = crate::history::record(&state, &domain, dkim, &published.run).await;
+    let recorded = crate::history::record(&state, &domain, dkim, &published.run, elapsed).await;
     crate::cache::hold(&state, recorded.as_ref(), &published).await;
     // Out of the register before the stream ends: a caller that read `Recorded` never joins this run.
     drop(deregister);

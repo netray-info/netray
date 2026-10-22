@@ -7,6 +7,7 @@ use netray_web::api::{
 };
 
 use crate::admission::{self, Admit, Reason, Refusal, RunStream, Trigger};
+use crate::check::CheckInput;
 use crate::input;
 use crate::state::AppState;
 
@@ -54,6 +55,42 @@ impl DomainRuns for LensRuns {
                 }
                 Admit::Refused(r) => RunStart::Refused(refusal(r)),
                 Admit::NotStarted => RunStart::NotStarted,
+            }
+        })
+    }
+
+    /// A run with DKIM selectors: never joins and is never joined, not recorded (V1's
+    /// `admit_dkim`); a prefetch starts none.
+    fn start_with<'a>(
+        &'a self,
+        domain: &'a str,
+        client: IpAddr,
+        trigger: RunTrigger,
+        prefetch: bool,
+        dkim_selectors: &'a [String],
+    ) -> BoxFuture<'a, RunStart> {
+        if dkim_selectors.is_empty() {
+            return self.start(domain, client, trigger, prefetch);
+        }
+        Box::pin(async move {
+            if let Err(r) = admission::check_limits(&self.state, client) {
+                return RunStart::Refused(refusal(r));
+            }
+            if prefetch {
+                return RunStart::NotStarted;
+            }
+            let input = CheckInput {
+                domain: domain.to_string(),
+                dkim_selectors: Some(dkim_selectors.to_vec()),
+                client_ip: Some(client),
+                request_id: None,
+            };
+            match admission::admit_dkim(&self.state, input) {
+                Ok(stream) => {
+                    self.state.client_runs.record(client);
+                    RunStart::Admitted(Box::pin(futures::stream::unfold(stream, events)))
+                }
+                Err(r) => RunStart::Refused(refusal(r)),
             }
         })
     }

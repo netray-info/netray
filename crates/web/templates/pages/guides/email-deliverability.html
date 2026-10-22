@@ -83,12 +83,12 @@
 
   <section class="guide-tool">
     <h2>Check your domain's email deliverability</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://dns.netray.info/", "q", "why are my emails going to spam", "Check")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/dns", "q", "why are my emails going to spam", "Check")) %}{% endcall %}
     <p class="guide-tool__hint">Runs SPF, DKIM, DMARC, MTA-STS, TLSRPT, and BIMI checks on your domain in a single pass.</p>
   </section>
 
   <section class="guide-tool">
     <h2>Check your domain's email authentication with netray</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://email.netray.info/", "domain", "example.com", "Check Email Security")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/email", "d", "example.com", "Check Email Security")) %}{% endcall %}
   </section>
 {% endblock %}

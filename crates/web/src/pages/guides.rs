@@ -8,7 +8,7 @@ use axum::http::header::LOCATION;
 use axum::response::{IntoResponse, Response};
 
 use super::jsonld::{Article, BreadcrumbList, script_json};
-use super::{Frame, SPECULATION_RULES, errors, page};
+use super::{Frame, ORIGIN, SPECULATION_RULES, errors, page};
 use crate::components::QueryInputView;
 
 const CACHE: &str = "public, max-age=3600";
@@ -493,10 +493,16 @@ guide_templates! {
 
 /// `GET /guide/{slug}`.
 pub async fn show(slug: Result<Path<String>, PathRejection>) -> Response {
-    let Some(guide) = slug.ok().and_then(|Path(slug)| find(&slug)) else {
+    let Ok(Path(slug)) = slug else {
         return errors::not_found().await;
     };
-    let url = format!("https://netray.info/guide/{}", guide.slug);
+    if let Some(target) = legacy_target(&slug) {
+        return moved(&target);
+    }
+    let Some(guide) = find(&slug) else {
+        return errors::not_found().await;
+    };
+    let url = format!("{ORIGIN}/guide/{}", guide.slug);
     let mut ld = vec![script_json(&Article::new(
         guide.title,
         guide.description,
@@ -504,8 +510,8 @@ pub async fn show(slug: Result<Path<String>, PathRejection>) -> Response {
     ))];
     if BREADCRUMBS.contains(&guide.slug) {
         ld.push(script_json(&BreadcrumbList::new(&[
-            ("Home", Some("https://netray.info/")),
-            ("Guides", Some("https://netray.info/guide/")),
+            ("Home", Some(&format!("{ORIGIN}/"))),
+            ("Guides", Some(&format!("{ORIGIN}/guide/"))),
             (guide.title, None),
         ])));
     }
@@ -513,8 +519,9 @@ pub async fn show(slug: Result<Path<String>, PathRejection>) -> Response {
         title: format!("{} - netray", guide.title),
         description: guide.description.to_string(),
         canonical: format!("/guide/{}", guide.slug),
-        og_image: format!("https://netray.info/static/og/{}", guide.og_image),
+        og_image: format!("{ORIGIN}/static/og/{}", guide.og_image),
         rules: SPECULATION_RULES,
+        nav: "",
     };
     let related = guide.related.iter().filter_map(|s| find(s)).collect();
     render(frame, guide, related, ld)
@@ -538,8 +545,8 @@ pub async fn index() -> Response {
         }
     }
     let ld = vec![script_json(&BreadcrumbList::new(&[
-        ("netray.info", Some("https://netray.info")),
-        ("Guides", Some("https://netray.info/guide/")),
+        ("netray.info", Some(&format!("{ORIGIN}/"))),
+        ("Guides", Some(&format!("{ORIGIN}/guide/"))),
     ]))];
     let frame = Frame::new(
         "All Guides - netray",
@@ -555,6 +562,27 @@ pub async fn index() -> Response {
             ld,
         },
     )
+}
+
+/// Where a V1 guide URL lives now: `<slug>.html` (V1's nginx `try_files`), `index.html` and the
+/// V1 slug `lens`, renamed `scoring`. `None` for a V2 slug or a stem that names no guide.
+fn legacy_target(slug: &str) -> Option<String> {
+    let stem = slug.strip_suffix(".html").unwrap_or(slug);
+    match stem {
+        "lens" => Some("/guide/scoring".to_string()),
+        "index" if stem != slug => Some("/guide/".to_string()),
+        _ if stem != slug && find(stem).is_some() => Some(format!("/guide/{stem}")),
+        _ => None,
+    }
+}
+
+/// A 301 to `location`.
+pub(super) fn moved(location: &str) -> Response {
+    (
+        StatusCode::MOVED_PERMANENTLY,
+        [(LOCATION, location.to_string())],
+    )
+        .into_response()
 }
 
 /// `GET /guide`: a 301 to the index.

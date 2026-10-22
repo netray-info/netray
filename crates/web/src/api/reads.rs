@@ -57,6 +57,11 @@ impl From<Entry> for EntryView {
     }
 }
 
+/// `entry` as `GET /api/v1/entries/{id}` answers it.
+pub(crate) fn entry_json(entry: &Entry) -> String {
+    serde_json::to_string(&EntryView::from(entry.clone())).unwrap_or_default()
+}
+
 #[derive(Serialize, ToSchema)]
 pub(super) struct DiffView {
     entry_id: String,

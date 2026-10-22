@@ -37,6 +37,7 @@ fn start(
 ) -> Result<EmailJob, EmailRefusal> {
     let request = EmailInspectRequest {
         domain: domain.to_string(),
+        dkim_selectors: Vec::new(),
     };
     stub_inspector(example_dns()).inspect(&request, CALLER, limits, slots)
 }

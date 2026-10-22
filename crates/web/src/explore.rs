@@ -6,7 +6,7 @@ use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 
 use crate::evidence::format_value;
 
-const COMPONENT: &AsciiSet = &NON_ALPHANUMERIC
+pub(crate) const COMPONENT: &AsciiSet = &NON_ALPHANUMERIC
     .remove(b'-')
     .remove(b'.')
     .remove(b'_')
@@ -17,6 +17,21 @@ const QUERY: &AsciiSet = &COMPONENT.remove(b':');
 pub struct ExploreLink {
     pub label: String,
     pub href: String,
+}
+
+impl ExploreLink {
+    /// The link named by its inspector and the query it opens: "DNS · example.com MX".
+    pub fn target(&self) -> String {
+        let rest = self.href.strip_prefix("/inspect/").unwrap_or(&self.href);
+        let (tool, query) = rest.split_once('?').unwrap_or((rest, ""));
+        let value = query.split_once('=').map_or("", |(_, v)| v);
+        let value = percent_encoding::percent_decode_str(value).decode_utf8_lossy();
+        let name = match tool {
+            "email" => "Email".to_string(),
+            other => other.to_uppercase(),
+        };
+        format!("{name} · {value}")
+    }
 }
 
 fn link(label: impl Into<String>, tool: &str, field: &str, value: &str) -> ExploreLink {
@@ -56,7 +71,8 @@ fn column_values<'a>(shape: &'a Shape, column: &str) -> Vec<&'a Value> {
 /// A `dns.<type>` records block links to `/inspect/dns?q=<owner> <TYPE>`, `TYPE` being the block
 /// name upper-cased. The owner is the records' shared owner, or `domain` when the owners differ
 /// (a CNAME chain) or there are no records. An `email.mx` row whose host is empty after dropping
-/// trailing dots (null MX, RFC 7505) gets no link.
+/// trailing dots (null MX, RFC 7505) gets no link. A `tls.addresses@<port>` block links
+/// `<address>:<port>`; an unqualified one links port 443.
 pub fn block_links(block: &Block, domain: &str) -> Vec<ExploreLink> {
     match (block.id.module(), block.id.name()) {
         ("dns", name) => {
@@ -71,17 +87,24 @@ pub fn block_links(block: &Block, domain: &str) -> Vec<ExploreLink> {
             let query = format!("{owner} {}", name.to_uppercase());
             vec![link(owner, "dns", "q", &query)]
         }
-        ("tls", "addresses") => column_values(&block.shape, "address")
-            .into_iter()
-            .map(|value| {
-                let address = format_value(value);
-                let host = match value {
-                    Value::Addr(addr) if addr.is_ipv6() => format!("[{address}]"),
-                    _ => address.clone(),
-                };
-                link(address, "tls", "h", &format!("{host}:443"))
-            })
-            .collect(),
+        ("tls", "addresses") => {
+            let port = block
+                .id
+                .qualifier()
+                .and_then(|q| q.parse::<u16>().ok())
+                .unwrap_or(443);
+            column_values(&block.shape, "address")
+                .into_iter()
+                .map(|value| {
+                    let address = format_value(value);
+                    let host = match value {
+                        Value::Addr(addr) if addr.is_ipv6() => format!("[{address}]"),
+                        _ => address.clone(),
+                    };
+                    link(address, "tls", "h", &format!("{host}:{port}"))
+                })
+                .collect()
+        }
         ("email", "mx") => column_values(&block.shape, "host")
             .into_iter()
             .filter_map(|value| {

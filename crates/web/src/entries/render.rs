@@ -6,6 +6,7 @@ use askama::Template;
 
 use super::view::EntryPageView;
 use crate::components::QueryInputView;
+use crate::pages::Frame;
 use crate::tokens;
 
 const COMPONENT_CSS: [&str; 10] = [
@@ -26,6 +27,8 @@ fn stylesheet() -> &'static str {
     SHEET.get_or_init(|| {
         let mut parts = vec![tokens::CSS, include_str!("../../static/base.css")];
         parts.extend(COMPONENT_CSS);
+        // The frame's own rules (the footer every page carries, spec v2-site-nav requirement 10).
+        parts.push(include_str!("../../static/pages.css"));
         parts.join("\n")
     })
 }
@@ -33,7 +36,7 @@ fn stylesheet() -> &'static str {
 #[derive(Template)]
 #[template(path = "pages/entry.html")]
 struct EntryPage<'a> {
-    styles: &'static str,
+    frame: Frame,
     view: &'a EntryPageView,
 }
 
@@ -47,13 +50,21 @@ struct GonePage {
 #[derive(Template)]
 #[template(path = "pages/privacy.html")]
 struct PrivacyPage {
-    styles: &'static str,
+    frame: Frame,
 }
 
 /// The entry page of a stored entry.
 pub fn entry(view: &EntryPageView) -> askama::Result<String> {
     EntryPage {
-        styles: stylesheet(),
+        frame: Frame::new(
+            &format!(
+                "{} · {}",
+                crate::idn::title(&view.domain),
+                view.grade.letter
+            ),
+            "The result of one check run.",
+            &format!("/r/{}", view.id),
+        ),
         view,
     }
     .render()
@@ -78,7 +89,11 @@ pub fn gone() -> askama::Result<String> {
 /// The privacy page.
 pub fn privacy() -> askama::Result<String> {
     PrivacyPage {
-        styles: stylesheet(),
+        frame: Frame::new(
+            "Privacy · netray",
+            "What netray stores about a check and what it keeps about the visitor: nothing.",
+            "/privacy",
+        ),
     }
     .render()
 }

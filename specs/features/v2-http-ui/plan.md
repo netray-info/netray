@@ -1,0 +1,114 @@
+# Plan: v2-http-ui
+
+## Phase 1 — Protocol views and value display
+
+### Groups
+
+G1: C5, C19 · G2: C1, C2, C3, C4, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16, C17, C18.
+G2 depends on G1 (the HSTS view renders `facts_grid`; the evidence cell reads the new `Cell`
+fields). Both groups compile into the one `it` test binary, so they are coded in one pass. C11 is
+already green (`evidence_render_source.rs`).
+
+### Plan
+
+G1
+1. `components.rs`: `Cell` gains `datetime: Option<String>` (raw RFC 3339 of a time) and
+   `key: Option<String>` (full `<key>#<n>`); `FactCell { label, values: Vec<Cell>, chips, tone:
+   Option<Tone> }`, `FactsGridView { cells }`; `component!(facts_grid, …)`; doc "eleven".
+2. `templates/components/facts_grid.html`: `{% macro facts_grid(view) %}`, `facts-grid`,
+   `facts-grid__cell` with `data-tone` when set, `__label`, `__value`, `__chip`; values through
+   `evidence_cell` imported from `evidence_block.html`.
+3. `static/facts_grid.css`: `repeat(auto-fill, minmax(240px, 1fr))`, gap 14px 28px; label 12 px
+   muted; value mono 13 px 700 `overflow-wrap: anywhere`; 3 px tone bar; chip hair border, radius.
+4. `pages/assets.rs` `APP_CSS` includes `facts_grid.css`.
+5. `gate.rs` `COMPONENTS` gains `facts_grid`.
+6. Tests changed (ADLC-Test-Change): `component_files.rs` NAMES, `component_gate.rs` COMPONENTS,
+   `facts_grid.rs` Cell literal (`datetime: None, key: None`).
+7. `frontend-rules.md` component list; 8. SDD §8.3 row for `facts_grid`.
+
+G2
+1. `evidence.rs`: `display_value` beside raw `format_value`; `cell()` uses it and sets
+   `datetime` for a time; `fields()` drops `_ms` on durations and splits `<k>#<digits>` into
+   `key`; the key column of a table does the same; `flatten` uses `display_value`; the split is a
+   `pub(crate)` helper. No block prefix in the source.
+2. `evidence_block.html`: `<time datetime>` in `evidence_cell`; `data-key` on `<td>`/`<dt>`.
+3. `evidence_render_values.rs` `fields_block_renders_typed_values_in_dd` expects display values
+   (ADLC-Test-Change).
+4. `pages/views/mod.rs`: `ViewContext { statuses, decorate, feeds }`, `render(block, ctx)` asks
+   each protocol module; claim helper (Fields, every key known); `tone(ctx, check)`; frame
+   template `partials/protocol_view.html`.
+5. `pages/views/{http,dns,tls,email,ip}.rs`: empty except HTTP's HSTS view (title
+   "Strict-Transport-Security", max-age in the largest whole unit plus " (<n> s)", "not parsed",
+   yes/no, tone from `http.hsts`).
+6. `partials/protocol_view.html`: `section.protocol-view#ev-<id>[data-block]`, `h3`, body,
+   `protocol-view__feeds` "Feeds lines:" when any.
+7. `pages/mod.rs` `pub mod views;`.
+8. `evidence.rs` seam: `BlockSlot { block, view }` with `Deref`; `block_feeds` pulled out of
+   `build_section`; `EvidenceView.blocks`, `PanelView.blocks` become slots; both ask
+   `views::render` with statuses and feeds.
+9. `evidence_section.html`, `result_evidence.html` render a slot's view or the generic block.
+10. `inspect.rs`: `part_html`/`part_event` take checks; `shared_html` passes the stored band's
+    checks; at band end with checks, every successful part holding a claimed block is re-sent.
+11. `pages.css`: `.protocol-view` card per board G, `__title`, `__feeds`.
+12. SDD §6.1 amended for protocol views.
+13. `islands/src/shell.ts` j/k navigation selects `.protocol-view` beside `.evidence-block`, so a
+    claimed block stays reachable (one selector, logged in the Decision log).
+
+## Phase 2 — CSP, HSTS and server views
+
+### Groups
+
+G1: C1–C14 (one group: every criterion touches `pages/views/http.rs`, `partials/protocol_view.html`
+or `pages.css`). C2, C4, C9, C10 already pass (the HSTS view of Phase 1).
+
+### Plan
+
+1. `templates/partials/protocol_view.html`: the h3 title, then `<div class="protocol-view__card">`
+   holding the body, then the feeds line.
+2. `static/pages.css`: `.protocol-view` loses its border, padding and background; `__title` 20 px,
+   650, -0.01em (board G's section h2); `__card` surface, hair border, radius, padding 18 px,
+   `overflow-x: auto`; `__note` muted; `csp-view__*` (mode, tone, count, issues, scroll with
+   `overflow-x: auto`, table, directive mono 600, sources mono wrapping between spans,
+   directive issues in the status text tones).
+3. `pages/views/http.rs`: `csp` (Tree claim on root and child keys, markup per the Phase 2
+   contract, tone from `http.csp`, warn when unknown) through a small askama template
+   `templates/partials/csp_view.html`; `server` (Fields claim on the eight keys, facts grid with
+   labels, `protocol-view__note` "Inspection took <display duration>", no tone).
+4. `pages/views/mod.rs`: a tree claim helper if needed beside `claim`.
+
+## Phase 3 — Caching, CDN and isolation views
+
+### Groups
+
+G1: C1–C12 (one group: `pages/views/http.rs` and `pages.css`). C4 and C12 already pass (exports
+never read the views).
+
+### Plan
+
+1. `pages/views/http.rs`: `caching` (claim on the seven keys; cells Cache-Control chips, max-age
+   via `seconds`, ETag plus "weak", Last-Modified through the evidence cell for the `<time>`, Vary
+   chips, Age via `seconds`; "not set"; an empty block renders `protocol-view__empty` "No caching
+   headers"), `cdn` (Provider, Cache status when present, Indicators chips when any), `isolation`
+   (three fixed cells; COOP toned by `http.coop`; COEP and CORP value plus "present" or "missing",
+   no tone; `protocol-view__note` "COEP and CORP are not part of the grade.").
+2. `pages.css`: `.protocol-view__empty` (muted).
+
+## Phase 4 — Slim band, manifest rows and design gate
+
+### Groups
+
+G1: C1, C4, C5, C6 (the slim band: `components.rs`, `spectrum.html`, `spectrum.css`,
+`tokens.json`, `pages/inspect.rs`). C2, C3, C7, C8, C9 are measured by `just design-check` and
+the reading beside board G (private canvas, no cargo test can render it).
+
+### Plan
+
+1. `components.rs`: `spectrum_slim(view)` renders the macro with a third argument `slim` (as `live`): a `slim` field would break the protected struct literals in `components.rs` and `drawing_rules.rs` tests.
+2. `templates/components/spectrum.html`: the root carries `data-slim` when slim; the label band,
+   the targets, the axis with its region labels and the region grades render only when not slim.
+3. `tokens.json`: `spectrum.bandPlateHeight` 96px (board G's band plate), emitted as
+   `--spectrum-band-plate-height` by the token pipeline; `static/spectrum.css`:
+   `.spectrum[data-slim] .spectrum__plate { height: var(--spectrum-band-plate-height) }`.
+4. `pages/inspect.rs` `band_html`: sets `slim` on the band's view.
+5. Private manifest (netray.info): the descriptor and All evidence rows on F, M; a band plate
+   height row on G and GDark.

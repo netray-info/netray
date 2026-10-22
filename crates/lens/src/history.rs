@@ -71,7 +71,12 @@ pub fn build_run(state: &AppState, output: &CheckOutput, facts: &[Block]) -> Run
                     })
                 }));
                 blocks.extend(result.evidence.iter().cloned());
-                (SectionKind::Measured, None)
+                netray_engine::measured_kind_and_reason(
+                    result
+                        .checks
+                        .iter()
+                        .map(|c| (Status::from(c.verdict.clone()), c.messages.as_slice())),
+                )
             }
             Err(SectionError::NotApplicable { reason }) => {
                 checks.extend(catalogue_checks(protocol, Status::NotApplicable));
@@ -109,6 +114,7 @@ pub(crate) async fn record(
     domain: &str,
     dkim_selectors: bool,
     run: &Run,
+    elapsed: Duration,
 ) -> Option<netray_store::Recorded> {
     let store = state.history_store.as_ref()?;
     if dkim_selectors {
@@ -118,9 +124,14 @@ pub(crate) async fn record(
     let profile = &state.scoring_profile;
     let previous = store.head(domain).await.ok().flatten();
     match store
-        .record(domain, run, &volatile, now_unix(), |prev, cur| {
-            netray_engine::history::diff(prev, cur, &volatile, profile)
-        })
+        .record_timed(
+            domain,
+            run,
+            &volatile,
+            now_unix(),
+            u64::try_from(elapsed.as_millis()).ok(),
+            |prev, cur| netray_engine::history::diff(prev, cur, &volatile, profile),
+        )
         .await
     {
         Ok(recorded) => {

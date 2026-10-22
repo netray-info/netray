@@ -201,6 +201,9 @@ pub fn check_key_strength(chain: &[CertInfo]) -> HealthCheck {
     }
 }
 
+/// Days before expiry at which `expiry_window` warns; the validity bar's amber zone reads it too.
+pub const EXPIRY_WARN_DAYS: i64 = 30;
+
 pub fn check_expiry_window(chain: &[CertInfo]) -> HealthCheck {
     let min = chain.iter().min_by_key(|c| c.days_remaining);
     let Some(cert) = min else {
@@ -220,7 +223,7 @@ pub fn check_expiry_window(chain: &[CertInfo]) -> HealthCheck {
     };
     let (status, detail) = if days <= 7 {
         (CheckStatus::Fail, format!("{who} expires in {days} days"))
-    } else if days <= 30 {
+    } else if days <= EXPIRY_WARN_DAYS {
         (CheckStatus::Warn, format!("{who} expires in {days} days"))
     } else {
         (CheckStatus::Pass, format!("{who} expires in {days} days"))

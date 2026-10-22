@@ -24,6 +24,7 @@ use crate::input::{self, Target};
 use crate::quality::{self, HealthCheck, checks};
 use crate::routes::{self, CaaSource, InspectRequest, InspectResponse, PortResult};
 use crate::state::AppState;
+use crate::tls::probe::{ProbeOutcome, ProtocolProbes, Verdict};
 use crate::tls::{CertInfo, IpInspectionResult, TlsParams};
 use crate::validate::CheckStatus;
 
@@ -43,6 +44,8 @@ static CHECKS: LazyLock<Vec<CheckId>> = LazyLock::new(|| {
         "tls_version",
         "forward_secrecy",
         "aead_cipher",
+        "legacy_versions",
+        "weak_suites",
         "ct_logged",
         "ocsp_stapled",
         "caa_compliant",
@@ -67,9 +70,12 @@ pub const REGISTER: Register = Register {
         ("tls.addresses", ShapeKind::Table),
         ("tls.chain", ShapeKind::Chain),
         ("tls.handshake", ShapeKind::Fields),
+        ("tls.probes", ShapeKind::Fields),
+        ("tls.protocols", ShapeKind::Fields),
         ("tls.tlsa", ShapeKind::Records),
         ("tls.ct", ShapeKind::Table),
         ("tls.caa", ShapeKind::Records),
+        ("tls.notices", ShapeKind::Fields),
     ],
     keys: &[
         ("tls.addresses", "address", ValueType::Addr),
@@ -87,6 +93,12 @@ pub const REGISTER: Register = Register {
         ("tls.chain", "fingerprint_sha256", ValueType::Text),
         ("tls.chain", "position", ValueType::Text),
         ("tls.chain", "ca_issuers_url", ValueType::Text),
+        ("tls.chain", "serial", ValueType::Text),
+        ("tls.chain", "fingerprint_sha1", ValueType::Text),
+        ("tls.chain", "policy", ValueType::Text),
+        ("tls.chain", "self_signed", ValueType::Bool),
+        ("tls.chain", "expired", ValueType::Bool),
+        ("tls.chain", "ocsp_url", ValueType::Text),
         ("tls.handshake", "version", ValueType::Text),
         ("tls.handshake", "cipher_suite", ValueType::Text),
         ("tls.handshake", "alpn", ValueType::Text),
@@ -94,6 +106,43 @@ pub const REGISTER: Register = Register {
         ("tls.handshake", "ocsp_stapled", ValueType::Bool),
         ("tls.handshake", "ech", ValueType::Bool),
         ("tls.handshake", "handshake_ms", ValueType::Duration),
+        ("tls.handshake", "sni", ValueType::Text),
+        ("tls.handshake", "starttls", ValueType::Text),
+        ("tls.handshake", "ocsp_status", ValueType::Text),
+        ("tls.handshake", "ocsp_this_update", ValueType::Time),
+        ("tls.handshake", "ocsp_next_update", ValueType::Time),
+        ("tls.handshake", "ocsp_live_status", ValueType::Text),
+        ("tls.handshake", "ocsp_live_revoked_at", ValueType::Time),
+        ("tls.handshake", "ocsp_live_reason", ValueType::Text),
+        ("tls.probes", "ssl3", ValueType::Text),
+        ("tls.probes", "tls1_0", ValueType::Text),
+        ("tls.probes", "tls1_1", ValueType::Text),
+        ("tls.probes", "tls1_2", ValueType::Text),
+        ("tls.probes", "tls1_3", ValueType::Text),
+        ("tls.probes", "suites_insecure", ValueType::Text),
+        ("tls.probes", "suites_cbc", ValueType::Text),
+        ("tls.probes", "suites_static_rsa", ValueType::Text),
+        ("tls.probes", "ssl3_answer", ValueType::Text),
+        ("tls.probes", "tls1_0_answer", ValueType::Text),
+        ("tls.probes", "tls1_1_answer", ValueType::Text),
+        ("tls.probes", "tls1_2_answer", ValueType::Text),
+        ("tls.probes", "tls1_3_answer", ValueType::Text),
+        ("tls.probes", "suites_insecure_answer", ValueType::Text),
+        ("tls.probes", "suites_cbc_answer", ValueType::Text),
+        ("tls.probes", "suites_static_rsa_answer", ValueType::Text),
+        ("tls.protocols", "ssl3", ValueType::Text),
+        ("tls.protocols", "tls1_0", ValueType::Text),
+        ("tls.protocols", "tls1_1", ValueType::Text),
+        ("tls.protocols", "tls1_2", ValueType::Text),
+        ("tls.protocols", "tls1_3", ValueType::Text),
+        ("tls.protocols", "suites_insecure", ValueType::Text),
+        ("tls.protocols", "suites_cbc", ValueType::Text),
+        ("tls.protocols", "suites_static_rsa", ValueType::Text),
+        (
+            "tls.protocols",
+            "forward_secrecy_all_suites",
+            ValueType::Bool,
+        ),
         ("tls.tlsa", "owner", ValueType::Text),
         ("tls.tlsa", "type", ValueType::Text),
         ("tls.tlsa", "ttl", ValueType::Int),
@@ -105,12 +154,19 @@ pub const REGISTER: Register = Register {
         ("tls.caa", "type", ValueType::Text),
         ("tls.caa", "ttl", ValueType::Int),
         ("tls.caa", "data", ValueType::Text),
+        ("tls.notices", "warning", ValueType::Text),
+        ("tls.notices", "skipped_address", ValueType::Addr),
     ],
 };
 
 const VOLATILE: &[EvidencePath] = &[
     EvidencePath("tls.chain/days_remaining"),
     EvidencePath("tls.handshake/handshake_ms"),
+    EvidencePath("tls.handshake/ocsp_this_update"),
+    EvidencePath("tls.handshake/ocsp_next_update"),
+    EvidencePath("tls.handshake/ocsp_live_status"),
+    EvidencePath("tls.handshake/ocsp_live_revoked_at"),
+    EvidencePath("tls.handshake/ocsp_live_reason"),
     EvidencePath("tls.tlsa/ttl"),
     EvidencePath("tls.caa/ttl"),
 ];
@@ -171,15 +227,19 @@ impl TlsModule {
         };
 
         let ips: Vec<IpAddr> = routes::resolve_target(&self.state, &parsed.target).await?;
+        // Probe connections count: the plan fits handshakes and probes into the check budget and
+        // the per-target burst it is charged to.
         let selection = select_ips(
             ips,
             config.limits.allow_blocked_targets,
             &hostname,
             parsed.ports.len(),
-            self.check_budget,
+            self.check_budget.min(config.limits.per_target_burst),
+            self.state.backend.probe_connections(),
         );
-        let inspected = selection.as_ref().map_or(1, |s| s.ips.len());
-        let cost = parsed.ports.len() as u32 * inspected as u32;
+        let cost = selection
+            .as_ref()
+            .map_or(parsed.ports.len() as u32, |s| s.plan.cost);
         check_keyed_cost(
             &self.per_target,
             &hostname.to_lowercase(),
@@ -191,20 +251,17 @@ impl TlsModule {
             retry_after_secs: r.retry_after_secs,
             scope: r.scope,
         })?;
-        let Selection {
-            ips,
-            warnings,
-            skipped_ips,
-        } = selection?;
+        let Selection { plan, warnings } = selection?;
 
         routes::inspect(
             &self.state,
             &config,
             InspectRequest {
                 parsed,
-                ips,
+                ips: plan.ips,
+                probed: plan.probed,
                 warnings,
-                skipped_ips,
+                skipped_ips: plan.skipped,
                 request_id: String::new(),
                 start,
                 caa: (!facts.caa.is_empty()).then(|| CaaLookup::from_presentation(&facts.caa)),
@@ -215,29 +272,26 @@ impl TlsModule {
     }
 }
 
-/// The addresses to inspect, the warnings so far and the addresses the budget skipped.
+/// The plan (addresses, probed addresses, cost) and the warnings so far.
 struct Selection {
-    ips: Vec<IpAddr>,
+    plan: routes::Plan,
     warnings: Vec<String>,
-    skipped_ips: Vec<String>,
 }
 
-/// The target policy, then the addresses `budget` handshakes over `ports` ports cover.
+/// The target policy, then the plan for `budget` over `ports` ports with `probes` connections
+/// per probed address.
 fn select_ips(
     ips: Vec<IpAddr>,
     allow_blocked: bool,
     hostname: &str,
     ports: usize,
     budget: u32,
+    probes: u32,
 ) -> Result<Selection, AppError> {
     let mut warnings = Vec::new();
     let allowed = routes::filter_allowed(ips, allow_blocked, hostname, &mut warnings)?;
-    let (selected, skipped) = routes::cap_to_budget(&allowed, ports, budget, &mut warnings);
-    Ok(Selection {
-        ips: selected,
-        warnings,
-        skipped_ips: skipped,
-    })
+    let plan = routes::plan_budget(&allowed, ports, budget, probes, &mut warnings);
+    Ok(Selection { plan, warnings })
 }
 
 impl Module for TlsModule {
@@ -276,11 +330,11 @@ impl Module for TlsModule {
     }
 }
 
-/// Maps port 443 (else the first port) onto all 21 `tls.<id>` checks and its blocks. Each
+/// Maps port 443 (else the first port) onto all 23 `tls.<id>` checks and its blocks. Each
 /// per-address check is measured on every address that completed a handshake and reports the
 /// worst of them; CAA, DANE and OCSP come once from the summary. A failed CAA, TLSA or HTTPS
 /// lookup makes its check `Unmeasured`, and so do the consistency checks when a timeout left
-/// fewer than two handshakes. Without any handshake the other 20 checks follow
+/// fewer than two handshakes. Without any handshake the other 22 checks follow
 /// `tls_reachable`: not applicable behind a Fail, `NotTested` or `Unmeasured` otherwise.
 pub fn translate(resp: &InspectResponse) -> SectionOutcome {
     translate_with_facts(resp, &[])
@@ -290,11 +344,91 @@ pub fn translate(resp: &InspectResponse) -> SectionOutcome {
 /// `dns.caa` when it was judged from them, else TLS's own `tls.caa` or the chains, and
 /// `ech_advertised` references the facts' `dns.https`.
 pub fn translate_with_facts(resp: &InspectResponse, facts: &[BlockId]) -> SectionOutcome {
+    translate_with_facts_at(resp, facts, Utc::now())
+}
+
+/// [`translate_with_facts`] judging a certificate's expiry against `now`.
+pub(crate) fn translate_with_facts_at(
+    resp: &InspectResponse,
+    facts: &[BlockId],
+    now: DateTime<Utc>,
+) -> SectionOutcome {
     let port = resp
         .ports
         .iter()
         .find(|p| p.port == 443)
         .or_else(|| resp.ports.first());
+    translate_port(resp, port, facts, false, true, now)
+}
+
+/// One outcome per inspected port, in the response's port order: each port is judged like
+/// [`translate`] judges its port, with `tls.addresses@<port>` and `tls.ct@<port>` when there are
+/// several ports, and OCSP, CAA and DANE judged on the port itself. The host-wide `tls.caa`
+/// block and a `tls.notices` block of the run's warnings and parseable skipped addresses sit in
+/// the [`band_port`]'s outcome only.
+/// A response with one port gives [`translate`]'s outcome plus `tls.notices` when present; one
+/// without a port gives nothing.
+pub fn translate_ports(resp: &InspectResponse) -> Vec<(u16, SectionOutcome)> {
+    let mut outcomes: Vec<(u16, SectionOutcome)> = match resp.ports.as_slice() {
+        [] => Vec::new(),
+        [only] => vec![(only.port, translate(resp))],
+        ports => {
+            let band = band_port(ports.iter().map(|p| p.port));
+            ports
+                .iter()
+                .map(|p| {
+                    (
+                        p.port,
+                        translate_port(resp, Some(p), &[], true, p.port == band, Utc::now()),
+                    )
+                })
+                .collect()
+        }
+    };
+    let mut fields: Fields = resp
+        .warnings
+        .iter()
+        .map(|w| ("warning".to_string(), EvValue::Text(w.clone())))
+        .collect();
+    fields.extend(
+        resp.skipped_ips
+            .iter()
+            .filter_map(|ip| ip.parse::<IpAddr>().ok())
+            .map(|ip| ("skipped_address".to_string(), EvValue::Addr(ip))),
+    );
+    let band = band_port(outcomes.iter().map(|(p, _)| *p));
+    if let (false, Some((_, SectionOutcome::Measured { evidence, .. }))) = (
+        fields.is_empty(),
+        outcomes.iter_mut().find(|(p, _)| *p == band),
+    ) {
+        evidence.push(Block {
+            id: static_block_id("tls.notices"),
+            title: "Notices".into(),
+            shape: Shape::Fields(fields),
+        });
+    }
+    outcomes
+}
+
+/// The port whose checks make an inspection's band and whose outcome holds the host-wide blocks:
+/// 443 when inspected, else the lowest port; 443 for none.
+pub fn band_port(ports: impl IntoIterator<Item = u16>) -> u16 {
+    let ports: Vec<u16> = ports.into_iter().collect();
+    if ports.contains(&443) {
+        443
+    } else {
+        ports.into_iter().min().unwrap_or(443)
+    }
+}
+
+fn translate_port(
+    resp: &InspectResponse,
+    port: Option<&PortResult>,
+    facts: &[BlockId],
+    qualify: bool,
+    host_wide: bool,
+    now: DateTime<Utc>,
+) -> SectionOutcome {
     let ips = port.map_or(&[][..], |p| p.ips.as_slice());
     let handshakes: Vec<&IpInspectionResult> = ips.iter().filter(|r| r.error.is_none()).collect();
 
@@ -328,13 +462,48 @@ pub fn translate_with_facts(resp: &InspectResponse, facts: &[BlockId]) -> Sectio
                 by_id.insert(name.to_string(), r);
             }
         }
+        let probed: Vec<(&IpInspectionResult, &ProtocolProbes)> = handshakes
+            .iter()
+            .filter_map(|r| Some((*r, r.probes.as_ref()?)))
+            .collect();
+        if !probed.is_empty() {
+            let protocols = qualified_block_id("tls.protocols", port.port, qualify);
+            for (name, judge) in [
+                (
+                    "legacy_versions",
+                    legacy_versions as fn(&str, &ProtocolProbes) -> (Status, Vec<String>),
+                ),
+                ("weak_suites", weak_suites),
+            ] {
+                let per: Vec<(&str, Status, Vec<String>)> = probed
+                    .iter()
+                    .map(|(r, p)| {
+                        let (status, findings) = judge(&r.ip, p);
+                        (r.ip.as_str(), status, findings)
+                    })
+                    .collect();
+                by_id.insert(
+                    name.to_string(),
+                    probe_check(name, &per, port.port, &protocols),
+                );
+            }
+        }
 
         let summary = &resp.summary.checks;
         let ocsp = summary.ocsp_stapled;
+        let (ocsp_check, caa, dane) = if qualify {
+            port_wide(resp, port, &handshakes)
+        } else {
+            (
+                checks::check_ocsp_stapled(ocsp == CheckStatus::Pass, ocsp != CheckStatus::Skip),
+                summary.caa_compliant,
+                summary.dane_valid,
+            )
+        };
         for hc in [
-            checks::check_ocsp_stapled(ocsp == CheckStatus::Pass, ocsp != CheckStatus::Skip),
-            checks::check_caa_compliant(summary.caa_compliant),
-            checks::check_dane_valid(summary.dane_valid),
+            ocsp_check,
+            checks::check_caa_compliant(caa),
+            checks::check_dane_valid(dane),
             checks::check_consistency(port.consistency.as_ref()),
             checks::check_alpn_consistency(ips),
         ] {
@@ -353,7 +522,12 @@ pub fn translate_with_facts(resp: &InspectResponse, facts: &[BlockId]) -> Sectio
             ("tlsa", "dane_valid", "TLSA"),
             ("https", "ech_advertised", "HTTPS"),
         ] {
-            if lookup_errors.iter().any(|e| e == lookup) && (lookup != "https" || port.port == 443)
+            // With several ports a TLSA error names no port: a port whose records answered is
+            // measured, any other is not.
+            let answered_here = qualify && lookup == "tlsa" && port.tlsa.is_some();
+            if lookup_errors.iter().any(|e| e == lookup)
+                && (lookup != "https" || port.port == 443)
+                && !answered_here
             {
                 let finding = format!("{record} lookup for {} failed", resp.hostname);
                 by_id.insert(
@@ -391,7 +565,9 @@ pub fn translate_with_facts(resp: &InspectResponse, facts: &[BlockId]) -> Sectio
         }
     };
     let caa_from_facts = caa_judged_from_facts(resp, facts);
-    let evidence = port.map_or_else(Vec::new, |port| blocks(resp, port, caa_from_facts));
+    let evidence = port.map_or_else(Vec::new, |port| {
+        blocks(resp, port, caa_from_facts, qualify, host_wide, now)
+    });
     let checks = tls_checks()
         .iter()
         .map(|id| {
@@ -416,10 +592,158 @@ pub fn translate_with_facts(resp: &InspectResponse, facts: &[BlockId]) -> Sectio
     SectionOutcome::Measured { checks, evidence }
 }
 
+fn status_rank(status: Status) -> u8 {
+    match status {
+        Status::Fail => 3,
+        Status::Unmeasured => 2,
+        Status::Warn => 1,
+        _ => 0,
+    }
+}
+
+/// The check over the probed addresses: the worst address status (fail, unmeasured, warn, pass)
+/// with the findings and `tls.probes` blocks of the addresses at it, plus `tls.protocols`; an
+/// unmeasured check references nothing.
+fn probe_check(
+    name: &str,
+    per: &[(&str, Status, Vec<String>)],
+    port: u16,
+    protocols: &BlockId,
+) -> CheckResult {
+    let status = per
+        .iter()
+        .map(|(_, s, _)| *s)
+        .max_by_key(|s| status_rank(*s))
+        .unwrap_or(Status::Pass);
+    let at_status = || per.iter().filter(|(_, s, _)| *s == status);
+    let mut r = result(
+        name,
+        status,
+        at_status().flat_map(|(_, _, f)| f.clone()).collect(),
+    );
+    if status != Status::Unmeasured {
+        r.evidence = at_status()
+            .filter_map(|(ip, _, _)| address_block_id("probes", ip, port))
+            .chain(std::iter::once(protocols.clone()))
+            .collect();
+    }
+    r
+}
+
+fn unanswered_findings(ip: &str, probes: &[(&str, &ProbeOutcome)]) -> Vec<String> {
+    probes
+        .iter()
+        .filter(|(_, o)| o.verdict == Verdict::Unanswered)
+        .map(|(name, o)| format!("{ip}: no answer to the {name} probe ({})", o.detail))
+        .collect()
+}
+
+/// SSLv3, TLS 1.0 and TLS 1.1 on one address: any accepted is a fail, all refused a pass.
+fn legacy_versions(ip: &str, probes: &ProtocolProbes) -> (Status, Vec<String>) {
+    let versions = [
+        ("SSLv3", &probes.ssl3),
+        ("TLS 1.0", &probes.tls1_0),
+        ("TLS 1.1", &probes.tls1_1),
+    ];
+    let accepted: Vec<&str> = versions
+        .iter()
+        .filter(|(_, o)| o.verdict == Verdict::Accepted)
+        .map(|(n, _)| *n)
+        .collect();
+    if !accepted.is_empty() {
+        return (
+            Status::Fail,
+            vec![format!("{ip}: accepts {}", accepted.join(", "))],
+        );
+    }
+    if versions.iter().all(|(_, o)| o.verdict == Verdict::Refused) {
+        return (Status::Pass, vec![]);
+    }
+    (Status::Unmeasured, unanswered_findings(ip, &versions))
+}
+
+/// The weak suite groups on one address: an accepted insecure group is a fail, an accepted CBC or
+/// static RSA group a warn.
+fn weak_suites(ip: &str, probes: &ProtocolProbes) -> (Status, Vec<String>) {
+    let suite = |o: &ProbeOutcome| o.cipher_suite.clone().unwrap_or_else(|| "unknown".into());
+    if probes.suites_insecure.verdict == Verdict::Accepted {
+        let finding = format!(
+            "{ip}: accepts insecure suite {}",
+            suite(&probes.suites_insecure)
+        );
+        return (Status::Fail, vec![finding]);
+    }
+    let groups = [
+        ("insecure suites", &probes.suites_insecure),
+        ("CBC suites", &probes.suites_cbc),
+        ("static RSA suites", &probes.suites_static_rsa),
+    ];
+    if probes.suites_insecure.verdict == Verdict::Unanswered {
+        return (Status::Unmeasured, unanswered_findings(ip, &groups));
+    }
+    let warns: Vec<String> = [
+        ("CBC", &probes.suites_cbc),
+        ("static RSA", &probes.suites_static_rsa),
+    ]
+    .iter()
+    .filter(|(_, o)| o.verdict == Verdict::Accepted)
+    .map(|(n, o)| format!("{ip}: accepts {n} suite {}", suite(o)))
+    .collect();
+    if !warns.is_empty() {
+        return (Status::Warn, warns);
+    }
+    if groups.iter().all(|(_, o)| o.verdict == Verdict::Refused) {
+        return (Status::Pass, vec![]);
+    }
+    (Status::Unmeasured, unanswered_findings(ip, &groups))
+}
+
+/// The OCSP, CAA and DANE verdicts of one port of several, which the response's summary judges
+/// from the first handshake and leaf over all ports: OCSP from the port's first handshake, CAA
+/// from the port's leaf against the looked-up records (the summary's verdict when the records
+/// are not at hand), DANE from the port's own TLSA match.
+fn port_wide(
+    resp: &InspectResponse,
+    port: &PortResult,
+    handshakes: &[&IpInspectionResult],
+) -> (HealthCheck, CheckStatus, CheckStatus) {
+    let first = handshakes.first();
+    let leaf = first.and_then(|r| r.chain.as_ref()?.first());
+    let ocsp = checks::check_ocsp_stapled(
+        first.is_some_and(|r| r.tls.as_ref().is_some_and(|t| t.ocsp.stapled)),
+        leaf.is_some_and(|l| l.ocsp_url.is_some()),
+    );
+    let lookup = resp
+        .dns
+        .as_ref()
+        .and_then(|d| d.caa.as_ref())
+        .and_then(|c| c.lookup.as_ref());
+    let caa = match (lookup, leaf) {
+        (Some(lookup), Some(leaf)) => {
+            crate::validate::caa_compliance::check_caa_compliance(lookup, &leaf.issuer, &leaf.sans)
+        }
+        _ => resp.summary.checks.caa_compliant,
+    };
+    let dane = match port.tlsa.as_ref().and_then(|t| t.dane_valid) {
+        Some(true) => CheckStatus::Pass,
+        Some(false) => CheckStatus::Fail,
+        None => CheckStatus::Skip,
+    };
+    (ocsp, caa, dane)
+}
+
 /// The id `tls.<name>@<addr>:<port>`, `None` for an address or port no block id can hold.
 fn address_block_id(name: &str, ip: &str, port: u16) -> Option<BlockId> {
     let addr = SocketAddr::new(ip.parse().ok()?, port);
     BlockId::parse(&format!("tls.{name}@{addr}")).ok()
+}
+
+fn qualified_block_id(id: &str, port: u16, qualify: bool) -> BlockId {
+    if qualify {
+        BlockId::parse(&format!("{id}@{port}")).expect("static block id with a port")
+    } else {
+        static_block_id(id)
+    }
 }
 
 fn static_block_id(id: &str) -> BlockId {
@@ -486,8 +810,15 @@ fn shared_references(name: &str, blocks: &[Block], caa_from_facts: bool) -> Opti
 /// completed one, the SCTs when CT is checked, and the TLSA and, unless CAA was judged from the
 /// facts, CAA records as answered. A response read from JSON holds no answered records: it gets
 /// no TLSA block, and a CAA block only for an empty answer, which needs no TTL.
-fn blocks(resp: &InspectResponse, port: &PortResult, caa_from_facts: bool) -> Vec<Block> {
-    let mut blocks = vec![addresses_block(port)];
+fn blocks(
+    resp: &InspectResponse,
+    port: &PortResult,
+    caa_from_facts: bool,
+    qualify: bool,
+    host_wide: bool,
+    now: DateTime<Utc>,
+) -> Vec<Block> {
+    let mut blocks = vec![addresses_block(port, qualify)];
     let dns = resp.dns.as_ref();
     let failed = |lookup: &str| dns.is_some_and(|d| d.lookup_errors.iter().any(|e| e == lookup));
     let handshakes: Vec<(IpAddr, &IpInspectionResult)> = port
@@ -502,7 +833,7 @@ fn blocks(resp: &InspectResponse, port: &PortResult, caa_from_facts: bool) -> Ve
             blocks.push(Block {
                 id,
                 title: format!("Certificate chain {qualifier}"),
-                shape: Shape::Chain(chain.iter().map(cert_fields).collect()),
+                shape: Shape::Chain(chain.iter().map(|c| cert_fields(c, now)).collect()),
             });
         }
         if let (Some(tls), Some(id)) = (&r.tls, address_block_id("handshake", &r.ip, port.port)) {
@@ -513,8 +844,9 @@ fn blocks(resp: &InspectResponse, port: &PortResult, caa_from_facts: bool) -> Ve
             });
         }
     }
+    blocks.extend(probe_blocks(port, &handshakes, qualify));
     if resp.summary.checks.ct_logged != CheckStatus::Skip && !handshakes.is_empty() {
-        blocks.push(ct_block(&handshakes));
+        blocks.push(ct_block(&handshakes, qualify.then_some(port.port)));
     }
     let tlsa = port.tlsa.as_ref().and_then(|t| t.answered.as_deref());
     if let (Some(answered), Ok(id)) = (tlsa, BlockId::parse(&format!("tls.tlsa@{}", port.port))) {
@@ -531,7 +863,7 @@ fn blocks(resp: &InspectResponse, port: &PortResult, caa_from_facts: bool) -> Ve
             Some(CaaSource::Facts) => None,
             None => (caa.records.is_empty() && !failed("caa")).then(Vec::new),
         });
-    if let (Some(caa), false) = (caa, caa_from_facts) {
+    if let (Some(caa), false, true) = (caa, caa_from_facts, host_wide) {
         blocks.push(Block {
             id: static_block_id("tls.caa"),
             title: "CAA".into(),
@@ -541,8 +873,85 @@ fn blocks(resp: &InspectResponse, port: &PortResult, caa_from_facts: bool) -> Ve
     blocks
 }
 
+/// `tls.probes` per probed address, then the port's `tls.protocols`: a probe the server left
+/// unanswered is omitted, addresses that differ read `mixed`.
+fn probe_blocks(
+    port: &PortResult,
+    handshakes: &[(IpAddr, &IpInspectionResult)],
+    qualify: bool,
+) -> Vec<Block> {
+    let probed: Vec<(&IpInspectionResult, &ProtocolProbes)> = handshakes
+        .iter()
+        .filter_map(|(_, r)| Some((*r, r.probes.as_ref()?)))
+        .collect();
+    let text = |k: &str, v: &str| (k.to_string(), EvValue::Text(v.to_string()));
+    let word = |key: &str, verdict: Verdict| match (key.starts_with("suites_"), verdict) {
+        (false, Verdict::Accepted) => Some("enabled"),
+        (false, Verdict::Refused) => Some("disabled"),
+        (true, Verdict::Accepted) => Some("accepted"),
+        (true, Verdict::Refused) => Some("refused"),
+        (_, Verdict::Unanswered) => None,
+    };
+    let mut blocks = Vec::new();
+    for (r, probes) in &probed {
+        let Some(id) = address_block_id("probes", &r.ip, port.port) else {
+            continue;
+        };
+        let mut fields = Fields::new();
+        for (key, outcome) in probes.entries() {
+            if let Some(value) = word(key, outcome.verdict) {
+                fields.push(text(key, value));
+                fields.push(text(&format!("{key}_answer"), &outcome.detail));
+            }
+        }
+        let addr = SocketAddr::new(r.ip.parse().expect("block id parsed it"), port.port);
+        blocks.push(Block {
+            id,
+            title: format!("Protocol probes {addr}"),
+            shape: Shape::Fields(fields),
+        });
+    }
+    if probed.is_empty() {
+        return blocks;
+    }
+    let mut fields = Fields::new();
+    for (i, (key, _)) in probed[0].1.entries().into_iter().enumerate() {
+        let values: Vec<Option<&str>> = probed
+            .iter()
+            .map(|(_, p)| word(key, p.entries()[i].1.verdict))
+            .collect();
+        if values.contains(&None) {
+            continue;
+        }
+        let first = values[0].expect("no unanswered value");
+        let all_equal = values.iter().all(|v| *v == Some(first));
+        fields.push(text(key, if all_equal { first } else { "mixed" }));
+    }
+    let static_rsa: Vec<Verdict> = probed
+        .iter()
+        .map(|(_, p)| p.suites_static_rsa.verdict)
+        .collect();
+    if static_rsa.contains(&Verdict::Accepted) {
+        fields.push((
+            "forward_secrecy_all_suites".to_string(),
+            EvValue::Bool(false),
+        ));
+    } else if static_rsa.iter().all(|v| *v == Verdict::Refused) {
+        fields.push((
+            "forward_secrecy_all_suites".to_string(),
+            EvValue::Bool(true),
+        ));
+    }
+    blocks.push(Block {
+        id: qualified_block_id("tls.protocols", port.port, qualify),
+        title: "Protocols and features".into(),
+        shape: Shape::Fields(fields),
+    });
+    blocks
+}
+
 /// One row per tested address: its outcome is the error code, or `ok` after a handshake.
-fn addresses_block(port: &PortResult) -> Block {
+fn addresses_block(port: &PortResult, qualify: bool) -> Block {
     let rows = port
         .ips
         .iter()
@@ -560,7 +969,7 @@ fn addresses_block(port: &PortResult) -> Block {
         })
         .collect();
     Block {
-        id: static_block_id("tls.addresses"),
+        id: qualified_block_id("tls.addresses", port.port, qualify),
         title: "Addresses".into(),
         shape: Shape::Table {
             key: "address".into(),
@@ -573,7 +982,7 @@ fn addresses_block(port: &PortResult) -> Block {
 }
 
 /// The SCTs embedded in each address's leaf: their count and log ids.
-fn ct_block(handshakes: &[(IpAddr, &IpInspectionResult)]) -> Block {
+fn ct_block(handshakes: &[(IpAddr, &IpInspectionResult)], port: Option<u16>) -> Block {
     let rows = handshakes
         .iter()
         .map(|(ip, r)| {
@@ -589,7 +998,10 @@ fn ct_block(handshakes: &[(IpAddr, &IpInspectionResult)]) -> Block {
         })
         .collect();
     Block {
-        id: static_block_id("tls.ct"),
+        id: port.map_or_else(
+            || static_block_id("tls.ct"),
+            |port| qualified_block_id("tls.ct", port, true),
+        ),
         title: "Certificate Transparency".into(),
         shape: Shape::Table {
             key: "address".into(),
@@ -612,7 +1024,7 @@ fn records(rtype: &str, answered: &[AnsweredRecord]) -> Vec<EvRecord> {
 }
 
 /// A certificate's fields; one `sans` entry per SAN, times only when they read as a timestamp.
-fn cert_fields(cert: &CertInfo) -> Fields {
+fn cert_fields(cert: &CertInfo, now: DateTime<Utc>) -> Fields {
     let text = |k: &str, v: &str| (k.to_string(), EvValue::Text(v.to_string()));
     let mut fields = vec![
         text("position", &cert.position),
@@ -637,6 +1049,31 @@ fn cert_fields(cert: &CertInfo) -> Fields {
     }
     fields.push(text("signature_algorithm", &cert.signature_algorithm));
     fields.push(text("fingerprint_sha256", &cert.fingerprint_sha256));
+    if !cert.fingerprint_sha1.is_empty() {
+        fields.push(text("fingerprint_sha1", &cert.fingerprint_sha1));
+    }
+    if !cert.serial.is_empty() {
+        fields.push(text("serial", &cert.serial));
+    }
+    if matches!(cert.cert_policy.as_str(), "EV" | "OV" | "DV") {
+        fields.push(text("policy", &cert.cert_policy));
+    }
+    // A certificate that did not parse has no issuer: its flags are defaults, not facts.
+    if !cert.issuer.is_empty() {
+        fields.push((
+            "self_signed".to_string(),
+            EvValue::Bool(cert.is_self_signed),
+        ));
+        // `is_expired` truncates to whole days: a certificate lapsed hours ago is expired too.
+        let lapsed = DateTime::parse_from_rfc3339(&cert.not_after)
+            .or_else(|_| DateTime::parse_from_str(&cert.not_after, "%b %e %H:%M:%S %Y %:z"))
+            .is_ok_and(|t| t < now);
+        fields.push((
+            "expired".to_string(),
+            EvValue::Bool(cert.is_expired || lapsed),
+        ));
+    }
+    fields.extend(cert.ocsp_url.as_deref().map(|url| text("ocsp_url", url)));
     fields.extend(
         cert.ca_issuers_url
             .as_deref()
@@ -669,7 +1106,28 @@ fn handshake_fields(tls: &TlsParams, https_failed: bool) -> Fields {
             .as_deref()
             .map(|v| text("key_exchange_group", v)),
     );
+    fields.extend(tls.sni.as_deref().map(|v| text("sni", v)));
+    // Only SMTP is upgraded (`tls::connect`); IMAP and FTP carry the port's label without one.
+    fields.extend(
+        tls.starttls
+            .as_deref()
+            .filter(|v| *v == "smtp")
+            .map(|v| text("starttls", v)),
+    );
     fields.push(("ocsp_stapled".to_string(), EvValue::Bool(tls.ocsp.stapled)));
+    fields.extend(tls.ocsp.status.as_deref().map(|v| text("ocsp_status", v)));
+    let time = |k: &str, v: &Option<String>| {
+        v.as_deref()
+            .and_then(rfc3339)
+            .map(|t| (k.to_string(), EvValue::Time(t)))
+    };
+    fields.extend(time("ocsp_this_update", &tls.ocsp.this_update));
+    fields.extend(time("ocsp_next_update", &tls.ocsp.next_update));
+    if let Some(live) = tls.ocsp_live.as_ref().filter(|live| live.answered) {
+        fields.push(text("ocsp_live_status", &live.status));
+        fields.extend(time("ocsp_live_revoked_at", &live.revoked_at));
+        fields.extend(live.reason.as_deref().map(|v| text("ocsp_live_reason", v)));
+    }
     fields.extend(
         tls.ech_advertised
             .filter(|_| !https_failed)
@@ -806,11 +1264,9 @@ mod tests {
     #[test]
     fn over_budget_selects_representative_ips_with_warning() {
         let ips: Vec<IpAddr> = (1..=25).map(public).collect();
-        let Selection {
-            ips: selected,
-            warnings,
-            skipped_ips: skipped,
-        } = select_ips(ips, false, "example.com", 1, 10).expect("allowed");
+        let Selection { plan, warnings } =
+            select_ips(ips, false, "example.com", 1, 10, 0).expect("allowed");
+        let (selected, skipped) = (plan.ips, plan.skipped);
         assert_eq!(selected.len(), 10);
         assert_eq!(skipped.len(), 15);
         assert_eq!(
@@ -823,11 +1279,9 @@ mod tests {
     fn target_policy_applies_before_the_budget() {
         let blocked = (1..=6).map(|n| IpAddr::from([10, 0, 0, n]));
         let ips: Vec<IpAddr> = blocked.chain((1..=15).map(public)).collect();
-        let Selection {
-            ips: selected,
-            warnings,
-            skipped_ips: skipped,
-        } = select_ips(ips, false, "example.com", 1, 10).expect("allowed");
+        let Selection { plan, warnings } =
+            select_ips(ips, false, "example.com", 1, 10, 0).expect("allowed");
+        let (selected, skipped) = (plan.ips, plan.skipped);
         assert_eq!(selected, (1..=10).map(public).collect::<Vec<_>>());
         assert_eq!(skipped.len(), 5);
         assert_eq!(warnings.iter().filter(|w| w.contains("blocked")).count(), 6);

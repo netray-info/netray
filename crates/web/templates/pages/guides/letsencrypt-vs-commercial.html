@@ -58,7 +58,7 @@
 
   <section class="guide-tool">
     <h2>Inspect your certificate issuer and validity</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://tls.netray.info/", "h", "example.com", "Inspect")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/tls", "h", "example.com", "Inspect")) %}{% endcall %}
     <p class="guide-tool__hint">Shows your certificate issuer, validity period, chain trust, and full TLS configuration.</p>
   </section>
 {% endblock %}

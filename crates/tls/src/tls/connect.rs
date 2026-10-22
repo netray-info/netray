@@ -100,7 +100,7 @@ impl StartTlsProtocol {
 
 /// Perform the SMTP STARTTLS upgrade on an established TCP stream.
 /// Sends EHLO, waits for 250, sends STARTTLS, waits for 220.
-async fn smtp_starttls(stream: &mut tokio::net::TcpStream) -> io::Result<()> {
+pub(crate) async fn smtp_starttls(stream: &mut tokio::net::TcpStream) -> io::Result<()> {
     let mut buf = [0u8; 1024];
 
     // Read server greeting (220 ...)

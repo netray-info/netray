@@ -57,7 +57,7 @@
 
   <section class="guide-tool">
     <h2>Check DNS propagation across resolvers</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://dns.netray.info/", "q", "example.com A", "Check")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/dns", "q", "example.com A", "Check")) %}{% endcall %}
     <p class="guide-tool__hint">Compares your DNS record across Cloudflare, Google, Quad9, and Mullvad resolvers simultaneously.</p>
   </section>
 {% endblock %}

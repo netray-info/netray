@@ -8,11 +8,13 @@ use netray_engine::catalogue::{Catalogue, CheckSpec};
 use netray_engine::profile::Profile;
 use netray_model::{CheckId, Protocol, Status};
 
-use crate::tokens::values::{FONT_SIZE_LABEL, SPACE_1, SPECTRUM_LINE_PITCH_MIN};
+use crate::tokens::values::{FONT_SIZE_CAPTION, SPACE_1, SPECTRUM_LINE_PITCH_MIN};
 
 const CHAR_WIDTH_EM: f64 = 0.62;
 const TOLERANCE: f64 = 1e-6;
+const COVER_MARGIN: f64 = 0.5;
 const MIN_ROWS: usize = 3;
+const HEIGHT_FLOOR: f64 = 0.35;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LineTone {
@@ -79,11 +81,103 @@ pub fn line_pitch_min() -> f64 {
 
 /// Width of a label box of `chars` characters.
 pub fn label_width(chars: usize) -> f64 {
-    chars as f64 * CHAR_WIDTH_EM * px(FONT_SIZE_LABEL) + px(SPACE_1)
+    chars as f64 * CHAR_WIDTH_EM * px(FONT_SIZE_CAPTION) + px(SPACE_1)
 }
 
 fn overlaps(a: &Label, b: &Label) -> bool {
     a.start < b.start + b.width - TOLERANCE && b.start < a.start + a.width - TOLERANCE
+}
+
+/// Whether `a`'s box covers `b`'s leader: the leader lies more than half a px inside the box.
+pub fn covers(a: &Label, b: &Label) -> bool {
+    b.leader > a.start + COVER_MARGIN && b.leader < a.start + a.width - COVER_MARGIN
+}
+
+/// Whether a box stands at its own leader; a box pushed in from the plate's right edge, or wider
+/// than the plate, does not, and its cover of leaders to its left is exempt (SDD §5.5 point 2).
+pub fn at_leader(label: &Label) -> bool {
+    (label.start - label.leader).abs() <= TOLERANCE
+}
+
+/// Assigns rows. A leader rises from the plate to its label's row, so a box at its leader sits
+/// above every label whose leader it covers. Such a box covers only leaders to its right, so the
+/// labels are placed right to left, each in the lowest row above those labels where it overlaps
+/// no label (SDD §5.5 point 2).
+fn place_labels(mut labels: Vec<Label>) -> Vec<Label> {
+    labels.sort_by(|a, b| b.leader.total_cmp(&a.leader).then(b.line.cmp(&a.line)));
+    for i in 0..labels.len() {
+        let (placed, rest) = labels.split_at_mut(i);
+        let label = &mut rest[0];
+        let mut row = if at_leader(label) {
+            placed
+                .iter()
+                .filter(|p| covers(label, p))
+                .map(|p| p.row + 1)
+                .max()
+                .unwrap_or(0)
+        } else {
+            0
+        };
+        while placed.iter().any(|p| p.row == row && overlaps(p, label)) {
+            row += 1;
+        }
+        label.row = row;
+    }
+    labels
+}
+
+/// The labels split into clusters of intersecting boxes, each in line order. A box covers or
+/// overlaps only boxes of its own cluster, so each cluster is placed on its own.
+fn clusters(mut labels: Vec<Label>) -> Vec<Vec<Label>> {
+    labels.sort_by(|a, b| a.start.total_cmp(&b.start).then(a.line.cmp(&b.line)));
+    let mut out: Vec<Vec<Label>> = Vec::new();
+    let mut end = f64::NEG_INFINITY;
+    for label in labels {
+        let label_end = label.start + label.width;
+        match out.last_mut() {
+            Some(cluster) if label.start < end - TOLERANCE => {
+                end = end.max(label_end);
+                cluster.push(label);
+            }
+            _ => {
+                end = label_end;
+                out.push(vec![label]);
+            }
+        }
+    }
+    for cluster in &mut out {
+        cluster.sort_by_key(|l| l.line);
+    }
+    out
+}
+
+/// One cluster's rows: right to left clear of leaders, unless that needs more rows than three and
+/// than the line-order placement. A dense cluster (boxes wider than the pitch, many adjacent)
+/// would stack every label above its neighbour; there the line-order placement stands and its
+/// leaders pass labels (SDD §5.5 point 2).
+fn place_cluster(cluster: Vec<Label>) -> Vec<Label> {
+    let rows_of = |ls: &[Label]| ls.iter().map(|l| l.row + 1).max().unwrap_or(0);
+    let clear = place_labels(cluster.clone());
+    let greedy = place_greedy(cluster);
+    if rows_of(&clear) > MIN_ROWS.max(rows_of(&greedy)) {
+        greedy
+    } else {
+        clear
+    }
+}
+
+/// The line-order placement: each label in the lowest row where it overlaps no label.
+fn place_greedy(mut labels: Vec<Label>) -> Vec<Label> {
+    for i in 0..labels.len() {
+        let (placed, rest) = labels.split_at_mut(i);
+        let label = &mut rest[0];
+        let mut row = 0;
+        while placed.iter().any(|p| p.row == row && overlaps(p, label)) {
+            row += 1;
+        }
+        label.row = row;
+    }
+    labels
 }
 
 /// The box start at a wider plate `to_plate` for a placement made at `plate`: equals `label.start`
@@ -128,8 +222,7 @@ pub fn place(lines: &[LineInput], width: u32) -> Result<Placement, LayoutError> 
     }
     let boundaries = groups.iter().skip(1).map(|g| g.start).collect();
 
-    let mut labels: Vec<Label> = Vec::new();
-    let mut highest = 0;
+    let mut candidates: Vec<Label> = Vec::new();
     for (i, line) in lines.iter().enumerate() {
         if !matches!(line.tone, LineTone::Warn | LineTone::Fail | LineTone::Fixed) {
             continue;
@@ -143,23 +236,21 @@ pub fn place(lines: &[LineInput], width: u32) -> Result<Placement, LayoutError> 
         } else {
             x
         };
-        let mut label = Label {
+        candidates.push(Label {
             line: i,
             text: line.short.clone(),
             row: 0,
             start,
             width: w,
             leader: x,
-        };
-        while labels
-            .iter()
-            .any(|l| l.row == label.row && overlaps(l, &label))
-        {
-            label.row += 1;
-        }
-        highest = highest.max(label.row);
-        labels.push(label);
+        });
     }
+    let mut labels: Vec<Label> = Vec::new();
+    for cluster in clusters(candidates) {
+        labels.extend(place_cluster(cluster));
+    }
+    let highest = labels.iter().map(|l| l.row).max().unwrap_or(0);
+    labels.sort_by_key(|l| l.line);
 
     Ok(Placement {
         plate_width,
@@ -263,8 +354,8 @@ fn base_tone(status: Option<Status>) -> LineTone {
     }
 }
 
-/// Heights in (0, 1]: a measured line's share of its section weight, scaled to the run's largest;
-/// muted lines take the smallest measured height.
+/// Heights in (0, 1]: 0.35 + 0.65 x w / w_max for a measured line, w its effective weight in the
+/// grade and w_max the largest in the run; muted lines take the smallest measured height.
 fn run_heights(run: &RunInput, specs: &[&CheckSpec], tones: &[LineTone]) -> Vec<f64> {
     let weight = |spec: &CheckSpec| -> f64 {
         run.profile
@@ -313,7 +404,10 @@ fn run_heights(run: &RunInput, specs: &[&CheckSpec], tones: &[LineTone]) -> Vec<
     if largest <= 0.0 {
         return vec![1.0; specs.len()];
     }
-    let scaled: Vec<Option<f64>> = shares.iter().map(|e| e.map(|e| e / largest)).collect();
+    let scaled: Vec<Option<f64>> = shares
+        .iter()
+        .map(|e| e.map(|e| HEIGHT_FLOOR + (1.0 - HEIGHT_FLOOR) * e / largest))
+        .collect();
     let smallest = scaled
         .iter()
         .flatten()
@@ -405,4 +499,53 @@ pub fn layout(
         boundaries: geometry.boundaries,
         runs,
     })
+}
+
+/// One bar of a mini band: `x` (its left edge) and `width` in px of the container, `height` in
+/// (0, 1] of the band's height.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MiniBar {
+    pub x: f64,
+    pub width: f64,
+    pub height: f64,
+    pub tone: LineTone,
+}
+
+/// The bars of `protocol`'s lines in catalogue order, from the slim band's layout in a container
+/// `width` px wide; `None` when no check of the protocol has a status.
+pub fn mini_band(
+    statuses: &[(CheckId, Status)],
+    protocol: Protocol,
+    width: u32,
+) -> Option<Vec<MiniBar>> {
+    let lines = netray_engine::catalogue::catalogue().for_protocol(protocol);
+    let statuses: BTreeMap<CheckId, Status> = statuses
+        .iter()
+        .filter(|(id, _)| lines.entries().iter().any(|spec| spec.id == *id))
+        .cloned()
+        .collect();
+    if statuses.is_empty() {
+        return None;
+    }
+    let input = RunInput {
+        statuses,
+        sections: BTreeMap::new(),
+        profile: netray_engine::profile::Profiles::current(),
+    };
+    let l = layout(&input, &[], &lines, width).ok()?;
+    let run = l.runs.first()?;
+    let scale = f64::from(width) / l.plate_width;
+    let bar = l.pitch / 2.0 * scale;
+    Some(
+        l.lines
+            .iter()
+            .zip(run.heights.iter().zip(&run.tones))
+            .map(|(line, (height, tone))| MiniBar {
+                x: line.x * scale - bar / 2.0,
+                width: bar,
+                height: *height,
+                tone: *tone,
+            })
+            .collect(),
+    )
 }

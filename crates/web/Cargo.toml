@@ -6,6 +6,7 @@ license = "MIT"
 description = "Templates, components and design tokens for the netray.info V2 suite"
 
 [dependencies]
+idna = { workspace = true }
 netray-common = { workspace = true, features = ["schema", "middleware", "cors", "server", "prometheus"] }
 netray-model = { workspace = true }
 netray-engine = { workspace = true }
@@ -25,7 +26,9 @@ utoipa = { workspace = true }
 utoipa-axum = { workspace = true }
 utoipa-scalar = { workspace = true, features = ["axum"] }
 governor = { workspace = true }
+httpdate = { workspace = true }
 futures = { workspace = true }
+moka = { workspace = true, features = ["future"] }
 percent-encoding = { workspace = true }
 sha2 = { workspace = true }
 base64 = { workspace = true }

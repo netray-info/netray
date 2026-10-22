@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}{{ frame.title }}{% endblock %}</title>
 {% block meta %}<meta name="description" content="{{ frame.description }}">
-<link rel="canonical" href="https://netray.info{{ frame.canonical }}">
+<link rel="canonical" href="{{ frame.origin() }}{{ frame.canonical }}">
 <meta property="og:title" content="{{ frame.title }}">
 <meta property="og:description" content="{{ frame.description }}">
 <meta property="og:image" content="{{ frame.og_image }}">{% endblock %}
@@ -16,24 +16,37 @@
 <body>
 {% block header %}<header class="page-header">
 <a href="/"><img src="/static/logo.svg" alt="netray"></a>
-<nav class="page-nav">
+{% block header_inspector %}{% endblock %}{% block header_tagline %}<span class="page-tagline">{% include "partials/header_tagline.html" %}</span>{% endblock %}
+<details class="page-menu">
+<summary class="page-menu__button" aria-label="Menu"><span class="page-menu__bar"></span><span class="page-menu__bar"></span><span class="page-menu__bar"></span></summary>
+<nav class="page-nav" data-island="nav-menu">
+<details class="nav-menu{% if frame.nav_inspectors() %} nav-menu--current{% endif %}">
+<summary class="nav-menu__button">Inspectors<span class="nav-menu__chevron" aria-hidden="true"></span></summary>
+<div class="nav-menu__panel" id="inspectors-menu">
+{% for (label, tool, desc) in crate::pages::INSPECTOR_MENU %}<a class="nav-menu__item" href="/inspect/{{ tool }}"{% if frame.nav == tool %} aria-current="page"{% endif %}><span class="nav-menu__label">{{ label }}</span><span class="nav-menu__desc">{{ desc }}</span></a>
+{% endfor %}<a class="nav-menu__all" href="/tools">All tools →</a>
+</div>
+</details>
 <a href="/guide/">Guides</a>
-<a href="/compare">Compare</a>
+<a href="/api/v1/docs">API</a>
 <a href="/status">Status</a>
-<a href="https://ip.netray.info">IP</a>
-<a href="https://dns.netray.info">DNS</a>
-<a href="https://tls.netray.info">TLS</a>
-<a href="https://http.netray.info">HTTP</a>
 </nav>
+</details>
 <button type="button" class="theme-toggle" data-island="theme" aria-label="Switch theme">Theme</button>
 </header>{% endblock %}
 <main>{% block main %}{% endblock %}</main>
 <footer class="page-footer">
+<div class="page-footer__inner">
+<div class="page-footer__about">
 <p>{% include "partials/tagline.html" %}</p>
-<nav>
-<a href="/privacy">Privacy</a>
-<a href="/status">Status</a>
+<span class="page-footer__version">netray {{ crate::pages::VERSION }}</span>
+</div>
+<nav class="page-footer__nav" aria-label="Footer">
+<div class="page-footer__group"><span class="page-footer__heading">Inspectors</span><div class="page-footer__links">{% for (label, tool, _desc) in crate::pages::INSPECTOR_MENU %}<a href="/inspect/{{ tool }}">{{ label }}</a>{% endfor %}</div></div>
+<div class="page-footer__group"><span class="page-footer__heading">Site</span><div class="page-footer__links"><a href="/guide/">Guides</a><a href="/compare">Compare</a><a href="/status">Status</a><a href="/api/v1/docs">API docs</a></div></div>
+<div class="page-footer__group"><span class="page-footer__heading">About</span><div class="page-footer__links"><a href="/privacy">Privacy</a><a href="https://github.com/netray-info/netray" rel="noopener">GitHub</a></div></div>
 </nav>
+</div>
 </footer>
 {% block scripts %}<script type="module" src="/static/islands.js"></script>
 <script type="speculationrules">{{ frame.rules|safe }}</script>{% endblock %}

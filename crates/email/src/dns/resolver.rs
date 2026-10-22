@@ -5,10 +5,11 @@ use std::time::Duration;
 
 use mhost::RecordType;
 use mhost::nameserver::predefined::PredefinedProvider;
-use mhost::nameserver::{NameServerConfig, Protocol};
+use mhost::nameserver::{NameServerConfig, NameServerConfigGroup, Protocol};
 use mhost::resolver::lookup::LookupResult;
 use mhost::resolver::{
-    Error as ResolverError, Lookups, MultiQuery, Resolver, ResolverGroup, ResolverGroupBuilder,
+    Error as ResolverError, Lookups, MultiQuery, Resolver, ResolverConfig, ResolverGroup,
+    ResolverGroupBuilder, ResolverOpts,
 };
 
 use super::{AddressLookup, LookupError};
@@ -38,22 +39,30 @@ fn record_dns_outcome(rtype: &'static str, result: Result<(), &ResolverError>) {
 
 pub struct DnsResolver {
     resolvers: Vec<Resolver>,
+    /// Indexed like `resolvers`: the TCP twin of a UDP resolver (same address and port), used
+    /// once when a UDP answer comes back truncated; `None` for a resolver that is TCP already.
+    tcp: Vec<Option<Resolver>>,
     index: AtomicUsize,
 }
 
 impl DnsResolver {
     pub async fn new(resolvers: &[String], timeout_ms: u64) -> Result<Self, mhost::Error> {
-        let mut builder = ResolverGroupBuilder::new().timeout(Duration::from_millis(timeout_ms));
+        let timeout = Duration::from_millis(timeout_ms);
+        let mut configs: Vec<NameServerConfig> = Vec::new();
+        let mut system_loaded = false;
 
         for entry in resolvers {
             if entry == "system" {
-                builder = builder.system();
+                if !system_loaded {
+                    system_loaded = true;
+                    configs.extend(NameServerConfigGroup::from_system_config()?);
+                }
             } else if let Ok(ip) = entry.parse::<IpAddr>() {
                 // Explicit IP — default port 53, UDP
-                builder = builder.nameserver(NameServerConfig::udp(SocketAddr::new(ip, 53)));
+                configs.push(NameServerConfig::udp(SocketAddr::new(ip, 53)));
             } else if let Ok(sock) = entry.parse::<SocketAddr>() {
                 // Explicit IP:port
-                builder = builder.nameserver(NameServerConfig::udp(sock));
+                configs.push(NameServerConfig::udp(sock));
             } else if let Ok(provider) = PredefinedProvider::from_str(entry) {
                 // Predefined provider: add IPv4-only configs (IPv6 times out on
                 // machines where IPv6 is unavailable, causing 10 s stalls per query),
@@ -63,7 +72,7 @@ impl DnsResolver {
                     if ns_config.ip_addr().is_ipv4()
                         && matches!(ns_config.protocol(), Protocol::Udp | Protocol::Tcp)
                     {
-                        builder = builder.nameserver(ns_config);
+                        configs.push(ns_config);
                     }
                 }
             } else {
@@ -71,8 +80,33 @@ impl DnsResolver {
             }
         }
 
-        let group: ResolverGroup = builder.build().await?;
+        // `from_configs` joins the resolver futures in order, so `resolvers()[i]` is `configs[i]`.
+        // No in-resolver retries: hickory re-sends a truncated UDP query, a second UDP query
+        // where the one TCP retry in `lookup_on` is wanted; `lookup_on` re-sends any other
+        // failure once.
+        let group: ResolverGroup = ResolverGroupBuilder::new()
+            .timeout(timeout)
+            .retries(0)
+            .nameservers(configs.clone())
+            .build()
+            .await?;
         let resolvers = group.resolvers().to_vec();
+
+        let mut tcp = Vec::with_capacity(configs.len());
+        for cfg in &configs {
+            if matches!(cfg.protocol(), Protocol::Udp) {
+                let twin = NameServerConfig::tcp(SocketAddr::new(cfg.ip_addr(), cfg.port()));
+                // One TCP query, no in-resolver re-send: the retry is already the second attempt.
+                let opts = ResolverOpts {
+                    timeout,
+                    retries: 0,
+                    ..Default::default()
+                };
+                tcp.push(Some(Resolver::new(ResolverConfig::from(twin), opts).await?));
+            } else {
+                tcp.push(None);
+            }
+        }
 
         tracing::info!(
             count = resolvers.len(),
@@ -82,6 +116,7 @@ impl DnsResolver {
 
         Ok(Self {
             resolvers,
+            tcp,
             index: AtomicUsize::new(0),
         })
     }
@@ -90,9 +125,10 @@ impl DnsResolver {
         !self.resolvers.is_empty()
     }
 
-    fn pick(&self) -> &Resolver {
+    /// The next resolver in rotation and its TCP twin, for the retry of a truncated answer.
+    fn pick(&self) -> (&Resolver, Option<&Resolver>) {
         let idx = self.index.fetch_add(1, Ordering::Relaxed) % self.resolvers.len();
-        &self.resolvers[idx]
+        (&self.resolvers[idx], self.tcp[idx].as_ref())
     }
 
     /// Resolve A + AAAA records for a hostname. An error only when both halves failed; when
@@ -100,10 +136,10 @@ impl DnsResolver {
     /// read as a measured absence.
     pub async fn lookup_ips(&self, hostname: &str) -> Result<AddressLookup, LookupError> {
         let hostname = hostname.trim_end_matches('.');
-        let resolver = self.pick();
+        let picked = self.pick();
         let (a_result, aaaa_result) = tokio::join!(
-            lookup_on(resolver, hostname, RecordType::A, "A"),
-            lookup_on(resolver, hostname, RecordType::AAAA, "AAAA"),
+            lookup_on(picked, hostname, RecordType::A, "A"),
+            lookup_on(picked, hostname, RecordType::AAAA, "AAAA"),
         );
         combine(a_result.map(|l| l.ips()), aaaa_result.map(|l| l.ips()))
     }
@@ -236,9 +272,14 @@ fn combine(
     Ok(lookup)
 }
 
+/// What a truncated UDP answer's cause contains (hickory's `NetError::Truncated`).
+const TRUNCATED: &str = "response was truncated";
+
 /// One query of `record_type` at `name` on `resolver`, as a definite answer or a [`LookupError`].
+/// A UDP answer with the TC bit is retried once on `tcp`, the same address over TCP; that answer
+/// is the lookup's answer, and its failure is reported as `TCP retry failed`.
 async fn lookup_on(
-    resolver: &Resolver,
+    (resolver, tcp): (&Resolver, Option<&Resolver>),
     name: &str,
     record_type: RecordType,
     label: &'static str,
@@ -255,9 +296,28 @@ async fn lookup_on(
             });
         }
     };
-    let result = resolver.lookup(query).await;
+    let result = resolver.lookup(query.clone()).await;
     record_dns_outcome(label, result.as_ref().map(|_| ()));
-    let answer = answer(label, name, result);
+    let mut answer = answer(label, name, result);
+    // The group runs without in-resolver retries (see `DnsResolver::new`), so a failure other
+    // than truncation gets its one re-send here, as mhost's default `retries = 1` gave it before.
+    if let Err(e) = &answer
+        && !e.cause.contains(TRUNCATED)
+    {
+        let result = resolver.lookup(query.clone()).await;
+        record_dns_outcome(label, result.as_ref().map(|_| ()));
+        answer = self::answer(label, name, result);
+    }
+    if let (Err(e), Some(tcp)) = (&answer, tcp)
+        && e.cause.contains(TRUNCATED)
+    {
+        let result = tcp.lookup(query).await;
+        record_dns_outcome(label, result.as_ref().map(|_| ()));
+        answer = self::answer(label, name, result).map_err(|t| LookupError {
+            cause: format!("TCP retry failed: {}", t.cause),
+            ..t
+        });
+    }
     if let Err(e) = &answer {
         tracing::warn!(query_name = %name, record_type = label, error = %e.cause, "DNS lookup failed");
     }

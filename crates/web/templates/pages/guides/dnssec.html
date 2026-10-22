@@ -65,7 +65,7 @@
 
   <section class="guide-tool">
     <h2>Validate your domain's DNSSEC chain</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://dns.netray.info/", "q", "example.com +dnssec", "Check")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/dns", "q", "example.com +dnssec", "Check")) %}{% endcall %}
     <p class="guide-tool__hint">Validates the DNSSEC chain of trust for your domain, including DS, DNSKEY, and RRSIG records.</p>
   </section>
 

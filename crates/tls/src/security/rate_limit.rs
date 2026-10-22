@@ -5,8 +5,9 @@
 //! - **Per-IP**: Limits total inspection cost per client IP per minute.
 //! - **Per-target**: Limits total inspection cost per target hostname per minute.
 //!
-//! Inspection cost is computed as `ports * inspected_ips` — the number of individual
-//! TLS handshakes that will be issued.
+//! Inspection cost is the number of connections a request opens: per port one handshake per
+//! inspected address plus `TlsBackend::probe_connections` per probed address
+//! (`routes::plan_budget`).
 
 use std::net::IpAddr;
 use std::num::NonZeroU32;
@@ -44,6 +45,7 @@ pub struct RateLimitState {
     per_ip: KeyedLimiter<IpAddr>,
     per_target: KeyedLimiter<String>,
     per_ip_burst: u32,
+    per_target_burst: u32,
     scopes: Scopes,
     last_prune: Mutex<Instant>,
 }
@@ -90,6 +92,7 @@ impl RateLimitState {
             per_ip,
             per_target,
             per_ip_burst: quotas.per_ip_burst,
+            per_target_burst: quotas.per_target_burst,
             scopes,
             last_prune: Mutex::new(Instant::now()),
         }
@@ -110,7 +113,8 @@ impl RateLimitState {
         self.per_target.shrink_to_fit();
     }
 
-    /// Return the per-IP burst size as an upper bound for cap-and-warn budget calculation.
+    /// Return the smaller of the per-IP and per-target bursts as an upper bound for cap-and-warn
+    /// budget calculation: a capped cost must fit both.
     ///
     /// Governor doesn't expose remaining capacity, so we use the burst size as a
     /// conservative estimate. The actual `check_cost` call will reject if insufficient.
@@ -120,14 +124,29 @@ impl RateLimitState {
     /// X-RateLimit-Limit / X-RateLimit-Remaining would require either switching to a
     /// limiter that supports state introspection or maintaining a separate counter.
     pub fn remaining_budget(&self, _client_ip: IpAddr) -> u32 {
-        self.per_ip_burst
+        self.per_ip_burst.min(self.per_target_burst)
+    }
+
+    /// `Err(AppError::CostExceedsLimit)` when `cost` exceeds the per-IP or the per-target burst,
+    /// which no wait can admit. Charges nothing.
+    pub fn cost_within_bursts(&self, cost: u32) -> Result<(), AppError> {
+        for limit in [self.per_ip_burst, self.per_target_burst] {
+            if cost > limit {
+                return Err(AppError::CostExceedsLimit { cost, limit });
+            }
+        }
+        Ok(())
     }
 
     /// Check whether a request with the given cost is allowed.
     ///
-    /// Returns `Ok(())` if allowed, or `Err(AppError::RateLimited)` if rejected.
+    /// Returns `Ok(())` if allowed, `Err(AppError::CostExceedsLimit)` if the cost exceeds a burst
+    /// (nothing is charged), or `Err(AppError::RateLimited)` if rejected.
     /// Checks per-IP first, then per-target.
     pub fn check_cost(&self, client_ip: IpAddr, hostname: &str, cost: u32) -> Result<(), AppError> {
+        // A cost above a burst never passes, however long the client waits: refuse it before
+        // either limiter is charged.
+        self.cost_within_bursts(cost)?;
         let cost_nz = NonZeroU32::new(cost.max(1)).expect("max(1) is non-zero");
 
         // Per-IP check

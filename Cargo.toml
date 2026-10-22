@@ -10,6 +10,7 @@ edition = "2024"
 netray-common = { path = "crates/common" }
 netray-model = { path = "crates/model" }
 netray-engine = { path = "crates/engine" }
+hickory-proto = "0.26.3"
 netray-store = { path = "crates/store" }
 netray-ip = { path = "crates/ip" }
 netray-tls = { path = "crates/tls" }
@@ -25,6 +26,7 @@ tower = "0.5"
 tower-http = "0.6"
 governor = "0.10"
 http-body-util = "0.1"
+httpdate = "1"
 
 # HTTP client
 reqwest = { version = "0.13", default-features = false }
@@ -69,6 +71,7 @@ regex = "1"
 chrono = { version = "0.4", default-features = false }
 percent-encoding = "2"
 url = "2"
+idna = "1"
 ip_network = "0.4"
 sha2 = "0.10"
 base64 = "0.22"

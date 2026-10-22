@@ -19,11 +19,11 @@
         <tr><th>Section</th><th>Tool</th><th>What it measures</th><th>Weight</th></tr>
       </thead>
       <tbody>
-        <tr><td>IP</td><td><a href="https://ip.netray.info">the IP inspector</a></td><td>Network type, hosting reputation, geolocation</td><td>10%</td></tr>
-        <tr><td>DNS</td><td><a href="https://dns.netray.info">the DNS inspector</a></td><td>DNSSEC, CAA records, NS delegation, HTTPS records</td><td>20%</td></tr>
-        <tr><td>TLS</td><td><a href="https://tls.netray.info">the TLS inspector</a></td><td>Certificate chain, protocol version, cipher strength</td><td>35%</td></tr>
-        <tr><td>HTTP</td><td><a href="https://http.netray.info">the HTTP inspector</a></td><td>Security headers, HSTS, CORS, cookie attributes</td><td>20%</td></tr>
-        <tr><td>Email</td><td><a href="https://email.netray.info">netray's email checks</a></td><td>SPF, DKIM, DMARC, MTA-STS, DANE, BIMI, DNSBL</td><td>15%</td></tr>
+        <tr><td>IP</td><td><a href="/inspect/ip">the IP inspector</a></td><td>Network type, hosting reputation, geolocation</td><td>10%</td></tr>
+        <tr><td>DNS</td><td><a href="/inspect/dns">the DNS inspector</a></td><td>DNSSEC, CAA records, NS delegation, HTTPS records</td><td>20%</td></tr>
+        <tr><td>TLS</td><td><a href="/inspect/tls">the TLS inspector</a></td><td>Certificate chain, protocol version, cipher strength</td><td>35%</td></tr>
+        <tr><td>HTTP</td><td><a href="/inspect/http">the HTTP inspector</a></td><td>Security headers, HSTS, CORS, cookie attributes</td><td>20%</td></tr>
+        <tr><td>Email</td><td><a href="/inspect/email">netray's email checks</a></td><td>SPF, DKIM, DMARC, MTA-STS, DANE, BIMI, DNSBL</td><td>15%</td></tr>
       </tbody>
     </table>
 
@@ -218,18 +218,18 @@
       pass them via the <code>dkim_selectors</code> parameter:
     </p>
 
-<pre><code># The evidence page of a domain
-https://netray.info/example.com
+<pre><code># Via URL parameter
+{{ frame.origin() }}/?d=example.com&dkim_selectors=google,selector1
 
 # Via curl
-curl -s -X POST 'https://netray.info/api/v1/domains/example.com/runs?dkim_selectors=default,s1' \
-  | jq '.checks[] | select(.id | startswith("email.dkim"))'</code></pre>
+curl -s -X POST '{{ frame.origin() }}/api/v1/domains/example.com/runs?dkim_selectors=default,s1' \
+  | jq '.run.checks[] | select(.id | startswith("email.dkim"))'</code></pre>
 
     <p>Selector validation rules:</p>
     <ul>
       <li>Characters: <code>[a-zA-Z0-9-]</code> only</li>
       <li>Length: 1&ndash;63 characters per selector</li>
-      <li>Count: 1&ndash;10 selectors per request</li>
+      <li>Count: 1&ndash;5 selectors per request</li>
       <li>Separator: comma (whitespace around commas is trimmed)</li>
     </ul>
 
@@ -274,10 +274,11 @@ curl -s -X POST 'https://netray.info/api/v1/domains/example.com/runs?dkim_select
     <h2>Cache behaviour</h2>
 
     <p>
-      Results are cached per domain for 5 minutes. The <code>X-Cache</code> response
-      header indicates <code>HIT</code> or <code>MISS</code>.
-      Requests with <code>dkim_selectors</code> always bypass the cache, since
-      selector-specific results cannot be shared.
+      A check of a domain is stored in its history, and a visit within 5 minutes of the
+      last stored check shows that check instead of running a new one.
+      A run with <code>dkim_selectors</code> is always a fresh run: it is never joined with
+      another check of the domain and never stored in the history, since selector-specific
+      results cannot be shared (the API answers <code>"recorded": "not_stored"</code>).
     </p>
 
   </article>

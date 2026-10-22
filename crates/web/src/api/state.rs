@@ -3,10 +3,13 @@ use std::net::IpAddr;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 
+use governor::clock::DefaultClock;
+use governor::middleware::StateInformationMiddleware;
+use governor::state::keyed::DefaultKeyedStateStore;
 use governor::{Quota, RateLimiter};
 use netray_common::ip_extract::IpExtractor;
 use netray_common::rate_limit::KeyedLimiter;
-use netray_dns::DnsJobs;
+use netray_dns::{DnsJobs, DnsResultCache};
 use netray_email::{EmailInspect, InspectSlots};
 use netray_engine::profile::{Profile, Profiles};
 use netray_http::HttpInspect;
@@ -45,7 +48,7 @@ pub struct ApiParts {
 /// The three limiters of the ip endpoints, keyed by the caller address (per-target by the
 /// looked-up address), built from `[api.ip]`.
 pub struct IpLimiters {
-    pub per_ip: KeyedLimiter<IpAddr>,
+    pub per_ip: PerIpLimiter,
     pub per_target: KeyedLimiter<IpAddr>,
     pub batch_addresses: KeyedLimiter<IpAddr>,
     /// When the three maps were last pruned; the per-target key is an address the caller picks,
@@ -53,19 +56,27 @@ pub struct IpLimiters {
     last_prune: std::sync::Mutex<std::time::Instant>,
 }
 
+pub type PerIpLimiter =
+    RateLimiter<IpAddr, DefaultKeyedStateStore<IpAddr>, DefaultClock, StateInformationMiddleware>;
+
 /// How often the IP limiters drop keys that have refilled, as ifconfig prunes its own.
 const PRUNE_EVERY: std::time::Duration = std::time::Duration::from_secs(60);
 
-fn keyed(per_minute: u32, burst: u32) -> KeyedLimiter<IpAddr> {
+fn quota(per_minute: u32, burst: u32) -> Quota {
     let per_minute = NonZeroU32::new(per_minute).unwrap_or(NonZeroU32::MIN);
     let burst = NonZeroU32::new(burst).unwrap_or(NonZeroU32::MIN);
-    RateLimiter::keyed(Quota::per_minute(per_minute).allow_burst(burst))
+    Quota::per_minute(per_minute).allow_burst(burst)
+}
+
+fn keyed(per_minute: u32, burst: u32) -> KeyedLimiter<IpAddr> {
+    RateLimiter::keyed(quota(per_minute, burst))
 }
 
 impl IpLimiters {
     fn new(config: &ApiIpConfig) -> Self {
         Self {
-            per_ip: keyed(config.per_ip_per_minute, config.per_ip_burst),
+            per_ip: RateLimiter::keyed(quota(config.per_ip_per_minute, config.per_ip_burst))
+                .with_middleware::<StateInformationMiddleware>(),
             per_target: keyed(config.per_target_per_minute, config.per_target_burst),
             batch_addresses: keyed(
                 config.batch_addresses_per_minute,
@@ -73,6 +84,20 @@ impl IpLimiters {
             ),
             last_prune: std::sync::Mutex::new(std::time::Instant::now()),
         }
+    }
+
+    /// Charges `cost` against the caller's budget: the burst left, or the seconds to wait.
+    pub fn charge_per_ip(&self, client: IpAddr, cost: u32) -> Result<u32, u64> {
+        let cost = NonZeroU32::new(cost).unwrap_or(NonZeroU32::MIN);
+        let wait = match self.per_ip.check_key_n(&client, cost) {
+            Ok(Ok(snapshot)) => return Ok(snapshot.remaining_burst_capacity()),
+            Ok(Err(not_until)) => not_until
+                .wait_time_from(governor::clock::Clock::now(&DefaultClock::default()))
+                .as_secs(),
+            Err(_) => 60,
+        };
+        metrics::counter!("lens_rate_limit_hits_total", "scope" => "api_v1_ip").increment(1);
+        Err(wait.max(1))
     }
 
     /// Drops the keys of all three limiters that have refilled, at most once per minute.
@@ -84,10 +109,12 @@ impl IpLimiters {
             return;
         }
         *last = std::time::Instant::now();
-        for limiter in [&self.per_ip, &self.per_target, &self.batch_addresses] {
+        for limiter in [&self.per_target, &self.batch_addresses] {
             limiter.retain_recent();
             limiter.shrink_to_fit();
         }
+        self.per_ip.retain_recent();
+        self.per_ip.shrink_to_fit();
     }
 }
 
@@ -107,6 +134,7 @@ pub struct ApiState {
     email_limiter: Arc<netray_email::security::RateLimitState>,
     email_slots: InspectSlots,
     dns_limiter: Arc<netray_dns::security::RateLimitState>,
+    dns_results: Arc<DnsResultCache>,
     header_filters: Arc<RegexSet>,
 }
 
@@ -187,6 +215,7 @@ impl ApiState {
             email_limiter,
             email_slots,
             dns_limiter,
+            dns_results: Arc::new(DnsResultCache::new()),
             header_filters,
         }
     }
@@ -267,6 +296,10 @@ impl ApiState {
 
     pub fn dns_limiter(&self) -> &Arc<netray_dns::security::RateLimitState> {
         &self.dns_limiter
+    }
+
+    pub fn dns_results(&self) -> &DnsResultCache {
+        &self.dns_results
     }
 
     pub fn dns_module(&self) -> Option<&Arc<dyn netray_engine::Module>> {

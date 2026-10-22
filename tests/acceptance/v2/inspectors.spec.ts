@@ -51,6 +51,7 @@ const BLOCK_LINKS: Partial<Record<Protocol, string[]>> = {
     '/inspect/dns?q=example.com.%20DS',
     '/inspect/dns?q=example.com.%20NSEC',
     '/inspect/dns?q=example.com%20NSEC3',
+    '/inspect/dns?q=example.com%20RRSIG',
     '/inspect/dns?q=example.com.%20SOA',
     '/inspect/dns?q=example.com%20SVCB',
     '/inspect/dns?q=example.com.%20TXT',
@@ -178,7 +179,7 @@ for (const protocol of PROTOCOLS) {
         }
 
         // explore-live links
-        const explore = await hrefs(page, '.evidence-view__explore');
+        const explore = await hrefs(page, '.evidence-view__explore a');
         expect(explore[0]).toBe(VIEW_LINK[protocol]);
         for (const row of ROW_LINKS[protocol] ?? []) expect(explore).toContain(row);
         for (const block of BLOCK_LINKS[protocol] ?? []) expect(explore).toContain(block);
@@ -215,9 +216,10 @@ for (const { tool, field } of INSPECTORS) {
   }
 }
 
-test('/inspect/email answers 404', async ({ request }) => {
+test('/inspect/email renders the email inspector', async ({ request }) => {
   const res = await request.get(`${lens}/inspect/email`);
-  expect(res.status()).toBe(404);
+  expect(res.status()).toBe(200);
+  expect(await res.text()).toContain('data-tool="email"');
 });
 
 // C7
@@ -244,7 +246,7 @@ for (const { tool } of INSPECTORS) {
 // C9
 test('C9: the email.mx row links to /inspect/tls?h=mx1.example.com:25', async ({ page }) => {
   await page.goto(`${lens}/${DOMAIN}/email`);
-  const explore = await hrefs(page, '.evidence-view__explore');
+  const explore = await hrefs(page, '.evidence-view__explore a');
   expect(explore).toContain('/inspect/tls?h=mx1.example.com:25');
 });
 

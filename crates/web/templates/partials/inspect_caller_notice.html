@@ -1,0 +1,3 @@
+<div id="inspect-result"><h1 class="inspector-run__target">{{ target }}</h1><p class="inspector-notice" role="status"{% if let Some(tone) = tone %} data-tone="{{ tone }}"{% endif %}>{{ message }}</p><ul class="inspector-examples">
+{% for example in examples %}<li><a class="inspector-examples__chip" href="{{ example.href }}" data-example="{{ example.text }}">{{ example.text }}</a></li>
+{% endfor %}</ul></div>

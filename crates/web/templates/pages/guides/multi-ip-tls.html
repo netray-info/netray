@@ -55,7 +55,7 @@
 
   <section class="guide-tool">
     <h2>Check TLS consistency across all IPs</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://tls.netray.info/", "h", "example.com", "Inspect")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/tls", "h", "example.com", "Inspect")) %}{% endcall %}
     <p class="guide-tool__hint">Inspects TLS configuration across all resolved IPs and flags inconsistencies in certificates, protocol versions, and ALPN.</p>
   </section>
 

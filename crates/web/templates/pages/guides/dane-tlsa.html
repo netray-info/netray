@@ -91,19 +91,19 @@ openssl x509 -in cert.pem -noout -pubkey \
 
   <section class="guide-tool">
     <h2>Check DANE/TLSA configuration</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://tls.netray.info/", "h", "example.com", "Inspect TLS")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/tls", "h", "example.com", "Inspect TLS")) %}{% endcall %}
     <p class="guide-tool__hint">Performs a TLS handshake and checks TLSA/DANE records, certificate chain, and DNSSEC status.</p>
   </section>
 
   <section class="guide-tool">
     <h2>Look up TLSA records in DNS</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://dns.netray.info/", "q", "_443._tcp.example.com TLSA", "Query DNS")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/dns", "q", "_443._tcp.example.com TLSA", "Query DNS")) %}{% endcall %}
     <p class="guide-tool__hint">Query TLSA records directly to verify your DNS publication.</p>
   </section>
 
   <section class="guide-tool">
     <h2>Check your domain's DANE and DNSSEC with netray</h2>
-    {% call c::query_input(crate::pages::guides::tool("https://email.netray.info/", "domain", "example.com", "Check Email Security")) %}{% endcall %}
+    {% call c::query_input(crate::pages::guides::tool("/inspect/email", "d", "example.com", "Check Email Security")) %}{% endcall %}
   </section>
 
   <section id="fix">

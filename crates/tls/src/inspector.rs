@@ -13,18 +13,29 @@ use crate::routes::{self, InspectRequest, InspectResponse};
 use crate::security::RateLimitState;
 use crate::state::AppState;
 
-fn default_port() -> u16 {
-    443
-}
-
-/// One host and port to inspect.
+/// One host and its port or ports to inspect.
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TlsInspectRequest {
     pub host: String,
-    #[serde(default = "default_port")]
-    #[schema(default = 443)]
-    pub port: u16,
+    /// The port; 443 by default.
+    #[serde(default)]
+    #[schema(default = 443, value_type = u16)]
+    pub port: Option<u16>,
+    /// Several ports instead of `port`, at most `limits.max_ports`, each inspected once.
+    #[serde(default)]
+    #[schema(value_type = Vec<u16>)]
+    pub ports: Option<Vec<u16>>,
+}
+
+fn dedup_ports(ports: impl IntoIterator<Item = u16>) -> Vec<u16> {
+    let mut out: Vec<u16> = Vec::new();
+    for p in ports {
+        if !out.contains(&p) {
+            out.push(p);
+        }
+    }
+    out
 }
 
 /// Why an inspection did not run to an answer.
@@ -48,7 +59,8 @@ impl From<AppError> for TlsRefusal {
             | AppError::InvalidPort(_)
             | AppError::ParseError(_)
             | AppError::AmbiguousInput(_)
-            | AppError::TooManyPorts { .. } => Self::InvalidInput(text),
+            | AppError::TooManyPorts { .. }
+            | AppError::CostExceedsLimit { .. } => Self::InvalidInput(text),
             AppError::BlockedTarget(_) => Self::Blocked(text),
             AppError::RateLimited {
                 retry_after_secs, ..
@@ -74,12 +86,25 @@ impl TlsInspector {
         Self { state }
     }
 
-    /// tlsight's input rules with this inspector's `limits.max_ports`.
-    pub fn parse(&self, input: &str) -> Result<ParsedInput, AppError> {
-        input::parse_input(input, self.state.config.load().limits.max_ports)
+    /// The connections the backend's probes of one address cost per port.
+    pub fn probe_connections(&self) -> u32 {
+        self.state.backend.probe_connections()
     }
 
-    /// Inspects `req.host` on `req.port`; a port in `host` is ignored, as tlsight's POST does.
+    /// The most ports one inspection takes: `limits.max_ports`.
+    pub fn max_ports(&self) -> usize {
+        self.state.config.load().limits.max_ports
+    }
+
+    /// tlsight's input rules with this inspector's `limits.max_ports`.
+    pub fn parse(&self, input: &str) -> Result<ParsedInput, AppError> {
+        let mut parsed = input::parse_input(input, self.state.config.load().limits.max_ports)?;
+        parsed.ports = dedup_ports(parsed.ports);
+        Ok(parsed)
+    }
+
+    /// Inspects `req.host` on `req.port` or `req.ports` (443 when neither is given); a port in
+    /// `host` is ignored, as tlsight's POST does.
     pub async fn inspect(
         &self,
         req: &TlsInspectRequest,
@@ -88,10 +113,32 @@ impl TlsInspector {
         request_id: String,
     ) -> Result<InspectResponse, TlsRefusal> {
         let mut parsed = self.parse(&req.host)?;
-        if req.port == 0 {
+        let ports = match (req.port, &req.ports) {
+            (Some(_), Some(_)) => {
+                return Err(
+                    AppError::InvalidPort("give port or ports, not both".to_string()).into(),
+                );
+            }
+            (None, Some(list)) if list.is_empty() => {
+                return Err(AppError::InvalidPort("ports must not be empty".to_string()).into());
+            }
+            (None, Some(list)) => list.clone(),
+            (Some(p), None) => vec![p],
+            (None, None) => vec![443],
+        };
+        if ports.contains(&0) {
             return Err(AppError::InvalidPort("port must be 1-65535".to_string()).into());
         }
-        parsed.ports = vec![req.port];
+        let ports = dedup_ports(ports);
+        let max = self.state.config.load().limits.max_ports;
+        if ports.len() > max {
+            return Err(AppError::TooManyPorts {
+                requested: ports.len(),
+                max,
+            }
+            .into());
+        }
+        parsed.ports = ports;
         Ok(self
             .inspect_parsed(parsed, client, limits, request_id)
             .await?)
@@ -115,7 +162,6 @@ impl TlsInspector {
             Target::Ip(ip) => ip.to_string(),
         };
         let mut warnings = Vec::new();
-        let mut skipped_ips = Vec::new();
 
         tracing::info!(
             hostname = %hostname_str,
@@ -139,56 +185,37 @@ impl TlsInspector {
             );
         })?;
 
-        // Cap-and-warn: compute cost and reduce IPs if over budget
-        let full_cost = parsed.ports.len() as u32 * allowed_ips.len() as u32;
-        let inspected_ips = if limits
-            .check_cost(client_ip, &hostname_str, full_cost)
-            .is_ok()
-        {
-            allowed_ips
-        } else {
-            // Try with reduced IPs
-            let budget = limits.remaining_budget(client_ip);
-            let (selected, skipped) =
-                routes::cap_to_budget(&allowed_ips, parsed.ports.len(), budget, &mut warnings);
-
-            if selected.is_empty() {
-                // Even 1 IP doesn't fit — hard reject
+        // Cap-and-warn: the addresses and probes that fit the smaller burst, charged once. A
+        // port count beyond a burst still plans one address and is refused as
+        // `CostExceedsLimit` without a charge; probes are capped, never refused.
+        let budget = limits.remaining_budget(client_ip);
+        let plan = routes::plan_budget(
+            &allowed_ips,
+            parsed.ports.len(),
+            budget,
+            state.backend.probe_connections(),
+            &mut warnings,
+        );
+        if let Err(e) = limits.check_cost(client_ip, &hostname_str, plan.cost) {
+            if let AppError::RateLimited { scope, .. } = &e {
                 tracing::warn!(
                     client_ip = %client_ip,
-                    scope = "per_ip",
+                    scope = *scope,
                     "rate limited"
                 );
-                return Err(AppError::RateLimited {
-                    retry_after_secs: 60,
-                    scope: "per_ip",
-                });
             }
-
-            let reduced_cost = parsed.ports.len() as u32 * selected.len() as u32;
-            if let Err(e) = limits.check_cost(client_ip, &hostname_str, reduced_cost) {
-                if let AppError::RateLimited { scope, .. } = &e {
-                    tracing::warn!(
-                        client_ip = %client_ip,
-                        scope = *scope,
-                        "rate limited"
-                    );
-                }
-                return Err(e);
-            }
-
-            skipped_ips = skipped;
-            selected
-        };
+            return Err(e);
+        }
 
         routes::inspect(
             state,
             &config,
             InspectRequest {
                 parsed,
-                ips: inspected_ips,
+                ips: plan.ips,
+                probed: plan.probed,
                 warnings,
-                skipped_ips,
+                skipped_ips: plan.skipped,
                 request_id,
                 start: request_start,
                 caa: None,

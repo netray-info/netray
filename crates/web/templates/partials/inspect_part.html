@@ -1,3 +1,4 @@
-<div id="inspect-part-{{ n }}">
-{% if let Some(html) = html %}{{ html|safe }}{% else %}<p>{{ text }}</p>{% endif %}
-</div>
+<section class="inspector-section{% if panel.is_some() %} inspector-port{% endif %}" id="inspect-part-{{ n }}"{% if let Some(panel) = panel %} data-panel="{{ panel }}"{% endif %}><h2{% if quiet %} class="visually-hidden"{% endif %}>{{ label }}</h2>
+{% if let Some(band) = band %}{{ band|safe }}
+{% endif %}{% if let Some(html) = html %}{{ html|safe }}{% else %}<p>{{ text }}</p>{% endif %}
+</section>

@@ -3,24 +3,44 @@
   display: inline-flex;
   flex-direction: column;
   padding-inline-start: var(--space-4);
-  border-inline-start: var(--line-fix) solid var(--color-line);
+  border-inline-start: var(--line-fail) solid var(--color-line);
   border-inline-start-color: var(--grade-tone);
 }
-.grade[data-tone="pass"] { --grade-tone: var(--status-pass-mark); }
-.grade[data-tone="warn"] { --grade-tone: var(--status-warn-mark); }
-.grade[data-tone="fail"] { --grade-tone: var(--status-fail-mark); }
-.grade[data-tone="fix"] { --grade-tone: var(--status-fix-mark); }
-.grade[data-tone="untested"] { --grade-tone: var(--status-untested-mark); }
+.grade[data-tone="pass"] { --grade-tone: var(--status-pass-text); }
+.grade[data-tone="warn"] { --grade-tone: var(--status-warn-text); }
+.grade[data-tone="fail"] { --grade-tone: var(--status-fail-text); }
+.grade[data-tone="fix"] { --grade-tone: var(--status-fix-text); }
+.grade[data-tone="untested"] { --grade-tone: var(--status-untested-text); }
 .grade__letter {
   color: var(--color-ink);
   font-family: var(--font-sans);
   font-size: var(--font-size-grade);
   font-weight: var(--font-weight-bold);
-  letter-spacing: var(--font-tracking-display);
-  line-height: 1;
+  letter-spacing: var(--font-tracking-grade);
+  line-height: 0.85;
 }
 .grade__score {
   color: var(--color-muted);
   font-family: var(--font-mono);
   font-size: var(--font-size-small);
+}
+.grade__score strong {
+  color: var(--color-ink);
+  font-weight: var(--font-weight-bold);
+}
+.grade__descriptor {
+  /* Wraps under the score instead of widening the grade block (the run title needs the width). */
+  width: 0;
+  min-width: 100%;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+@media (max-width: 480px) {
+  .grade {
+    padding-inline-start: var(--space-3);
+  }
+  .grade__score {
+    font-size: var(--font-size-label);
+  }
 }

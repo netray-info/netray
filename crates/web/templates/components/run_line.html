@@ -3,3 +3,9 @@
   {% for part in view.parts %}{% if !loop.first %}&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;{% endif %}<span class="run-line__part">{{ part }}</span>{% endfor %}
 </p>
 {% endmacro %}
+
+{% macro run_title(view) %}
+<p class="run-line run-line--title">
+  {% for part in view.parts %}{% if !loop.first %}&#32;<span class="run-line__sep"{% if part.starts_with("profile ") %} data-part="profile"{% endif %} aria-hidden="true">·</span>&#32;{% endif %}<span class="run-line__part"{% if part.starts_with("profile ") %} data-part="profile"{% endif %}>{{ part }}</span>{% endfor %}
+</p>
+{% endmacro %}

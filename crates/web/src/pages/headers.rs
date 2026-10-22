@@ -48,7 +48,7 @@ const FIXED: [(HeaderName, &str); 7] = [
 ];
 
 /// Adds the policy and the seven fixed headers to a response.
-pub(super) fn secure(mut response: Response) -> Response {
+pub(crate) fn secure(mut response: Response) -> Response {
     let headers = response.headers_mut();
     headers.insert(CONTENT_SECURITY_POLICY, CSP.clone());
     for (name, value) in FIXED {

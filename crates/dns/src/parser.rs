@@ -31,6 +31,14 @@ const SERVER_GROUP_ALIASES: &[(&str, &[PredefinedProvider])] = &[
     ),
 ];
 
+/// The group aliases with the provider names each expands to.
+pub fn server_groups() -> Vec<(&'static str, Vec<String>)> {
+    SERVER_GROUP_ALIASES
+        .iter()
+        .map(|&(alias, providers)| (alias, providers.iter().map(|p| p.to_string()).collect()))
+        .collect()
+}
+
 /// Maximum number of record types allowed in a single query (SDD section 8).
 /// Must equal `config::HARD_CAP_RECORD_TYPES` — enforced by a const assertion in config.rs.
 pub(crate) const MAX_RECORD_TYPES: usize = 10;
@@ -124,6 +132,15 @@ pub enum ParseError {
     BlockedQueryType(String),
     #[error("ALL expands to {0} record types, exceeding the limit of {1}")]
     AllExceedsLimit(usize, usize),
+}
+
+/// The name a lookup queries for a parsed domain: an IP address becomes its reverse name
+/// (`…in-addr.arpa` / nibble `ip6.arpa`), anything else is returned unchanged.
+pub(crate) fn lookup_name(domain: &str) -> String {
+    match domain.parse::<IpAddr>() {
+        Ok(addr) => hickory_proto::rr::Name::from(addr).to_ascii(),
+        Err(_) => domain.to_string(),
+    }
 }
 
 /// Parse a dig-inspired query string into structured query parameters.
@@ -231,6 +248,24 @@ pub fn parse(input: &str) -> Result<ParsedQuery, ParseError> {
 /// "ALL" is handled as a special expansion marker. Blocked types (ANY, AXFR, IXFR)
 /// are allowed through here -- they are rejected in the caller after all tokens
 /// are collected, so the error message is clear.
+/// The record types a query names, in the order [`parse`] reads them: duplicates dropped, aliases
+/// resolved, `ALL` expanded, and no defaults when it names none. Tokens that are no record type
+/// are left out.
+pub fn named_record_types(input: &str) -> Vec<RecordType> {
+    let mut record_types = Vec::new();
+    let mut has_all = false;
+    let mut warnings = Vec::new();
+    for token in input.split_whitespace().skip(1) {
+        if !token.starts_with(['@', '+']) {
+            parse_record_type(token, &mut record_types, &mut has_all, &mut warnings);
+        }
+    }
+    if has_all {
+        record_types = expand_all();
+    }
+    record_types
+}
+
 fn parse_record_type(
     token: &str,
     record_types: &mut Vec<RecordType>,
@@ -352,6 +387,21 @@ fn parse_ipv4_with_port(s: &str) -> Option<ServerSpec> {
     Some(ServerSpec::Ip { addr, port })
 }
 
+/// The flags a query takes, without their `+`.
+pub const FLAGS: &[&str] = &[
+    "udp",
+    "tcp",
+    "tls",
+    "https",
+    "dnssec",
+    "short",
+    "norecurse",
+    "check",
+    "trace",
+    "compare",
+    "auth",
+];
+
 /// Parse a flag name after stripping the `+` prefix.
 fn parse_flag(
     name: &str,
@@ -361,7 +411,14 @@ fn parse_flag(
     recursive: &mut bool,
     warnings: &mut Vec<String>,
 ) {
-    match name.to_ascii_lowercase().as_str() {
+    let flag = name.to_ascii_lowercase();
+    if !FLAGS.contains(&flag.as_str()) {
+        warnings.push(format!("unrecognized flag: +{name}"));
+        return;
+    }
+    // +check, +trace, +compare and +auth are routing hints: the backend routes them via
+    // dedicated endpoints, not via query-string flags.
+    match flag.as_str() {
         "udp" => *transport = Some(Transport::Udp),
         "tcp" => *transport = Some(Transport::Tcp),
         "tls" => *transport = Some(Transport::Tls),
@@ -369,12 +426,7 @@ fn parse_flag(
         "dnssec" => *dnssec = true,
         "short" => *short = true,
         "norecurse" => *recursive = false,
-        // +check and +trace are routing hints for the frontend; the backend
-        // routes them via dedicated endpoints, not via query-string flags.
-        "check" | "trace" | "compare" | "auth" => {}
-        _ => {
-            warnings.push(format!("unrecognized flag: +{name}"));
-        }
+        _ => {}
     }
 }
 

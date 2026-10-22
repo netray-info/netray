@@ -44,7 +44,7 @@ use crate::api::{AppState, BatchEvent, CollectedResponse, STREAM_TIMEOUT_SECS};
 use crate::circuit_breaker::{BreakerState, CircuitBreakerRegistry};
 use crate::dns_raw::{self, NOT_PUBLIC, RawOutbound};
 use crate::error::{ApiError, ErrorResponse};
-use crate::jobs::DnsEnrichmentEvent;
+use crate::jobs::{DnsBackend, DnsEnrichmentEvent, ResolverLookup};
 use crate::parser::ParsedQuery;
 use crate::record_format;
 use crate::result_cache::{CachedEvent, CachedResult, ResultCache};
@@ -55,7 +55,7 @@ use netray_common::enrichment::{EnrichmentClient, IpInfo};
 // Record types queried for the base domain (15 types)
 // ---------------------------------------------------------------------------
 
-const CHECK_RECORD_TYPES: [RecordType; 15] = [
+pub(crate) const CHECK_RECORD_TYPES: [RecordType; 15] = [
     RecordType::A,
     RecordType::AAAA,
     RecordType::CAA,
@@ -180,8 +180,9 @@ pub enum CheckEvent {
         code: &'static str,
         message: String,
     },
-    /// Nameservers of an NS check (`ns_lame`, `ns_delegation`) that did not answer, after the
-    /// lints; not part of the `/api/check` stream.
+    /// Findings of a check whose input did not answer, after the lints: the nameservers of an
+    /// NS check (`ns_lame`, `ns_delegation`) that did not answer, or the failed ancestor lookup
+    /// of a zone or CAA climb; not part of the `/api/check` stream.
     Unanswered {
         category: &'static str,
         silent: Vec<String>,
@@ -377,8 +378,8 @@ async fn stream_check_events(
     while let Some(event) = events.recv().await {
         let event = match event {
             CheckEvent::Batch(batch) => {
-                push_cached(&mut cached_events, "batch", &batch);
-                let mut v = serde_json::to_value(&batch).unwrap_or(serde_json::Value::Null);
+                let mut v = wire_batch(&batch);
+                push_cached(&mut cached_events, "batch", &v);
                 record_format::enrich_lookups_json(&mut v, &batch.record_type);
                 Event::default()
                     .event("batch")
@@ -434,6 +435,18 @@ async fn stream_check_events(
     }
 }
 
+/// A batch as prism's stream and result cache carry it: the internal [`ZONE_SOURCE`] marker is
+/// left out, so the V1 wire is unchanged.
+fn wire_batch(batch: &BatchEvent) -> serde_json::Value {
+    let mut v = serde_json::to_value(batch).unwrap_or(serde_json::Value::Null);
+    if batch.source.as_deref() == Some(ZONE_SOURCE)
+        && let Some(map) = v.as_object_mut()
+    {
+        map.remove("source");
+    }
+    v
+}
+
 fn push_cached(cached: &mut Vec<CachedEvent>, event_type: &str, payload: &impl Serialize) {
     if let Ok(data) = serde_json::to_value(payload) {
         cached.push(CachedEvent {
@@ -451,6 +464,17 @@ fn push_cached(cached: &mut Vec<CachedEvent>, event_type: &str, payload: &impl S
 /// MTA-STS checks and the lints, sent on `tx` in stream order and closed by a `done` event
 /// (no `done` after the stream deadline). Stops when `tx` is closed.
 pub async fn run_check(run: CheckRun, tx: mpsc::Sender<CheckEvent>) {
+    run_check_on(run, tx, DnsBackend::production(), Outbound::production()).await
+}
+
+/// [`run_check`] over the given lookup and raw-query backend and MTA-STS fetch settings: the
+/// seam tests drive without network.
+pub(crate) async fn run_check_on(
+    run: CheckRun,
+    tx: mpsc::Sender<CheckEvent>,
+    backend: DnsBackend,
+    outbound: Outbound,
+) {
     let CheckRun {
         request_id: rid,
         domain,
@@ -460,8 +484,10 @@ pub async fn run_check(run: CheckRun, tx: mpsc::Sender<CheckEvent>) {
         query_semaphore,
         ip_enrichment: enrichment_svc,
     } = run;
-    let outbound = Outbound::production();
-    let raw_outbound = RawOutbound::production();
+    let DnsBackend {
+        lookup,
+        raw: raw_outbound,
+    } = backend;
 
     let _active = ActiveCheck::new();
     let start = Instant::now();
@@ -496,8 +522,10 @@ pub async fn run_check(run: CheckRun, tx: mpsc::Sender<CheckEvent>) {
         let circuit_breakers = Arc::clone(&circuit_breakers);
         let tx_err = tx.clone();
         let semaphore = Arc::clone(&query_semaphore);
+        let lookup = Arc::clone(&lookup);
         futs.push(Box::pin(async move {
             let lookups = fan_out_lookup(
+                &lookup,
                 &domain,
                 rt,
                 &resolvers,
@@ -521,8 +549,10 @@ pub async fn run_check(run: CheckRun, tx: mpsc::Sender<CheckEvent>) {
         let circuit_breakers = Arc::clone(&circuit_breakers);
         let tx_err = tx.clone();
         let semaphore = Arc::clone(&query_semaphore);
+        let lookup = Arc::clone(&lookup);
         futs.push(Box::pin(async move {
             let lookups = fan_out_lookup(
+                &lookup,
                 &sub_domain,
                 RecordType::TXT,
                 &resolvers,
@@ -551,19 +581,8 @@ pub async fn run_check(run: CheckRun, tx: mpsc::Sender<CheckEvent>) {
                     None => break,
                     Some((label, lookups, kind)) => {
                         completed += 1;
-                        let batch = BatchEvent {
-                            request_id: rid.clone(),
-                            record_type: label,
-                            lookups: lookups.clone(),
-                            completed,
-                            total: CHECK_TOTAL_STEPS,
-                            transport: None,
-                            source: None,
-                        };
-                        if enrichment_svc.is_some() {
-                            push_cached(&mut batch_events, "batch", &batch);
-                        }
-                        if tx.send(CheckEvent::Batch(batch)).await.is_err() {
+                        let cache = enrichment_svc.is_some().then_some(&mut batch_events);
+                        if !send_batch(&tx, &rid, &label, &lookups, completed, cache, None).await {
                             metrics::counter!("netray_dns_queries_total", "operation" => "check", "status" => "error").increment(1);
                             return;
                         }
@@ -588,6 +607,43 @@ pub async fn run_check(run: CheckRun, tx: mpsc::Sender<CheckEvent>) {
                 return;
             }
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 1.25: the zone of the queried name and the CAA climb
+    // ------------------------------------------------------------------
+    let scope = LookupScope {
+        lookup: &lookup,
+        resolvers: &resolvers,
+        breaker_keys: &breaker_keys,
+        circuit_breakers: &circuit_breakers,
+        tx: &tx,
+        semaphore: &query_semaphore,
+    };
+    let zone = read_zone(&scope, &domain, &all_lookups, deadline).await;
+    for (rt, lookups) in zone.batches {
+        completed += 1;
+        let cache = enrichment_svc.is_some().then_some(&mut batch_events);
+        if !send_batch(
+            &tx,
+            &rid,
+            &rt.to_string(),
+            &lookups,
+            completed,
+            cache,
+            Some(ZONE_SOURCE),
+        )
+        .await
+        {
+            metrics::counter!("netray_dns_queries_total", "operation" => "check", "status" => "error")
+                .increment(1);
+            return;
+        }
+        let others: Vec<_> = all_lookups
+            .into_iter()
+            .filter(|l| l.query().record_type() != rt)
+            .collect();
+        all_lookups = Lookups::from(others).merge(lookups);
     }
 
     // Extract DMARC TXT strings for the dmarc lint.
@@ -623,11 +679,29 @@ pub async fn run_check(run: CheckRun, tx: mpsc::Sender<CheckEvent>) {
     // ------------------------------------------------------------------
     let query_timeout = Duration::from_secs(3);
     let unique = unique_records(&all_lookups);
-    let (lame, delegation, mta_sts_results) = tokio::join!(
-        check_ns_lame_delegation(&unique, &domain, query_timeout, &raw_outbound),
-        check_ns_delegation_consistency(&unique, &domain, query_timeout, &raw_outbound),
+    let (lame, delegation, mta_sts_results, ttl_batches) = tokio::join!(
+        check_ns_lame_delegation(&unique, &zone.judged, query_timeout, &raw_outbound),
+        check_ns_delegation_consistency(&unique, &zone.judged, query_timeout, &raw_outbound),
         check_mta_sts(&mta_sts_lookups, &domain, &unique, &outbound),
+        async {
+            tokio::time::timeout_at(
+                deadline,
+                authoritative_ttls(&unique, &zone.judged, query_timeout, &raw_outbound),
+            )
+            .await
+            .unwrap_or_default()
+        },
     );
+    for (rt, lookups) in ttl_batches {
+        completed += 1;
+        let cache = enrichment_svc.is_some().then_some(&mut batch_events);
+        if !send_batch(&tx, &rid, &rt.to_string(), &lookups, completed, cache, None).await {
+            metrics::counter!("netray_dns_queries_total", "operation" => "check", "status" => "error")
+                .increment(1);
+            return;
+        }
+        all_lookups = all_lookups.merge(lookups);
+    }
 
     // ------------------------------------------------------------------
     // Phase 2: Lint checks (synchronous, pure)
@@ -679,7 +753,11 @@ pub async fn run_check(run: CheckRun, tx: mpsc::Sender<CheckEvent>) {
             return;
         }
     }
-    for event in unanswered_events(&lame, &delegation) {
+    for event in zone
+        .unmeasured
+        .into_iter()
+        .chain(unanswered_events(&lame, &delegation))
+    {
         if tx.send(event).await.is_err() {
             metrics::counter!("netray_dns_queries_total", "operation" => "check", "status" => "error")
                 .increment(1);
@@ -737,7 +815,11 @@ impl Drop for ActiveCheck {
 
 /// Fan out a single-type DNS query across all resolvers concurrently,
 /// applying circuit breaker pre-checks. Returns merged lookups.
+// One argument per seam and shared limiter, as `dispatch_mechanism` in netray-email does; a
+// struct for one private call site would only move the list.
+#[allow(clippy::too_many_arguments)]
 async fn fan_out_lookup(
+    lookup: &Arc<dyn ResolverLookup>,
     domain: &str,
     rt: RecordType,
     resolvers: &[Resolver],
@@ -776,9 +858,10 @@ async fn fan_out_lookup(
         let r = resolver.clone();
         let q = query.clone();
         let sem = Arc::clone(semaphore);
+        let lookup = Arc::clone(lookup);
         handles.push(tokio::spawn(async move {
             let _permit = sem.acquire().await;
-            r.lookup(q).await
+            lookup.lookup(&r, q).await
         }));
     }
 
@@ -813,6 +896,225 @@ async fn fan_out_lookup(
     merged
 }
 
+/// Sends `lookups` as the batch of `record_type`, numbered `completed`, cached for the IP
+/// enrichment when `cache` is given. False when `tx` is closed.
+async fn send_batch(
+    tx: &mpsc::Sender<CheckEvent>,
+    rid: &str,
+    record_type: &str,
+    lookups: &Lookups,
+    completed: u32,
+    cache: Option<&mut Vec<CachedEvent>>,
+    source: Option<&str>,
+) -> bool {
+    let batch = BatchEvent {
+        request_id: rid.to_owned(),
+        record_type: record_type.to_owned(),
+        lookups: lookups.clone(),
+        completed,
+        total: CHECK_TOTAL_STEPS.max(completed),
+        transport: None,
+        source: source.map(str::to_owned),
+    };
+    if let Some(cache) = cache {
+        push_cached(cache, "batch", &wire_batch(&batch));
+    }
+    tx.send(CheckEvent::Batch(batch)).await.is_ok()
+}
+
+/// The lookup seam, resolvers and limits every check lookup goes through.
+struct LookupScope<'a> {
+    lookup: &'a Arc<dyn ResolverLookup>,
+    resolvers: &'a [Resolver],
+    breaker_keys: &'a [String],
+    circuit_breakers: &'a Arc<CircuitBreakerRegistry>,
+    tx: &'a mpsc::Sender<CheckEvent>,
+    semaphore: &'a Arc<Semaphore>,
+}
+
+impl LookupScope<'_> {
+    /// [`fan_out_lookup`] of `rt` at `name`.
+    async fn of(&self, name: &str, rt: RecordType) -> Lookups {
+        fan_out_lookup(
+            self.lookup,
+            name,
+            rt,
+            self.resolvers,
+            self.breaker_keys,
+            self.circuit_breakers,
+            self.tx,
+            self.semaphore,
+        )
+        .await
+    }
+}
+
+/// The checks that judge the zone of the queried name.
+const ZONE_CHECKS: [&str; 6] = [
+    "ns",
+    "ns_lame",
+    "ns_delegation",
+    "dnssec",
+    "dnskey_algorithm",
+    "dnssec_rollover",
+];
+
+/// What the zone of the queried name adds to a check: the name the lame-delegation and
+/// delegation-consistency checks ask for, the batches sent that replace the name's lookups of
+/// their type in the linted lookups (the zone's NS, DNSKEY and DS, an ancestor's CAA), and an
+/// `Unanswered` event per check whose zone or CAA climb ended on a failed lookup.
+struct ZoneReading {
+    judged: String,
+    batches: Vec<(RecordType, Lookups)>,
+    unmeasured: Vec<CheckEvent>,
+}
+
+/// The finding of a zone reading cut off by the stream deadline.
+const ZONE_DEADLINE: &str = "zone lookup exceeded the stream deadline";
+
+/// The finding of a CAA climb cut off by the stream deadline.
+const CAA_DEADLINE: &str = "CAA lookup of the name's ancestors exceeded the stream deadline";
+
+/// The `source` of a batch read at the zone or an ancestor instead of the queried name: it replaces
+/// the name's batch of its type, whose failure then decides nothing (`module::translate`).
+pub(crate) const ZONE_SOURCE: &str = "zone";
+
+/// Most ancestors a zone or CAA climb asks.
+const MAX_ANCESTORS: usize = 8;
+
+/// The zone of `domain` and its CAA climb, read after the lookups at `domain` itself and bounded
+/// by `deadline`. An apex owning its SOA, a name whose SOA lookup got no definite answer and a
+/// name holding CAA records add no lookup.
+async fn read_zone(
+    scope: &LookupScope<'_>,
+    domain: &str,
+    lookups: &Lookups,
+    deadline: tokio::time::Instant,
+) -> ZoneReading {
+    let zone = async {
+        if owns(lookups, domain, RecordType::SOA)
+            || lookup_failure(lookups, RecordType::SOA, domain).is_some()
+        {
+            return Ok(None);
+        }
+        let Some((zone, _)) = climb(scope, domain, RecordType::SOA, |l, ancestor| {
+            owns(l, ancestor, RecordType::SOA)
+        })
+        .await?
+        else {
+            return Ok(None);
+        };
+        let (ns, dnskey, ds) = tokio::join!(
+            scope.of(&zone, RecordType::NS),
+            scope.of(&zone, RecordType::DNSKEY),
+            scope.of(&zone, RecordType::DS),
+        );
+        Ok(Some((zone, ns, dnskey, ds)))
+    };
+    let caa = async {
+        if !lookups.records_by_type(RecordType::CAA).is_empty()
+            || lookup_failure(lookups, RecordType::CAA, domain).is_some()
+        {
+            return Ok(None);
+        }
+        climb(scope, domain, RecordType::CAA, |l, _| {
+            !l.records_by_type(RecordType::CAA).is_empty()
+        })
+        .await
+    };
+    let (zone, caa) = tokio::join!(
+        tokio::time::timeout_at(deadline, zone),
+        tokio::time::timeout_at(deadline, caa),
+    );
+
+    let mut reading = ZoneReading {
+        judged: domain.to_owned(),
+        batches: Vec::new(),
+        unmeasured: Vec::new(),
+    };
+    match zone.unwrap_or_else(|_| Err(ZONE_DEADLINE.to_owned())) {
+        Ok(None) => {}
+        Ok(Some((zone, ns, dnskey, ds))) => {
+            reading.batches.extend([
+                (RecordType::NS, ns),
+                (RecordType::DNSKEY, dnskey),
+                (RecordType::DS, ds),
+            ]);
+            reading.judged = zone;
+        }
+        Err(finding) => reading
+            .unmeasured
+            .extend(ZONE_CHECKS.iter().map(|check| unmeasured(check, &finding))),
+    }
+    // A timed-out future was climbing: one that needed no climb is ready at its first poll.
+    match caa.unwrap_or_else(|_| Err(CAA_DEADLINE.to_owned())) {
+        Ok(None) => {}
+        Ok(Some((_, lookups))) => reading.batches.push((RecordType::CAA, lookups)),
+        Err(finding) => reading.unmeasured.push(unmeasured("caa", &finding)),
+    }
+    reading
+}
+
+/// The closest ancestor of `domain` whose `rt` lookup `found` accepts, with that lookup; `None`
+/// when none of [`ancestors`] does. An ancestor lookup with no definite answer before then ends
+/// the climb with its finding.
+async fn climb(
+    scope: &LookupScope<'_>,
+    domain: &str,
+    rt: RecordType,
+    found: impl Fn(&Lookups, &str) -> bool,
+) -> Result<Option<(String, Lookups)>, String> {
+    for ancestor in ancestors(domain) {
+        let lookups = scope.of(&ancestor, rt).await;
+        if found(&lookups, &ancestor) {
+            return Ok(Some((ancestor, lookups)));
+        }
+        if let Some(finding) = lookup_failure(&lookups, rt, &ancestor) {
+            return Err(finding);
+        }
+    }
+    Ok(None)
+}
+
+/// The ancestors of `domain`, closest first, at most [`MAX_ANCESTORS`]: never above its
+/// registrable domain, or a single-label name when the public suffix list gives none.
+fn ancestors(domain: &str) -> Vec<String> {
+    let domain = domain.trim_end_matches('.').to_ascii_lowercase();
+    let floor = psl::domain_str(&domain).map_or(2, |d| d.split('.').count());
+    let labels: Vec<&str> = domain.split('.').collect();
+    (1..=labels.len().saturating_sub(floor))
+        .take(MAX_ANCESTORS)
+        .map(|first| labels[first..].join("."))
+        .collect()
+}
+
+/// Whether `lookups` hold an `rt` record owned by `name`, compared as A-labels.
+fn owns(lookups: &Lookups, name: &str, rt: RecordType) -> bool {
+    let name = name.trim_end_matches('.');
+    lookups.records_by_type(rt).iter().any(|record| {
+        record
+            .name()
+            .to_ascii()
+            .trim_end_matches('.')
+            .eq_ignore_ascii_case(name)
+    })
+}
+
+/// The finding of the `rt` lookups of `name` in `lookups` when none got a definite answer.
+fn lookup_failure(lookups: &Lookups, rt: RecordType, name: &str) -> Option<String> {
+    let of_type = lookups.iter().filter(|l| l.query().record_type() == rt);
+    crate::module::lookup_error(&rt.to_string(), of_type, Some(name))
+}
+
+/// The event that makes `category` unmeasured with `finding`.
+fn unmeasured(category: &'static str, finding: &str) -> CheckEvent {
+    CheckEvent::Unanswered {
+        category,
+        silent: vec![finding.to_owned()],
+        none_answered: true,
+    }
+}
+
 /// Maps a lint result onto the shared model status (a function: `CheckResult` is foreign).
 pub fn lint_status(r: &CheckResult) -> netray_model::Status {
     match r {
@@ -843,7 +1145,7 @@ pub fn unique_lines(results: Vec<CheckResult>) -> Vec<CheckResult> {
 /// needs no change is kept as is, a lookup whose records all repeat earlier ones is dropped,
 /// and a lookup that does not survive the serde round trip (e.g. a name with an escaped
 /// `\000` label) is kept as is, so it can only affect its own deduplication.
-fn unique_records(lookups: &Lookups) -> Lookups {
+pub(crate) fn unique_records(lookups: &Lookups) -> Lookups {
     use mhost::resolver::Lookup;
     use serde_json::Value;
     use std::collections::HashSet;
@@ -926,6 +1228,184 @@ fn unique_records(lookups: &Lookups) -> Lookups {
     Lookups::new(out)
 }
 
+/// The TTL below which `check_ttl` calls a record low.
+const LOW_TTL: u32 = 60;
+
+/// Two names compared as A-labels: hickory serialises and displays `xn--` labels as Unicode.
+fn same_name(a: &str, b: &str) -> bool {
+    a_label(a).eq_ignore_ascii_case(&a_label(b))
+}
+
+/// `name` as an A-label without the trailing dot; unparsable names stay as given.
+fn a_label(name: &str) -> String {
+    let ascii = hickory_proto::rr::Name::from_utf8(name)
+        .map(|n| n.to_ascii())
+        .unwrap_or_else(|_| name.to_owned());
+    ascii.trim_end_matches('.').to_owned()
+}
+
+/// Whether `name` is `zone` or below it.
+fn in_zone(name: &str, zone: &str) -> bool {
+    let (name, zone) = (
+        a_label(name).to_ascii_lowercase(),
+        a_label(zone).to_ascii_lowercase(),
+    );
+    name == zone || name.ends_with(&format!(".{zone}"))
+}
+
+/// One batch per (name, type) at or below `zone` whose highest TTL in `unique` is below
+/// [`LOW_TTL`]: the pair's records with the highest TTL an authoritative (AA) answer of the
+/// zone's nameservers carries for that name and type, from the nameserver that served it. A pair
+/// no nameserver answers authoritatively, or owned outside the zone (a CNAME target elsewhere),
+/// gets no batch.
+async fn authoritative_ttls(
+    unique: &Lookups,
+    zone: &str,
+    timeout: Duration,
+    raw: &RawOutbound,
+) -> Vec<(RecordType, Lookups)> {
+    let mut pairs: Vec<(String, RecordType)> = Vec::new();
+    for record in unique.records() {
+        let pair = (record.name().to_ascii(), record.record_type());
+        // An RRSIG carries the TTL of the RRset it covers (RFC 4034 §3), not one per name.
+        if record.record_type() != RecordType::RRSIG
+            && record.ttl() > 0
+            && record.ttl() < LOW_TTL
+            && in_zone(&pair.0, zone)
+            && !pairs.contains(&pair)
+        {
+            pairs.push(pair);
+        }
+    }
+    if pairs.is_empty() {
+        return Vec::new();
+    }
+
+    let mut ns_ips: HashMap<String, Vec<IpAddr>> = unique
+        .ns()
+        .into_iter()
+        .map(|n| (n.to_ascii(), Vec::new()))
+        .collect();
+    if ns_ips.is_empty() {
+        return Vec::new();
+    }
+    raw.resolve_missing_glue(&mut ns_ips).await;
+    let servers: Vec<SocketAddr> = raw
+        .build_server_list(&ns_ips)
+        .servers
+        .into_iter()
+        .map(|(addr, _)| addr)
+        .collect();
+    if servers.is_empty() {
+        return Vec::new();
+    }
+
+    let answers = futures::future::join_all(pairs.iter().map(|(name, rt)| {
+        let servers = &servers;
+        async move {
+            let qname =
+                hickory_proto::rr::Name::from_ascii(format!("{}.", name.trim_end_matches('.')))
+                    .ok()?;
+            let qtype = hickory_proto::rr::RecordType::from(u16::from(*rt));
+            raw.parallel_queries(servers, &qname, qtype, timeout)
+                .await
+                .into_iter()
+                .filter_map(|qr| {
+                    let resp = qr.result.ok().filter(|r| r.is_authoritative())?;
+                    resp.answers()
+                        .iter()
+                        .filter(|rec| {
+                            rec.record_type() == qtype && same_name(&rec.name.to_ascii(), name)
+                        })
+                        .map(|rec| rec.ttl)
+                        .max()
+                        .map(|ttl| (ttl, qr.server))
+                })
+                .max_by_key(|(ttl, _)| *ttl)
+        }
+    }))
+    .await;
+
+    pairs
+        .iter()
+        .zip(answers)
+        .filter_map(|((name, rt), answer)| {
+            let (ttl, server) = answer?;
+            let lookups = with_ttl(unique, name, *rt, ttl, server);
+            (!lookups.is_empty()).then(|| (*rt, Lookups::new(lookups)))
+        })
+        .collect()
+}
+
+/// Every lookup in `lookups` holding records of (`name`, `rt`), reduced to those records, each
+/// carrying `ttl`, as answered by `server`. The TTL belongs to the RRset (RFC 2181 §5.2), so it
+/// covers records the authoritative answer did not repeat, such as a rotating address set.
+fn with_ttl(
+    lookups: &Lookups,
+    name: &str,
+    rt: RecordType,
+    ttl: u32,
+    server: SocketAddr,
+) -> Vec<mhost::resolver::Lookup> {
+    use serde_json::Value;
+
+    let rtype = rt.to_string();
+    let owned = |rec: &Value| {
+        rec["type"].as_str() == Some(rtype.as_str())
+            && rec["name"].as_str().is_some_and(|n| same_name(n, name))
+    };
+    // Every lookup, whatever its query type: `unique_records` keeps a record in the first
+    // lookup that carried it (a CNAME in the A lookup, glue in the NS lookup).
+    lookups
+        .iter()
+        .filter_map(|l| serde_json::to_value(l).ok())
+        .filter_map(|mut value| {
+            let records = value
+                .pointer_mut("/result/Response/records")?
+                .as_array_mut()?;
+            records.retain(|rec| owned(rec));
+            if records.is_empty() {
+                return None;
+            }
+            for rec in records.iter_mut() {
+                rec["ttl"] = Value::from(ttl);
+            }
+            value["name_server"] =
+                Value::from(mhost::nameserver::NameServerConfig::udp(server).to_string());
+            serde_json::from_value(value).ok()
+        })
+        .collect()
+}
+
+/// `lookups` without RRSIG records, for the TTL lint: an RRSIG carries the TTL of the RRset it
+/// covers (RFC 4034 §3), which the lint judges on that RRset, while the signature's own cached
+/// remainder would add a finding no answer stands behind.
+fn without_rrsigs(lookups: &Lookups) -> Lookups {
+    use serde_json::Value;
+
+    let rrsig = |rec: &Value| rec["type"].as_str() == Some("RRSIG");
+    let kept: Vec<mhost::resolver::Lookup> = lookups
+        .iter()
+        .map(|lookup| {
+            let Ok(mut value) = serde_json::to_value(lookup) else {
+                return lookup.clone();
+            };
+            let Some(records) = value
+                .pointer_mut("/result/Response/records")
+                .and_then(Value::as_array_mut)
+            else {
+                return lookup.clone();
+            };
+            if !records.iter().any(rrsig) {
+                return lookup.clone();
+            }
+            records.retain(|rec| !rrsig(rec));
+            serde_json::from_value(value).unwrap_or_else(|_| lookup.clone())
+        })
+        .collect();
+    Lookups::new(kept)
+}
+
 /// The synchronous record lints in emit order, run over the unique records of all resolvers,
 /// each category's lines deduplicated.
 pub fn lint_lookups(lookups: &Lookups) -> Vec<(&'static str, Vec<CheckResult>)> {
@@ -941,7 +1421,7 @@ pub fn lint_lookups(lookups: &Lookups) -> Vec<(&'static str, Vec<CheckResult>)> 
         ("mx", check_mx_sync(lookups)),
         ("ns", check_ns_count(lookups)),
         ("spf", check_spf(lookups)),
-        ("ttl", check_ttl(lookups)),
+        ("ttl", check_ttl(&without_rrsigs(lookups))),
     ]
     .into_iter()
     .map(|(category, results)| (category, unique_lines(results)))
@@ -1859,6 +2339,14 @@ mod mta_sts_outbound_tests;
 #[cfg(test)]
 #[path = "check_ns_outbound_tests.rs"]
 mod ns_outbound_tests;
+
+#[cfg(test)]
+#[path = "check_zone_tests.rs"]
+mod zone_tests;
+
+#[cfg(test)]
+#[path = "check_ttl_tests.rs"]
+mod ttl_tests;
 
 #[cfg(test)]
 mod tests {
