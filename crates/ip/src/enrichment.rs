@@ -4,7 +4,7 @@ use crate::backend::{
     AsnInfo, BotDb, CinsArmyIps, CloudProviderDb, DatacenterRanges, FeodoBotnetIps, GeoIpAsnDb, GeoIpCityDb,
     SpamhausDrop, TorExitNodes, VpnRanges,
 };
-use crate::config::Config;
+use crate::config::ModuleConfig;
 use mhost::resolver::{ResolverGroup, ResolverGroupBuilder};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -65,9 +65,7 @@ fn emit_file_age(path: &str, source_label: &'static str) {
 #[error("{0}")]
 pub struct LoadError(String);
 
-/// Groups all reloadable backend resources. Stored behind `ArcSwap` in `AppState`
-/// so SIGHUP can atomically swap in a freshly loaded context without dropping
-/// in-flight requests.
+/// Groups all backend resources the lookups read.
 pub struct EnrichmentContext {
     pub user_agent_parser: Option<Arc<UserAgentParser>>,
     pub geoip_city_db: Option<Arc<GeoIpCityDb>>,
@@ -91,19 +89,13 @@ pub struct EnrichmentContext {
 }
 
 impl EnrichmentContext {
-    /// Load all backends from the paths specified in `config`.
-    /// DNS resolver is built from system config (async).
-    pub async fn load(config: &Config) -> Result<Self, LoadError> {
-        Self::load_with(config, true).await
-    }
-
-    /// Like [`load`](Self::load), for the engine module: the User-Agent parser loads only when
+    /// Load all backends from the paths in `config`: the User-Agent parser loads only when
     /// `user_agent_regexes` is set, and no log line says otherwise.
-    pub async fn load_for_module(config: &Config) -> Result<Self, LoadError> {
+    pub async fn load_for_module(config: &ModuleConfig) -> Result<Self, LoadError> {
         Self::load_with(config, config.user_agent_regexes.is_some()).await
     }
 
-    async fn load_with(config: &Config, with_user_agent: bool) -> Result<Self, LoadError> {
+    async fn load_with(config: &ModuleConfig, with_user_agent: bool) -> Result<Self, LoadError> {
         let geoip_city_db = if let Some(path) = config.geoip_city_db.as_deref() {
             match GeoIpCityDb::new(path).await {
                 Some(db) => {
@@ -520,12 +512,12 @@ impl EnrichmentContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
+    use crate::config::ModuleConfig;
 
     #[tokio::test]
     async fn load_with_no_paths_succeeds() {
-        let config = Config::load(None).unwrap();
-        let ctx = EnrichmentContext::load(&config).await;
+        let config = ModuleConfig::default();
+        let ctx = EnrichmentContext::load_for_module(&config).await;
         assert!(ctx.is_ok());
         let ctx = ctx.unwrap();
         assert!(ctx.geoip_city_db.is_none());
@@ -538,32 +530,32 @@ mod tests {
 
     #[tokio::test]
     async fn nonexistent_geoip_city_path_returns_error() {
-        let mut config = Config::load(None).unwrap();
+        let mut config = ModuleConfig::default();
         config.geoip_city_db = Some("/nonexistent/GeoLite2-City.mmdb".to_string());
-        let result = EnrichmentContext::load(&config).await;
+        let result = EnrichmentContext::load_for_module(&config).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn nonexistent_geoip_asn_path_returns_error() {
-        let mut config = Config::load(None).unwrap();
+        let mut config = ModuleConfig::default();
         config.geoip_asn_db = Some("/nonexistent/GeoLite2-ASN.mmdb".to_string());
-        let result = EnrichmentContext::load(&config).await;
+        let result = EnrichmentContext::load_for_module(&config).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn nonexistent_ua_regex_path_returns_error() {
-        let mut config = Config::load(None).unwrap();
+        let mut config = ModuleConfig::default();
         config.user_agent_regexes = Some("/nonexistent/regexes.yaml".to_string());
-        let result = EnrichmentContext::load(&config).await;
+        let result = EnrichmentContext::load_for_module(&config).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn no_geoip_means_build_epoch_is_none() {
-        let config = Config::load(None).unwrap();
-        let ctx = EnrichmentContext::load(&config).await.unwrap();
+        let config = ModuleConfig::default();
+        let ctx = EnrichmentContext::load_for_module(&config).await.unwrap();
         assert!(ctx.geoip_city_build_epoch.is_none());
     }
 }

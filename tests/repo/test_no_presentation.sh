@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# C5: `presentation` is not an identifier in the engine, the module adapters or lens.
+# C5: `presentation` is not an identifier in the engine or the module adapters.
 set -u
 cd "$(dirname "$0")/../.." || exit 1
 
-targets=(crates/engine/src crates/lens/src)
+targets=(crates/engine/src)
 for c in dns tls http email ip; do
     targets+=("crates/$c/src/module.rs")
 done

@@ -335,15 +335,17 @@ fn page_letter(html: &str) -> String {
 
 /// The `(code, tone)` of every issue row of the entry page, sorted.
 fn page_issues(html: &str) -> Vec<(String, String)> {
-    let code = r#"<span class="check-row__code">"#;
-    let tone = r#"<span class="check-row__tone">"#;
+    // The row carries its tone on the article (`data-tone`) and its check ID on its main column
+    // (`data-check`); the side column may show a catalogue line (`DNS·01`) instead of the ID.
+    let row = r#"<article class="check-row" data-tone=""#;
+    let code = r#"data-check=""#;
     let mut rows = Vec::new();
     let mut rest = html;
-    while let Some(i) = rest.find(code) {
-        rest = &rest[i + code.len()..];
-        let id = rest[..rest.find("</span>").unwrap()].to_string();
-        let j = rest.find(tone).expect("a tone after the code") + tone.len();
-        let t = rest[j..j + rest[j..].find("</span>").unwrap()].to_string();
+    while let Some(i) = rest.find(row) {
+        rest = &rest[i + row.len()..];
+        let t = rest[..rest.find('"').unwrap()].to_string();
+        let j = rest.find(code).expect("a code in the row") + code.len();
+        let id = rest[j..j + rest[j..].find('"').unwrap()].to_string();
         rows.push((id, t));
     }
     rows.sort();
@@ -404,13 +406,13 @@ fn tone(status: Status) -> &'static str {
 /// `(title, tone)` of every check row of an evidence view, which names a check by its label and
 /// title.
 fn page_titles(html: &str) -> Vec<(String, String)> {
-    let tone = r#"<span class="check-row__tone">"#;
+    let row = r#"<article class="check-row" data-tone=""#;
     let title = r#"<h3 class="check-row__title">"#;
     let mut rows = Vec::new();
     let mut rest = html;
-    while let Some(i) = rest.find(tone) {
-        rest = &rest[i + tone.len()..];
-        let t = rest[..rest.find("</span>").unwrap()].to_string();
+    while let Some(i) = rest.find(row) {
+        rest = &rest[i + row.len()..];
+        let t = rest[..rest.find('"').unwrap()].to_string();
         let j = rest.find(title).expect("a title after the tone") + title.len();
         let name = rest[j..j + rest[j..].find("</h3>").unwrap()].to_string();
         rows.push((name, t));

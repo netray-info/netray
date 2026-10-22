@@ -1,6 +1,3 @@
-use std::ffi::OsString;
-use std::net::SocketAddr;
-
 use serde::Deserialize;
 
 pub use config::ConfigError;
@@ -12,28 +9,13 @@ const HARD_CAP_MAX_PORTS: usize = 7;
 const HARD_CAP_MAX_IPS: usize = 10;
 const HARD_CAP_HTTP_CHECK_TIMEOUT: u64 = 5;
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
+/// The inspection's runtime config: the `[modules.tls]` sections, validated and clamped.
+#[derive(Debug, Clone)]
 pub struct Config {
-    /// Display name shown in the UI. Defaults to "tlsight".
-    #[serde(default = "default_site_name")]
-    pub site_name: String,
-    #[serde(default = "default_server")]
-    pub server: ServerConfig,
-    #[serde(default = "default_limits")]
     pub limits: LimitsConfig,
-    #[serde(default = "default_dns")]
     pub dns: DnsConfig,
-    #[serde(default = "default_validation")]
     pub validation: ValidationConfig,
-    #[serde(default)]
-    pub ecosystem: EcosystemConfig,
-    #[serde(default = "default_quality")]
     pub quality: QualityConfig,
-    #[serde(default)]
-    pub telemetry: TelemetryConfig,
-    #[serde(default)]
-    pub backends: BackendsConfig,
 }
 
 /// The check sections the TLS module reads from a `[modules.tls]` table; tlsight's key names
@@ -71,7 +53,7 @@ pub struct ModuleLimits {
     #[serde(default = "default_per_target_burst")]
     pub per_target_burst: u32,
     /// Handshakes one lens check may spend; 0.23.x got this from tlsight's `per_ip_burst`.
-    #[serde(default = "default_per_ip_burst")]
+    #[serde(default = "default_check_budget")]
     pub check_budget: u32,
 }
 
@@ -85,19 +67,17 @@ impl Default for ModuleLimits {
             max_ips_per_hostname: default_max_ips_per_hostname(),
             per_target_per_minute: default_per_target_per_minute(),
             per_target_burst: default_per_target_burst(),
-            check_budget: default_per_ip_burst(),
+            check_budget: default_check_budget(),
         }
     }
 }
 
 impl ModuleConfig {
-    /// The service `Config` these sections stand for, validated and clamped as at startup.
+    /// The runtime `Config` these sections stand for, validated and clamped.
     pub fn into_config(self) -> Result<Config, ConfigError> {
         let l = self.limits;
         reject_zero("check_budget", l.check_budget)?;
         let mut cfg = Config {
-            site_name: default_site_name(),
-            server: default_server(),
             limits: LimitsConfig {
                 per_target_per_minute: l.per_target_per_minute,
                 per_target_burst: l.per_target_burst,
@@ -107,14 +87,10 @@ impl ModuleConfig {
                 max_ports: l.max_ports,
                 max_ips_per_hostname: l.max_ips_per_hostname,
                 allow_blocked_targets: false,
-                ..default_limits()
             },
             dns: self.dns,
             validation: self.validation,
-            ecosystem: EcosystemConfig::default(),
             quality: self.quality,
-            telemetry: TelemetryConfig::default(),
-            backends: BackendsConfig::default(),
         };
         cfg.validate()?;
         cfg.check_startup()?;
@@ -122,45 +98,16 @@ impl ModuleConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ServerConfig {
-    #[serde(default = "default_bind")]
-    pub bind: SocketAddr,
-    #[serde(default = "default_metrics_bind")]
-    pub metrics_bind: SocketAddr,
-    #[serde(default)]
-    pub trusted_proxies: Vec<String>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Clone)]
 pub struct LimitsConfig {
-    #[serde(default = "default_per_ip_per_minute")]
-    pub per_ip_per_minute: u32,
-    #[serde(default = "default_per_ip_burst")]
-    pub per_ip_burst: u32,
-    #[serde(default = "default_per_target_per_minute")]
     pub per_target_per_minute: u32,
-    #[serde(default = "default_per_target_burst")]
     pub per_target_burst: u32,
-    #[serde(default = "default_max_concurrent_connections")]
-    pub max_concurrent_connections: usize,
-    #[serde(default = "default_max_concurrent_handshakes")]
     pub max_concurrent_handshakes: usize,
-    #[serde(default = "default_handshake_timeout_secs")]
     pub handshake_timeout_secs: u64,
-    #[serde(default = "default_request_timeout_secs")]
     pub request_timeout_secs: u64,
-    #[serde(default = "default_max_ports")]
     pub max_ports: usize,
-    #[serde(default = "default_max_ips_per_hostname")]
     pub max_ips_per_hostname: usize,
-    #[serde(default = "default_max_domain_length")]
-    pub max_domain_length: usize,
-    /// Allow inspection of blocked IP ranges (loopback, private, etc.).
-    /// **Development only** — must never be enabled in production.
-    #[serde(default)]
+    /// Allow inspection of blocked IP ranges (loopback, private, etc.); tests only.
     pub allow_blocked_targets: bool,
 }
 
@@ -186,15 +133,6 @@ pub struct ValidationConfig {
     pub check_ct: bool,
     #[serde(default)]
     pub custom_ca_dir: Option<String>,
-}
-
-pub use netray_common::ecosystem::EcosystemConfig;
-
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct BackendsConfig {
-    #[serde(default)]
-    pub ip: Option<netray_common::backend::BackendConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -226,39 +164,6 @@ fn default_http_check_timeout_secs() -> u64 {
     5
 }
 
-pub use netray_common::telemetry::TelemetryConfig;
-
-// --- Default value functions ---
-
-fn default_site_name() -> String {
-    "tlsight".to_string()
-}
-
-fn default_server() -> ServerConfig {
-    ServerConfig {
-        bind: default_bind(),
-        metrics_bind: default_metrics_bind(),
-        trusted_proxies: Vec::new(),
-    }
-}
-
-fn default_limits() -> LimitsConfig {
-    LimitsConfig {
-        per_ip_per_minute: default_per_ip_per_minute(),
-        per_ip_burst: default_per_ip_burst(),
-        per_target_per_minute: default_per_target_per_minute(),
-        per_target_burst: default_per_target_burst(),
-        max_concurrent_connections: default_max_concurrent_connections(),
-        max_concurrent_handshakes: default_max_concurrent_handshakes(),
-        handshake_timeout_secs: default_handshake_timeout_secs(),
-        request_timeout_secs: default_request_timeout_secs(),
-        max_ports: default_max_ports(),
-        max_ips_per_hostname: default_max_ips_per_hostname(),
-        max_domain_length: default_max_domain_length(),
-        allow_blocked_targets: false,
-    }
-}
-
 fn default_dns() -> DnsConfig {
     DnsConfig {
         timeout_secs: default_dns_timeout_secs(),
@@ -276,19 +181,21 @@ fn default_validation() -> ValidationConfig {
     }
 }
 
-fn default_bind() -> SocketAddr {
-    ([127, 0, 0, 1], 8080).into()
+#[cfg(test)]
+fn default_limits() -> LimitsConfig {
+    LimitsConfig {
+        per_target_per_minute: default_per_target_per_minute(),
+        per_target_burst: default_per_target_burst(),
+        max_concurrent_handshakes: default_max_concurrent_handshakes(),
+        handshake_timeout_secs: default_handshake_timeout_secs(),
+        request_timeout_secs: default_request_timeout_secs(),
+        max_ports: default_max_ports(),
+        max_ips_per_hostname: default_max_ips_per_hostname(),
+        allow_blocked_targets: false,
+    }
 }
 
-fn default_metrics_bind() -> SocketAddr {
-    ([127, 0, 0, 1], 9090).into()
-}
-
-fn default_per_ip_per_minute() -> u32 {
-    30
-}
-
-fn default_per_ip_burst() -> u32 {
+fn default_check_budget() -> u32 {
     10
 }
 
@@ -298,10 +205,6 @@ fn default_per_target_per_minute() -> u32 {
 
 fn default_per_target_burst() -> u32 {
     20
-}
-
-fn default_max_concurrent_connections() -> usize {
-    256
 }
 
 fn default_max_concurrent_handshakes() -> usize {
@@ -324,10 +227,6 @@ fn default_max_ips_per_hostname() -> usize {
     10
 }
 
-fn default_max_domain_length() -> usize {
-    253
-}
-
 fn default_dns_timeout_secs() -> u64 {
     3
 }
@@ -345,30 +244,7 @@ fn default_true() -> bool {
 }
 
 impl Config {
-    /// Load configuration from an optional TOML file path and environment variables.
-    ///
-    /// Precedence (highest first): env vars (NETRAY_TLS_ prefix) > TOML file > built-in defaults.
-    /// A `TLSIGHT_` variable is refused.
-    pub fn load(config_path: Option<&str>) -> Result<Self, ConfigError> {
-        Self::load_with_env(config_path, std::env::vars_os())
-    }
-
-    fn load_with_env(
-        config_path: Option<&str>,
-        env: impl IntoIterator<Item = (OsString, OsString)>,
-    ) -> Result<Self, ConfigError> {
-        let env: Vec<(OsString, OsString)> = env.into_iter().collect();
-        netray_common::config::refuse_legacy_prefix("TLSIGHT_", "NETRAY_TLS_", &env)?;
-        // e.g. NETRAY_TLS_LIMITS__PER_IP_PER_MINUTE=60 maps to limits.per_ip_per_minute.
-        let mut cfg: Config =
-            netray_common::config::load_with_env(config_path, "NETRAY_TLS_", env)?;
-        cfg.validate()?;
-
-        Ok(cfg)
-    }
-
-    /// Checks that only startup (and `--check-config`) enforces: a SIGHUP reload goes
-    /// through `load` and must keep the previous trust store instead of failing.
+    /// Refuses a `validation.custom_ca_dir` that is not a directory.
     pub fn check_startup(&self) -> Result<(), ConfigError> {
         if let Some(dir) = &self.validation.custom_ca_dir
             && !std::path::Path::new(dir).is_dir()
@@ -423,14 +299,8 @@ impl Config {
         }
 
         // Reject zero values — these would disable protections or cause division-by-zero.
-        reject_zero("per_ip_per_minute", self.limits.per_ip_per_minute)?;
-        reject_zero("per_ip_burst", self.limits.per_ip_burst)?;
         reject_zero("per_target_per_minute", self.limits.per_target_per_minute)?;
         reject_zero("per_target_burst", self.limits.per_target_burst)?;
-        reject_zero(
-            "max_concurrent_connections",
-            self.limits.max_concurrent_connections,
-        )?;
         reject_zero(
             "max_concurrent_handshakes",
             self.limits.max_concurrent_handshakes,
@@ -439,7 +309,6 @@ impl Config {
         reject_zero("request_timeout_secs", self.limits.request_timeout_secs)?;
         reject_zero("max_ports", self.limits.max_ports)?;
         reject_zero("max_ips_per_hostname", self.limits.max_ips_per_hostname)?;
-        reject_zero("max_domain_length", self.limits.max_domain_length)?;
         reject_zero("dns.timeout_secs", self.dns.timeout_secs)?;
         reject_zero(
             "validation.expiry_warning_days",
@@ -458,14 +327,6 @@ impl Config {
                 "quality.http_check_timeout_secs exceeds hard cap, clamping"
             );
             self.quality.http_check_timeout_secs = HARD_CAP_HTTP_CHECK_TIMEOUT;
-        }
-
-        // Telemetry config validation.
-        netray_common::telemetry::validate(&self.telemetry).map_err(ConfigError::Message)?;
-        if self.telemetry.enabled && !(0.0..=1.0).contains(&self.telemetry.sample_rate) {
-            return Err(ConfigError::Message(
-                "invalid configuration: telemetry.sample_rate must be in [0.0, 1.0]".to_owned(),
-            ));
         }
 
         Ok(())
@@ -488,15 +349,10 @@ mod tests {
 
     fn valid_config() -> Config {
         Config {
-            site_name: default_site_name(),
-            server: default_server(),
             limits: default_limits(),
             dns: default_dns(),
             validation: default_validation(),
-            ecosystem: EcosystemConfig::default(),
             quality: default_quality(),
-            telemetry: TelemetryConfig::default(),
-            backends: BackendsConfig::default(),
         }
     }
 
@@ -580,20 +436,11 @@ mod tests {
         };
     }
 
-    zero_rejects!(rejects_zero_per_ip_per_minute, |c: &mut Config| {
-        c.limits.per_ip_per_minute = 0
-    });
-    zero_rejects!(rejects_zero_per_ip_burst, |c: &mut Config| {
-        c.limits.per_ip_burst = 0
-    });
     zero_rejects!(rejects_zero_per_target_per_minute, |c: &mut Config| {
         c.limits.per_target_per_minute = 0
     });
     zero_rejects!(rejects_zero_per_target_burst, |c: &mut Config| {
         c.limits.per_target_burst = 0
-    });
-    zero_rejects!(rejects_zero_max_concurrent_connections, |c: &mut Config| {
-        c.limits.max_concurrent_connections = 0
     });
     zero_rejects!(rejects_zero_max_concurrent_handshakes, |c: &mut Config| {
         c.limits.max_concurrent_handshakes = 0
@@ -610,9 +457,6 @@ mod tests {
     zero_rejects!(rejects_zero_max_ips_per_hostname, |c: &mut Config| {
         c.limits.max_ips_per_hostname = 0
     });
-    zero_rejects!(rejects_zero_max_domain_length, |c: &mut Config| {
-        c.limits.max_domain_length = 0
-    });
     zero_rejects!(rejects_zero_dns_timeout_secs, |c: &mut Config| {
         c.dns.timeout_secs = 0
     });
@@ -622,8 +466,6 @@ mod tests {
     zero_rejects!(rejects_zero_expiry_critical_days, |c: &mut Config| {
         c.validation.expiry_critical_days = 0
     });
-
-    // --- Enrichment config ---
 
     // --- Quality config ---
 

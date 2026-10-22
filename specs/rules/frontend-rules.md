@@ -4,7 +4,7 @@ The V2 view layer: askama templates on one page frame, generated tokens, small T
 and one streaming island, all in `crates/web` (SDD `specs/sdd/v2.md` §8). Every page is rendered
 in Rust; the client computes no layout and holds no verdict.
 
-The Solid apps (`crates/*/frontend`, `packages/common-frontend`) are frozen until V5.1, except the catalogue texts `CLAUDE.md` requires in the one `checkMeta.ts` (`CHECK_LABELS`, `CHECK_DESCRIPTIONS`; its path is in `tests/repo/test_checkmeta_catalogue.sh`); their old rules are in commit `45898422` (`git show 45898422:specs/rules/frontend-rules.md`).
+The Solid apps were deleted in 0.30.0 (`v2-cutover`, V5.1); their old rules are in commit `45898422` (`git show 45898422:specs/rules/frontend-rules.md`).
 
 A rule the gate or a test enforces is stated once below with the test's path; the test is the
 definition, this file the pointer.

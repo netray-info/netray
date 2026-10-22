@@ -24,11 +24,7 @@ else {
   const dev = p.devDependencies || {};
   if (p.private !== true) bad("islands package is not private: true");
   if (!/^\d+\.\d+\.\d+$/.test(dev.esbuild || "")) bad(`esbuild must be one exact version, got ${dev.esbuild}`);
-  const ref = rd("crates/lens/frontend/package.json");
-  const refRange = (ref.dependencies || {}).typescript ?? (ref.devDependencies || {}).typescript;
-  const refMajor = String(refRange).match(/(\d+)/)[1];
-  const m = String(dev.typescript || "").match(/(\d+)/);
-  if (!m || m[1] !== refMajor) bad(`typescript major ${m && m[1]} != workspace major ${refMajor}`);
+  if (!/^\^6(\.|$)/.test(dev.typescript || "")) bad(`typescript must be ^6, got ${dev.typescript}`);
   if (!/^\^4(\.|$)/.test(dev.vitest || "")) bad(`vitest must be ^4, got ${dev.vitest}`);
   if (!/^\^20(\.|$)/.test(dev["happy-dom"] || "")) bad(`happy-dom must be ^20, got ${dev["happy-dom"]}`);
   const s = p.scripts || {};
@@ -53,7 +49,6 @@ git check-ignore -q crates/web/islands/dist/islands.js || bad "crates/web/island
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 cp justfile "$tmp/justfile"
-for c in dns email http ip lens tls; do mkdir -p "$tmp/crates/$c/frontend/dist"; done
 out=$(just --justfile "$tmp/justfile" --working-directory "$tmp" check-frontend-dist 2>&1); rc=$?
 if [ "$rc" -eq 0 ]; then bad "check-frontend-dist passes without crates/web/islands/dist"
 elif ! grep -Eq 'crates/web/islands/dist|islands\.js' <<<"$out" || ! grep -q 'just adlc-setup' <<<"$out"; then

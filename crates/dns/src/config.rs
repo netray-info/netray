@@ -1,6 +1,3 @@
-use std::ffi::OsString;
-use std::net::SocketAddr;
-
 use serde::Deserialize;
 
 pub use config::ConfigError;
@@ -21,28 +18,26 @@ const _: () = assert!(
     "parser::MAX_RECORD_TYPES and config::HARD_CAP_RECORD_TYPES must be equal"
 );
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
+/// The inspection's runtime config: the `[modules.dns]` sections over prism's defaults,
+/// validated and clamped.
+#[derive(Debug, Clone)]
 pub struct Config {
-    /// Display name shown in the UI. Defaults to "prism".
-    #[serde(default = "default_site_name")]
-    pub site_name: String,
-    #[serde(default = "default_server")]
-    pub server: ServerConfig,
-    #[serde(default = "default_limits")]
     pub limits: LimitsConfig,
-    #[serde(default = "default_circuit_breaker")]
     pub circuit_breaker: CircuitBreakerConfig,
-    #[serde(default = "default_dns")]
     pub dns: DnsConfig,
-    #[serde(default = "default_trace")]
     pub trace: TraceConfig,
-    #[serde(default)]
-    pub telemetry: TelemetryConfig,
-    #[serde(default)]
-    pub ecosystem: EcosystemConfig,
-    #[serde(default)]
-    pub backends: BackendsConfig,
+}
+
+impl Default for Config {
+    /// Every section at its default.
+    fn default() -> Self {
+        Self {
+            limits: default_limits(),
+            circuit_breaker: default_circuit_breaker(),
+            dns: default_dns(),
+            trace: default_trace(),
+        }
+    }
 }
 
 /// The check sections the DNS module reads from a `[modules.dns]` table; prism's key names and
@@ -86,12 +81,10 @@ impl Default for ModuleLimits {
 }
 
 impl ModuleConfig {
-    /// The service `Config` these sections stand for, validated and clamped as at startup.
+    /// The runtime `Config` these sections stand for, validated and clamped.
     pub fn into_config(self) -> Result<Config, ConfigError> {
         let l = self.limits;
         let mut cfg = Config {
-            site_name: default_site_name(),
-            server: default_server(),
             limits: LimitsConfig {
                 per_target_per_minute: l.per_target_per_minute,
                 per_target_burst: l.per_target_burst,
@@ -102,24 +95,10 @@ impl ModuleConfig {
             circuit_breaker: self.circuit_breaker,
             dns: self.dns,
             trace: default_trace(),
-            telemetry: TelemetryConfig::default(),
-            ecosystem: EcosystemConfig::default(),
-            backends: BackendsConfig::default(),
         };
         cfg.validate()?;
         Ok(cfg)
     }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ServerConfig {
-    #[serde(default = "default_bind")]
-    pub bind: SocketAddr,
-    #[serde(default = "default_metrics_bind")]
-    pub metrics_bind: SocketAddr,
-    #[serde(default)]
-    pub trusted_proxies: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -137,8 +116,6 @@ pub struct LimitsConfig {
     pub global_per_minute: u32,
     #[serde(default = "default_global_burst")]
     pub global_burst: u32,
-    #[serde(default = "default_max_concurrent")]
-    pub max_concurrent_connections: usize,
     #[serde(default = "default_per_ip_max_streams")]
     pub per_ip_max_streams: u32,
     #[serde(default = "default_max_timeout")]
@@ -188,44 +165,7 @@ pub struct DnsConfig {
     pub allow_arbitrary_servers: bool,
 }
 
-pub use netray_common::telemetry::TelemetryConfig;
-
-pub use netray_common::ecosystem::EcosystemConfig;
-
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct BackendsConfig {
-    #[serde(default)]
-    pub ip: Option<netray_common::backend::BackendConfig>,
-}
-
-/// Hot-reloadable subset of the configuration.
-///
-/// Contains fields that can be swapped at runtime via SIGHUP without
-/// restarting the server. Cold fields (bind address, TLS, trusted proxies)
-/// are not included.
-#[derive(Debug, Clone)]
-#[allow(dead_code)] // Fields read by reload.rs on SIGHUP; handler migration pending.
-pub struct HotConfig {
-    pub limits: LimitsConfig,
-    pub circuit_breaker: CircuitBreakerConfig,
-    pub dns: DnsConfig,
-    pub trace: TraceConfig,
-}
-
 // --- Default value functions ---
-
-fn default_site_name() -> String {
-    "prism".to_string()
-}
-
-fn default_server() -> ServerConfig {
-    ServerConfig {
-        bind: default_bind(),
-        metrics_bind: default_metrics_bind(),
-        trusted_proxies: Vec::new(),
-    }
-}
 
 fn default_limits() -> LimitsConfig {
     LimitsConfig {
@@ -235,7 +175,6 @@ fn default_limits() -> LimitsConfig {
         per_target_burst: default_per_target_burst(),
         global_per_minute: default_global_per_minute(),
         global_burst: default_global_burst(),
-        max_concurrent_connections: default_max_concurrent(),
         per_ip_max_streams: default_per_ip_max_streams(),
         max_timeout_secs: default_max_timeout(),
         max_record_types: default_max_record_types(),
@@ -265,14 +204,6 @@ fn default_dns() -> DnsConfig {
         allow_system_resolvers: true,
         allow_arbitrary_servers: false,
     }
-}
-
-fn default_bind() -> SocketAddr {
-    ([127, 0, 0, 1], 8080).into()
-}
-
-fn default_metrics_bind() -> SocketAddr {
-    ([127, 0, 0, 1], 9090).into()
 }
 
 fn default_per_ip_per_minute() -> u32 {
@@ -321,10 +252,6 @@ fn default_cb_min_requests() -> u32 {
     5
 }
 
-fn default_max_concurrent() -> usize {
-    256
-}
-
 fn default_per_ip_max_streams() -> u32 {
     10
 }
@@ -358,55 +285,11 @@ fn default_true() -> bool {
 }
 
 impl Config {
-    /// Load configuration from an optional TOML file path and environment variables.
-    ///
-    /// Precedence (highest first): env vars (NETRAY_DNS_ prefix) > TOML file > built-in defaults.
-    /// A `PRISM_` variable is refused.
-    pub fn load(config_path: Option<&str>) -> Result<Self, ConfigError> {
-        let env: Vec<(OsString, OsString)> = std::env::vars_os().collect();
-        netray_common::config::refuse_legacy_prefix("PRISM_", "NETRAY_DNS_", &env)?;
-        // e.g. NETRAY_DNS_LIMITS__PER_IP_PER_MINUTE=60 maps to limits.per_ip_per_minute.
-        let mut cfg: Config =
-            netray_common::config::load_with_env(config_path, "NETRAY_DNS_", env)?;
-        cfg.validate()?;
-
-        Ok(cfg)
-    }
-
-    /// Extract the hot-reloadable subset of the configuration.
-    pub fn hot(&self) -> HotConfig {
-        HotConfig {
-            limits: self.limits.clone(),
-            circuit_breaker: self.circuit_breaker.clone(),
-            dns: self.dns.clone(),
-            trace: self.trace.clone(),
-        }
-    }
-
-    /// Validate only the hot-reloadable fields. Used during SIGHUP reload.
-    pub fn validate_hot(&mut self) -> Result<(), ConfigError> {
-        self.validate_limits_and_trace()
-    }
-
     /// Validate and clamp configuration values to hard caps.
     ///
     /// - Values exceeding hard caps are clamped with a tracing warning.
     /// - Zero values for rate limits, connections, and query limits are rejected.
     fn validate(&mut self) -> Result<(), ConfigError> {
-        self.validate_limits_and_trace()?;
-
-        // Telemetry config validation.
-        netray_common::telemetry::validate(&self.telemetry).map_err(ConfigError::Message)?;
-        if self.telemetry.enabled && !(0.0..=1.0).contains(&self.telemetry.sample_rate) {
-            return Err(ConfigError::Message(
-                "invalid configuration: telemetry.sample_rate must be in [0.0, 1.0]".to_owned(),
-            ));
-        }
-
-        Ok(())
-    }
-
-    fn validate_limits_and_trace(&mut self) -> Result<(), ConfigError> {
         // Clamp to hard caps (§8.1).
         if self.limits.max_timeout_secs > HARD_CAP_TIMEOUT_SECS {
             tracing::warn!(
@@ -460,10 +343,6 @@ impl Config {
         reject_zero("per_target_burst", self.limits.per_target_burst)?;
         reject_zero("global_per_minute", self.limits.global_per_minute)?;
         reject_zero("global_burst", self.limits.global_burst)?;
-        reject_zero(
-            "max_concurrent_connections",
-            self.limits.max_concurrent_connections,
-        )?;
         reject_zero("per_ip_max_streams", self.limits.per_ip_max_streams)?;
         reject_zero("max_timeout_secs", self.limits.max_timeout_secs)?;
         reject_zero("max_record_types", self.limits.max_record_types)?;
@@ -510,17 +389,7 @@ mod tests {
     use super::*;
 
     fn valid_config() -> Config {
-        Config {
-            site_name: default_site_name(),
-            server: default_server(),
-            limits: default_limits(),
-            circuit_breaker: default_circuit_breaker(),
-            dns: default_dns(),
-            trace: default_trace(),
-            telemetry: TelemetryConfig::default(),
-            ecosystem: EcosystemConfig::default(),
-            backends: BackendsConfig::default(),
-        }
+        Config::default()
     }
 
     // --- Valid defaults ---
@@ -624,9 +493,6 @@ mod tests {
     });
     zero_rejects!(rejects_zero_global_burst, |c: &mut Config| {
         c.limits.global_burst = 0
-    });
-    zero_rejects!(rejects_zero_max_concurrent_connections, |c: &mut Config| {
-        c.limits.max_concurrent_connections = 0
     });
     zero_rejects!(rejects_zero_per_ip_max_streams, |c: &mut Config| {
         c.limits.per_ip_max_streams = 0

@@ -16,7 +16,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use netray_email::checks::run_all_checks;
-use netray_email::config::Config;
 use netray_email::dns::FetchResolver;
 use netray_email::dns::test_support::TestDnsResolver;
 use netray_email::quality::types::SseEvent;
@@ -120,11 +119,11 @@ fn each(ids: &[&'static str], status: Status, needle: &'static str) -> Expect {
     )
 }
 
-fn config() -> Arc<Config> {
+fn config() -> Arc<ModuleConfig> {
     let zones = ZONES.map(|z| format!("\"{z}\"")).join(", ");
     let module: ModuleConfig =
         toml::from_str(&format!("[dnsbl]\nzones = [{zones}]\ntimeout_ms = 1000\n")).unwrap();
-    Arc::new(Config::from_module(module))
+    Arc::new(module)
 }
 
 /// Starts a loopback listener for `policy`; returns its port.

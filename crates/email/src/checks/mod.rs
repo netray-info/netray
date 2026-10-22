@@ -56,7 +56,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use tracing::Instrument;
 
-use crate::config::Config;
+use crate::config::ModuleConfig;
 use crate::dns::DnsLookup;
 use crate::quality::{
     AllResults, BimiMeasured, Category, CheckResult, DaneRecord, DkimKey, DmarcMeasured,
@@ -72,7 +72,7 @@ use netray_common::enrichment::EnrichmentClient;
 pub async fn run_all_checks<R: DnsLookup + 'static>(
     domain: String,
     selectors: Vec<String>,
-    config: Arc<Config>,
+    config: Arc<ModuleConfig>,
     dns: Arc<R>,
     dnsbl_dns: Arc<R>,
     fetch: OutboundFetch,
@@ -272,7 +272,7 @@ fn skip_result(category: Category) -> CheckResult {
 async fn run_inspection_inner<R: DnsLookup + 'static>(
     domain: String,
     selectors: Vec<String>,
-    config: Arc<Config>,
+    config: Arc<ModuleConfig>,
     dns: Arc<R>,
     dnsbl_dns: Arc<R>,
     fetch: OutboundFetch,
@@ -906,13 +906,9 @@ mod tests {
     use crate::dns::test_support::TestDnsResolver;
     use std::time::Duration;
 
-    fn test_config() -> crate::config::Config {
-        // Build a default Config via serde from an empty TOML document. Every
-        // field has a `#[serde(default = ...)]`, so this produces the same
-        // struct as loading an empty file.
-        let builder = ::config::Config::builder()
-            .add_source(::config::File::from_str("", ::config::FileFormat::Toml));
-        builder.build().unwrap().try_deserialize().unwrap()
+    fn test_config() -> crate::config::ModuleConfig {
+        // Every field has a `#[serde(default = ...)]`, so an empty document gives the defaults.
+        serde_json::from_str("{}").unwrap()
     }
 
     /// E2: when every DNS lookup stalls past the 30s timeout, the Summary

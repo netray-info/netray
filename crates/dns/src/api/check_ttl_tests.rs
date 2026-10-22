@@ -130,7 +130,7 @@ async fn run(scenario: Scenario) -> Ran {
         .build()
         .await
         .expect("resolver group over documentation addresses");
-    let config = crate::config::Config::load(None).expect("default config");
+    let config = crate::config::Config::default();
     let sender = RecordingSender::new(move |_: SocketAddr, name: &Name, rtype: RecordType| {
         let owner = name.to_ascii();
         let mut m = reply(true);
@@ -502,7 +502,7 @@ async fn run_world(world: World) -> Ran {
         .build()
         .await
         .expect("resolver group over documentation addresses");
-    let config = crate::config::Config::load(None).expect("default config");
+    let config = crate::config::Config::default();
     let raw_world = Arc::clone(&world);
     let sender = RecordingSender::new(move |server: SocketAddr, name: &Name, rtype: RecordType| {
         let owner = name.to_ascii();

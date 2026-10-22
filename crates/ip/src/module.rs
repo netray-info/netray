@@ -9,7 +9,7 @@ use netray_model::evidence::{Block, BlockId, Node, Register, Row, Shape, ShapeKi
 use netray_model::{CheckId, CheckResult, Protocol, Status};
 
 use crate::backend::{DnsCache, Ifconfig, UserAgent, new_dns_cache};
-use crate::config::{Config, ModuleConfig};
+use crate::config::ModuleConfig;
 use crate::enrichment::{EnrichmentContext, LoadError};
 use crate::lookup::{
     AsnLookupResponse, IpLookup, IpRefusal, LookupOptions, RangeResponse, asn_lookup, enrich, range_lookup,
@@ -122,7 +122,7 @@ pub struct IpModule {
 
 enum Source {
     Live {
-        config: Arc<Config>,
+        config: Arc<ModuleConfig>,
         enrichment: Arc<ArcSwap<EnrichmentContext>>,
         dns_cache: DnsCache,
     },
@@ -132,8 +132,7 @@ enum Source {
 }
 
 impl IpModule {
-    pub async fn new(module: ModuleConfig) -> Result<Self, LoadError> {
-        let config = Config::from_module(module);
+    pub async fn new(config: ModuleConfig) -> Result<Self, LoadError> {
         let ctx = EnrichmentContext::load_for_module(&config).await?;
         Ok(Self {
             source: Source::Live {

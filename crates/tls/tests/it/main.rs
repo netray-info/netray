@@ -5,7 +5,6 @@
 mod caa_critical;
 mod caa_wildcard;
 mod chain_completeness;
-mod config_reload_tolerance;
 mod contract;
 mod contract_golden;
 mod contract_status;
@@ -17,7 +16,6 @@ mod evidence_handshake_detail;
 mod evidence_ocsp_live;
 mod evidence_refs;
 mod evidence_unmeasured;
-mod integration;
 mod lookup_errors_unmeasured;
 mod model_status;
 mod module_limits;

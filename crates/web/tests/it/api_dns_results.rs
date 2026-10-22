@@ -263,35 +263,6 @@ async fn replay_refuses_malformed_and_unknown_keys() {
     assert_eq!(r.json()["error"]["code"], json!("NOT_FOUND"));
 }
 
-/// C8: prism's V1 dnssec route streamed ends in a done without a cache_key.
-#[tokio::test]
-async fn prism_dnssec_done_has_no_cache_key() {
-    let prism = netray_dns::api::api_router(netray_dns::testing::stub_state())
-        .layer(axum::middleware::from_fn(netray_dns::request_id_middleware));
-    let mut req = Request::builder()
-        .method("POST")
-        .uri("/api/dnssec")
-        .header("content-type", "application/json")
-        .header("x-request-id", "golden")
-        .body(Body::from(json!({"domain": "example.com"}).to_string()))
-        .unwrap();
-    let peer: SocketAddr = "127.0.0.1:12345".parse().unwrap();
-    req.extensions_mut().insert(ConnectInfo(peer));
-    let resp = prism.oneshot(req).await.unwrap();
-    assert_eq!(resp.status(), StatusCode::OK);
-    let bytes = resp.into_body().collect().await.unwrap().to_bytes();
-    let events = frames(std::str::from_utf8(&bytes).unwrap());
-    let done = events
-        .iter()
-        .find(|f| f.0 == "done")
-        .unwrap_or_else(|| panic!("no done frame: {events:?}"));
-    assert!(
-        done.1.as_object().unwrap().get("cache_key").is_none(),
-        "{}",
-        done.1
-    );
-}
-
 /// C9: a replay validates against DnsCachedResult and the operation's documented 200 schema.
 #[tokio::test]
 async fn replay_validates_against_its_documented_schema() {

@@ -7,17 +7,11 @@
 //! Phase 3 sends a done event with summary counts.
 
 use std::collections::HashMap;
-use std::convert::Infallible;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use axum::Json;
-use axum::extract::{ConnectInfo, Query, State};
-use axum::http::{HeaderMap, Method};
-use axum::response::IntoResponse;
-use axum::response::Response;
-use axum::response::sse::{Event, KeepAlive, Sse};
+use axum::http::Method;
 use futures::stream::{FuturesUnordered, StreamExt};
 use mhost::RecordType;
 use mhost::lints::{
@@ -33,22 +27,17 @@ use netray_common::fetch::{
 use netray_common::target_policy::is_allowed_target;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Semaphore, mpsc};
-use tokio_stream::wrappers::ReceiverStream;
 
-use crate::RequestId;
 use crate::api::query::{
-    StreamParams, build_resolver_group, effective_server_specs, extract_ips_from_cached_events,
-    make_error_event, parse_server_spec, record_breaker_outcomes, target_keys_from_servers,
+    extract_ips_from_cached_events, parse_server_spec, record_breaker_outcomes,
 };
-use crate::api::{AppState, BatchEvent, CollectedResponse, STREAM_TIMEOUT_SECS};
+use crate::api::{BatchEvent, STREAM_TIMEOUT_SECS};
 use crate::circuit_breaker::{BreakerState, CircuitBreakerRegistry};
 use crate::dns_raw::{self, NOT_PUBLIC, RawOutbound};
-use crate::error::{ApiError, ErrorResponse};
-use crate::jobs::{DnsBackend, DnsEnrichmentEvent, ResolverLookup};
+use crate::error::ApiError;
+use crate::jobs::{DnsBackend, ResolverLookup};
 use crate::parser::ParsedQuery;
-use crate::record_format;
-use crate::result_cache::{CachedEvent, CachedResult, ResultCache};
-use crate::security::QueryPolicy;
+use crate::result_cache::CachedEvent;
 use netray_common::enrichment::{EnrichmentClient, IpInfo};
 
 // ---------------------------------------------------------------------------
@@ -207,137 +196,6 @@ pub struct CheckRun {
 // POST handler
 // ---------------------------------------------------------------------------
 
-#[derive(Deserialize, utoipa::ToSchema)]
-pub struct CheckRequest {
-    /// Domain name to check (e.g. `"example.com"`).
-    domain: String,
-    /// DNS servers to use. Defaults to config default_servers.
-    #[serde(default)]
-    servers: Vec<String>,
-    /// Query timeout in seconds. Clamped to config max (default 10).
-    #[serde(default)]
-    timeout_secs: Option<u64>,
-}
-
-/// Run a comprehensive DNS health check for a domain.
-///
-/// Queries 15 record types plus subdomain TXT lookups for DMARC, BIMI, MTA-STS, and
-/// TLSRPT, then runs 12 lint categories (CAA, CNAME apex, DNSSEC, HTTPS/SVCB, MX,
-/// NS count, SPF, TTL consistency, DMARC, BIMI, MTA-STS, TLSRPT).
-/// Results stream as Server-Sent Events.
-///
-/// ## SSE Events
-///
-/// - `batch` — DNS results per step: `{"request_id","record_type","lookups","completed","total"}`
-/// - `lint` — lint category results: `{"request_id","category","results"}`
-/// - `done` — summary: `{"request_id","duration_ms","total_checks","passed","warnings","failed","not_found"}`
-/// - `error` — non-fatal error: `{"code","message"}`
-#[utoipa::path(
-    post, path = "/api/check",
-    tag = "Check",
-    request_body = CheckRequest,
-    responses(
-        (status = 200, description = "SSE stream of DNS batch events, lint results, and done summary", content_type = "text/event-stream"),
-        (status = 400, description = "Bad request (invalid domain or server)", body = ErrorResponse),
-        (status = 422, description = "Query rejected by policy (private IP, limits exceeded)", body = ErrorResponse),
-        (status = 429, description = "Rate limit exceeded", body = ErrorResponse),
-    )
-)]
-pub async fn post_handler(
-    State(state): State<AppState>,
-    ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
-    headers: HeaderMap,
-    axum::extract::Extension(request_id): axum::extract::Extension<RequestId>,
-    Query(stream_params): Query<StreamParams>,
-    Json(body): Json<CheckRequest>,
-) -> Result<Response, ApiError> {
-    let parsed = check_query(&body.domain, &body.servers)?;
-    let domain = parsed.domain.clone();
-
-    let client_ip = state.ip_extractor.extract(&headers, peer_addr);
-    tracing::Span::current().record("client_ip", tracing::field::display(&client_ip));
-    tracing::debug!(%client_ip, %peer_addr, "check POST");
-
-    let policy = QueryPolicy::new(&state.config);
-    policy.validate_for_check(&parsed)?;
-
-    // Clamp user-supplied timeout to config max; default to config max.
-    let timeout_secs = body
-        .timeout_secs
-        .map(|t| t.min(state.config.limits.max_timeout_secs))
-        .unwrap_or(state.config.limits.max_timeout_secs);
-    let timeout = Duration::from_secs(timeout_secs);
-
-    // Rate limiting: cost = 19 (15 base types + 4 subdomain TXT lookups: DMARC, BIMI, MTA-STS, TLSRPT) x server_count.
-    let effective_servers = effective_server_specs(&parsed, &state.config);
-    let target_keys = target_keys_from_servers(&effective_servers);
-    let num_servers = effective_servers.len().max(1) as u32;
-    let total_cost = CHECK_TOTAL_STEPS * num_servers;
-    let stream_guard = state.hot_state.rate_limiter.load().check_query_cost(
-        client_ip,
-        &target_keys,
-        total_cost,
-        CHECK_TOTAL_STEPS,
-    )?;
-
-    let (resolver_group, breaker_keys) =
-        build_resolver_group(&parsed, &state.config, timeout).await?;
-
-    let (tx, rx) = mpsc::channel::<Result<Event, Infallible>>(32);
-    let (done_tx, done_rx) = if !stream_params.stream {
-        let (s, r) = tokio::sync::oneshot::channel::<Vec<crate::result_cache::CachedEvent>>();
-        (Some(s), Some(r))
-    } else {
-        (None, None)
-    };
-
-    let rid = request_id.0;
-    let run = CheckRun {
-        request_id: rid.clone(),
-        domain: domain.clone(),
-        resolvers: resolver_group.resolvers().to_vec(),
-        breaker_keys,
-        circuit_breakers: state.circuit_breakers.clone(),
-        query_semaphore: state.query_semaphore.clone(),
-        ip_enrichment: state.ip_enrichment.clone(),
-    };
-    let result_cache = state.result_cache.clone();
-
-    tokio::spawn(async move {
-        let _stream_guard = stream_guard;
-        let (events_tx, events_rx) = mpsc::channel::<CheckEvent>(32);
-        tokio::join!(
-            run_check(run, events_tx),
-            stream_check_events(events_rx, tx, rid, result_cache, domain, done_tx),
-        );
-    });
-
-    if let Some(drx) = done_rx {
-        let timeout = Duration::from_secs(STREAM_TIMEOUT_SECS + 5);
-        let (events, truncated) = match tokio::time::timeout(timeout, drx).await {
-            Ok(Ok(cached)) => {
-                let vals = cached
-                    .into_iter()
-                    .map(|e| serde_json::json!({"type": e.event_type, "data": e.data}))
-                    .collect();
-                (vals, false)
-            }
-            _ => (Vec::new(), true),
-        };
-        return Ok(axum::Json(CollectedResponse { events, truncated }).into_response());
-    }
-
-    let sse_stream = ReceiverStream::new(rx);
-
-    Ok(Sse::new(sse_stream)
-        .keep_alive(
-            KeepAlive::new()
-                .interval(Duration::from_secs(15))
-                .text("keep-alive"),
-        )
-        .into_response())
-}
-
 /// The check's query for `domain` and `servers`: the domain lowercased and refused when empty,
 /// each server parsed. `record_types` is empty — `validate_for_check` skips the type count.
 pub(crate) fn check_query(domain: &str, servers: &[String]) -> Result<ParsedQuery, ApiError> {
@@ -362,77 +220,6 @@ pub(crate) fn check_query(domain: &str, servers: &[String]) -> Result<ParsedQuer
         truncated_servers: false,
         warnings: Vec::new(),
     })
-}
-
-/// Maps the pipeline's events onto the SSE frames of `/api/check`, collects them for the result
-/// cache and, on `done`, stores the result and hands the events to `done_tx`.
-async fn stream_check_events(
-    mut events: mpsc::Receiver<CheckEvent>,
-    tx: mpsc::Sender<Result<Event, Infallible>>,
-    request_id: String,
-    result_cache: Arc<ResultCache>,
-    query_string: String,
-    mut done_tx: Option<tokio::sync::oneshot::Sender<Vec<CachedEvent>>>,
-) {
-    let mut cached_events: Vec<CachedEvent> = Vec::new();
-    while let Some(event) = events.recv().await {
-        let event = match event {
-            CheckEvent::Batch(batch) => {
-                let mut v = wire_batch(&batch);
-                push_cached(&mut cached_events, "batch", &v);
-                record_format::enrich_lookups_json(&mut v, &batch.record_type);
-                Event::default()
-                    .event("batch")
-                    .json_data(&v)
-                    .unwrap_or_else(|_| Event::default().event("batch").data("{}"))
-            }
-            CheckEvent::Enrichment(enrichments) => {
-                let enrichment_event = DnsEnrichmentEvent {
-                    request_id: request_id.clone(),
-                    enrichments,
-                };
-                push_cached(&mut cached_events, "enrichment", &enrichment_event);
-                Event::default()
-                    .event("enrichment")
-                    .json_data(&enrichment_event)
-                    .unwrap_or_else(|_| Event::default().event("enrichment").data("{}"))
-            }
-            CheckEvent::Lint(lint_event) => {
-                push_cached(&mut cached_events, "lint", &lint_event);
-                Event::default()
-                    .event("lint")
-                    .json_data(&lint_event)
-                    .unwrap_or_else(|_| Event::default().event("lint").data("{}"))
-            }
-            CheckEvent::Error { code, message } => make_error_event(code, &message),
-            CheckEvent::Unanswered { .. } => continue,
-            CheckEvent::Done(mut done) => {
-                let cache_key = ResultCache::generate_key();
-                done.cache_key = Some(cache_key.clone());
-                push_cached(&mut cached_events, "done", &done);
-                result_cache
-                    .insert(
-                        cache_key,
-                        CachedResult {
-                            query: query_string.clone(),
-                            mode: "check".to_owned(),
-                            events: cached_events.clone(),
-                        },
-                    )
-                    .await;
-                if let Some(dtx) = done_tx.take() {
-                    let _ = dtx.send(cached_events.clone());
-                }
-                Event::default()
-                    .event("done")
-                    .json_data(&done)
-                    .unwrap_or_else(|_| Event::default().event("done").data("{}"))
-            }
-        };
-        if tx.send(Ok(event)).await.is_err() {
-            return;
-        }
-    }
 }
 
 /// A batch as prism's stream and result cache carry it: the internal [`ZONE_SOURCE`] marker is

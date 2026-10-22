@@ -14,11 +14,11 @@ fn client() -> IpAddr {
 }
 
 fn limiter() -> RateLimitState {
-    RateLimitState::new(&Config::load(None).expect("default config").limits)
+    RateLimitState::new(&Config::default().limits)
 }
 
 async fn run(query: &str, allow_system_resolvers: bool) -> DnsQueryResult {
-    let mut config = Config::load(None).expect("default config");
+    let mut config = Config::default();
     config.dns.allow_system_resolvers = allow_system_resolvers;
     let parsed = netray_dns::parser::parse(query).expect("query parses");
     testing::stub_jobs_with(config)

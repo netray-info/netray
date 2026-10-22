@@ -12,7 +12,7 @@ use tokio::sync::mpsc;
 use crate::checks::dnsbl::{reverse_ipv4, reverse_ipv6};
 use crate::checks::run_all_checks;
 use crate::checks::util::parse_tags;
-use crate::config::Config;
+use crate::config::ModuleConfig;
 use crate::dns::test_support::TestDnsResolver;
 use crate::dns::{AddressLookup, DnsLookup, FetchResolver, LookupError, TlsaRecord};
 use crate::job::EmailInspector;
@@ -67,7 +67,7 @@ pub fn example_dns() -> TestDnsResolver {
 
 /// An email inspector over module defaults and `dns` for every lookup, offline.
 pub fn stub_inspector(dns: TestDnsResolver) -> EmailInspector<TestDnsResolver> {
-    let config = Config::from_module(serde_json::from_str("{}").expect("module defaults"));
+    let config: ModuleConfig = serde_json::from_str("{}").expect("module defaults");
     let dns = Arc::new(dns);
     let fetch = OutboundFetch::new(500, Arc::new(FetchResolver(dns.clone())));
     EmailInspector::new(Arc::new(config), dns.clone(), dns, fetch, None)
@@ -360,7 +360,7 @@ fn dnsbl_query(target: &str, zone: &str) -> String {
 /// writes on every answered lookup fails that lookup when absent; a name a present block does
 /// not record answers with a definite empty answer.
 pub async fn from_evidence(domain: &str, blocks: &[Block]) -> SectionOutcome {
-    let config = Config::from_module(serde_json::from_str("{}").expect("module defaults"));
+    let config: ModuleConfig = serde_json::from_str("{}").expect("module defaults");
     let absent = |id: &str| shape(blocks, id).is_none();
     let mut dns = TestDnsResolver::new();
     let mut addresses: Vec<(String, Vec<IpAddr>)> = Vec::new();

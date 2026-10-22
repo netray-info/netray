@@ -48,12 +48,6 @@ async fn in_process_client_answers_from_its_source_without_a_base_url() {
     });
     let client = EnrichmentClient::in_process(source.clone());
 
-    assert_eq!(
-        client.base_url(),
-        "",
-        "an in-process client has no base URL"
-    );
-
     let info = client
         .lookup("8.8.8.8".parse().unwrap(), None)
         .await

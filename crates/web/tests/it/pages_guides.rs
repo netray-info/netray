@@ -32,7 +32,7 @@ async fn get_uri(uri: &str) -> (StatusCode, axum::http::HeaderMap, String) {
 }
 
 fn v1_guide_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../site/guide")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/v1-site/guide")
 }
 
 fn v1_to_v2(slug: &str) -> String {

@@ -1,6 +1,6 @@
 //! API v1 DNS inspector jobs (spec v2-api, Phase 7): `POST /dns/*` driven through
 //! `netray_web::api::router` over the offline DNS stub, paths relative to the mount.
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
 use axum::Router;
@@ -132,34 +132,6 @@ fn frames(body: &str) -> Vec<(String, Value)> {
     out
 }
 
-fn normalise(v: &mut Value) {
-    match v {
-        Value::Object(map) => {
-            if map.contains_key("duration_ms") {
-                map.insert("duration_ms".into(), json!(0));
-            }
-            for child in map.values_mut() {
-                normalise(child);
-            }
-        }
-        Value::Array(items) => items.iter_mut().for_each(normalise),
-        _ => {}
-    }
-}
-
-fn normalised(frames: Vec<(String, Value)>, drop_cache_key: bool) -> Vec<(String, Value)> {
-    frames
-        .into_iter()
-        .map(|(name, mut data)| {
-            if drop_cache_key && let Some(map) = data.as_object_mut() {
-                map.remove("cache_key");
-            }
-            normalise(&mut data);
-            (name, data)
-        })
-        .collect()
-}
-
 /// C3: Accept application/json answers one typed collected object valid against `DnsQueryResult`.
 #[tokio::test]
 async fn query_json_is_a_valid_collected_object() {
@@ -192,10 +164,10 @@ async fn query_without_accept_answers_json() {
     validate_component("DnsQueryResult", &json_of(&r));
 }
 
-/// C4: Accept event-stream answers named events, each data valid against its component, and
-/// v1's frames equal prism's `/api/query` frames over the same stub.
+/// C4: Accept event-stream answers named events, each data valid against its component (the
+/// comparison with prism's `/api/query` frames went with prism's V1 router).
 #[tokio::test]
-async fn query_event_stream_names_components_and_equals_prism() {
+async fn query_event_stream_names_components() {
     let body = json!({"domain": "example.com", "record_types": ["A"]});
     let r = post("/dns/query", Some("text/event-stream"), body.clone()).await;
     assert_eq!(r.status, StatusCode::OK, "{}", r.body);
@@ -218,33 +190,6 @@ async fn query_event_stream_names_components_and_equals_prism() {
         };
         validate_component(component, data);
     }
-
-    let prism = netray_dns::api::api_router(netray_dns::testing::stub_state())
-        .layer(axum::middleware::from_fn(netray_dns::request_id_middleware));
-    let mut req = Request::builder()
-        .method("POST")
-        .uri("/api/query")
-        .header("content-type", "application/json")
-        .header("x-request-id", "golden")
-        .body(Body::from(body.to_string()))
-        .unwrap();
-    let peer = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 12345);
-    req.extensions_mut().insert(ConnectInfo(peer));
-    let resp = prism.oneshot(req).await.unwrap();
-    assert_eq!(resp.status(), StatusCode::OK);
-    let bytes = resp.into_body().collect().await.unwrap().to_bytes();
-    let prism_frames = frames(std::str::from_utf8(&bytes).unwrap());
-    // C20 (v2-dns-api): prism emits no `summary`; v1's frames without it equal prism's.
-    assert!(
-        prism_frames.iter().all(|f| f.0 != "summary"),
-        "prism emitted a summary event"
-    );
-    let v1: Vec<_> = v1.into_iter().filter(|f| f.0 != "summary").collect();
-    assert_eq!(
-        normalised(v1, true),
-        normalised(prism_frames, true),
-        "v1 frames differ from prism's"
-    );
 }
 
 /// C5: trace, compare, authcompare and dnssec answer 200 in both forms.

@@ -9,13 +9,23 @@ export interface Origin {
   host?: string;
 }
 
-const NAMES: { name: OriginName; host: string }[] = [
-  { name: 'apex', host: 'netray.info' },
-  { name: 'dns', host: 'dns.netray.info' },
-  { name: 'tls', host: 'tls.netray.info' },
-  { name: 'http', host: 'http.netray.info' },
-  { name: 'ip', host: 'ip.netray.info' },
-];
+/** The apex name: `netray.info` in production; locally the `[server] apex` `netray serve` runs
+ * with (`LOCAL_APEX`, `localhost` from `just acceptance-local`), so a browser reaches the apex
+ * at the local origin and an inspector host at `<tool>.localhost`. */
+function apexName(): string {
+  return isProduction() ? 'netray.info' : (process.env.LOCAL_APEX ?? 'netray.info');
+}
+
+function names(): { name: OriginName; host: string }[] {
+  const a = apexName();
+  return [
+    { name: 'apex', host: a },
+    { name: 'dns', host: `dns.${a}` },
+    { name: 'tls', host: `tls.${a}` },
+    { name: 'http', host: `http.${a}` },
+    { name: 'ip', host: `ip.${a}` },
+  ];
+}
 
 export function testEnv(): TestEnv {
   const env = process.env.TEST_ENV ?? 'local';
@@ -32,10 +42,10 @@ export function isProduction(): boolean {
 /** The apex and the four inspector hosts: five URLs in production, one local origin by `Host`. */
 export function origins(): Origin[] {
   if (isProduction()) {
-    return NAMES.map(({ name, host }) => ({ name, url: `https://${host}` }));
+    return names().map(({ name, host }) => ({ name, url: `https://${host}` }));
   }
   const url = process.env.LOCAL_URL ?? 'http://localhost:8082';
-  return NAMES.map(({ name, host }) => ({ name, url, host }));
+  return names().map(({ name, host }) => ({ name, url, host }));
 }
 
 export function apex(): Origin {

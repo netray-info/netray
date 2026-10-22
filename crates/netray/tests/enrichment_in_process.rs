@@ -84,7 +84,6 @@ async fn server_fields(client: Option<Arc<EnrichmentClient>>) -> Vec<(String, Ev
 async fn c15_enrichment_calls_the_registered_ip_module_in_process() {
     let ip = netray_ip::testing::stub_ip_module(IFCONFIG_JSON);
     let client = netray_ip::enrichment_client(Some(&ip)).expect("an ip module turns enrichment on");
-    assert_eq!(client.base_url(), "", "no base URL is configured anywhere");
     // the http module accepts the client in place of an `ip_url`
     let http_config = toml::from_str("").unwrap();
     netray_http::HttpModule::new(http_config, Some(client.clone())).expect("http module builds");

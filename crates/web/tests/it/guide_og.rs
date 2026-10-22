@@ -25,7 +25,7 @@ fn web_og() -> PathBuf {
 }
 
 fn site() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../site")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/v1-site")
 }
 
 fn names(dir: &Path) -> Vec<String> {

@@ -1,5 +1,5 @@
 //! The HTTP inspection as a function with no axum type: parse, limit, resolve under the target
-//! policy, inspect. spectra's route and the v1 API both run it.
+//! policy, inspect. netray-web runs it.
 
 use std::net::{IpAddr, SocketAddr};
 use std::time::Instant;
@@ -13,7 +13,7 @@ use crate::error::AppError;
 use crate::inspect::assembler::InspectResponse;
 use crate::security::RateLimitState;
 
-/// What `run` needs from the outside: the target resolution and the inspection itself.
+/// What `inspect_url` needs from the outside: the target resolution and the inspection itself.
 pub trait HttpInspect: Send + Sync + 'static {
     /// Resolve the URL's host and apply the target policy.
     fn target<'a>(&'a self, url: &'a Url) -> BoxFuture<'a, Result<SocketAddr, AppError>>;
@@ -60,7 +60,7 @@ impl From<AppError> for HttpRefusal {
 }
 
 /// Parse the URL, charge the caller and the host, resolve the target, inspect.
-pub async fn run(
+async fn inspect_url(
     raw_url: &str,
     client: IpAddr,
     limits: &RateLimitState,
@@ -73,14 +73,14 @@ pub async fn run(
     backend.inspect(&url, target, start).await
 }
 
-/// `run` with the refusals as `HttpRefusal`.
+/// `inspect_url` with the refusals as `HttpRefusal`.
 pub async fn inspect(
     req: &HttpInspectRequest,
     client: IpAddr,
     limits: &RateLimitState,
     backend: &dyn HttpInspect,
 ) -> Result<InspectResponse, HttpRefusal> {
-    run(&req.url, client, limits, backend)
+    inspect_url(&req.url, client, limits, backend)
         .await
         .map_err(Into::into)
 }

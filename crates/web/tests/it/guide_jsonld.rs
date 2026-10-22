@@ -58,7 +58,7 @@ fn blocks(html: &str) -> Vec<String> {
 fn v1_file(slug: &str) -> PathBuf {
     let name = if slug == "scoring" { "lens" } else { slug };
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../site/guide")
+        .join("tests/fixtures/v1-site/guide")
         .join(format!("{name}.html"))
 }
 

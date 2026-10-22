@@ -20,7 +20,7 @@ fn client() -> IpAddr {
 }
 
 fn limiter() -> RateLimitState {
-    RateLimitState::new(&Config::load(None).expect("default config").limits)
+    RateLimitState::new(&Config::default().limits)
 }
 
 fn post(v: Value) -> PostQueryRequest {
@@ -54,7 +54,7 @@ fn sorted(mut v: Vec<Value>) -> Vec<String> {
 }
 
 fn arbitrary_jobs() -> DnsJobs {
-    let mut cfg = Config::load(None).expect("default config");
+    let mut cfg = Config::default();
     cfg.dns.allow_arbitrary_servers = true;
     testing::stub_jobs_with(cfg)
 }
@@ -313,7 +313,7 @@ async fn trace_axfr_is_refused() {
 #[tokio::test]
 async fn spent_limiter_burst_is_rate_limited() {
     let jobs = testing::stub_jobs();
-    let mut limits = Config::load(None).expect("default config").limits;
+    let mut limits = Config::default().limits;
     limits.per_ip_burst = 16;
     limits.per_ip_per_minute = 16;
     let limiter = RateLimitState::new(&limits);
@@ -430,7 +430,7 @@ async fn input_limits_dnssec_types_already_requested_are_not_counted_twice() {
 #[tokio::test]
 async fn cost_limit_c5_query_above_global_burst_is_refused_and_charges_nothing() {
     let jobs = arbitrary_jobs();
-    let mut limits = Config::load(None).expect("default config").limits;
+    let mut limits = Config::default().limits;
     limits.global_burst = 20;
     let limiter = RateLimitState::new(&limits);
     let req = post(json!({
@@ -453,7 +453,7 @@ async fn cost_limit_c5_query_above_global_burst_is_refused_and_charges_nothing()
 #[tokio::test]
 async fn cost_limit_c6_compare_above_per_target_burst_is_refused() {
     let jobs = testing::stub_jobs();
-    let mut limits = Config::load(None).expect("default config").limits;
+    let mut limits = Config::default().limits;
     limits.per_target_burst = 5;
     let limiter = RateLimitState::new(&limits);
     let req = post(json!({

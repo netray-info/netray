@@ -1,14 +1,12 @@
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
 
 use arc_swap::ArcSwap;
 
 use crate::backend::{LiveBackend, TlsBackend};
 use crate::config::Config;
 use crate::dns::DnsResolver;
-use crate::security::{IpExtractor, RateLimitState};
-use netray_common::enrichment::{EnrichmentClient, EnrichmentMode};
+use netray_common::enrichment::EnrichmentClient;
 use rustls_pki_types::CertificateDer;
 use rustls_pki_types::pem::PemObject;
 use tokio::sync::Semaphore;
@@ -16,9 +14,6 @@ use tokio::sync::Semaphore;
 #[derive(Clone)]
 pub struct AppState {
     pub config: Arc<ArcSwap<Config>>,
-    pub ip_extractor: Arc<IpExtractor>,
-    pub rate_limiter: Arc<RateLimitState>,
-    /// Trust store wrapped in ArcSwap so it can be hot-reloaded on SIGHUP.
     pub trust_store: Arc<ArcSwap<rustls::RootCertStore>>,
     pub handshake_semaphore: Arc<Semaphore>,
     /// Addresses probing at once (each up to seven connections), apart from the handshake
@@ -28,20 +23,17 @@ pub struct AppState {
     pub dns_resolver: Option<Arc<DnsResolver>>,
     pub backend: Arc<dyn TlsBackend>,
     pub enrichment_client: Option<Arc<EnrichmentClient>>,
-    pub custom_ca_count: usize,
 }
 
 impl AppState {
     pub fn new(config: &Config) -> Self {
         let mut root_store = rustls::RootCertStore::empty();
         root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-        let mozilla_count = webpki_roots::TLS_SERVER_ROOTS.len();
 
         if let Some(ref ca_dir) = config.validation.custom_ca_dir {
             load_custom_cas(&mut root_store, ca_dir);
         }
 
-        let custom_ca_count = root_store.len().saturating_sub(mozilla_count);
         let trust_store_inner = Arc::new(root_store);
         let trust_store = Arc::new(ArcSwap::from(trust_store_inner));
 
@@ -51,29 +43,14 @@ impl AppState {
             .with_no_client_auth();
         let hsts_tls_connector = Arc::new(tokio_rustls::TlsConnector::from(Arc::new(hsts_config)));
 
-        let enrichment_client = config.backends.ip.as_ref().and_then(|ip_cfg| {
-            ip_cfg.url.as_ref().map(|url| {
-                Arc::new(EnrichmentClient::new(
-                    url,
-                    Duration::from_millis(ip_cfg.timeout_ms),
-                    "tlsight",
-                    None,
-                    EnrichmentMode::Backend { cache_ttl_secs: 0 },
-                ))
-            })
-        });
-
         Self {
-            ip_extractor: Arc::new(IpExtractor::new(&config.server.trusted_proxies)),
-            rate_limiter: Arc::new(RateLimitState::new(&config.limits)),
             trust_store,
             handshake_semaphore: Arc::new(Semaphore::new(config.limits.max_concurrent_handshakes)),
             probe_semaphore: Arc::new(Semaphore::new(config.limits.max_concurrent_handshakes)),
             hsts_tls_connector,
-            dns_resolver: None, // Initialized async in main
+            dns_resolver: None, // Initialized by `init_dns_resolver`
             backend: Arc::new(LiveBackend { resolver: None }),
-            enrichment_client,
-            custom_ca_count,
+            enrichment_client: None,
             config: Arc::new(ArcSwap::from_pointee(config.clone())),
         }
     }
@@ -167,33 +144,6 @@ fn load_custom_cas(root_store: &mut rustls::RootCertStore, ca_dir: &str) {
     );
 }
 
-/// Rebuild the `RootCertStore` from scratch (Mozilla bundle + custom CA dir) and
-/// store it into the shared `ArcSwap`. Returns the new custom CA count.
-pub fn reload_custom_cas(
-    ca_dir: Option<&str>,
-    trust_store: &ArcSwap<rustls::RootCertStore>,
-) -> usize {
-    let mut root_store = rustls::RootCertStore::empty();
-    root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-    let mozilla_count = webpki_roots::TLS_SERVER_ROOTS.len();
-
-    if let Some(dir) = ca_dir {
-        let path = Path::new(dir);
-        if path.is_dir() {
-            load_custom_cas(&mut root_store, dir);
-        } else {
-            tracing::warn!(dir = dir, "custom_ca_dir not found during reload");
-        }
-    }
-
-    let custom_ca_count = root_store.len().saturating_sub(mozilla_count);
-    trust_store.store(Arc::new(root_store));
-
-    tracing::info!(custom_cas = custom_ca_count, "custom CA directory reloaded");
-
-    custom_ca_count
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -203,44 +153,10 @@ mod tests {
     }
 
     fn default_config() -> Config {
-        let mut cfg = Config {
-            site_name: "tlsight".to_string(),
-            server: crate::config::ServerConfig {
-                bind: ([127, 0, 0, 1], 8080).into(),
-                metrics_bind: ([127, 0, 0, 1], 9090).into(),
-                trusted_proxies: Vec::new(),
-            },
-            limits: crate::config::LimitsConfig {
-                per_ip_per_minute: 30,
-                per_ip_burst: 10,
-                per_target_per_minute: 60,
-                per_target_burst: 20,
-                max_concurrent_connections: 256,
-                max_concurrent_handshakes: 10,
-                handshake_timeout_secs: 5,
-                request_timeout_secs: 15,
-                max_ports: 7,
-                max_ips_per_hostname: 10,
-                max_domain_length: 253,
-                allow_blocked_targets: false,
-            },
-            dns: crate::config::DnsConfig { timeout_secs: 3 },
-            validation: crate::config::ValidationConfig {
-                expiry_warning_days: 30,
-                expiry_critical_days: 14,
-                check_dane: true,
-                check_caa: true,
-                check_ct: false,
-                custom_ca_dir: None,
-            },
-            ecosystem: crate::config::EcosystemConfig::default(),
-            quality: crate::config::QualityConfig::default(),
-            telemetry: crate::config::TelemetryConfig::default(),
-            backends: crate::config::BackendsConfig::default(),
-        };
-        // Ensure defaults pass validation (not strictly needed but defensive).
-        let _ = &mut cfg;
-        cfg
+        serde_json::from_str::<crate::config::ModuleConfig>("{}")
+            .unwrap()
+            .into_config()
+            .unwrap()
     }
 
     #[test]

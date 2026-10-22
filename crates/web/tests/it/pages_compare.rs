@@ -179,7 +179,10 @@ fn tables(html: &str) -> Vec<Table> {
 }
 
 fn v1() -> String {
-    let p = concat!(env!("CARGO_MANIFEST_DIR"), "/../../site/compare/index.html");
+    let p = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/v1-site/compare/index.html"
+    );
     std::fs::read_to_string(p).expect("read V1 compare page")
 }
 

@@ -3,8 +3,8 @@
 # v2-entries requirement 9 and v2-api requirement 1: crates/web is the package netray-web, edition
 # 2024, a library; a `Router` appears only under crates/web/src/entries/, pages/ and api/; it
 # depends on netray-common and netray-engine by path, askama 0.16, axum, and sha2/base64 via
-# [workspace.dependencies]; lens depends on netray-web; the netray binary depends on it (crates/netray
-# builds the parts). The crate's shape includes its token source (tokens.json) and a build.rs. The
+# [workspace.dependencies]; the netray binary depends on it (crates/netray builds the parts; lens is
+# gone, v2-cutover Phase 7). The crate's shape includes its token source (tokens.json) and a build.rs. The
 # Router scan is a function over a root dir, self-tested on scratch input. Cargo is asked via
 # `cargo metadata --no-deps --offline`.
 set -uo pipefail
@@ -79,11 +79,6 @@ else:
     nd = sorted(d["name"] for d in bins[0]["dependencies"])
     print("netray deps=%s" % nd)
     if "netray-web" not in nd: errs.append("netray does not depend on netray-web")
-lens = [p for p in meta["packages"] if p["name"] == "lens"]
-if not lens:
-    errs.append("package lens not found")
-elif not any(d["name"] == "netray-web" and d.get("kind") is None for d in lens[0]["dependencies"]):
-    errs.append("lens does not depend on netray-web")
 for e in errs: print("ERR " + e)
 '
 }

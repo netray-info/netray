@@ -369,3 +369,25 @@ Pass 1: BLOCKER the apex built two `ApiState`s, so `/api/v1/<tool>` and the insp
 Pass 2: the fixes hold, no row of requirements 13–14 is shadowed, no open redirect. AMENDMENT (repaired in phase): the page CSP's `form-action` did not admit the bare apex, so a no-JS form redirected from an inspector host to the apex was blocked; `form-action` now names `https://netray.info` too (`pages_csp.rs`). DEFERRED: the header logo links `/`, which on an inspector host is that host's inspector, not the apex home (Decision log). NIT: the shared-limiter test drives `apex::app` (`routes()`), not `host::build`, which `serve` uses; both build one state today.
 DEFERRED from the copies: badges and OG cards keep the default label `lens` for byte-identical output; the result page's evidence part was seen listing tls, http and ip as measured for a run of only dns and email (G3's page dump, not asserted; v2-result-page's code); lens's `NotTested` → `Skip` mapping (Phase 4's DEFERRED) is copied unchanged, as the stored bytes require.
 
+
+## Phase 7 — Deletion
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | req 4: `netray --help` lists `serve` only; the V1 subcommands exit non-zero | green | tests/repo/test_cli.sh |
+| C2 | req 6: crates/lens, crate frontends, packages/, site/, site.rs and the module crates' routers, run(config), per-service Config, loaders, toml files and V1-only types are gone | green | tests/repo/test_v1_deleted.sh |
+| C3 | req 7: gate scripts and recipes start `netray serve`; none writes into the checkout | green | tests/repo/test_v1_deleted.sh, tests/repo/test_check_config.sh |
+| C4 | req 8: the Dockerfile builds no Solid app, carries netray.example.toml and no site/, runs `netray serve`; release.yml smoke-tests serve on the apex and four inspector hosts; workflow-rules R-R4 amended | green | tests/repo/test_v1_deleted.sh, tests/repo/test_workflows.sh |
+| C5 | req 23: no tracked file outside specs/ and CHANGELOG.md names snapshots.db, except the legacy table | green | tests/repo/test_v1_deleted.sh |
+| C6 | GIVEN netray --help THEN serve only; GIVEN netray lens THEN non-zero | green | tests/repo/test_cli.sh |
+| C7 | GIVEN git ls-files THEN nothing under crates/lens/, crates/*/frontend/, packages/, site/; site.rs absent | green | tests/repo/test_v1_deleted.sh |
+| C8 | GIVEN every Cargo.toml and package.json THEN no solid-js or common-frontend; no module crate exposes pub async fn run | green | tests/repo/test_v1_deleted.sh |
+| C9 | GIVEN tracked files outside specs/ and CHANGELOG.md THEN none names snapshots.db except the legacy row | green | tests/repo/test_v1_deleted.sh |
+| C10 | GIVEN a clean checkout WHEN adlc-setup then adlc-verify THEN they pass and git status --porcelain is empty | green | adlc verify |
+| C11 | GIVEN just acceptance-local THEN exactly one netray serve process | green | tests/repo/test_v1_deleted.sh |
+| C12 | GIVEN the Dockerfile THEN netray.example.toml, no site/, no frontend/dist, entrypoint netray serve | green | tests/repo/test_v1_deleted.sh |
+| C13 | GIVEN release.yml WHEN test_workflows.sh runs THEN the smoke step starts serve once and requests /health with the apex and four inspector Hosts | green | tests/repo/test_workflows.sh |
+| C14 | GIVEN test_suite_size.sh THEN floors equal the counts after deletion, under ADLC-Test-Change | green | tests/repo/test_suite_size.sh |
+| C15 | the lens dependency is gone from crates/netray and crates/web | green | tests/repo/test_no_lens_dependency.sh |

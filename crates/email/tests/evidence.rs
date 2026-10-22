@@ -32,7 +32,6 @@ use axum::response::IntoResponse;
 use axum::response::sse::{Event, Sse};
 use http_body_util::BodyExt;
 use netray_email::checks::run_all_checks;
-use netray_email::config::Config;
 use netray_email::dns::FetchResolver;
 use netray_email::dns::test_support::TestDnsResolver;
 use netray_email::module::REGISTER;
@@ -73,11 +72,11 @@ fn healthy() -> TestDnsResolver {
         .with_txt("_dmarc.example.com", vec![DMARC])
 }
 
-fn config() -> Arc<Config> {
+fn config() -> Arc<ModuleConfig> {
     let zones = ZONES.map(|z| format!("\"{z}\"")).join(", ");
     let module: ModuleConfig =
         toml::from_str(&format!("[dnsbl]\nzones = [{zones}]\ntimeout_ms = 1000\n")).unwrap();
-    Arc::new(Config::from_module(module))
+    Arc::new(module)
 }
 
 /// Every event `run_all_checks` sends, up to and including `Summary`.

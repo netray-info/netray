@@ -1,20 +1,13 @@
 // V2 Phase 5, requirements 28 and 31 (first bullet): the HTTP inspection as a function with no
-// axum type, over `testing::StubHttpInspect` (offline), and spectra's own `POST /api/inspect`
-// unchanged. Needs `required-features = ["testing"]` on this test target.
+// axum type, over `testing::StubHttpInspect` (offline). Needs `required-features = ["testing"]` on this test target.
 
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr};
 
-use axum::body::Body;
-use axum::extract::connect_info::MockConnectInfo;
-use axum::http::{Request, StatusCode};
-use netray_http::config::Config;
 use netray_http::job::{self, HttpInspectRequest, HttpRefusal};
-use netray_http::routes::api_router;
 use netray_http::security::RateLimitState;
-use netray_http::state::AppState;
+use netray_http::security::rate_limit::{Quotas, Scopes};
 use netray_http::testing::StubHttpInspect;
 use serde_json::Value;
-use tower::ServiceExt;
 
 const SPECTRA_JSON: &str = include_str!("../../../tests/fixtures/contracts/spectra-inspect.json");
 
@@ -23,7 +16,19 @@ fn caller() -> IpAddr {
 }
 
 fn limits() -> RateLimitState {
-    RateLimitState::new(&Config::load(None).unwrap().limits)
+    RateLimitState::scoped(
+        &Quotas {
+            per_ip_per_minute: 10,
+            per_ip_burst: 5,
+            per_target_per_minute: 30,
+            per_target_burst: 10,
+        },
+        Scopes {
+            metrics_prefix: "spectra",
+            per_ip: "per_ip",
+            per_target: "per_target",
+        },
+    )
 }
 
 fn req(url: &str) -> HttpInspectRequest {
@@ -100,47 +105,5 @@ async fn inspect_returns_rate_limited_once_the_per_ip_budget_is_spent() {
     match got {
         HttpRefusal::RateLimited { retry_after_secs } => assert!(retry_after_secs > 0),
         other => panic!("expected RateLimited, got {other:?}"),
-    }
-}
-
-async fn spectra_post(url: &str) -> (StatusCode, Value) {
-    let state = AppState::new(&Config::load(None).unwrap());
-    let peer = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 1)), 12345);
-    let app = api_router(state).layer(MockConnectInfo(peer));
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/inspect")
-                .header("content-type", "application/json")
-                .body(Body::from(serde_json::json!({ "url": url }).to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    let status = response.status();
-    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    (status, serde_json::from_slice(&bytes).unwrap_or_default())
-}
-
-#[tokio::test]
-async fn spectra_post_inspect_keeps_its_codes() {
-    for (url, status, code) in [
-        (
-            "http://example.com/",
-            StatusCode::BAD_REQUEST,
-            "INVALID_URL",
-        ),
-        (
-            "https://127.0.0.1/",
-            StatusCode::FORBIDDEN,
-            "TARGET_BLOCKED",
-        ),
-    ] {
-        let (got, body) = spectra_post(url).await;
-        assert_eq!(got, status, "{url}");
-        assert_eq!(body["error"]["code"], code, "{url}");
     }
 }

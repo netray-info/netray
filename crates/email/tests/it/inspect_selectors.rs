@@ -2,9 +2,9 @@
 //! inspection, so a key published at a user selector reaches the `email.dkim` evidence block.
 //! Needs `--features testing` (the stub inspector).
 
-use netray_email::config::RateLimitConfig;
 use netray_email::job::{EmailInspect, EmailInspectRequest, InspectSlots};
 use netray_email::security::RateLimitState;
+use netray_email::security::rate_limit::{Quotas, Scopes};
 use netray_email::testing::{example_dns, stub_inspector};
 use netray_model::evidence::{Shape, Value};
 
@@ -16,8 +16,7 @@ async fn request_dkim_selectors_reach_the_dkim_evidence_block() {
     let record = format!("v=DKIM1; k=rsa; p={RSA_2048_P}");
     let dns = example_dns().with_txt("custom1._domainkey.example.com", vec![record.as_str()]);
     let inspector = stub_inspector(dns);
-    let limits = RateLimitState::new(&serde_json::from_str::<RateLimitConfig>("{}").unwrap())
-        .expect("default rate limit");
+    let limits = limits();
     let slots = InspectSlots::new(4);
 
     let job = inspector
@@ -61,8 +60,7 @@ async fn a_repeated_selector_is_probed_once() {
     let record = format!("v=DKIM1; k=rsa; p={RSA_2048_P}");
     let dns = example_dns().with_txt("custom1._domainkey.example.com", vec![record.as_str()]);
     let inspector = stub_inspector(dns);
-    let limits = RateLimitState::new(&serde_json::from_str::<RateLimitConfig>("{}").unwrap())
-        .expect("default rate limit");
+    let limits = limits();
     let slots = InspectSlots::new(4);
 
     let job = inspector
@@ -95,4 +93,18 @@ async fn a_repeated_selector_is_probed_once() {
         })
         .collect();
     assert_eq!(custom, vec!["custom1#1".to_string()], "rows: {custom:?}");
+}
+
+/// beacon's old default, 10 per minute with a burst of 10.
+fn limits() -> RateLimitState {
+    RateLimitState::scoped(
+        &Quotas {
+            per_ip_per_minute: 10,
+            per_ip_burst: 10,
+        },
+        Scopes {
+            metrics_prefix: "beacon",
+            per_ip: "per_ip",
+        },
+    )
 }

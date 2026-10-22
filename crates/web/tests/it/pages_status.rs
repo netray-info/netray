@@ -35,7 +35,7 @@ fn main_of(body: &str) -> &str {
 /// The public status page URL V1 names in its noscript block.
 fn v1_public_status_url() -> String {
     let path = format!(
-        "{}/../../site/status/index.html",
+        "{}/tests/fixtures/v1-site/status/index.html",
         env!("CARGO_MANIFEST_DIR")
     );
     let v1 = std::fs::read_to_string(path).expect("read site/status/index.html");

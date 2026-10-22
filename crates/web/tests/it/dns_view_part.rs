@@ -86,7 +86,7 @@ fn client() -> IpAddr {
 }
 
 fn limiter() -> RateLimitState {
-    RateLimitState::new(&Config::load(None).expect("default config").limits)
+    RateLimitState::new(&Config::default().limits)
 }
 
 fn escaped(text: &str) -> String {

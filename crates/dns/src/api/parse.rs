@@ -9,32 +9,13 @@
 
 use std::str::FromStr;
 
-use axum::Json;
-use axum::extract::State;
 use mhost::RecordType;
 use mhost::nameserver::predefined::PredefinedProvider;
-use serde::{Deserialize, Serialize};
-
-use crate::api::AppState;
+use serde::Serialize;
 
 // ---------------------------------------------------------------------------
 // Request / Response types
 // ---------------------------------------------------------------------------
-
-#[derive(Deserialize, utoipa::ToSchema)]
-pub struct ParseRequest {
-    /// The query input string to tokenize.
-    input: String,
-    /// Cursor byte offset within the input (defaults to end of input).
-    #[serde(default)]
-    cursor_pos: Option<usize>,
-}
-
-#[derive(Serialize, utoipa::ToSchema)]
-pub struct ParseResponse {
-    tokens: Vec<TokenInfo>,
-    completions: Vec<Completion>,
-}
 
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct TokenInfo {
@@ -110,35 +91,6 @@ const FLAG_INFO: &[(&str, &str)] = &[
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
-
-/// Tokenize a partial query string and return context-aware completions.
-///
-/// Powers the editor's autocomplete. Classifies each token (domain, record type,
-/// server, flag) and returns completions relevant to the cursor position.
-/// `@system` is offered only when the server allows system resolvers.
-#[utoipa::path(
-    post, path = "/api/parse",
-    tag = "Query",
-    request_body = ParseRequest,
-    responses(
-        (status = 200, description = "Tokenized input with completions", body = ParseResponse),
-    )
-)]
-pub async fn parse_handler(
-    State(state): State<AppState>,
-    Json(body): Json<ParseRequest>,
-) -> Json<ParseResponse> {
-    let (tokens, completions) = parse_input(
-        &body.input,
-        body.cursor_pos,
-        state.config.dns.allow_system_resolvers,
-    );
-
-    Json(ParseResponse {
-        tokens,
-        completions,
-    })
-}
 
 /// Tokenises `input` and completes at `cursor_pos` (default: the end). `@system` is offered only
 /// when `allow_system` is set.

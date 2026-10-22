@@ -191,51 +191,6 @@ impl<E: DnsJobEvent> DnsJob<E> {
 }
 
 // ---------------------------------------------------------------------------
-// prism's metrics
-// ---------------------------------------------------------------------------
-
-/// prism's `prism_*` series; every call is a no-op unless the jobs run for prism.
-#[derive(Clone, Copy)]
-struct PrismMetrics(bool);
-
-impl PrismMetrics {
-    fn active(self, gauge: &'static str, delta: f64) {
-        if self.0 {
-            let g = metrics::gauge!(gauge);
-            if delta >= 0.0 {
-                g.increment(delta);
-            } else {
-                g.decrement(-delta);
-            }
-        }
-    }
-
-    fn query(self, status: &'static str, record_type: String) {
-        if self.0 {
-            metrics::counter!(
-                "prism_queries_total",
-                "status" => status,
-                "record_type" => record_type
-            )
-            .increment(1);
-        }
-    }
-
-    fn endpoint(self, endpoint: &'static str, status: &'static str) {
-        if self.0 {
-            metrics::counter!("prism_queries_total", "endpoint" => endpoint, "status" => status)
-                .increment(1);
-        }
-    }
-
-    fn duration(self, histogram: &'static str, elapsed: Duration) {
-        if self.0 {
-            metrics::histogram!(histogram).record(elapsed.as_secs_f64());
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Jobs
 // ---------------------------------------------------------------------------
 
@@ -248,7 +203,6 @@ pub struct DnsJobs {
     query_semaphore: Arc<Semaphore>,
     ip_enrichment: Option<Arc<EnrichmentClient>>,
     backend: DnsBackend,
-    prism_metrics: bool,
 }
 
 async fn send_error<E: From<DnsErrorEvent>>(tx: &mpsc::Sender<E>, code: &str, message: &str) {
@@ -339,19 +293,12 @@ impl DnsJobs {
             query_semaphore,
             ip_enrichment,
             backend,
-            prism_metrics: false,
         }
     }
 
     /// Whether `@system` resolvers are allowed by the configuration.
     pub fn allows_system_resolvers(&self) -> bool {
         self.config.dns.allow_system_resolvers
-    }
-
-    /// Emit prism's `prism_*` metrics from the jobs.
-    pub fn with_prism_metrics(mut self) -> Self {
-        self.prism_metrics = true;
-        self
     }
 
     /// A query job over a structured body.
@@ -421,13 +368,11 @@ impl DnsJobs {
         .to_owned();
         let dnssec_requested = parsed.dnssec;
         let enrichment_svc = self.ip_enrichment.clone();
-        let prism = PrismMetrics(self.prism_metrics);
 
         tokio::spawn(async move {
             // Hold stream guard for the lifetime of this task so the active stream
             // count is decremented when the job ends.
             let _stream_guard = stream_guard;
-            prism.active("prism_active_queries", 1.0);
             let start = Instant::now();
             let mut batch_events: Vec<CachedEvent> = Vec::new();
             let deadline = tokio::time::Instant::now() + Duration::from_secs(STREAM_TIMEOUT_SECS);
@@ -436,7 +381,7 @@ impl DnsJobs {
             let degraded: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
 
             // Build one future per record type. Each future fans out across all
-            // resolvers concurrently and returns (RecordType, Lookups, had_error).
+            // resolvers concurrently and returns (RecordType, Lookups).
             // FuturesUnordered drives them all in parallel and yields each result
             // as it completes, so the total wall-clock time is bounded by the
             // slowest single-type query rather than the sum.
@@ -458,7 +403,7 @@ impl DnsJobs {
                             Err(e) => {
                                 tracing::warn!(domain = %domain, record_type = %rt, error = %e, "query build failed");
                                 send_error(&tx_err, "RESOLVER_ERROR", &e.to_string()).await;
-                                return (rt, Lookups::empty(), true);
+                                return (rt, Lookups::empty());
                             }
                         };
 
@@ -494,7 +439,6 @@ impl DnsJobs {
                         }
 
                         let mut merged = Lookups::empty();
-                        let mut had_error = false;
                         for handle in handles {
                             match handle.await {
                                 Ok(Ok(lookups)) => {
@@ -502,19 +446,17 @@ impl DnsJobs {
                                     merged = merged.merge(lookups);
                                 }
                                 Ok(Err(e)) => {
-                                    had_error = true;
                                     tracing::warn!(domain = %domain, record_type = %rt, error = %e, "resolver lookup failed");
                                     send_error(&tx_err, "RESOLVER_ERROR", &e.to_string()).await;
                                 }
                                 Err(e) => {
-                                    had_error = true;
                                     tracing::error!(domain = %domain, record_type = %rt, error = %e, "resolver task panicked");
                                     send_error(&tx_err, "INTERNAL_ERROR", &e.to_string()).await;
                                 }
                             }
                         }
 
-                        (rt, merged, had_error)
+                        (rt, merged)
                     }
                 })
                 .collect();
@@ -528,11 +470,8 @@ impl DnsJobs {
                     maybe = futs.next() => {
                         match maybe {
                             None => break, // all record types completed
-                            Some((rt, merged, had_error)) => {
+                            Some((rt, merged)) => {
                                 completed += 1;
-                                let status = if had_error { "error" } else { "ok" };
-                                prism.query(status, rt.to_string());
-
                                 let batch = DnsBatch {
                                     request_id: rid.clone(),
                                     record_type: rt.to_string(),
@@ -550,7 +489,6 @@ impl DnsJobs {
                                 }
                                 if tx.send(DnsQueryEvent::Batch(batch)).await.is_err() {
                                     // Receiver dropped.
-                                    prism.active("prism_active_queries", -1.0);
                                     return;
                                 }
                             }
@@ -593,11 +531,7 @@ impl DnsJobs {
                     cache_key: None,
                 };
                 let _ = tx.send(DnsQueryEvent::Done(done)).await;
-
-                prism.duration("prism_query_duration_seconds", start.elapsed());
             }
-
-            prism.active("prism_active_queries", -1.0);
         });
 
         Ok(DnsJob::new(rx))
@@ -676,11 +610,9 @@ impl DnsJobs {
         let query_semaphore = self.query_semaphore.clone();
         let backend_lookup = Arc::clone(&self.backend.lookup);
         let total_batches = (record_types.len() as u32) * num_transports;
-        let prism = PrismMetrics(self.prism_metrics);
 
         tokio::spawn(async move {
             let _stream_guard = stream_guard;
-            prism.active("prism_active_compares", 1.0);
             let start = Instant::now();
             let deadline = tokio::time::Instant::now() + Duration::from_secs(STREAM_TIMEOUT_SECS);
             let mut batch_events: Vec<CachedEvent> = Vec::new();
@@ -832,8 +764,6 @@ impl DnsJobs {
                                         });
                                     }
                                     if tx.send(DnsCompareEvent::Batch(batch)).await.is_err() {
-                                        prism.endpoint("compare", "error");
-                                        prism.active("prism_active_compares", -1.0);
                                         return;
                                     }
                                 }
@@ -843,7 +773,6 @@ impl DnsJobs {
                     _ = tokio::time::sleep_until(deadline) => {
                         timed_out = true;
                         send_error(&tx, "STREAM_TIMEOUT", "stream deadline exceeded").await;
-                        prism.endpoint("compare", "error");
                         break;
                     }
                 }
@@ -877,12 +806,7 @@ impl DnsJobs {
                     cache_key: None,
                 };
                 let _ = tx.send(DnsCompareEvent::Done(done)).await;
-
-                prism.endpoint("compare", "ok");
-                prism.duration("prism_compare_duration_seconds", elapsed);
             }
-
-            prism.active("prism_active_compares", -1.0);
         });
 
         Ok(DnsJob::new(rx))
@@ -944,11 +868,9 @@ impl DnsJobs {
         let query_semaphore = self.query_semaphore.clone();
         let backend_lookup = Arc::clone(&self.backend.lookup);
         let raw_outbound = self.backend.raw.clone();
-        let prism = PrismMetrics(self.prism_metrics);
 
         tokio::spawn(async move {
             let _stream_guard = stream_guard;
-            prism.active("prism_active_authcompares", 1.0);
             let start = Instant::now();
             let deadline = tokio::time::Instant::now() + Duration::from_secs(STREAM_TIMEOUT_SECS);
             let mut batch_events: Vec<CachedEvent> = Vec::new();
@@ -962,7 +884,6 @@ impl DnsJobs {
                 Ok(q) => q,
                 Err(e) => {
                     send_error(&tx, "RESOLVER_ERROR", &e.to_string()).await;
-                    prism.active("prism_active_authcompares", -1.0);
                     return;
                 }
             };
@@ -1282,8 +1203,6 @@ impl DnsJobs {
                                         });
                                     }
                                     if tx.send(DnsAuthCompareEvent::Batch(batch)).await.is_err() {
-                                        prism.endpoint("authcompare", "error");
-                                        prism.active("prism_active_authcompares", -1.0);
                                         return;
                                     }
                                 }
@@ -1293,7 +1212,6 @@ impl DnsJobs {
                     _ = tokio::time::sleep_until(deadline) => {
                         timed_out = true;
                         send_error(&tx, "STREAM_TIMEOUT", "stream deadline exceeded").await;
-                        prism.endpoint("authcompare", "error");
                         break;
                     }
                 }
@@ -1326,12 +1244,7 @@ impl DnsJobs {
                     cache_key: None,
                 };
                 let _ = tx.send(DnsAuthCompareEvent::Done(done)).await;
-
-                prism.endpoint("authcompare", "ok");
-                prism.duration("prism_authcompare_duration_seconds", elapsed);
             }
-
-            prism.active("prism_active_authcompares", -1.0);
         });
 
         Ok(DnsJob::new(rx))
@@ -1388,11 +1301,9 @@ impl DnsJobs {
         let rid = request_id;
         let enrichment_svc = self.ip_enrichment.clone();
         let raw = self.backend.raw.clone();
-        let prism = PrismMetrics(self.prism_metrics);
 
         tokio::spawn(async move {
             let _stream_guard = stream_guard;
-            prism.active("prism_active_traces", 1.0);
             let start = Instant::now();
 
             let hops = match tokio::time::timeout(
@@ -1404,8 +1315,6 @@ impl DnsJobs {
                 Ok(hops) => hops,
                 Err(_) => {
                     send_error(&tx, "STREAM_TIMEOUT", "stream deadline exceeded").await;
-                    prism.endpoint("trace", "error");
-                    prism.active("prism_active_traces", -1.0);
                     return;
                 }
             };
@@ -1426,8 +1335,6 @@ impl DnsJobs {
                     hop,
                 };
                 if tx.send(DnsTraceEvent::Hop(event)).await.is_err() {
-                    prism.endpoint("trace", "error");
-                    prism.active("prism_active_traces", -1.0);
                     return;
                 }
             }
@@ -1453,10 +1360,6 @@ impl DnsJobs {
                 cache_key: None,
             };
             let _ = tx.send(DnsTraceEvent::Done(done)).await;
-
-            prism.endpoint("trace", "ok");
-            prism.duration("prism_trace_duration_seconds", elapsed);
-            prism.active("prism_active_traces", -1.0);
         });
 
         Ok(DnsJob::new(rx))
@@ -1498,11 +1401,9 @@ impl DnsJobs {
         let (tx, rx) = mpsc::channel::<DnsDnssecEvent>(32);
         let rid = request_id;
         let raw = self.backend.raw.clone();
-        let prism = PrismMetrics(self.prism_metrics);
 
         tokio::spawn(async move {
             let _stream_guard = stream_guard;
-            prism.active("prism_active_dnssec", 1.0);
             let start = Instant::now();
 
             let levels = match tokio::time::timeout(
@@ -1514,8 +1415,6 @@ impl DnsJobs {
                 Ok(levels) => levels,
                 Err(_) => {
                     send_error(&tx, "STREAM_TIMEOUT", "stream deadline exceeded").await;
-                    prism.endpoint("dnssec", "error");
-                    prism.active("prism_active_dnssec", -1.0);
                     return;
                 }
             };
@@ -1527,8 +1426,6 @@ impl DnsJobs {
                     level,
                 };
                 if tx.send(DnsDnssecEvent::Chain(event)).await.is_err() {
-                    prism.endpoint("dnssec", "error");
-                    prism.active("prism_active_dnssec", -1.0);
                     return;
                 }
             }
@@ -1547,10 +1444,6 @@ impl DnsJobs {
                 cache_key: None,
             };
             let _ = tx.send(DnsDnssecEvent::Done(done)).await;
-
-            prism.endpoint("dnssec", "ok");
-            prism.duration("prism_dnssec_duration_seconds", elapsed);
-            prism.active("prism_active_dnssec", -1.0);
         });
 
         Ok(DnsJob::new(rx))

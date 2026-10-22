@@ -130,7 +130,7 @@ fn start(tag: &str, apex: Option<&str>) -> Server {
 
 fn site(rel: &str) -> Vec<u8> {
     let p = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../site")
+        .join("../web/tests/fixtures/v1-site")
         .join(rel);
     std::fs::read(&p).unwrap_or_else(|e| panic!("{}: {e}", p.display()))
 }

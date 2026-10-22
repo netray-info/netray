@@ -6,9 +6,9 @@
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
-MERGED="netray-web lens netray-engine netray-model netray-store netray-dns netray-tls netray-email netray-http netray-common"
+MERGED="netray-web netray-engine netray-model netray-store netray-dns netray-tls netray-email netray-http netray-common"
 # package:target -- reason
-EXCEPTIONS="lens:admission_config lens:history_config"   # set LENS_* env vars lens's loader reads as keys
+EXCEPTIONS=""
 
 meta=$(cargo metadata --no-deps --format-version 1 2>/dev/null) || { echo "FAIL: cargo metadata"; exit 1; }
 out=$(MERGED="$MERGED" EXCEPTIONS="$EXCEPTIONS" python3 -c '

@@ -3,9 +3,7 @@
 //! goes here and gets its `mod` line; `tests/repo/test_test_binaries.sh` holds the layout.
 
 mod contract_golden;
-mod enrichment_integration;
 mod history_volatile;
-mod inspect_route;
 mod inspect_selectors;
 mod model_status;
 mod module_input;

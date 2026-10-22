@@ -12,7 +12,7 @@ use tokio::task::JoinHandle;
 
 use crate::checks::run_all_checks;
 use crate::checks::util::parse_tags;
-use crate::config::{Config, ModuleConfig};
+use crate::config::ModuleConfig;
 use crate::dns::{DnsResolver, FetchResolver};
 use crate::error::MailError;
 use crate::input;
@@ -121,7 +121,7 @@ pub const REGISTER: Register = Register {
 
 /// The email inspection as an engine module: beacon's checks run in-process.
 pub struct EmailModule {
-    config: Arc<Config>,
+    config: Arc<ModuleConfig>,
     dns_resolver: Arc<DnsResolver>,
     dnsbl_resolver: Arc<DnsResolver>,
     fetch: OutboundFetch,
@@ -131,11 +131,10 @@ pub struct EmailModule {
 
 impl EmailModule {
     pub async fn new(
-        module: ModuleConfig,
+        config: ModuleConfig,
         enrichment_client: Option<Arc<EnrichmentClient>>,
     ) -> Result<Self, MailError> {
-        let max_concurrent = module.inspections.max_concurrent;
-        let config = Config::from_module(module);
+        let max_concurrent = config.inspections.max_concurrent;
 
         let dns_resolver = DnsResolver::new(&config.dns.resolvers, config.dns.timeout_ms)
             .await

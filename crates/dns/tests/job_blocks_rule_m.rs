@@ -17,7 +17,7 @@ fn client() -> IpAddr {
 }
 
 fn limiter() -> RateLimitState {
-    RateLimitState::new(&Config::load(None).expect("default config").limits)
+    RateLimitState::new(&Config::default().limits)
 }
 
 async fn query(q: &str) -> DnsQueryResult {

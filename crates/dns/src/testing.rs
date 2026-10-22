@@ -22,7 +22,7 @@ use crate::api::check::{
     CHECK_RECORD_TYPES, CHECK_TOTAL_STEPS, LintEvent, check_ns_delegation_consistency,
     check_ns_lame_delegation, lint_lookups, unanswered_events, unique_lines, unique_records,
 };
-use crate::api::{AppState, BatchEvent, CheckEvent, QUERY_SEMAPHORE_PERMITS};
+use crate::api::{BatchEvent, CheckEvent, QUERY_SEMAPHORE_PERMITS};
 use crate::config::{Config, ModuleConfig};
 use crate::dns_raw::{RawError, RawOutbound, RawResponse, RawSend, SendFuture};
 use crate::jobs::{DnsBackend, DnsJobs, ResolverLookup};
@@ -854,25 +854,6 @@ pub fn stub_backend() -> DnsBackend {
             ]))),
             sender: Arc::new(ZoneSend),
         },
-    }
-}
-
-/// An `AppState` over the default configuration whose backend is [`stub_backend`].
-pub fn stub_state() -> AppState {
-    let config = crate::config::Config::load(None).expect("default config must be valid");
-    AppState {
-        circuit_breakers: Arc::new(crate::circuit_breaker::CircuitBreakerRegistry::new(
-            &config.circuit_breaker,
-        )),
-        ip_extractor: Arc::new(crate::security::IpExtractor::new(
-            &config.server.trusted_proxies,
-        )),
-        result_cache: Arc::new(crate::result_cache::ResultCache::new()),
-        hot_state: crate::reload::HotState::new(&config),
-        ip_enrichment: None,
-        query_semaphore: Arc::new(tokio::sync::Semaphore::new(QUERY_SEMAPHORE_PERMITS)),
-        config: Arc::new(config),
-        backend: stub_backend(),
     }
 }
 

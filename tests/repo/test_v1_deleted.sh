@@ -30,7 +30,7 @@ runs=$(git ls-files 'crates/dns/src' 'crates/tls/src' 'crates/http/src' 'crates/
     | xargs grep -nE '^\s*pub async fn run\b' 2>/dev/null)
 [ -z "$runs" ] || fails+=("a module crate exposes pub async fn run: $runs")
 
-snap=$(git ls-files | grep -vE '^(specs/|CHANGELOG\.md$)' | grep -v '^crates/netray/src/legacy\.rs$' \
+snap=$(git ls-files | grep -vE '^(specs/|CHANGELOG\.md$)' | grep -vE '^(crates/netray/src/legacy\.rs|tests/repo/test_v1_deleted\.sh)$' \
     | xargs grep -lF 'snapshots.db' 2>/dev/null)
 [ -z "$snap" ] || fails+=("files name snapshots.db: $snap")
 
