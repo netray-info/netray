@@ -25,7 +25,7 @@ fn default_badge_ttl() -> u64 {
 }
 
 fn default_badge_label() -> String {
-    "lens".into()
+    "netray".into()
 }
 
 fn default_badge_max_label_len() -> usize {

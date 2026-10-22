@@ -16,3 +16,15 @@
 - `crates/web/src/metrics.rs`: zero series `image_budget`.
 - `crates/netray/src/config.rs`: `[admission] image_runs_per_minute`, default, `validate` zero, `apex_config`; `serve.rs` startup log; `netray.example.toml`.
 - `specs/sdd/v2.md`: S44 and §4.4.
+
+## Phase 2 — Label and logo
+
+## Groups
+
+- G1: C1 to C7.
+
+## Plan
+
+- `crates/web/src/config.rs` `default_badge_label`, `crates/web/src/og/layout.rs` `DEFAULT_LABEL`: "netray".
+- `crates/web/templates/base.html`: the logo's `href` through `frame.origin()`.
+- `crates/netray/netray.example.toml`: `default_label = "netray"`.

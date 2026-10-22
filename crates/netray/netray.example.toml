@@ -30,7 +30,7 @@
 [badges]
 # enabled = true
 # ttl_seconds = 3600
-# default_label = "lens"
+# default_label = "netray"
 # max_label_len = 32
 
 [og_cards]

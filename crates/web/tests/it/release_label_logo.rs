@@ -91,7 +91,7 @@ async fn r6_a_default_badge_says_netray_and_a_custom_label_stays() {
 #[tokio::test]
 async fn r7_the_logo_links_to_the_apex_on_apex_pages() {
     let app = hosts();
-    for path in ["/", "/inspect/dns", "/tools", "/guide/"] {
+    for path in ["/inspect/dns", "/tools", "/guide/", "/status"] {
         let (status, body) = get(&app, "netray.info", path).await;
         assert_eq!(status, StatusCode::OK, "{path}");
         assert!(body.contains(LOGO), "{path}: logo must link to the apex");

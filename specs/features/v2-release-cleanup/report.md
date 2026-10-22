@@ -45,3 +45,34 @@ og 200 image/png
 netray_runs_total{outcome="incomplete",trigger="badge"} 1
 netray_admission_rejections_total{reason="image_budget"} 2
 ```
+
+## Phase 2 — Label and logo
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R6: default badge label and OG label are netray; the example shows it | green | crates/web/tests/it/release_label_logo.rs |
+| C2 | R7: the header logo links to https://netray.info/ through Frame::origin on every host, byte-identical on apex and inspector hosts | green | crates/web/tests/it/release_label_logo.rs |
+| C3 | default badge renders netray, no lens | green | crates/web/tests/it/release_label_logo.rs |
+| C4 | ?label=custom renders custom | green | crates/web/tests/it/release_label_logo.rs |
+| C5 | OG footer reads netray · netray.info | green | crates/web/tests/it/release_label_logo.rs |
+| C6 | apex pages carry the absolute logo link, no host-relative one | green | crates/web/tests/it/release_label_logo.rs |
+| C7 | inspector hosts carry it and equal the apex's /inspect/tool | green | crates/web/tests/it/release_label_logo.rs |
+
+Three earlier tests encoded "no absolute URL in the header" and "logo inside a link to /"
+(`fidelity_header.rs`, `pages_frame.rs`, `site_nav_links.rs`); requirement 7 supersedes them for
+the logo only, so each now exempts exactly the logo's apex link and keeps its rule for every other
+link. The apex `/` is absent from the logo test's path list: the router built without a store
+answers it 404, and `pages_frame.rs` covers the landing page.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 label, logo | 1 | implementer (no coder agent) | n/a | n/a |
+
+### Behavioural verification
+
+`just design-check` with this build copied to main's binary path (backed up, restored
+byte-identical, `NETRAY_BIN` set): `0 open deviation(s), 0 stale accepted entries`.
