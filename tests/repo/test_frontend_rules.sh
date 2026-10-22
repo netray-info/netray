@@ -61,8 +61,8 @@ for need in 'crates/web/templates' 'crates/web/static' 'crates/web/islands'; do
   echo "$row" | grep -qF -- "$need" || fail "CLAUDE.md frontend-rules row does not name $need"
 done
 echo "$row" | grep -qF 'packages/common-frontend' && fail "CLAUDE.md frontend-rules row still names packages/common-frontend"
-grep -F 'site/' CLAUDE.md | grep -F 'frozen' | grep -qF 'v2-cutover' \
-  || fail "CLAUDE.md has no line saying site/ is frozen until v2-cutover"
+grep -F 'site/' CLAUDE.md | grep -F 'netray-web' | grep -qF 'v2-cutover' \
+  || fail "CLAUDE.md has no line saying site content lives in netray-web since v2-cutover deleted site/"
 
 [ "$rc" = 0 ] || exit 1
 echo "PASS: frontend rules describe the V2 frontend"
