@@ -166,6 +166,8 @@ GIVEN www.example.com with a CNAME to example.net, whose NS, DNSKEY and DS answe
 GIVEN www.example.com whose own SOA lookup fails with SERVFAIL on every resolver WHEN the check runs THEN no ancestor is queried.
 GIVEN unregistered.example.co.uk (registrable domain example.co.uk) answering NXDOMAIN everywhere and co.uk owning an SOA WHEN the check runs THEN co.uk is never queried and the NS checks judge the name as before.
 GIVEN a name with ten labels below example.com and no SOA anywhere below example.com WHEN the zone is determined THEN at most 8 ancestors are queried.
+GIVEN www.example.com whose own NS lookup fails with SERVFAIL on every resolver, and example.com as its zone answering NS WHEN the check runs THEN `dns.ns`, `dns.ns_lame` and `dns.ns_delegation` judge example.com and are not `unmeasured`.
+GIVEN www.example.com without CAA and the CAA climb still running at the stream deadline WHEN the check runs THEN `dns.caa` is `unmeasured` naming the deadline.
 
 ## Phase 3 — DNS: TTLs from the authoritative servers
 
@@ -184,6 +186,7 @@ GIVEN example.com A answered by the resolvers as 192.0.2.10 (TTL 60) and 192.0.2
 GIVEN xn--bcher-kva.example A at TTL 29 from the resolvers and 300 from its authoritative server WHEN the check runs THEN `dns.ttl` is `pass`.
 GIVEN www.example.com CNAME web.example.com at TTL 29 from the resolvers, carried only in the A lookup, and 300 from the authoritative server WHEN the check runs THEN `dns.ttl` is `pass`.
 GIVEN www.example.com CNAME shop.example.net whose A is TTL 20 from the resolvers WHEN the check runs THEN no authoritative lookup is made for shop.example.net and `dns.ttl` warns with 20s.
+GIVEN example.com's RRSIG records at TTL 29 from the resolvers WHEN the check runs THEN no authoritative lookup is made for RRSIG: an RRSIG carries the TTL of the RRset it covers (RFC 4034 §3).
 
 ## Phase 4 — DNS inspector: reverse names and `@system`
 
@@ -254,6 +257,11 @@ GIVEN the DNS inspector query `com NS` WHEN parsed THEN it is accepted.
   router's contract (`result_page_csp`) sends every non-domain single segment there, and the API
   the page would call refuses the name (implementer under the operator's autonomy mandate,
   2026-10-22).
+- Review of the range (implementer under the operator's autonomy mandate, 2026-10-22): fixed on
+  this branch rather than split: a failed batch at the name no longer marks the zone checks
+  unmeasured once the zone's replacement answered (zone batches carry `source: "zone"`); RRSIGs are
+  not re-read for TTL; a CAA climb cut off by the deadline makes `dns.caa` unmeasured. The SDD rows
+  for requirements 3 to 7 landed in the phase 5 commit, not with their code; recorded, not rewritten.
 - A section with every check unmeasured is labelled `incomplete` without dropping its checks: the
   grade already treats it so, and the per-check findings say why (implementer under the operator's
   autonomy mandate, 2026-10-22).

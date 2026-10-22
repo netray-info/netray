@@ -570,7 +570,7 @@ pub(crate) async fn run_check_on(
                     Some((label, lookups, kind)) => {
                         completed += 1;
                         let cache = enrichment_svc.is_some().then_some(&mut batch_events);
-                        if !send_batch(&tx, &rid, &label, &lookups, completed, cache).await {
+                        if !send_batch(&tx, &rid, &label, &lookups, completed, cache, None).await {
                             metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error").increment(1);
                             return;
                         }
@@ -612,7 +612,17 @@ pub(crate) async fn run_check_on(
     for (rt, lookups) in zone.batches {
         completed += 1;
         let cache = enrichment_svc.is_some().then_some(&mut batch_events);
-        if !send_batch(&tx, &rid, &rt.to_string(), &lookups, completed, cache).await {
+        if !send_batch(
+            &tx,
+            &rid,
+            &rt.to_string(),
+            &lookups,
+            completed,
+            cache,
+            Some(ZONE_SOURCE),
+        )
+        .await
+        {
             metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error")
                 .increment(1);
             return;
@@ -673,7 +683,7 @@ pub(crate) async fn run_check_on(
     for (rt, lookups) in ttl_batches {
         completed += 1;
         let cache = enrichment_svc.is_some().then_some(&mut batch_events);
-        if !send_batch(&tx, &rid, &rt.to_string(), &lookups, completed, cache).await {
+        if !send_batch(&tx, &rid, &rt.to_string(), &lookups, completed, cache, None).await {
             metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error")
                 .increment(1);
             return;
@@ -882,6 +892,7 @@ async fn send_batch(
     lookups: &Lookups,
     completed: u32,
     cache: Option<&mut Vec<CachedEvent>>,
+    source: Option<&str>,
 ) -> bool {
     let batch = BatchEvent {
         request_id: rid.to_owned(),
@@ -890,7 +901,7 @@ async fn send_batch(
         completed,
         total: CHECK_TOTAL_STEPS.max(completed),
         transport: None,
-        source: None,
+        source: source.map(str::to_owned),
     };
     if let Some(cache) = cache {
         push_cached(cache, "batch", &batch);
@@ -947,6 +958,13 @@ struct ZoneReading {
 
 /// The finding of a zone reading cut off by the stream deadline.
 const ZONE_DEADLINE: &str = "zone lookup exceeded the stream deadline";
+
+/// The finding of a CAA climb cut off by the stream deadline.
+const CAA_DEADLINE: &str = "CAA lookup of the name's ancestors exceeded the stream deadline";
+
+/// The `source` of a batch read at the zone or an ancestor instead of the queried name: it replaces
+/// the name's batch of its type, whose failure then decides nothing (`module::translate`).
+pub(crate) const ZONE_SOURCE: &str = "zone";
 
 /// Most ancestors a zone or CAA climb asks.
 const MAX_ANCESTORS: usize = 8;
@@ -1015,7 +1033,8 @@ async fn read_zone(
             .unmeasured
             .extend(ZONE_CHECKS.iter().map(|check| unmeasured(check, &finding))),
     }
-    match caa.unwrap_or(Ok(None)) {
+    // A timed-out future was climbing: one that needed no climb is ready at its first poll.
+    match caa.unwrap_or_else(|_| Err(CAA_DEADLINE.to_owned())) {
         Ok(None) => {}
         Ok(Some((_, lookups))) => reading.batches.push((RecordType::CAA, lookups)),
         Err(finding) => reading.unmeasured.push(unmeasured("caa", &finding)),
@@ -1235,7 +1254,9 @@ async fn authoritative_ttls(
     let mut pairs: Vec<(String, RecordType)> = Vec::new();
     for record in unique.records() {
         let pair = (record.name().to_ascii(), record.record_type());
-        if record.ttl() > 0
+        // An RRSIG carries the TTL of the RRset it covers (RFC 4034 §3), not one per name.
+        if record.record_type() != RecordType::RRSIG
+            && record.ttl() > 0
             && record.ttl() < LOW_TTL
             && in_zone(&pair.0, zone)
             && !pairs.contains(&pair)

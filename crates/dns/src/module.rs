@@ -23,6 +23,7 @@ use netray_model::evidence::{
 use netray_model::{CheckId, CheckResult, Protocol, Status};
 use tokio::sync::{Semaphore, mpsc};
 
+use crate::api::check::ZONE_SOURCE;
 use crate::api::check::{
     CHECK_TOTAL_STEPS, CheckEvent, CheckRun, LintEvent, check_query, run_check,
 };
@@ -707,7 +708,8 @@ const EVIDENCE_ONLY_INPUTS: &[(&str, &[&str])] = &[("dnssec", &["RRSIG", "NSEC",
 /// records blocks of the answered base-name batches. A check references the blocks of its inputs that the section holds.
 pub fn translate(events: &[CheckEvent]) -> SectionOutcome {
     let mut checks: Vec<LintCheck> = Vec::new();
-    let mut batch_errors: Vec<(&str, Option<String>)> = Vec::new();
+    let mut batch_errors: Vec<(&str, Option<String>, bool)> = Vec::new();
+    let mut replaced: Vec<&str> = Vec::new();
     let mut batches: Vec<&BatchEvent> = Vec::new();
     let mut unanswered: Vec<(&'static str, &[String], bool)> = Vec::new();
     let mut stream_timed_out = false;
@@ -715,7 +717,11 @@ pub fn translate(events: &[CheckEvent]) -> SectionOutcome {
     for event in events {
         match event {
             CheckEvent::Batch(batch) => {
-                batch_errors.push((batch.record_type.as_str(), batch_error(batch)));
+                let zone = batch.source.as_deref() == Some(ZONE_SOURCE);
+                if zone {
+                    replaced.push(batch.record_type.as_str());
+                }
+                batch_errors.push((batch.record_type.as_str(), batch_error(batch), zone));
                 batches.push(batch);
             }
             CheckEvent::Lint(lint) => {
@@ -735,6 +741,14 @@ pub fn translate(events: &[CheckEvent]) -> SectionOutcome {
             _ => {}
         }
     }
+
+    // A batch read at the zone replaces the queried name's batch of its type: the name's failure
+    // decides nothing once the zone's lookup stands in for it.
+    let batch_errors: Vec<(&str, Option<String>)> = batch_errors
+        .into_iter()
+        .filter(|(record_type, _, zone)| *zone || !replaced.contains(record_type))
+        .map(|(record_type, error, _)| (record_type, error))
+        .collect();
 
     for check in &mut checks {
         let findings: Vec<String> = if check.name == "ttl" {
