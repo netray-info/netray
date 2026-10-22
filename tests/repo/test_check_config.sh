@@ -85,6 +85,7 @@ startup_rejects=(
     "api.email|per_ip_per_minute = 0|api.email.per_ip_per_minute"
     "api.email|max_concurrent_inspections = 0|api.email.max_concurrent_inspections"
     "api.dns|per_ip_burst = 17|api.dns.per_ip_burst"
+    "modules.tls.validation|custom_ca_dir = \"/nonexistent-ca-dir\"|custom_ca_dir"
     "api.dns|per_ip_per_minute = 0|api.dns.per_ip_per_minute"
     "api.dns|per_target_per_minute = 0|api.dns.per_target_per_minute"
     "api.dns|per_target_burst = 0|api.dns.per_target_burst"

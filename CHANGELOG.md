@@ -35,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `/api-docs/openapi.json` on those hosts and on `netray.info` | 410, successor `/api/v1/openapi.json` |
 | `netray.info/api/check`, `/api/check/<domain>` | 410, successor `/api/v1/domains/{domain}/runs` |
 | any other `netray.info/api/<x>` but `/api/v1` | 410, successor `/api/v1` |
-| `netray.info/api/`, `/api/<name>.html` (V1 API docs) | 301 `https://netray.info/api/v1/docs` |
+| `netray.info/api`, `/api/`, `/api/<name>` and `/api/<name>.html` for `index`, `dns`, `tls`, `http`, `email`, `ip`, `lens` (V1 API docs) | 301 `https://netray.info/api/v1/docs` |
 | `netray.info/guide/lens` | 301 `https://netray.info/guide/scoring` |
 | `netray.info/r/<id>` for an ID that is no stored entry (every V1 snapshot link) | 410 page; `/r/<id>/og.png` an empty 410 |
 | `ip.netray.info/range` | 410, successor `/api/v1/ip/range/{cidr}` |

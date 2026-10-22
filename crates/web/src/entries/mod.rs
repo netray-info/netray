@@ -1,5 +1,5 @@
 //! The pages of a stored entry (the entry page, the gone page and the privacy page) and the
-//! routes that serve `/r/<id>`: history first, then the V1 snapshots lens hands in.
+//! routes that serve `/r/<id>` from the history; an ID that is no stored entry answers 410.
 
 pub mod render;
 mod routes;

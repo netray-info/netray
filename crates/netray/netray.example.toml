@@ -126,7 +126,7 @@
 # [modules.dns.circuit_breaker]
 # window_secs = 60
 # cooldown_secs = 30
-# failure_threshold = 0.5            # between 0.0 and 1.0, both exclusive
+# failure_threshold = 0.5            # above 0.0, at most 1.0
 # min_requests = 5
 
 # [modules.tls]
