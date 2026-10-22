@@ -434,14 +434,14 @@ pub(crate) fn make_error_event(code: &str, message: &str) -> Event {
 }
 
 #[cfg(test)]
-mod build_resolver_group_tests {
+pub(super) mod build_resolver_group_tests {
     use super::*;
     use crate::config::{
         CircuitBreakerConfig, DnsConfig, EcosystemConfig, LimitsConfig, ServerConfig,
         TelemetryConfig, TraceConfig,
     };
 
-    fn config(allow_system_resolvers: bool) -> Config {
+    pub(super) fn config(allow_system_resolvers: bool) -> Config {
         Config {
             site_name: "prism".to_string(),
             server: ServerConfig {
@@ -483,7 +483,7 @@ mod build_resolver_group_tests {
         }
     }
 
-    fn parsed(servers: Vec<ServerSpec>) -> ParsedQuery {
+    pub(super) fn parsed(servers: Vec<ServerSpec>) -> ParsedQuery {
         ParsedQuery {
             domain: "example.com".to_string(),
             record_types: vec![RecordType::A],
@@ -529,3 +529,7 @@ mod build_resolver_group_tests {
         assert!(res.is_ok(), "cloudflare: {:?}", res.err());
     }
 }
+
+#[cfg(test)]
+#[path = "query_system_keys_tests.rs"]
+mod query_system_keys_tests;
