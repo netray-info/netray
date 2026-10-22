@@ -164,3 +164,43 @@ Read by the implementer (small diff): `@system` keeps bypassing `deny_non_global
 ### Behavioural verification
 
 skipped: a worktree binary has no egress, and the live review instance runs main's code; the offline job tests drive the real query job and resolver group. `curl -G --data-urlencode 'q=1.1.1.1' http://127.0.0.1:8787/api/v1/dns/query` on main shows the defect (PTR at the literal `1.1.1.1`, NXDOMAIN).
+
+## Phase 5 — Section outcome and domain input
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R10: a measured section with at least one check, every check unmeasured, is reported incomplete with reason "every check unmeasured: <first finding>"; checks keep statuses, findings, evidence; grade unchanged; holds for the API answer and events, the result page views and the stored run | green | crates/lens/tests/it/section_all_unmeasured.rs, crates/engine/tests/it/section_kind.rs |
+| C2 | R11: no domain run starts for a single-label name (API runs and reads that start runs, badge, OG card, result page refuse it as invalid before admission with "a domain needs at least two labels"); the DNS inspector keeps single-label names | green | crates/lens/tests/it/single_label_domain.rs |
+| C3 | R12: SDD and CHANGELOG state requirements 3-7, 10 and 11 with a decision row | test-unwritable | (prose: SDD, CHANGELOG) |
+| C4 | GIVEN an HTTP stub section with 13 checks all unmeasured, first finding "HTTPS probe: timed out after 10s" WHEN answered by POST /api/v1/domains/example.com/runs THEN the http section is incomplete with reason "every check unmeasured: HTTPS probe: timed out after 10s", the 13 checks are listed unmeasured with findings, grade incomplete | green | crates/lens/tests/it/section_all_unmeasured.rs |
+| C5 | GIVEN the same stub WHEN the run streams THEN the http section event carries outcome incomplete, that reason and the 13 checks | green | crates/lens/tests/it/section_all_unmeasured.rs |
+| C6 | GIVEN a section with one pass check and the rest unmeasured WHEN answered THEN outcome stays measured | already_implemented | crates/lens/tests/it/section_all_unmeasured.rs |
+| C7 | GIVEN a measured section with no checks WHEN answered THEN outcome stays measured | already_implemented | crates/lens/tests/it/section_all_unmeasured.rs |
+| C8 | GIVEN POST /api/v1/domains/landing/runs WHEN answered THEN 400 (invalid domain) with "a domain needs at least two labels" and no run starts | green | crates/lens/tests/it/single_label_domain.rs |
+| C9 | GIVEN GET /og/landing.png or GET /badge/landing.svg WHEN answered THEN refused as an invalid domain and no run starts | green | crates/lens/tests/it/single_label_domain.rs |
+| C10 | GIVEN the result page for landing WHEN requested THEN no run starts | already_implemented | crates/lens/tests/it/single_label_domain.rs |
+| C11 | GIVEN example.com and www.example.com WHEN validated for a domain run THEN both are accepted | already_implemented | crates/lens/tests/it/single_label_domain.rs |
+| C12 | GIVEN the DNS inspector query com NS WHEN parsed THEN it is accepted | already_implemented | crates/lens/tests/it/single_label_domain.rs |
+
+C6, C7, C10, C11 and C12 held before the change and guard it. C3 is prose (SDD §3.2 and §3.9 with decision S43 in the code commit, CHANGELOG in the docs commit). C10 changed during the phase (`ADLC-Test-Change`): the result page keeps sending a dotless segment to its fallback (the `result_page_csp` routing contract); the API the page would call refuses the name.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 2 | sonnet | 67616 | 195 |
+| G2 | 3 (its page-route change broke the router contract and was set aside) | sonnet | 55066 | 185 |
+
+### Review
+
+- AMENDMENT (repaired): the CHANGELOG named `/landing` as refused; it now names the refusing entries.
+- AMENDMENT (partly repaired): no test covered the result page's live mapping; the rule itself is now unit-tested (`section_kind.rs`), and every mapping site calls it. A page-level test stays open.
+- DEFERRED (repaired): `/api/v1/dns/check` mapped an all-unmeasured section to `measured`; it now uses the rule.
+- DEFERRED: API v1 domain reads also refuse single-label names, so a stored entry for such a name is no longer readable by domain.
+- NIT: c10 passes at the baseline too (guard).
+
+### Behavioural verification
+
+skipped for the live entry points: a worktree binary has no egress for a full run, and these paths are offline-tested end to end through `lens::app` (`POST /api/v1/domains/landing/runs`, `/og/landing.png`, `/badge/landing.svg`, an all-unmeasured http section over JSON and SSE). Inventory: the blackhole.webpagetest.org run (http 13/13 and tls 23/23 unmeasured, `measured`) is the case requirement 10 relabels.

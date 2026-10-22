@@ -110,9 +110,10 @@ single-label name in an OG card URL starts a domain run.
     and the grade is unchanged (already incomplete). This holds for the API's run answer and
     section events, the result page's live and stored views, and the stored run.
 11. No domain run starts for a single-label name: the API (`POST /api/v1/domains/{domain}/runs`
-    and the reads that start runs), the badge, the OG card and the result page refuse it as an
-    invalid domain before admission, with the message "a domain needs at least two labels". The DNS
-    inspector keeps accepting single-label names (`com NS`).
+    and the reads that start runs), the badge and the OG card refuse it as an invalid domain
+    before admission, with the message "a domain needs at least two labels"; the result page's
+    router keeps treating a segment without a dot as no domain (its fallback), which starts no
+    run. The DNS inspector keeps accepting single-label names (`com NS`).
 12. SDD `specs/sdd/v2.md` states requirements 3 to 7 in §3.9's DNS rows and requirement 10 and 11
     where it describes section outcomes and domain input, with a decision row, in the same commit
     as the code; `CHANGELOG.md` `[Unreleased]` names the verdict changes (subdomains, SPF, TTL,
@@ -215,7 +216,7 @@ GIVEN an HTTP module stub whose section has 13 checks, all `unmeasured`, the fir
 GIVEN the same stub WHEN the run streams with `Accept: text/event-stream` THEN the http `section` event carries outcome `incomplete`, that reason and the 13 checks.
 GIVEN a section with one `pass` check and the rest `unmeasured` WHEN the run is answered THEN its outcome stays `measured`.
 GIVEN a measured section with no checks WHEN the run is answered THEN its outcome stays `measured`.
-GIVEN `POST /api/v1/domains/landing/runs` WHEN answered THEN it is `400 INVALID_INPUT` with "a domain needs at least two labels" and no run starts.
+GIVEN `POST /api/v1/domains/landing/runs` WHEN answered THEN it is `400` (the invalid-domain refusal) with "a domain needs at least two labels" and no run starts.
 GIVEN `GET /og/landing.png` WHEN answered THEN it is refused as an invalid domain and no run starts; GIVEN `GET /badge/landing.svg` THEN the same.
 GIVEN the result page for `landing` WHEN requested THEN no run starts.
 GIVEN `example.com` and `www.example.com` WHEN validated for a domain run THEN both are accepted.
@@ -249,6 +250,10 @@ GIVEN the DNS inspector query `com NS` WHEN parsed THEN it is accepted.
   public mail, web or DNS posture to check, and the OG card for `landing` and `dns` ran full
   domain runs (inventory area 10). The DNS inspector keeps single-label names (implementer under
   the operator's autonomy mandate, 2026-10-22).
+- The result page keeps routing a dotless segment to its fallback instead of refusing it: the
+  router's contract (`result_page_csp`) sends every non-domain single segment there, and the API
+  the page would call refuses the name (implementer under the operator's autonomy mandate,
+  2026-10-22).
 - A section with every check unmeasured is labelled `incomplete` without dropping its checks: the
   grade already treats it so, and the per-check findings say why (implementer under the operator's
   autonomy mandate, 2026-10-22).

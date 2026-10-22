@@ -80,6 +80,7 @@ pub struct DnsCheckResult {
 
 /// The section a module run ended in, as an answer.
 pub fn check_result(outcome: SectionOutcome) -> DnsCheckResult {
+    let (kind, kind_reason) = outcome.kind_and_reason();
     let (outcome, reason, checks, blocks) = match outcome {
         SectionOutcome::Measured { checks, evidence } => {
             let checks = checks
@@ -91,7 +92,7 @@ pub fn check_result(outcome: SectionOutcome) -> DnsCheckResult {
                     evidence: c.evidence,
                 })
                 .collect();
-            (SectionKind::Measured, None, checks, evidence)
+            (kind, kind_reason, checks, evidence)
         }
         SectionOutcome::NotApplicable { reason } => {
             (SectionKind::NotApplicable, Some(reason), vec![], vec![])

@@ -149,7 +149,8 @@ pub(super) struct RunSectionEvent {
 impl From<SectionEvent> for RunSectionEvent {
     fn from(event: SectionEvent) -> Self {
         let SectionEvent { protocol, outcome } = event;
-        let (outcome, reason, checks, blocks) = match outcome {
+        let (outcome_kind, reason) = outcome.kind_and_reason();
+        let (checks, blocks) = match outcome {
             SectionOutcome::Measured { checks, evidence } => {
                 let checks = checks
                     .into_iter()
@@ -160,19 +161,13 @@ impl From<SectionEvent> for RunSectionEvent {
                         evidence: c.evidence,
                     })
                     .collect();
-                (SectionKind::Measured, None, checks, evidence)
+                (checks, evidence)
             }
-            SectionOutcome::NotApplicable { reason } => {
-                (SectionKind::NotApplicable, Some(reason), vec![], vec![])
-            }
-            SectionOutcome::Incomplete { reason } => {
-                (SectionKind::Incomplete, Some(reason), vec![], vec![])
-            }
-            SectionOutcome::TimedOut => (SectionKind::TimedOut, None, vec![], vec![]),
+            _ => (vec![], vec![]),
         };
         Self {
             protocol,
-            outcome,
+            outcome: outcome_kind,
             reason,
             checks,
             blocks,

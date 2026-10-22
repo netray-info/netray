@@ -47,3 +47,14 @@ G1: C1, C3, C4, C5 (`crates/dns/src/parser.rs`, where an IP domain becomes a PTR
 
 - G1: when the parsed domain is an IP address, the query's lookup name becomes its reverse name (`hickory_proto::rr::Name::from(IpAddr)` gives `…in-addr.arpa.` / nibble `ip6.arpa.`); keep the record-type defaulting. Check every consumer of `ParsedQuery.domain` that expects the IP form (warnings, policy checks, page labels) and keep their behaviour.
 - G2: after `builder.build()`, one breaker key per resolver: for `@system`, push "system" once per resolver the system entry added (compute from the group's resolver count minus the keys of the other entries, or build the system configs explicitly via `NameServerConfigGroup::from_system_config` and add each with its own "system" key).
+
+## Phase 5 — Section outcome and domain input
+
+### Groups
+
+G1: C1, C4-C7 (the mapping from a module's `SectionOutcome` to `RunSection` in lens's engine run, and every other site that maps it: `crates/web/src/api/runs.rs`, `crates/web/src/pages/result/views.rs`) · G2: C2, C8-C12 (`crates/lens/src/input.rs` `validate_domain`, the page route for `/<domain>`).
+
+### Plan
+
+- G1: one helper (in `netray-engine` beside `SectionOutcome`, e.g. `SectionOutcome::kind_and_reason`) returning (`SectionKind`, reason): Measured with at least one check and every check Unmeasured → Incomplete, "every check unmeasured: <first check's first finding>"; used by every mapping site (three or more: rule of three). Checks and evidence are kept.
+- G2: `validate_domain` refuses a name without a dot (after `netray_common::domain::validate`) with "a domain needs at least two labels"; the result page's domain route uses it (or the same check) before admission. lens's `single_label_accepted` unit test changes with an ADLC-Test-Change trailer.
