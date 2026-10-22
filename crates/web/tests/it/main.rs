@@ -43,6 +43,7 @@ mod api_ip_headers_review;
 mod api_ip_lang;
 mod api_ip_lookup;
 mod api_ip_range;
+mod api_ip_rate_limit_metric;
 mod api_ip_review;
 mod api_read_errors;
 mod api_reads;
