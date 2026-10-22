@@ -829,3 +829,46 @@ async fn c11_rrsig_takes_the_covered_rrsets_authoritative_ttl() {
     let (status, findings) = ran.ttl_check();
     assert_eq!(status, Status::Pass, "{findings:?}");
 }
+
+/// C12: an RRSIG whose covered RRset already shows 60 s or more at some resolver takes that TTL,
+/// with no re-read: a healthier RRset never gets the worse verdict.
+#[tokio::test]
+async fn c12_rrsig_takes_the_covered_rrsets_recursive_ttl() {
+    let apex = |ttl, rd| Rr {
+        owner: "example.com.",
+        ttl,
+        rd,
+    };
+    let ran = run_world(World {
+        domain: "example.com",
+        zone: "example.com",
+        ns: EXAMPLE_NS.to_vec(),
+        recursive: vec![
+            Answer {
+                at: Some("198.51.100.1"),
+                ..answer(
+                    "example.com",
+                    RecordType::A,
+                    vec![apex(29, Rd::A("192.0.2.10"))],
+                )
+            },
+            Answer {
+                at: Some("198.51.100.2"),
+                ..answer(
+                    "example.com",
+                    RecordType::A,
+                    vec![apex(300, Rd::A("192.0.2.10"))],
+                )
+            },
+            Answer {
+                at: Some("198.51.100.1"),
+                ..answer("example.com", RecordType::RRSIG, vec![apex(29, Rd::Rrsig)])
+            },
+        ],
+        authoritative: vec![],
+    })
+    .await;
+
+    let (status, findings) = ran.ttl_check();
+    assert_eq!(status, Status::Pass, "{findings:?}");
+}
