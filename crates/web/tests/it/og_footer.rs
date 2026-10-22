@@ -15,7 +15,14 @@ fn footer(svg: &str) -> &str {
 }
 
 fn grade_card(label: &str) -> String {
-    svg_for_grade("example.com", "A", label, 91.0, SystemTime::UNIX_EPOCH, None)
+    svg_for_grade(
+        "example.com",
+        "A",
+        label,
+        91.0,
+        SystemTime::UNIX_EPOCH,
+        None,
+    )
 }
 
 #[test]
