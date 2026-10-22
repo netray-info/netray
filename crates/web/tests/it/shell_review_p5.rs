@@ -25,6 +25,7 @@ fn markdown_escapes_markup_characters() {
         band: None,
         blocks: &blocks,
         errors: &[],
+        ports: &[],
     });
     assert!(md.contains(r"https://\*.googleapis.com"), "{md}");
     assert!(md.contains(r"\<b\>"), "{md}");
@@ -44,6 +45,7 @@ fn a_failed_part_or_band_is_in_every_export_with_its_reason() {
         band: None,
         blocks: &[],
         errors: &errors,
+        ports: &[],
     };
     let md = markdown(&input);
     assert!(
@@ -77,6 +79,7 @@ fn a_csv_value_never_starts_a_formula() {
         band: None,
         blocks: &blocks,
         errors: &[],
+        ports: &[],
     });
     let row = csv.lines().find(|l| l.starts_with("http.headers")).unwrap();
     let value = row.splitn(4, ',').nth(3).unwrap();

@@ -72,6 +72,7 @@ fn exports_keep_the_raw_key_and_values() {
         band: None,
         blocks: &blocks,
         errors: &[],
+        ports: &[],
     };
     for out in [json(&input), csv(&input)] {
         assert!(out.contains("set-cookie#2"), "in: {out}");

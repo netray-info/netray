@@ -121,6 +121,7 @@ pub const REGISTER: Register = Register {
         ("http.isolation", "coop", ValueType::Text),
         ("http.isolation", "coep", ValueType::Text),
         ("http.isolation", "corp", ValueType::Text),
+        ("http.isolation", "unreadable", ValueType::Text),
         ("http.isolation", "missing", ValueType::Text),
     ],
 };
@@ -387,7 +388,11 @@ fn check_result(
         };
     }
     if name == "coop" {
-        let (status, findings) = coop_verdict(&resp.security.coop);
+        let unreadable = resp
+            .unreadable_headers
+            .iter()
+            .any(|h| h == "cross-origin-opener-policy");
+        let (status, findings) = coop_verdict(&resp.security.coop, unreadable);
         return CheckResult {
             id: id.clone(),
             status,
@@ -443,8 +448,18 @@ fn check_result(
 /// the V1 security report, whose presence-only verdict stays on the V1 wire. The policy is the
 /// token before any `;` (a structured-field token: no surrounding space, case-sensitive);
 /// `same-origin`, `same-origin-allow-popups` and `noopener-allow-popups` pass, anything else or
-/// no readable header warns.
-fn coop_verdict(coop: &crate::inspect::assembler::HeaderCheck) -> (Status, Vec<String>) {
+/// no readable header warns. A received header whose first line is not readable as text warns
+/// with a finding saying so.
+fn coop_verdict(
+    coop: &crate::inspect::assembler::HeaderCheck,
+    unreadable: bool,
+) -> (Status, Vec<String>) {
+    if coop.value.is_none() && unreadable {
+        return (
+            Status::Warn,
+            vec!["Cross-Origin-Opener-Policy header is not readable as text".to_string()],
+        );
+    }
     let Some(value) = coop.value.as_deref() else {
         let finding = coop
             .message
@@ -665,20 +680,12 @@ fn hsts_block(resp: &InspectResponse) -> Option<Block> {
 fn caching_block(resp: &InspectResponse) -> Block {
     let c = &resp.caching;
     let mut fields: Fields = Vec::new();
-    if c.cache_control.is_some() {
-        let d = &c.directives;
-        for (name, set) in [
-            ("public", d.public),
-            ("private", d.private),
-            ("no-store", d.no_store),
-            ("no-cache", d.no_cache),
-            ("must-revalidate", d.must_revalidate),
-            ("immutable", d.immutable),
-        ] {
-            if set {
-                fields.push(("directive".into(), EvValue::Text(name.into())));
-            }
-        }
+    if let Some(cache_control) = &c.cache_control {
+        fields.extend(
+            cache_control_directives(cache_control)
+                .into_iter()
+                .map(|d| ("directive".into(), EvValue::Text(d))),
+        );
     }
     if let Some(max_age) = c.directives.max_age.and_then(|v| i64::try_from(v).ok()) {
         fields.push(("max_age".into(), EvValue::Int(max_age)));
@@ -704,6 +711,38 @@ fn caching_block(resp: &InspectResponse) -> Block {
         title: "Caching".into(),
         shape: Shape::Fields(fields),
     }
+}
+
+/// Every directive of a Cache-Control list in received order, repeats kept: the name lowercased,
+/// then `=` and the argument as received (trimmed, quotes kept). A comma inside a quoted argument
+/// does not split it; empty members are skipped.
+fn cache_control_directives(value: &str) -> Vec<String> {
+    let mut members = Vec::new();
+    let mut start = 0;
+    let mut quoted = false;
+    let mut escaped = false;
+    for (i, ch) in value.char_indices() {
+        match ch {
+            _ if escaped => escaped = false,
+            '\\' if quoted => escaped = true,
+            '"' => quoted = !quoted,
+            ',' if !quoted => {
+                members.push(&value[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    members.push(&value[start..]);
+    members
+        .into_iter()
+        .map(str::trim)
+        .filter(|m| !m.is_empty())
+        .map(|m| match m.split_once('=') {
+            Some((name, arg)) => format!("{}={}", name.trim().to_lowercase(), arg.trim()),
+            None => m.to_lowercase(),
+        })
+        .collect()
 }
 
 /// An HTTP date (RFC 9110 §5.6.7: IMF-fixdate and the obsolete RFC 850 and asctime forms) as an
@@ -743,10 +782,12 @@ fn cdn_block(resp: &InspectResponse) -> Option<Block> {
     })
 }
 
-/// COOP, COEP and CORP: the value when readable, the header name under `missing` otherwise.
+/// COOP, COEP and CORP: the value when readable, the header name under `unreadable` when received
+/// but not readable as text, under `missing` when not received.
 fn isolation_block(resp: &InspectResponse) -> Block {
     let s = &resp.security;
     let mut fields: Fields = Vec::new();
+    let mut unreadable: Fields = Vec::new();
     let mut missing: Fields = Vec::new();
     for (key, header, check) in [
         ("coop", "cross-origin-opener-policy", &s.coop),
@@ -755,9 +796,13 @@ fn isolation_block(resp: &InspectResponse) -> Block {
     ] {
         match &check.value {
             Some(v) => fields.push((key.into(), EvValue::Text(v.clone()))),
+            None if resp.unreadable_headers.iter().any(|h| h == header) => {
+                unreadable.push(("unreadable".into(), EvValue::Text(header.into())));
+            }
             None => missing.push(("missing".into(), EvValue::Text(header.into()))),
         }
     }
+    fields.extend(unreadable);
     fields.extend(missing);
     Block {
         id: static_block_id("http.isolation"),

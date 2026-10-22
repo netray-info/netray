@@ -140,6 +140,7 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Compose each new inspector onto the finished v1 document** (`api/compose.rs`, one step per part): composing it with the earlier parts renames a committed component and fails `openapi_contract`.
 - **A golden over prism's routes zeroes `latency_ms` and sorts hash-map-ordered lists** (authcompare's servers); capture it twice before committing.
 - **Outbound fetches of user- or domain-controlled URLs** go only through `netray_common::fetch`; never build a `reqwest::Client` for them. Checking and pinning live in its DNS resolver; reqwest keeps redirect handling.
+- **An HTTP header value that is not text never reaches `headers`, `raw_headers` or `dump_headers`**: read its presence from `InspectResponse.unreadable_headers` (first line, as `security.*` reads it).
 - **`FetchOptions::new` follows no redirect**: a test that follows one sets `max_redirects`.
 - **rcgen is 0.14**: sign with `Issuer::from_params(&ca_params, &ca_key)`, not 0.13's three-argument `signed_by`.
 - **Features unify.** A dependency feature one crate enables reaches every service in the `netray` binary; select behaviour at runtime, never with `cfg!(feature)`.

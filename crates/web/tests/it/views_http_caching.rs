@@ -139,3 +139,32 @@ fn age_reads_in_the_largest_whole_unit_and_max_age_alone_proves_cache_control() 
         "{cc}"
     );
 }
+
+#[test]
+fn c12_a_synthetic_max_age_chip_follows_directives_without_one() {
+    let b = block(vec![
+        ("directive", Value::Text("public".into())),
+        ("directive", Value::Text("must-revalidate".into())),
+        ("max_age", Value::Int(3600)),
+    ]);
+    let html = view(&b).expect("claimed");
+    let cc = cell(&html, "Cache-Control");
+    assert_eq!(cc.matches("facts-grid__chip").count(), 3, "{cc}");
+    let public = cc.find(">public<").expect(cc);
+    let revalidate = cc.find(">must-revalidate<").expect(cc);
+    let max_age = cc.find(">max-age=3600<").expect(cc);
+    assert!(public < revalidate && revalidate < max_age, "{cc}");
+}
+
+#[test]
+fn c13_a_stored_max_age_directive_is_not_repeated_by_a_synthetic_chip() {
+    let b = block(vec![
+        ("directive", Value::Text("public".into())),
+        ("directive", Value::Text("max-age=3600".into())),
+        ("max_age", Value::Int(3600)),
+    ]);
+    let html = view(&b).expect("claimed");
+    let cc = cell(&html, "Cache-Control");
+    assert_eq!(cc.matches("max-age=3600").count(), 1, "{cc}");
+    assert_eq!(cc.matches("facts-grid__chip").count(), 2, "{cc}");
+}

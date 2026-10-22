@@ -21,6 +21,41 @@ pub struct ExportInput<'a> {
     /// Parts or the band that ended without a result: (section, reason). Rule M: a failure is in
     /// every export with its reason, never an empty answer.
     pub errors: &'a [(String, String)],
+    /// Each port's own checks in a run of several ports, in input order; empty otherwise. Exports
+    /// add them beside the band's checks, and a port whose checks ended without a result as the
+    /// error section `checks@<port>` (Rule M).
+    pub ports: &'a [PortChecks<'a>],
+}
+
+/// One port's own checks: its name as the port tab shows it, the run's protocol, and its checks
+/// or the reason they are missing.
+pub struct PortChecks<'a> {
+    pub port: &'a str,
+    pub protocol: Protocol,
+    pub checks: Result<&'a [CheckResult], &'a str>,
+}
+
+impl PortChecks<'_> {
+    fn rows(&self) -> Option<Vec<CheckRow>> {
+        let checks = self.checks.ok()?;
+        Some(check_rows(Some((&[self.protocol], checks))))
+    }
+
+    fn section(&self) -> String {
+        format!("checks@{}", self.port)
+    }
+}
+
+/// The run's error sections followed by those of ports whose checks are missing.
+fn all_errors(input: &ExportInput<'_>) -> Vec<(String, String)> {
+    let mut errors = input.errors.to_vec();
+    errors.extend(
+        input
+            .ports
+            .iter()
+            .filter_map(|p| p.checks.err().map(|e| (p.section(), e.to_string()))),
+    );
+    errors
 }
 
 /// The target with every run of characters outside `[A-Za-z0-9.]` replaced by one `-`, trimmed
@@ -259,6 +294,19 @@ pub fn markdown(input: &ExportInput<'_>) -> String {
         ));
         out.push('\n');
     }
+    for port in input.ports {
+        let Some(rows) = port.rows() else { continue };
+        let rows: Vec<Vec<String>> = rows
+            .into_iter()
+            .map(|r| vec![r.code, r.title, r.status.to_string(), r.finding, r.fix])
+            .collect();
+        out.push_str(&format!("## Checks · port {}\n\n", md_escape(port.port)));
+        out.push_str(&md_table(
+            &["Code", "Check", "Status", "Finding", "Fix"],
+            &rows,
+        ));
+        out.push('\n');
+    }
     for block in input.blocks {
         out.push_str(&format!("## {}\n\n", md_escape(&block.title)));
         match &block.shape {
@@ -306,7 +354,7 @@ pub fn markdown(input: &ExportInput<'_>) -> String {
         }
         out.push('\n');
     }
-    for (section, reason) in input.errors {
+    for (section, reason) in &all_errors(input) {
         out.push_str(&format!(
             "## {}\n\nNot measured: {}\n\n",
             md_escape(section),
@@ -345,6 +393,14 @@ pub fn csv(input: &ExportInput<'_>) -> String {
         csv_row(&mut out, ["checks", &r.id, "status", r.status]);
         csv_row(&mut out, ["checks", &r.id, "finding", &r.finding]);
         csv_row(&mut out, ["checks", &r.id, "fix", &r.fix]);
+    }
+    for port in input.ports {
+        let section = port.section();
+        for r in port.rows().unwrap_or_default() {
+            csv_row(&mut out, [&section, &r.id, "status", r.status]);
+            csv_row(&mut out, [&section, &r.id, "finding", &r.finding]);
+            csv_row(&mut out, [&section, &r.id, "fix", &r.fix]);
+        }
     }
     for block in input.blocks {
         let id = block.id.to_string();
@@ -396,7 +452,7 @@ pub fn csv(input: &ExportInput<'_>) -> String {
             Shape::Text(text) => row("0", "text", text),
         }
     }
-    for (section, reason) in input.errors {
+    for (section, reason) in &all_errors(input) {
         csv_row(&mut out, [section, "", "error", reason]);
     }
     out
@@ -404,12 +460,23 @@ pub fn csv(input: &ExportInput<'_>) -> String {
 
 pub fn json(input: &ExportInput<'_>) -> String {
     let checks = input.band.map_or(&[][..], |(_, checks)| checks);
-    let errors: Vec<serde_json::Value> = input
-        .errors
+    let errors: Vec<serde_json::Value> = all_errors(input)
         .iter()
         .map(|(section, error)| json!({"section": section, "error": error}))
         .collect();
-    let value =
+    let mut value =
         json!({"target": input.target, "checks": checks, "blocks": input.blocks, "errors": errors});
+    if !input.ports.is_empty() {
+        let ports: Vec<serde_json::Value> = input
+            .ports
+            .iter()
+            .filter_map(|p| {
+                p.checks
+                    .ok()
+                    .map(|checks| json!({"port": p.port, "checks": checks}))
+            })
+            .collect();
+        value["ports"] = json!(ports);
+    }
     serde_json::to_string_pretty(&value).unwrap_or_default()
 }

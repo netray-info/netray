@@ -91,7 +91,7 @@ fn caching_block_holds_the_known_cache_headers() {
     let f = caching(&blocks).unwrap_or_else(|| panic!("no http.caching block: {blocks:?}"));
     assert_eq!(
         all(f, "directive"),
-        vec![&t("public"), &t("must-revalidate")]
+        vec![&t("public"), &t("max-age=3600"), &t("must-revalidate")]
     );
     assert_eq!(all(f, "max_age"), vec![&Ev::Int(3600)]);
     assert_eq!(all(f, "etag"), vec![&t("W/\"abc\"")]);
