@@ -811,6 +811,14 @@ pub fn translate(events: &[CheckEvent]) -> SectionOutcome {
         }
     }
 
+    // A domain without an HTTPS or SVCB record warns, as a malformed record does (SDD S44); a
+    // failed lookup is already unmeasured above.
+    for check in &mut checks {
+        if check.name == "https_svcb" && check.verdict == Verdict::NotFound {
+            check.verdict = Verdict::Warn;
+        }
+    }
+
     let mut results = Vec::with_capacity(checks.len());
     for check in checks {
         let id = match CheckId::parse(&format!("dns.{}", check.name)) {

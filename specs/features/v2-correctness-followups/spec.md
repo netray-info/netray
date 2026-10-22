@@ -138,7 +138,7 @@ GIVEN an API state whose `[api.dns]` per-target burst is exhausted for a target 
 GIVEN HTTPS and SVCB batches for example.com that answer NODATA and a lint event `https_svcb` with `NotFound` WHEN translated THEN `dns.https_svcb` is `warn` with the finding "Not found".
 GIVEN a lint event `https_svcb` with a Warning for mixed modes WHEN translated THEN it is `warn` with that finding.
 GIVEN a lint event `https_svcb` with Ok WHEN translated THEN it is `pass`.
-GIVEN an HTTPS batch whose every lookup timed out WHEN translated THEN `dns.https_svcb` is `unmeasured`.
+GIVEN an HTTPS batch whose every lookup failed (SERVFAIL) WHEN translated THEN `dns.https_svcb` is `unmeasured`.
 GIVEN a lint event `caa` with `NotFound` WHEN translated THEN `dns.caa` is still `fail`.
 GIVEN `Profiles::current()` WHEN read THEN it is version 5 with v4's section weights, check weights, hard fails and thresholds; GIVEN `Profiles::get(4)` and `get(3)` THEN they load; GIVEN the lock THEN v3, v4 and v5 hashes match their files.
 GIVEN a stored v4 run of example.com with `dns.https_svcb` fail and a current v5 run with it warn WHEN diffed THEN the diff carries a profile change and the grade change carries the v4 run re-scored under v5.

@@ -145,7 +145,7 @@ per_ip_burst = 10
 # max_concurrent = 8                  # at least 1
 
 [scoring]
-# profile_path = "my-profile.toml"   # override the built-in profile v3 (crates/engine/profiles/v3.toml)
+# profile_path = "my-profile.toml"   # override the built-in profile v5 (crates/engine/profiles/v5.toml)
 
 [site]
 # Apex landing-page branding. Every field is optional; missing values fall

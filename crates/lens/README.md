@@ -236,7 +236,7 @@ curl -s -H 'Accept: application/json' 'https://lens.netray.info/api/check/exampl
 
 ## Scoring
 
-This section is the authoritative description of the scoring algorithm. lens scores through `netray_engine::score` with the engine's profile v3 (`crates/engine/profiles/v3.toml`); any change to `src/score.rs`, the engine's scoring or the profile must update this section in the same commit. Check titles, fix hints, fix owners and guide links come from the engine's catalogue (`crates/engine/catalogue/checks.toml`).
+This section is the authoritative description of the scoring algorithm. lens scores through `netray_engine::score` with the engine's current profile v5 (`crates/engine/profiles/v5.toml`, v4's weights; v5 marks `dns.https_svcb` warning instead of failing on a missing HTTPS or SVCB record); any change to `src/score.rs`, the engine's scoring or the profile must update this section in the same commit. Check titles, fix hints, fix owners and guide links come from the engine's catalogue (`crates/engine/catalogue/checks.toml`).
 
 ### Algorithm
 
@@ -355,7 +355,7 @@ and every id resolves within the run. The `dns` section also carries the shared 
 
 ### Custom profiles
 
-The scoring profile is defined in TOML. The default is the engine's current profile, embedded in the binary (`crates/engine/profiles/v3.toml`, pinned by `crates/engine/profiles/lock.toml`); override it with `scoring.profile_path` in `lens.toml`. Check names are the catalogue's, without the protocol prefix; the format:
+The scoring profile is defined in TOML. The default is the engine's current profile, embedded in the binary (`crates/engine/profiles/v5.toml`, pinned by `crates/engine/profiles/lock.toml`); override it with `scoring.profile_path` in `lens.toml`. Check names are the catalogue's, without the protocol prefix; the format:
 
 ```toml
 [meta]
@@ -420,7 +420,7 @@ client_budget_per_hour = 30          # 0 refuses every budgeted run
 domain_run_slots = 8
 
 [scoring]
-# profile_path = "my-profile.toml"   # override the built-in profile v3
+# profile_path = "my-profile.toml"   # override the built-in profile v5
 ```
 
 Override any value with environment variables: `LENS_` prefix, `__` for nesting — e.g. `LENS_SERVER__BIND=0.0.0.0:8082`.

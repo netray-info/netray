@@ -21,7 +21,7 @@ letter-graded health score.
 - IP enrichment runs after DNS (needs resolved IPs)
 - Results stream as SSE events: `dns`, `tls`, `ip`, `summary`, `done`
 - 20s hard deadline — return whatever is ready
-- Scoring through `netray_engine::score` with the engine's profile v3 (embedded, file override)
+- Scoring through `netray_engine::score` with the engine's current profile v5 (embedded, file override)
 
 ## Architecture
 

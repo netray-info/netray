@@ -88,7 +88,10 @@ fn an_absent_https_svcb_set_warns_and_nothing_else_changes() {
             vec![
                 batch("HTTPS", "NOERROR"),
                 batch("SVCB", "NOERROR"),
-                lint("https_svcb", json!({ "Ok": "HTTPS records are well-formed" })),
+                lint(
+                    "https_svcb",
+                    json!({ "Ok": "HTTPS records are well-formed" }),
+                ),
             ],
             "dns.https_svcb",
             Status::Pass,

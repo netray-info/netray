@@ -5,7 +5,7 @@
 
 use netray_engine::catalogue;
 use netray_engine::history::{diff, rescore};
-use netray_engine::profile::{check_lock, Profiles};
+use netray_engine::profile::{Profiles, check_lock};
 use netray_model::run::{Run, RunCheck, RunSection, SectionKind};
 use netray_model::{CheckId, Grade, Protocol, Status};
 
@@ -82,8 +82,11 @@ fn the_https_svcb_texts_name_every_branch_of_the_check() {
     assert_eq!(e.title, "HTTPS record");
     assert_eq!(e.short, "HTTPS RR");
     let finding = e.finding.to_lowercase();
-    for needle in ["no https or svcb record", "mix", "several alias"] {
-        assert!(finding.contains(needle), "finding lacks {needle:?}: {finding}");
+    for needle in ["no https or svcb record", "mix", "several alias", "warning"] {
+        assert!(
+            finding.contains(needle),
+            "finding lacks {needle:?}: {finding}"
+        );
     }
     let fix = e.fix_hint.to_lowercase();
     for needle in ["publish", "alias"] {

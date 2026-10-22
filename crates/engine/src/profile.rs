@@ -12,6 +12,7 @@ use netray_model::{CheckId, Grade, Protocol};
 
 const V3: &str = include_str!("../profiles/v3.toml");
 const V4: &str = include_str!("../profiles/v4.toml");
+const V5: &str = include_str!("../profiles/v5.toml");
 const LOCK: &str = include_str!("../profiles/lock.toml");
 
 /// Why a profile or its lock entry is refused.
@@ -166,6 +167,7 @@ impl Profiles {
             vec![
                 Profile::from_toml(V3).expect("embedded v3.toml parses"),
                 Profile::from_toml(V4).expect("embedded v4.toml parses"),
+                Profile::from_toml(V5).expect("embedded v5.toml parses"),
             ]
         })
     }
