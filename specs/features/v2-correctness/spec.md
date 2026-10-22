@@ -96,7 +96,8 @@ single-label name in an OG card URL starts a domain run.
    and the answer is sent as a batch of that type, so the records block shows the highest TTL
    across all answers, the authoritative one included; the authoritative TTL applies to the whole
    RRset (RFC 2181 §5.2), and to the RRSIGs covering it (RFC 4034 §3), which are never re-read on
-   their own. Only names at or below the zone are re-read. A record whose
+   their own; an RRSIG also takes the highest TTL its covered RRset shows at any resolver. Only names
+   at or below the zone are re-read. A record whose
    authoritative TTL is 60 s or more is not low. When no authoritative server answers, the recursive TTL is judged, as
    today.
 8. A DNS inspector query whose domain is an IP address queries PTR at the address's reverse name:

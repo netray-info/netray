@@ -1276,8 +1276,9 @@ async fn authoritative_ttls(
             pairs.push(pair);
         }
     }
+    let lifted = rrsig_lifts(unique);
     if pairs.is_empty() {
-        return Vec::new();
+        return lifted;
     }
 
     let mut ns_ips: HashMap<String, Vec<IpAddr>> = unique
@@ -1286,7 +1287,7 @@ async fn authoritative_ttls(
         .map(|n| (n.to_ascii(), Vec::new()))
         .collect();
     if ns_ips.is_empty() {
-        return Vec::new();
+        return lifted;
     }
     raw.resolve_missing_glue(&mut ns_ips).await;
     let servers: Vec<SocketAddr> = raw
@@ -1296,7 +1297,7 @@ async fn authoritative_ttls(
         .map(|(addr, _)| addr)
         .collect();
     if servers.is_empty() {
-        return Vec::new();
+        return lifted;
     }
 
     let answers = futures::future::join_all(pairs.iter().map(|(name, rt)| {
@@ -1332,12 +1333,44 @@ async fn authoritative_ttls(
         .flat_map(|(name, rt, (ttl, server))| {
             // The RRset's RRSIGs carry its TTL (RFC 4034 §3): they go in an RRSIG batch, so the
             // signature of a re-read RRset is not judged on its cached remainder.
-            let rrset = with_ttl(unique, name, rt, None, ttl, server);
-            let rrsigs = with_ttl(unique, name, RecordType::RRSIG, Some(rt), ttl, server);
+            let rrset = with_ttl(unique, name, rt, None, ttl, Some(server));
+            let rrsigs = with_ttl(unique, name, RecordType::RRSIG, Some(rt), ttl, Some(server));
             [(rt, rrset), (RecordType::RRSIG, rrsigs)]
         })
         .filter(|(_, lookups)| !lookups.is_empty())
         .map(|(rt, lookups)| (rt, Lookups::new(lookups)))
+        .chain(lifted)
+        .collect()
+}
+
+/// RRSIG batches that give each RRSIG the highest TTL its covered RRset shows in `unique`
+/// (RFC 4034 §3), where that is higher than the RRSIG's own cached remainder; no lookup.
+fn rrsig_lifts(unique: &Lookups) -> Vec<(RecordType, Lookups)> {
+    let mut covered: Vec<(String, RecordType)> = Vec::new();
+    for record in unique.records() {
+        if let Some(rt) = record
+            .data()
+            .rrsig()
+            .and_then(|rrsig| rrsig.type_covered().parse::<RecordType>().ok())
+        {
+            let pair = (record.name().to_ascii(), rt);
+            if !covered.contains(&pair) {
+                covered.push(pair);
+            }
+        }
+    }
+    covered
+        .into_iter()
+        .filter_map(|(name, rt)| {
+            let ttl = unique
+                .records()
+                .into_iter()
+                .filter(|r| r.record_type() == rt && same_name(&r.name().to_ascii(), &name))
+                .map(|r| r.ttl())
+                .max()?;
+            let lookups = with_ttl(unique, &name, RecordType::RRSIG, Some(rt), ttl, None);
+            (!lookups.is_empty()).then(|| (RecordType::RRSIG, Lookups::new(lookups)))
+        })
         .collect()
 }
 
@@ -1352,7 +1385,7 @@ fn with_ttl(
     rt: RecordType,
     covering: Option<RecordType>,
     ttl: u32,
-    server: SocketAddr,
+    server: Option<SocketAddr>,
 ) -> Vec<mhost::resolver::Lookup> {
     use serde_json::Value;
 
@@ -1383,8 +1416,10 @@ fn with_ttl(
             for rec in records.iter_mut() {
                 rec["ttl"] = Value::from(ttl);
             }
-            value["name_server"] =
-                Value::from(mhost::nameserver::NameServerConfig::udp(server).to_string());
+            if let Some(server) = server {
+                value["name_server"] =
+                    Value::from(mhost::nameserver::NameServerConfig::udp(server).to_string());
+            }
             serde_json::from_value(value).ok()
         })
         .collect()
