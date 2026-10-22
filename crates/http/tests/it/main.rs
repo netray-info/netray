@@ -2,6 +2,7 @@
 //! (v2-ci-speed: one binary links once; ~400 separate ones dominated CI). A new test file
 //! goes here and gets its `mod` line; `tests/repo/test_test_binaries.sh` holds the layout.
 
+mod caching_directives;
 mod caching_evidence;
 mod cdn_isolation_evidence;
 mod contract_golden;
@@ -15,6 +16,7 @@ mod evidence_probes;
 mod evidence_reading;
 mod history_volatile;
 mod hsts_evidence;
+mod isolation_unreadable;
 mod model_status;
 mod module_target_limit;
 mod module_v3;

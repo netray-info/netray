@@ -41,7 +41,7 @@ use crate::entries::view::grade_letter;
 use crate::evidence::{
     Badge, EvidenceRow, block_feeds, live_rows, live_run_title, shared_run_title, slot,
 };
-use crate::export::{self, ExportInput};
+use crate::export::{self, ExportInput, PortChecks};
 use crate::links;
 use crate::pages::result::views::line_code;
 use crate::pages::views;
@@ -345,6 +345,8 @@ type BandChecks = BoxFuture<'static, Result<Vec<CheckResult>, String>>;
 pub enum Refusal {
     RateLimited(Duration),
     Invalid(String),
+    /// Every slot of the module is taken: the visitor waits it out (the notice's warn tone).
+    Busy(String),
 }
 
 type Gate = BoxFuture<'static, Result<(), Refusal>>;
@@ -552,7 +554,10 @@ struct InspectorPage {
 
 #[derive(Template)]
 #[template(path = "partials/inspect_dns_builder.html")]
-struct DnsBuilder;
+struct DnsBuilder {
+    /// The page's query holds `+check`: the note on it shows (the `dns` island follows the field).
+    check_note: bool,
+}
 
 #[derive(Template)]
 #[template(path = "partials/port_chooser.html")]
@@ -635,6 +640,8 @@ fn related_event(tool: Tool, input: &str, part: &PartResult) -> Option<Event> {
 struct CallerNotice {
     target: String,
     message: String,
+    tone: Option<&'static str>,
+    examples: Vec<ExampleView>,
 }
 
 /// The band region of the start fragment: none, a placeholder the stream fills, or rendered.
@@ -693,6 +700,10 @@ struct BandView {
 struct NoticeFragment {
     name: &'static str,
     message: String,
+    /// `warn` for a refusal the visitor waits out (too many requests, busy, timed out); none for
+    /// invalid input.
+    tone: Option<&'static str>,
+    examples: Vec<ExampleView>,
 }
 
 /// `GET /inspect/{tool}` and `POST /inspect/{tool}/run`; any other tool is the 404 page.
@@ -767,7 +778,14 @@ async fn show(
     }
     let name = tool.as_str();
     let slot = match tool {
-        Tool::Dns => (DnsBuilder).render().ok(),
+        Tool::Dns => (DnsBuilder {
+            check_note: prefill.as_deref().is_some_and(|q| {
+                q.split_whitespace()
+                    .any(|t| t.eq_ignore_ascii_case("+check"))
+            }),
+        })
+        .render()
+        .ok(),
         _ => None,
     };
     let between = match tool {
@@ -804,18 +822,7 @@ async fn show(
         stream_url: format!("/inspect/{name}/run"),
         autostart: (prefill.is_some() || own_ip) && result.is_none(),
         tabs,
-        examples: tool
-            .examples()
-            .iter()
-            .map(|text| ExampleView {
-                href: format!(
-                    "/inspect/{name}?{}={}",
-                    tool.field(),
-                    utf8_percent_encode(text, LOCATION_SET)
-                ),
-                text,
-            })
-            .collect(),
+        examples: examples(tool),
         between,
         slot,
         result,
@@ -855,10 +862,12 @@ async fn caller_run(
         .and_then(|v| v.to_str().ok())
         .map(str::to_owned);
     let target = client.to_string();
-    let caller_notice = |message: String| {
+    let caller_notice = |message: String, warn: bool| {
         (CallerNotice {
             target: target.clone(),
             message,
+            tone: warn.then_some("warn"),
+            examples: examples(Tool::Ip),
         })
         .render()
         .ok()
@@ -871,13 +880,16 @@ async fn caller_run(
         deadline: deadline.into_std(),
     })? {
         Ok(job) => job,
-        Err(message) => return Some(caller_notice(message)),
+        Err(message) => return Some(caller_notice(message, false)),
     };
     let Ok(_permit) = deps.slots[Tool::Ip.index()].clone().try_acquire_owned() else {
-        return Some(caller_notice("busy, try again in a moment".to_string()));
+        return Some(caller_notice(
+            "busy, try again in a moment".to_string(),
+            true,
+        ));
     };
     if let Err(retry_after) = deps.jobs.admit(Tool::Ip, client, "") {
-        return Some(caller_notice(too_many_requests_text(retry_after)));
+        return Some(caller_notice(too_many_requests_text(retry_after), true));
     }
     let Job { parts, band, .. } = job;
     let labels: Vec<String> = parts.iter().map(|part| part.label.clone()).collect();
@@ -890,7 +902,7 @@ async fn caller_run(
         (results, band)
     };
     let Ok((results, band)) = timeout_at(deadline, finished).await else {
-        return Some(caller_notice("timed out".to_string()));
+        return Some(caller_notice("timed out".to_string(), true));
     };
     Some(caller_html(target, &labels, &results, &band))
 }
@@ -946,7 +958,7 @@ fn caller_html(
                 .map(|(label, r)| (label.as_str(), Some(r))),
             band.as_ref().map(|(_, r)| r),
         ),
-        true,
+        &[],
     )?;
     finished_html(
         live_run_title(now),
@@ -1005,7 +1017,7 @@ async fn shared_result(deps: &InspectDeps, tool: Tool, key: &str) -> Shared {
                 std::iter::once((dns_label(&cached.mode), Some(&blocks))),
                 None::<&Result<(), String>>,
             ),
-            true,
+            &[],
         )?;
         finished_html(
             title,
@@ -1095,6 +1107,22 @@ fn tabs(current: Tool, input: Option<&str>) -> Vec<TabView> {
     .collect()
 }
 
+/// The example chips of an inspector: each fills the field and starts a run.
+fn examples(tool: Tool) -> Vec<ExampleView> {
+    let name = tool.as_str();
+    tool.examples()
+        .iter()
+        .map(|text| ExampleView {
+            href: format!(
+                "/inspect/{name}?{}={}",
+                tool.field(),
+                utf8_percent_encode(text, LOCATION_SET)
+            ),
+            text,
+        })
+        .collect()
+}
+
 /// The back-link target for an input: the `/{domain}` path and the domain, when it has one.
 fn backlink(tool: Tool, input: &str) -> Option<(String, String)> {
     let domain = registrable_domain(&target_host(tool, input)?)?;
@@ -1126,14 +1154,22 @@ fn too_many_requests(tool: Tool, retry_after: Duration) -> Response {
         tool,
         StatusCode::TOO_MANY_REQUESTS,
         too_many_requests_text(retry_after),
+        true,
     );
     response.headers_mut().insert(RETRY_AFTER, secs.into());
     response
 }
 
-fn notice(tool: Tool, status: StatusCode, message: String) -> Response {
-    let name = tool.name();
-    match (NoticeFragment { name, message }).render() {
+/// The idle result frame with `message` as its notice; `warn` tones a refusal the visitor waits
+/// out.
+fn notice(tool: Tool, status: StatusCode, message: String, warn: bool) -> Response {
+    let fragment_view = NoticeFragment {
+        name: tool.name(),
+        message,
+        tone: warn.then_some("warn"),
+        examples: examples(tool),
+    };
+    match fragment_view.render() {
         Ok(html) => sse(status, vec![fragment(RESULT_ID, &html), end()]),
         Err(_) => server_error(),
     }
@@ -1172,6 +1208,7 @@ async fn run(
             tool,
             StatusCode::SERVICE_UNAVAILABLE,
             "busy, try again in a moment".to_string(),
+            true,
         );
     };
     if let Err(retry_after) = deps.jobs.admit(tool, client, &input) {
@@ -1213,7 +1250,7 @@ async fn run(
         share_key: share_key.clone(),
     }) {
         Ok(job) => job,
-        Err(message) => return notice(tool, StatusCode::OK, message),
+        Err(message) => return notice(tool, StatusCode::OK, message, false),
     };
     if let Some(gate) = job.gate.take() {
         match timeout_at(deadline, gate).await {
@@ -1221,8 +1258,13 @@ async fn run(
             Ok(Err(Refusal::RateLimited(retry_after))) => {
                 return too_many_requests(tool, retry_after);
             }
-            Ok(Err(Refusal::Invalid(message))) => return notice(tool, StatusCode::OK, message),
-            Err(_) => return notice(tool, StatusCode::OK, "timed out".to_string()),
+            Ok(Err(Refusal::Invalid(message))) => {
+                return notice(tool, StatusCode::OK, message, false);
+            }
+            Ok(Err(Refusal::Busy(message))) => {
+                return notice(tool, StatusCode::SERVICE_UNAVAILABLE, message, true);
+            }
+            Err(_) => return notice(tool, StatusCode::OK, "timed out".to_string(), true),
         }
     }
     match stream_job(
@@ -1523,7 +1565,15 @@ fn share_html(tool: Tool, key: Option<String>) -> Option<String> {
     .ok()
 }
 
-/// The export slot: disabled while the run streams, with the three exports once it is `ready`.
+/// The export slot while the run streams: disabled, without exports.
+fn pending_export_html(tool: Tool, target: &str) -> Option<String> {
+    super::export_slot(
+        format!("netray-{}-{}", tool.as_str(), export::slug(target)),
+        None,
+    )
+}
+
+/// The export slot of a finished run, with its three exports.
 fn export_html(
     tool: Tool,
     target: &str,
@@ -1531,7 +1581,7 @@ fn export_html(
     band: Option<(Protocol, &[CheckResult])>,
     blocks: &[Block],
     errors: &[(String, String)],
-    ready: bool,
+    ports: &[PortChecks<'_>],
 ) -> Option<String> {
     let title: Vec<String> = title.parts.iter().map(|p| p.to_uppercase()).collect();
     let band = band.map(|(p, c)| ([p], c));
@@ -1541,18 +1591,44 @@ fn export_html(
         band: band.as_ref().map(|(p, c)| (&p[..], *c)),
         blocks,
         errors,
+        ports,
     };
-    let exports = ready.then(|| {
-        (
+    super::export_slot(
+        format!("netray-{}-{}", tool.as_str(), export::slug(target)),
+        Some((
             export::markdown(&input),
             export::csv(&input),
             export::json(&input),
-        )
-    });
-    super::export_slot(
-        format!("netray-{}-{}", tool.as_str(), export::slug(target)),
-        exports,
+        )),
     )
+}
+
+/// Each port's own checks for the exports when the run shows port panels, in part order; a port
+/// whose checks never arrived reads "timed out" (Rule M).
+fn port_checks<'a>(
+    names: Option<&'a [String]>,
+    checked: &BTreeSet<usize>,
+    part_checks: &'a [Option<BandResult>],
+    protocol: Option<Protocol>,
+) -> Vec<PortChecks<'a>> {
+    let (Some(names), Some(protocol)) = (names, protocol) else {
+        return Vec::new();
+    };
+    checked
+        .iter()
+        .filter_map(|&n| {
+            let checks = match part_checks.get(n).and_then(Option::as_ref) {
+                Some(Ok(checks)) => Ok(checks.as_slice()),
+                Some(Err(e)) => Err(e.as_str()),
+                None => Err("timed out"),
+            };
+            Some(PortChecks {
+                port: names.get(n)?.as_str(),
+                protocol,
+                checks,
+            })
+        })
+        .collect()
 }
 
 /// The sections of a run that ended without a result, for the exports (Rule M): a part with its
@@ -1670,7 +1746,7 @@ fn shared_html(run: &SharedRun, key: &str) -> Option<String> {
             run.parts.iter().map(|(label, r)| (label.as_str(), Some(r))),
             run.band.as_ref().map(|(_, r)| r),
         ),
-        true,
+        &port_checks(names.as_deref(), &checked, &run.part_checks, protocol),
     )?;
     finished_html(
         shared_run_title(Some(run.started)),
@@ -1867,15 +1943,7 @@ fn stream_job(
         },
         ports,
         share: share_html(head.tool, None)?,
-        export: export_html(
-            head.tool,
-            &head.target,
-            &live_run_title(now),
-            None,
-            &[],
-            &[],
-            false,
-        )?,
+        export: pending_export_html(head.tool, &head.target)?,
         related: related_box(head.tool, &head.input, None),
         own: own_link(head.tool, &head.input),
     }
@@ -2004,7 +2072,12 @@ fn stream_job(
                                 .map(|(label, r)| (label.as_str(), r.as_ref())),
                             run.band_out.as_ref().map(|(_, r)| r),
                         ),
-                        true,
+                        &port_checks(
+                            panel_names(&run.labels, &run.checked).as_deref(),
+                            &run.checked,
+                            &run.part_checks,
+                            run.band_out.as_ref().map(|(p, _)| *p).or(run.protocol),
+                        ),
                     );
                     if let Some(key) = run.share_key.take() {
                         let finished = run.finished();

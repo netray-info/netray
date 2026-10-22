@@ -41,6 +41,10 @@ pub struct InspectResponse {
     /// kept. Not serialized; empty after a JSON replay.
     #[serde(skip)]
     pub raw_headers: Vec<(String, String)>,
+    /// Internal: the lowercased names of HTTPS response headers whose first line is not readable
+    /// as text (`HeaderValue::to_str` fails). Not serialized; empty after a JSON replay.
+    #[serde(skip)]
+    pub unreadable_headers: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

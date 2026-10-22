@@ -19,6 +19,21 @@ pub struct ExploreLink {
     pub href: String,
 }
 
+impl ExploreLink {
+    /// The link named by its inspector and the query it opens: "DNS · example.com MX".
+    pub fn target(&self) -> String {
+        let rest = self.href.strip_prefix("/inspect/").unwrap_or(&self.href);
+        let (tool, query) = rest.split_once('?').unwrap_or((rest, ""));
+        let value = query.split_once('=').map_or("", |(_, v)| v);
+        let value = percent_encoding::percent_decode_str(value).decode_utf8_lossy();
+        let name = match tool {
+            "email" => "Email".to_string(),
+            other => other.to_uppercase(),
+        };
+        format!("{name} · {value}")
+    }
+}
+
 fn link(label: impl Into<String>, tool: &str, field: &str, value: &str) -> ExploreLink {
     let set = if field == "url" { COMPONENT } else { QUERY };
     ExploreLink {

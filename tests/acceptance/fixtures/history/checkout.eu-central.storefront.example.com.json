@@ -1773,6 +1773,13 @@
               }
             ],
             [
+              "directive",
+              {
+                "t": "text",
+                "v": "max-age=300"
+              }
+            ],
+            [
               "max_age",
               {
                 "t": "int",

@@ -197,6 +197,28 @@ async fn get_with_the_callers_token_spent_shows_the_refusal_under_the_address() 
     );
 }
 
+/// v2-ui-polish R5: the refusal under the address is the shell's notice card with the warn tone
+/// and the example chips below it.
+#[tokio::test]
+async fn the_callers_refusal_is_a_warn_notice_card_with_the_example_chips() {
+    let rec = Arc::new(Recording::default());
+    let app = app(
+        Some(rec),
+        "[ip]\ninternal_mode = true\nper_ip_burst = 1\nper_ip_per_minute = 1\n",
+    );
+    let _ = get_caller(&app).await;
+    let r = get_caller(&app).await;
+    let result = &r.body[r
+        .body
+        .find("<div id=\"inspect-result\">")
+        .expect("result region")..];
+    assert!(result.contains("<p class=\"inspector-notice\" role=\"status\" data-tone=\"warn\">too many requests; try again in"), "{result}");
+    assert!(
+        result.contains("class=\"inspector-examples__chip\""),
+        "{result}"
+    );
+}
+
 /// C14
 #[tokio::test]
 async fn get_without_an_ip_part_shows_unavailable_under_the_address() {

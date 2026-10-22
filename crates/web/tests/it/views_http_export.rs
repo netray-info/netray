@@ -24,6 +24,7 @@ fn c4_the_json_export_keeps_max_age_and_etag_weak() {
         band: None,
         blocks: &blocks,
         errors: &[],
+        ports: &[],
     };
     let doc: serde_json::Value = serde_json::from_str(&json(&input)).expect("json");
     let text = doc.to_string();
@@ -45,6 +46,7 @@ fn c12_the_csv_export_keeps_max_age_and_its_value() {
         band: None,
         blocks: &blocks,
         errors: &[],
+        ports: &[],
     };
     let out = csv(&input);
     assert!(out.contains("max_age"), "{out}");

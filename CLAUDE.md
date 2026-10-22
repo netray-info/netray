@@ -144,6 +144,7 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Compose each new inspector onto the finished v1 document** (`api/compose.rs`, one step per part): composing it with the earlier parts renames a committed component and fails `openapi_contract`.
 - **A golden over prism's routes zeroes `latency_ms` and sorts hash-map-ordered lists** (authcompare's servers); capture it twice before committing.
 - **Outbound fetches of user- or domain-controlled URLs** go only through `netray_common::fetch`; never build a `reqwest::Client` for them. Checking and pinning live in its DNS resolver; reqwest keeps redirect handling.
+- **An HTTP header value that is not text never reaches `headers`, `raw_headers` or `dump_headers`**: read its presence from `InspectResponse.unreadable_headers` (first line, as `security.*` reads it).
 - **`FetchOptions::new` follows no redirect**: a test that follows one sets `max_redirects`.
 - **rcgen is 0.14**: sign with `Issuer::from_params(&ca_params, &ca_key)`, not 0.13's three-argument `signed_by`.
 - **Features unify.** A dependency feature one crate enables reaches every service in the `netray` binary; select behaviour at runtime, never with `cfg!(feature)`.
@@ -169,6 +170,8 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **A browser breaks after a hyphen**: to break a domain only at its dots, wrap each label in an inline-block box (`.result-hero__label`).
 - **Identifier-valued CSS properties** (`grid-area`, `transition`) go into `IDENTIFIER_PROPERTIES` in `crates/web/src/gate.rs`, or the gate refuses colour words in them.
 - **Absolute URLs come from `pages::ORIGIN`**; in-page links are apex-relative (`/inspect/<tool>`). `tests/repo/test_no_absolute_apex.sh` refuses a `netray.info` literal in `crates/web/{templates,src,islands/src}`.
+- **The gate keeps a component's classes in its own stylesheet**: a page rule on `.check-row` or `.query-input__*` goes into that component's CSS or uses a structural selector (`.card > :first-child`).
+- **A design board with `wait` marks its always-rendered elements `"shell": true`**: without a non-shell element on the page the board is `no state`, so a timed-out run never passes.
 - **The gate's colour words include CSS system colours** (`menu`, `canvas`, `field`): an island or class named so is refused as a colour literal (the header menu island is `nav-menu`). A class starting `grade-` belongs to the grade component (the home legend is `score-key`).
 - **The expired-entry page inlines its sheet** (`entries/render.rs` `stylesheet`): a frame rule it needs (the footer) lives in `pages.css`, which that sheet appends.
 - **A design board state behind a control** is measured with the manifest's `click` (`{"board": …, "page": …}`): board M's menu sheet, the open Inspectors menu.

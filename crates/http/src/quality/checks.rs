@@ -324,6 +324,7 @@ mod tests {
             error: None,
             redirect_limit_reached: None,
             raw_headers: vec![],
+            unreadable_headers: vec![],
         }
     }
 

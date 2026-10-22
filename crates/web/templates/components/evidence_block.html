@@ -2,6 +2,7 @@
 {% macro evidence_block(view) %}
 <section class="evidence-block" id="{{ view.id }}" data-shape="{{ view.shape.as_str() }}">
   <h3 class="evidence-block__title">{{ view.title }}</h3>
+  {%- if view.shape.is_empty() %}<p class="evidence-block__empty">Nothing recorded.</p>{% else %}
   {% match view.shape %}
   {% when EvidenceShape::Records(rows) %}
   <table class="evidence-block__table">
@@ -33,7 +34,7 @@
   {% when EvidenceShape::Text(text) %}
   <pre class="evidence-block__text">
 {{ text }}</pre>
-  {% endmatch %}
+  {% endmatch %}{% if view.shape.swipes() %}<p class="evidence-block__swipe">← swipe the table</p>{% endif %}{% endif %}
   {% if !view.feeds.is_empty() %}<p class="evidence-block__feeds">Feeds lines: {% for code in view.feeds %}{% if !loop.first %}, {% endif %}<span class="evidence-block__feed">{{ code }}</span>{% endfor %}</p>{% endif %}
 </section>
 {% endmacro %}
