@@ -123,7 +123,7 @@ elsif rel
   hosts = %w[dns tls http ip]
   i_smoke = texts.index { |t|
     t.include?("docker run") && t.scan(/docker run\b/).size == 1 && t =~ /(^|[^a-z])serve([^a-z]|$)/ &&
-      t.include?("/health") && t.include?("netray.info") &&
+      t.include?("/health") && t.include?("netray.info") && t =~ /"\$host" \/ / &&
       hosts.all? { |h| t.include?("#{h}.netray.info") || t =~ /\b#{h}\b/ } &&
       t !~ /"\$image" +"?(lens|dns|tls|http|email|ip|site)\b/ && t !~ /"\$sub"/
   }

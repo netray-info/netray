@@ -428,4 +428,47 @@ Pass 1:
 - AMENDMENT (repaired in phase): the release smoke step's `/health` answers before host routing, so it proved only that the process started. It now also asks `/` on each host, which an unknown host answers 404.
 - NIT (fixed): `netray --help` listed clap's `help` subcommand; it is disabled.
 - Found sound: module configs keep their defaults and clamps, the TLS custom CA loads at startup, the DNS circuit breaker and limits are unchanged, in-process enrichment keeps its private-address guard, and the image and lockfile match.
+Pass 2: the four fixes hold; no wrong result. NIT (fixed): `test_workflows.sh` now also requires the smoke step's `/` request per host.
+
 - Also found while preparing Phase 8: `crates/web/src/api/state.rs` counted a refused API ip caller as `lens_rate_limit_hits_total` (main's code; requirement 17). Fixed to `netray_rate_limit_hits_total{scope="api_v1_ip"}` (`crates/web/tests/it/api_ip_rate_limit_metric.rs`).
+
+## Phase 8 — Documentation, SDD and release notes
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | req 24: CHANGELOG Unreleased states 0.30.0: lead paragraph, Removed with every row of requirements 13 and 14 and its successor, Changed with the config table, env prefix and metric renames, sibling entries kept | green | claim to path table below |
+| C2 | req 25: SDD S37, S38, the section 10 table, V0.3, the Phase 5 table, section 9.2 trigger list confirmed, S24 unchanged | green | tests/repo/test_api_sdd.sh and the other SDD repo checks |
+| C3 | req 26: CLAUDE.md, README.md, architecture-rules and logging-rules corrected for the cutover | green | tests/repo/test_frontend_rules.sh |
+| C4 | GIVEN Unreleased THEN lead paragraph, Removed rows with successors, Changed config table and metric renames | green | CHANGELOG.md |
+| C5 | GIVEN each CHANGELOG claim THEN report.md names the path that makes it true | green | report.md claim table |
+| C6 | GIVEN CHANGELOG.md WHEN grepped for domains THEN only netray.info and example.com | green | grep below |
+| C7 | GIVEN the SDD THEN S37 carries the 2026-10-17 decision and the section 10 table shows no release 0.27.0 to 0.29.0 | green | specs/sdd/v2.md |
+| C8 | GIVEN CLAUDE.md THEN no netray lens, run(config), Config stays per service, checkMeta.ts, packages/common-frontend or lens goldens | green | grep below |
+| C9 | GIVEN architecture-rules THEN the env prefix rule names NETRAY_ only, with the refused legacy prefixes | green | specs/rules/architecture-rules.md |
+
+### Claims of CHANGELOG 0.30.0, traced to code
+
+| claim | path |
+|---|---|
+| `netray serve` is the only subcommand; the entrypoint runs it | crates/netray/src/main.rs (`Command::Serve`), Dockerfile (`ENTRYPOINT`) |
+| one process serves every host by `Host` | crates/web/src/host/mod.rs (`dispatch`), crates/netray/src/serve.rs (`HostRouters`) |
+| the Solid apps, common-frontend, site/ are gone | package.json (workspaces), tests/repo/test_v1_deleted.sh |
+| lens, its snapshot store, `/api/check`, SPA and MCP tools are gone | tests/repo/test_v1_deleted.sh; `/api/check` 410 in crates/web/src/host/legacy.rs (`apex_legacy`) |
+| the legacy env prefixes are refused naming `NETRAY_*` and `NETRAY_CONFIG` | crates/netray/src/config.rs (`LEGACY_PREFIXES`, `refuse_legacy_prefix`) |
+| enrichment calls the IP module in-process; no `[modules.ip]` means off | crates/common/src/enrichment.rs (`EnrichmentClient::in_process`), crates/ip/src/module.rs (`enrichment_client`), crates/netray/src/registry.rs |
+| lens. redirects; email. rows; `/api/*`, `/docs`, `/api-docs/openapi.json` on subdomains | crates/web/src/host/legacy.rs (`lens_host`, `email_host`, `subdomain_common`) |
+| apex `/api/check`, other `/api/<x>`, `/api/` and `/api/<name>.html`, `/docs`, `/guide/lens` | crates/web/src/host/legacy.rs (`apex_legacy`) |
+| `/r/<id>` of no stored entry answers the 410 page, og.png an empty 410 | crates/web/src/entries/routes.rs |
+| ip. 410 rows and their successors | crates/web/src/host/legacy.rs (`ip_successor`) |
+| ip. keeps its command-line family; a browser gets the inspector | crates/web/src/api/ip_host.rs (`ip_host`), crates/web/src/host/mod.rs (ip arm), crates/web/src/pages/inspect.rs (`inspect_host_router`) |
+| inspector hosts prefill from `?q=`, `?h=`, `?url=`, `?ip=`; `?r=` ignored | crates/web/src/pages/inspect.rs (`render`, `without_share_key`) |
+| other GET or HEAD on an inspector host moves to the apex | crates/web/src/host/legacy.rs (`to_apex`) |
+| unknown Host answers 404 but `/health`, `/ready` | crates/web/src/host/mod.rs (`dispatch`) |
+| `netray.toml` tables, deny_unknown_fields, `NETRAY_`, `NETRAY_CONFIG`, the example config | crates/netray/src/config.rs, crates/netray/netray.example.toml |
+| old file keys refused with their destination; the configuration table | crates/netray/src/legacy.rs (`ROWS`, generated row for row) |
+| one metrics listener without token; `admin_bind` → `metrics_bind`, `admin_token` removed | crates/netray/src/serve.rs (`metrics_bind`), crates/netray/src/legacy.rs |
+| the section 9.2 set registered at startup | crates/web/src/metrics.rs (`init_zero_series`) |
+| renamed series | crates/web/src/admission/mod.rs, crates/web/src/metrics.rs, crates/store/src/record.rs, crates/web/src/api/state.rs, crates/dns/src (`netray_dns_*`, label `operation`), crates/email/src (`netray_email_*`, label `fetch`), crates/tls/src/routes.rs, crates/http/src/inspect/mod.rs, crates/ip/src, crates/web/src/host/apex.rs (`http_metrics("netray")`) |
+| `lens_check_requests_total` ended | no tracked source names it (`rg lens_check_requests_total crates`) |
