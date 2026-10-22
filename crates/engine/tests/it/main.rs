@@ -14,6 +14,7 @@ mod facts_blocks_section_wins;
 mod hard_fail_precedence;
 mod history;
 mod history_fixtures;
+mod history_fixtures_story;
 mod no_address_sections;
 mod profile;
 mod profile_v4;

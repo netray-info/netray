@@ -2,7 +2,7 @@
 //! module (`netray_tls`) and `netray_http` translate the TLS and HTTP goldens (all sections run
 //! in-process).
 //!
-//! Each backend's own `tests/contract_golden.rs` writes its golden under
+//! Each backend's own `contract_golden` test writes its golden under
 //! `tests/fixtures/contracts/` from its real response types. Here the DNS and TLS modules run
 //! the goldens through the engine; both must produce checks and no error and carry values that
 //! come from the golden rather than defaults.

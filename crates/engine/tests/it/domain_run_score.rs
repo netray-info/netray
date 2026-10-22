@@ -3,8 +3,8 @@
 //! v2-cutover Phase 6, assertions unchanged).
 //!
 //! lens ran the module goldens; the engine names no module crate, so stub modules answer every
-//! catalogue check of their protocol as passing, and the HTTP module answers the twelve v3 HTTP
-//! checks with known statuses (a weight-5 warn, a failing `csp`). The expected grade is
+//! catalogue check of their protocol as passing, and the HTTP module answers the thirteen v4
+//! HTTP checks with known statuses (a weight-5 warn, a failing `csp`). The expected grade is
 //! `netray_engine::score` over the events of a second run on the same registry.
 
 use std::time::{Duration, Instant};
@@ -18,7 +18,7 @@ use netray_engine::{
 use netray_model::{CheckId, CheckResult, Protocol, Status};
 use tokio::sync::mpsc;
 
-const HTTP_IDS: [&str; 12] = [
+const HTTP_IDS: [&str; 13] = [
     "https_redirect",
     "hsts",
     "cors",
@@ -28,6 +28,7 @@ const HTTP_IDS: [&str; 12] = [
     "x_content_type_options",
     "referrer_policy",
     "permissions_policy",
+    "coop",
     "deprecated_headers",
     "info_leakage",
     "caching",
@@ -41,7 +42,7 @@ const PROTOCOLS: [Protocol; 5] = [
     Protocol::Ip,
 ];
 
-/// A module answering a measured section: the twelve v3 HTTP checks for HTTP
+/// A module answering a measured section: the thirteen v4 HTTP checks for HTTP
 /// (`https_redirect`, weight 5, warns; `csp` fails; the rest pass), every catalogue check of its
 /// protocol passing otherwise.
 struct Stub(Protocol);

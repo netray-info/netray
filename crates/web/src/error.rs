@@ -161,8 +161,12 @@ mod tests {
     }
 
     #[test]
-    fn single_label_accepted() {
-        assert_eq!(validate_domain("localhost").unwrap(), "localhost");
+    fn single_label_refused() {
+        let err = validate_domain("localhost").unwrap_err();
+        assert!(matches!(
+            err,
+            AppError::DomainInvalid(ref m) if m == "a domain needs at least two labels"
+        ));
     }
 
     #[test]

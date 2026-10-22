@@ -146,7 +146,7 @@ async fn c2_entry_card_is_a_1200x630_png_and_its_svg_carries_the_plate() {
     let plate = card_plate(&card_layout(&s.run, None));
     let t = UNIX_EPOCH + Duration::from_secs(s.seen as u64);
     let svg = svg_for_entry(DOMAIN, "B", DEFAULT_LABEL, t, &plate);
-    assert_eq!(count(&svg, "class=\"plate__line\""), 54);
+    assert_eq!(count(&svg, "class=\"plate__line\""), 57);
     assert!(svg.contains(DOMAIN));
     assert!(svg.contains(">B<"));
     assert!(svg.contains(&format_utc_timestamp(t)));
@@ -166,7 +166,7 @@ async fn c5_domain_card_with_a_fresh_head_carries_the_plate_and_without_an_entry
         UNIX_EPOCH + Duration::from_secs(s.seen as u64),
         Some(&plate),
     );
-    assert_eq!(count(&svg, "class=\"plate__line\""), 54);
+    assert_eq!(count(&svg, "class=\"plate__line\""), 57);
     let expected = svg_to_png(&svg, s.state.font_db.clone()).unwrap();
 
     let (status, body) = get(
