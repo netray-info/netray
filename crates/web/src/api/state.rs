@@ -96,7 +96,7 @@ impl IpLimiters {
                 .as_secs(),
             Err(_) => 60,
         };
-        metrics::counter!("lens_rate_limit_hits_total", "scope" => "api_v1_ip").increment(1);
+        metrics::counter!("netray_rate_limit_hits_total", "scope" => "api_v1_ip").increment(1);
         Err(wait.max(1))
     }
 

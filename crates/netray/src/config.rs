@@ -30,6 +30,11 @@ const DEFAULT_GLOBAL_PER_MINUTE: u32 = 100;
 const DEFAULT_GLOBAL_BURST: u32 = 20;
 const DEFAULT_CACHE_WINDOW_SECONDS: u64 = 300;
 
+/// The repository tooling's own `NETRAY_` variables, which reach every process its scripts start
+/// and are no config keys: the live-test switch, a prebuilt binary (`tests/repo/lib/netray.sh`)
+/// and `just design-check`'s canvas.
+const TOOL_VARS: [&str; 3] = ["NETRAY_LIVE_TESTS", "NETRAY_BIN", "NETRAY_DESIGN_DIR"];
+
 const LEGACY_PREFIXES: [&str; 11] = [
     "LENS_",
     "NETRAY_DNS_",
@@ -160,7 +165,9 @@ impl Config {
         {
             crate::legacy::refuse(&raw).map_err(ConfigError::Message)?;
         }
-        let env = env.into_iter().filter(|(k, _)| k != "NETRAY_LIVE_TESTS");
+        let env = env
+            .into_iter()
+            .filter(|(k, _)| !TOOL_VARS.iter().any(|t| k == t));
         let cfg: Config = netray_common::config::load_with_env(path, "NETRAY_", env)?;
         cfg.validate()?;
         Ok(cfg)

@@ -592,9 +592,9 @@ Operator handoff, in this order:
    - `[modules.ip]` naming the files under `/netray/data`.
    - lens's `[modules.*]` tables; `[admission]` (S33 start values); `[badges]`, `[og_cards]`, `[telemetry]`.
 
-   Verify with `docker run --rm -v <file>:/netray/netray.toml ghcr.io/netray-info/netray:0.30.0 serve --check-config /netray/netray.toml`.
+   Verify with `docker run --rm -v <file>:/netray/netray.toml ghcr.io/netray-info/netray:0.30.0 --check-config /netray/netray.toml`.
 4. **netray-ops env.** Remove every `LENS_*`, `NETRAY_{DNS,TLS,HTTP,EMAIL,IP}_*`, `PRISM_*`, `TLSIGHT_*`, `SPECTRA_*`, `BEACON_*` and `IFCONFIG_*` variable. `serve` refuses to start while any is set. Set the `NETRAY_*` equivalents only where a value must stay out of the file.
-5. **One container.** It replaces the seven (lens, dns, tls, http, email, ip, site) and runs `serve /netray/netray.toml`. Mounts: the config, the persistent volume for `history.db`, `/netray/data` (GeoIP, from the data image), and the TLS custom CA directory if one is used.
+5. **One container.** It replaces the seven (lens, dns, tls, http, email, ip, site) and runs the image with the argument `/netray/netray.toml` (the entrypoint is `netray serve`). Mounts: the config, the persistent volume for `history.db`, `/netray/data` (GeoIP, from the data image), and the TLS custom CA directory if one is used.
 6. **Traefik.** Route `netray.info`, `dns.`, `tls.`, `http.`, `ip.`, `email.`, `lens.` and `mta-sts.netray.info` to the container's bind port, with health checks on `/health`. Remove the per-service routers and services. Keep any `www.` redirect at Traefik (operator, 2026-10-17).
 7. **DNS.** No change expected. Verify that each host above resolves to argus.
 8. **Prometheus, dashboards and alerts.** One scrape target at `metrics_bind` replaces the six jobs. Dashboards and alerts move to `netray_*` without continuity (S11).

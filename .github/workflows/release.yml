@@ -86,8 +86,10 @@ jobs:
             -e NETRAY_SERVER__BIND=127.0.0.1:8080 -e NETRAY_SERVER__METRICS_BIND=127.0.0.1:9090 \
             -e NETRAY_STORE__DB_PATH=/tmp/history.db \
             "$image" >/dev/null
+          # /health answers before host routing; / tells the hosts apart (an unknown host is 404).
           for host in netray.info dns.netray.info tls.netray.info http.netray.info ip.netray.info; do
             check smoke-serve "$host" /health || failed=1
+            check smoke-serve "$host" / || failed=1
           done
           docker rm -f smoke-serve >/dev/null
 

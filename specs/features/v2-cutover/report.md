@@ -391,3 +391,41 @@ DEFERRED from the copies: badges and OG cards keep the default label `lens` for 
 | C13 | GIVEN release.yml WHEN test_workflows.sh runs THEN the smoke step starts serve once and requests /health with the apex and four inspector Hosts | green | tests/repo/test_workflows.sh |
 | C14 | GIVEN test_suite_size.sh THEN floors equal the counts after deletion, under ADLC-Test-Change | green | tests/repo/test_suite_size.sh |
 | C15 | the lens dependency is gone from crates/netray and crates/web | green | tests/repo/test_no_lens_dependency.sh |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 top level (orchestrator, direct) | 1 | orchestrator | | |
+| G2 module crates | 1 | opus | 422223 | 2114 |
+| review fixes B1, B2 (orchestrator, direct) | 1 | orchestrator | | |
+
+The merge reconciliation before the phase ported main's new lens tests to the survivor copies (one sonnet agent, 166563 tokens, 500 s).
+
+### Behavioural verification
+
+```
+$ netray --help
+Commands:
+  serve  The netray.info product: every host, one process
+$ netray lens                      -> error: unrecognized subcommand 'lens', exit 2
+$ NETRAY_SERVER__BIND=127.0.0.1:18531 NETRAY_STORE__DB_PATH=$T/h.db netray serve crates/netray/netray.dev.toml &
+$ curl -H 'Host: netray.info' :18531/          -> 200
+$ curl -H 'Host: dns.netray.info' :18531/      -> 200
+$ curl -H 'Host: ip.netray.info' :18531/       -> 200
+$ curl -H 'Host: mta-sts.netray.info' :18531/  -> 404
+$ curl -H 'Host: lens.netray.info' :18531/     -> 301
+$ curl -A curl/8 -H 'Host: ip.netray.info' :18531/   -> 127.0.0.1
+$ curl -H 'Host: ip.netray.info' :18531/range  -> 410
+```
+
+### Review
+
+Pass 1:
+- BLOCKER `NETRAY_DESIGN_DIR`, exported by `just design-check`, reached `serve`'s config as the key `design_dir` and stopped it. Fixed: `crates/netray/src/config.rs` drops the tooling variables (`NETRAY_LIVE_TESTS`, `NETRAY_BIN`, `NETRAY_DESIGN_DIR`) before loading (`crates/netray/tests/serve_tool_vars.rs`).
+- BLOCKER `NETRAY_BIN` (a prebuilt binary for the scripts) stopped `serve` the same way. Same fix.
+- AMENDMENT (repaired in phase): handoff item 5 named `serve /netray/netray.toml` although the entrypoint already is `netray serve`, and item 3's `--check-config` carried a stray `serve`. Both corrected in the spec.
+- AMENDMENT (repaired in phase): the release smoke step's `/health` answers before host routing, so it proved only that the process started. It now also asks `/` on each host, which an unknown host answers 404.
+- NIT (fixed): `netray --help` listed clap's `help` subcommand; it is disabled.
+- Found sound: module configs keep their defaults and clamps, the TLS custom CA loads at startup, the DNS circuit breaker and limits are unchanged, in-process enrichment keeps its private-address guard, and the image and lockfile match.
+- Also found while preparing Phase 8: `crates/web/src/api/state.rs` counted a refused API ip caller as `lens_rate_limit_hits_total` (main's code; requirement 17). Fixed to `netray_rate_limit_hits_total{scope="api_v1_ip"}` (`crates/web/tests/it/api_ip_rate_limit_metric.rs`).

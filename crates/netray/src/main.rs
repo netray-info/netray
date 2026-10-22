@@ -9,7 +9,8 @@ mod serve;
 #[command(
     name = "netray",
     version,
-    about = "netray.info: every host, one process"
+    about = "netray.info: every host, one process",
+    disable_help_subcommand = true
 )]
 struct Cli {
     #[command(subcommand)]
