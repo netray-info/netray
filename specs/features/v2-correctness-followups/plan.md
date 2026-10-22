@@ -13,3 +13,16 @@
   suite groups (`ProbeKind::is_suite_group`) keep `REFUSING_ALERTS`. The protected
   `probe_alerts.rs` table moves to a suite-group kind, because its Tls10 rows for 50, 112 and 0
   now refuse. Planned by the implementer directly: one function in one file.
+
+## Phase 2 — DNS: domain runs pay no per-target limit
+
+## Groups
+
+- G1: C1, C3, C4 (C2 and C5 already hold).
+
+## Plan
+
+- G1: `crates/netray/src/main.rs`, `lens_registry`: the registry's `DnsModule` is built
+  `.admitted_by_caller()` like the band's; it stays its own instance (circuit breakers, query
+  semaphore). `crates/dns/src/module.rs`: doc comments of `DnsModule` and `admitted_by_caller`.
+  Planned by the implementer directly.

@@ -110,8 +110,8 @@ const FACT_RECORD_TYPES: [RecordType; 6] = [
 ];
 
 /// The DNS check as an engine module: prism's check-route input policy (domain, servers,
-/// `QueryPolicy::validate_for_check`), its per-target limit, circuit breakers and query
-/// semaphore, then the check pipeline over the configured servers.
+/// `QueryPolicy::validate_for_check`), its per-target limit unless admitted by its caller,
+/// circuit breakers and query semaphore, then the check pipeline over the configured servers.
 pub struct DnsModule {
     config: Config,
     servers: Vec<String>,
@@ -142,9 +142,10 @@ impl DnsModule {
         })
     }
 
-    /// This module without its per-target limit, for a caller that admits each run itself (the
-    /// DNS inspector's band runs under the inspector job's `[api.dns]` admission and its
-    /// concurrency limit, so it never refuses inside the job's stream).
+    /// This module without its per-target limit, for a caller that admits each run itself: lens
+    /// admits domain runs and their facts stage (SDD S44), and the DNS inspector's band runs
+    /// under the inspector job's `[api.dns]` admission and its concurrency limit, so it never
+    /// refuses inside the job's stream.
     pub fn admitted_by_caller(mut self) -> Self {
         self.per_target = None;
         self

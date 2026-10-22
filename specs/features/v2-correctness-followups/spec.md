@@ -120,7 +120,7 @@ test in `crates/netray/src/main.rs` over `lens_registry`; the API limiter test i
 
 ### Test Scenarios
 
-GIVEN a lens config whose `[modules.dns.limits]` sets `per_target_burst = 1` and `[modules.dns.dns]` allows the server 192.0.2.53 WHEN `lens_registry` builds the modules and the registry's DNS module runs example.com twice under a short deadline THEN neither outcome is incomplete with a rate-limit reason.
+GIVEN a lens config whose `[modules.dns.limits]` sets `per_target_burst = 1` and `[modules.dns.dns]` allows the server 9.9.9.9 WHEN `lens_registry` builds the modules and the registry's DNS module runs example.com twice under a short deadline THEN neither outcome is incomplete with a rate-limit reason.
 GIVEN that config WHEN the facts provider of the registry resolves example.com twice THEN neither error names a rate limit.
 GIVEN an API state whose `[api.dns]` per-target burst is exhausted for a target WHEN a DNS query job for that target starts THEN it is refused with scope `api_v1_dns_target`, as before.
 
@@ -175,6 +175,12 @@ GIVEN the committed history fixtures WHEN `every_history_fixture_is_its_recomput
   change (SDD §3.8: a change is a new version the diff shows as a profile change). As with S41,
   the grade split cannot carry the effect: a stored `v4` run keeps its stored `fail` and re-scores
   under `v5` to its old grade (implementer under the operator's autonomy mandate, 2026-10-22).
+
+- Review of phase 2: badge and OG runs are not counted by lens's per-IP, global and budget
+  limits, so after this change only the 8 domain-run slots and the per-domain throttle bound their
+  resolver load. Accepted and stated in S44 rather than reintroducing a limiter: the decision is
+  that lens admission bounds domain runs; a badge/OG ceiling is an operator proposal
+  (implementer under the operator's autonomy mandate, 2026-10-22).
 
 ## Open decisions
 

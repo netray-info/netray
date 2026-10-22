@@ -40,3 +40,47 @@ G1 was a ten-line change in one function, written by the implementer without a c
 
 skipped: the probes need a live TLS server; the live check of nginx.org runs once after phase 3
 with the build copied to main's binary path (network), and is recorded there.
+
+## Phase 2 — DNS: domain runs pay no per-target limit
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R3: a domain run charges no per-target limit of the DNS module; the registry's DNS module and the facts stage are admitted by lens, so a per_target_burst below 19 never makes the DNS section incomplete with a rate-limit reason | green | crates/netray/src/main.rs |
+| C2 | R4: a direct DNS-inspector request keeps its per-target limit from [api.dns] and is refused past its burst | already_implemented | crates/web/tests/it/api_dns_limits.rs |
+| C3 | GIVEN a lens config with [modules.dns.limits] per_target_burst = 1 WHEN lens_registry builds the modules and the registry's DNS module runs example.com twice THEN neither outcome is incomplete with a rate-limit reason | green | crates/netray/src/main.rs |
+| C4 | GIVEN that config WHEN the registry's facts provider resolves example.com twice THEN neither error names a rate limit | green | crates/netray/src/main.rs |
+| C5 | GIVEN an [api.dns] per-target burst spent for a target WHEN a DNS query job for it starts THEN it is refused with scope api_v1_dns_target as before | already_implemented | crates/web/tests/it/api_dns_limits.rs |
+
+C2 and C5 held before the change; `a_spent_per_target_burst_refuses_another_caller_with_retry_after`
+in `crates/web/tests/it/api_dns_limits.rs` already pins them and stays green.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 0 | implementer | 0 | 0 |
+
+G1 was one builder call in `lens_registry` plus doc comments, written by the implementer.
+
+### Review
+
+- AMENDMENT (repaired in phase 3's prose commit): CLAUDE.md's in-process bullet still names
+  per-target limits for every module; requirement 9 puts it in the final prose commit.
+- AMENDMENT (fixed): SDD §3.6 still said the facts stage charges 6 on top of 19.
+- AMENDMENT (fixed): `crates/lens/lens.example.toml` still said a check charges 25 per target; it
+  now says the keys are accepted and not read.
+- AMENDMENT (fixed): the spec's scenario named 192.0.2.53, which the server policy refuses before
+  any charge (the test would pass either way); the scenario and the test use 9.9.9.9 as
+  `module_admitted.rs` does. Offline the run times out; it never says "rate limit".
+- DEFERRED (operator proposal): badge and OG runs skip the per-IP, global and budget limits, so the
+  DNS per-target limiter was their only per-minute ceiling on resolver load; now the 8 domain-run
+  slots and the per-domain throttle bound them. S44 and the `lens_registry` comment now say so.
+- NIT: `module_admitted.rs`'s `the_registry_module_refuses_over_its_per_target_limit` now tests a
+  bare `DnsModule::new`, which no production path builds unadmitted; kept (protected), name stale.
+
+### Behavioural verification
+
+`cargo test -p netray --bin netray`: `tests::a_domain_run_charges_no_dns_per_target_limit ... ok`
+(red before: `Incomplete { reason: "rate limited (per_target)" }`). The live run follows phase 3.

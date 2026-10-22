@@ -17,7 +17,7 @@ timeout_ms = 15000
 # default_servers = ["google"]
 # allow_system_resolvers = false
 #
-# [modules.dns.limits]                # a check charges 25 per target: 19 for the DNS check, 6 for the resolve stage's facts
+# [modules.dns.limits]                # per_target_* are accepted but not read: lens admits domain runs (SDD S44)
 # per_target_per_minute = 160
 # per_target_burst = 53
 
