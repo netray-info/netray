@@ -1,7 +1,8 @@
 # Spec: v2-release-cleanup
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-22
+Finished: 2026-10-22
 
 ## Goal
 
@@ -205,6 +206,10 @@ GIVEN a README naming `netray dns crates/dns/prism.toml` WHEN the check runs THE
 - The legacy check is a unit test in the binary crate over an integration test: `ROWS` is private
   to the binary; the test calls `serve::check_config`, the code `--check-config` runs
   (implementer under the operator's autonomy mandate, 2026-10-22).
+
+- Finish: two CLAUDE.md bullets written without operator confirmation (the route refusal test
+  lesson, the logo exception to apex-relative links), no solutions note, the review's MINOR
+  dropped as fixed in 6f431e31, under the operator's autonomy mandate (implementer, 2026-10-22).
 
 ## Open decisions
 

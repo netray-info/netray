@@ -64,6 +64,7 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - Admission starts one run per domain per 60 s on tokio's clock: a second run of one domain in a test needs `common::pass_throttle()` (current_thread) or another domain.
 - A paused tokio clock times out sqlx pool acquires and auto-advances through deadlines while the runtime idles on the store: never `start_paused` with a `HistoryStore`; `pause()` only after the store work is drained (`result_run_c15`).
 - governor's `check` spends a token whatever follows: take a keyed limiter after every refusal that must cost nothing.
+- A refusal test over the badge or OG route asserts no run started: an incomplete run renders the same `?` and short Cache-Control as a refusal.
 - Never wrap self-timed work in an outer timeout at the same deadline: it races the inner timers and drops answers. Bound the wait by the deadline, the work by the time left plus a grace.
 - Probe slots go to the first addresses whose handshake succeeded, decided per address (`SlotBoard`), never behind a port-wide barrier: one SYN-dropping address would push the TLS section past its window.
 - Never edit another feature's `specs/features/<name>/` on a feature branch: `adlc next` refuses two features. Supersede old decisions in the new spec's decision log.
@@ -169,7 +170,7 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **A new table inside `main` inherits `main th, main td`** (muted cells, a bottom rule): override colour and borders in its own rules.
 - **A browser breaks after a hyphen**: to break a domain only at its dots, wrap each label in an inline-block box (`.result-hero__label`).
 - **Identifier-valued CSS properties** (`grid-area`, `transition`) go into `IDENTIFIER_PROPERTIES` in `crates/web/src/gate.rs`, or the gate refuses colour words in them.
-- **Absolute URLs come from `pages::ORIGIN`**; in-page links are apex-relative (`/inspect/<tool>`). `tests/repo/test_no_absolute_apex.sh` refuses a `netray.info` literal in `crates/web/{templates,src,islands/src}`.
+- **Absolute URLs come from `pages::ORIGIN`**; in-page links are apex-relative (`/inspect/<tool>`), except the header logo, which links to `ORIGIN` so inspector hosts reach the apex. `tests/repo/test_no_absolute_apex.sh` refuses a `netray.info` literal in `crates/web/{templates,src,islands/src}`.
 - **The gate keeps a component's classes in its own stylesheet**: a page rule on `.check-row` or `.query-input__*` goes into that component's CSS or uses a structural selector (`.card > :first-child`).
 - **A design board with `wait` marks its always-rendered elements `"shell": true`**: without a non-shell element on the page the board is `no state`, so a timed-out run never passes.
 - **The gate's colour words include CSS system colours** (`menu`, `canvas`, `field`): an island or class named so is refused as a colour literal (the header menu island is `nav-menu`). A class starting `grade-` belongs to the grade component (the home legend is `score-key`).
