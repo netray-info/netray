@@ -102,6 +102,9 @@ skipped here: a worktree binary has no egress; the live rerun of docs.github.com
 | C7 | GIVEN xn--bcher-kva.example A TTL 29 from resolvers and 300 authoritative WHEN the check runs THEN dns.ttl pass | green | crates/dns/src/api/check_ttl_tests.rs |
 | C8 | GIVEN www.example.com CNAME web.example.com TTL 29, only in the A lookup, and 300 authoritative WHEN the check runs THEN dns.ttl pass | green | crates/dns/src/api/check_ttl_tests.rs |
 | C9 | GIVEN www.example.com CNAME shop.example.net with A TTL 20 WHEN the check runs THEN no authoritative lookup for shop.example.net and dns.ttl warns with 20s | already_implemented | crates/dns/src/api/check_ttl_tests.rs |
+| C10 | GIVEN example.com's RRSIG at TTL 29 from the resolvers WHEN the check runs THEN no authoritative lookup is made for RRSIG | green | crates/dns/src/api/check_ttl_tests.rs |
+| C11 | GIVEN A and RRSIG at 29 from the resolvers and A at 60 authoritative WHEN the check runs THEN dns.ttl pass | green | crates/dns/src/api/check_ttl_tests.rs |
+| C12 | GIVEN A at 29 at one resolver and 300 at another and RRSIG at 29 WHEN the check runs THEN dns.ttl pass | green | crates/dns/src/api/check_ttl_tests.rs |
 
 C4, C5 and C9 held before the change (C9 guards that a CNAME target outside the zone is never re-read).
 
