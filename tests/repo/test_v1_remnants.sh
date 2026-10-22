@@ -46,9 +46,9 @@ grep -nE '#\[path' crates/tls/src/lib.rs >/dev/null \
     && fails+=("crates/tls/src/lib.rs carries a #[path] attribute")
 grep -qF '`src/inspection.rs`' crates/tls/CLAUDE.md || fails+=("crates/tls/CLAUDE.md does not name src/inspection.rs")
 # The tls crate names no `routes` at all (no module, alias or path); the web crate, which has
-# utoipa's `routes!`, never names `netray_tls::routes`.
+# utoipa's `routes!`, never names `netray_tls::routes`, `src/routes.rs` or `routes::plan`.
 users=$( { git ls-files 'crates/tls/*.rs' 'crates/tls/*.md' | grep -v '/CHANGELOG.md$' | xargs grep -nwE 'routes'; \
-    git ls-files 'crates/web/*.rs' | xargs grep -nE 'netray_tls::routes'; } 2>/dev/null | head -3)
+    git ls-files 'crates/web/*.rs' | xargs grep -nE 'netray_tls::routes|src/routes\.rs|routes::plan'; } 2>/dev/null | head -3)
 [ -z "$users" ] || fails+=("the old TLS module name is still used: $users")
 
 if [ ${#fails[@]} -gt 0 ]; then
