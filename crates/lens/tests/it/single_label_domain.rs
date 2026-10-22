@@ -108,8 +108,20 @@ async fn c9_the_og_card_and_the_badge_refuse_a_single_label_name() {
 
 #[tokio::test]
 async fn c10_the_result_page_for_a_single_label_name_starts_no_run() {
+    // A segment without a dot is no domain to the page router: it goes to the fallback (the
+    // site's other pages, `result_page_csp`'s routing contract), which starts no run itself.
     let (app, store, _dir) = app().await;
-    assert_refused(&app, &store, "GET", "/landing").await;
+    let r = send(&app, "GET", "/landing").await;
+    assert!(
+        !r.body.contains("result-hero"),
+        "GET /landing rendered a result page: {}",
+        r.body.chars().take(200).collect::<String>()
+    );
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(
+        store.latest("landing").await.unwrap().is_none(),
+        "GET /landing: a run was recorded"
+    );
 }
 
 #[test]
