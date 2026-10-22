@@ -39,6 +39,13 @@ describe("dns +check note", () => {
     expect(note.hasAttribute("hidden")).toBe(true);
   });
 
+  it("reads the flag in any case, as the parser does", () => {
+    const { builder, q, note } = page();
+    dns(builder);
+    type(q, "example.com +CHECK");
+    expect(note.hasAttribute("hidden")).toBe(false);
+  });
+
   it("follows a field the shell writes without an input event", async () => {
     const { builder, q, note } = page();
     dns(builder);

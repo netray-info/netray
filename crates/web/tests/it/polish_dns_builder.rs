@@ -154,3 +154,13 @@ async fn c2_c8_the_check_note_is_hidden_until_the_query_carries_check() {
     let tls = get("/inspect/tls").await;
     assert!(!tls.contains("dns-builder__note"), "{tls}");
 }
+
+/// The DNS parser reads flags case-insensitively, so `+CHECK` runs as `+check` and shows the note.
+#[tokio::test]
+async fn the_check_note_reads_the_flag_in_any_case() {
+    for q in ["example.com%20%2BCHECK", "example.com%20%2BCheck"] {
+        let page = get(&format!("/inspect/dns?q={q}")).await;
+        let tag = tag_with(&page, "dns-builder__note").expect("note");
+        assert!(!tag.contains("hidden"), "{q}: {tag}");
+    }
+}
