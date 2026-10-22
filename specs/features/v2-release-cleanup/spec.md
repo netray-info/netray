@@ -98,7 +98,8 @@ describe V2 modules, not V1 services, and a repository check holds them to it.
     CHANGELOG, and none of `netray dns|tls|http|email|ip ` subcommands, `frontend/`,
     `SolidJS`, `.toml` per-service names (`prism.toml`, `tlsight.toml`, `spectra.toml`,
     `beacon.toml`, `ifconfig.toml`), retired prefixes (`PRISM_`, `TLSIGHT_`, `SPECTRA_`,
-    `BEACON_`, `IFCONFIG_`, `LENS_`) in the READMEs and CLAUDE.md files.
+    `BEACON_`, `IFCONFIG_`, `LENS_`, `NETRAY_DNS_`, `NETRAY_TLS_`, `NETRAY_HTTP_`, `NETRAY_EMAIL_`,
+    `NETRAY_IP_`) in the READMEs and CLAUDE.md files.
 
 ## Phase 1 — Image-run budget
 
