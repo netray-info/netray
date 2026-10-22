@@ -1,7 +1,8 @@
 # Spec: v2-backend-followups
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-22
+Finished: 2026-10-22
 
 ## Goal
 
@@ -176,6 +177,11 @@ GIVEN a finished two-port run and its shared copy WHEN both exports are rendered
 - Phase 1 review: requirement 4's replay sentence and the fingerprint note above corrected to
   what the code and the canonical form do (implementer under the operator's autonomy mandate,
   2026-10-22).
+
+- Review: the isolation view's stricter claim also refuses a block repeating one key; kept, since
+  the backend never writes one and the view claims only blocks it can render faithfully (deferred
+  row dropped). Finish: one CLAUDE.md bullet on unreadable headers; no solutions note, no check to
+  build (implementer under the operator's autonomy mandate, 2026-10-22).
 
 ## Open decisions
 
