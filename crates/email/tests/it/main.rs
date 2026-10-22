@@ -10,3 +10,4 @@ mod inspect_selectors;
 mod model_status;
 mod module_input;
 mod module_v3;
+mod resolver_tcp_retry;

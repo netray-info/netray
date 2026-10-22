@@ -3019,6 +3019,7 @@ dependencies = [
  "config",
  "futures",
  "governor",
+ "hickory-proto",
  "http-body-util",
  "ipnet",
  "metrics",
