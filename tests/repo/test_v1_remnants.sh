@@ -42,12 +42,14 @@ git ls-files --error-unmatch crates/tls/src/inspection.rs >/dev/null 2>&1 \
     || fails+=("crates/tls/src/inspection.rs is not tracked")
 grep -qxF 'pub mod inspection;' crates/tls/src/lib.rs \
     || fails+=("crates/tls/src/lib.rs does not declare pub mod inspection;")
-grep -nE '#\[path|mod routes' crates/tls/src/lib.rs >/dev/null \
-    && fails+=("crates/tls/src/lib.rs still declares a routes module or a #[path] attribute")
+grep -nE '#\[path' crates/tls/src/lib.rs >/dev/null \
+    && fails+=("crates/tls/src/lib.rs carries a #[path] attribute")
 grep -qF '`src/inspection.rs`' crates/tls/CLAUDE.md || fails+=("crates/tls/CLAUDE.md does not name src/inspection.rs")
-users=$(git ls-files 'crates/tls/*.rs' 'crates/tls/*.md' 'crates/web/*.rs' | grep -v '/CHANGELOG.md$' \
-    | xargs grep -nE 'netray_tls::routes|crate::routes::|src/routes\.rs|`routes::plan' 2>/dev/null | head -3)
-[ -z "$users" ] || fails+=("the old TLS module path is still named: $users")
+# The tls crate names no `routes` at all (no module, alias or path); the web crate, which has
+# utoipa's `routes!`, never names `netray_tls::routes`.
+users=$( { git ls-files 'crates/tls/*.rs' 'crates/tls/*.md' | grep -v '/CHANGELOG.md$' | xargs grep -nwE 'routes'; \
+    git ls-files 'crates/web/*.rs' | xargs grep -nE 'netray_tls::routes'; } 2>/dev/null | head -3)
+[ -z "$users" ] || fails+=("the old TLS module name is still used: $users")
 
 if [ ${#fails[@]} -gt 0 ]; then
     printf 'FAIL: %s\n' "${fails[@]}"
