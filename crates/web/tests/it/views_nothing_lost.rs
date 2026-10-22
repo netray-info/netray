@@ -133,6 +133,19 @@ fn rows() -> Vec<Row> {
             ];
             Shape::Fields(fields)
         }),
+        // `unreadable`: a header the fetch could not read, shown as "unreadable".
+        Row::new("http.isolation", |r| {
+            let fields = vec![
+                r.pair("coop", text("same-origin")),
+                r.pair_shown_as(
+                    "unreadable",
+                    text("cross-origin-embedder-policy"),
+                    "unreadable",
+                ),
+                r.pair_shown_as("missing", text("cross-origin-resource-policy"), "missing"),
+            ];
+            Shape::Fields(fields)
+        }),
         Row::new("http.server", |r| {
             let fields = vec![
                 r.pair("final_url", text("https://www.example.com/a?b=1&c=2")),

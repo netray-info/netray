@@ -132,3 +132,53 @@ fn a_header_both_received_and_missing_is_not_claimed() {
     };
     assert!(render(&block, &ctx).is_none());
 }
+
+#[test]
+fn c19_an_unreadable_coep_reads_unreadable_without_tone() {
+    let b = block(vec![
+        ("coop", "same-origin"),
+        ("unreadable", "cross-origin-embedder-policy"),
+        ("missing", "cross-origin-resource-policy"),
+    ]);
+    let html = render_with(&b, Some(Status::Pass)).expect("claimed");
+    let coep = cell(&html, COEP);
+    assert!(coep.contains("unreadable"), "{coep}");
+    assert!(!coep.contains("data-tone"), "{coep}");
+}
+
+#[test]
+fn c19_an_unreadable_coop_reads_unreadable_in_the_check_tone() {
+    let b = block(vec![
+        ("unreadable", "cross-origin-opener-policy"),
+        ("missing", "cross-origin-embedder-policy"),
+        ("missing", "cross-origin-resource-policy"),
+    ]);
+    let html = render_with(&b, Some(Status::Warn)).expect("claimed");
+    let coop = cell(&html, COOP);
+    assert!(coop.contains("unreadable"), "{coop}");
+    assert!(coop.contains(r#"data-tone="warn""#), "{coop}");
+}
+
+#[test]
+fn c20_a_header_both_missing_and_unreadable_is_not_claimed() {
+    let b = block(vec![
+        ("missing", "cross-origin-opener-policy"),
+        ("unreadable", "cross-origin-opener-policy"),
+    ]);
+    assert_eq!(render_with(&b, None), None);
+}
+
+#[test]
+fn c20_an_unknown_unreadable_name_is_not_claimed() {
+    let b = block(vec![("coop", "same-origin"), ("unreadable", "x-unknown")]);
+    assert_eq!(render_with(&b, None), None);
+}
+
+#[test]
+fn c20_a_header_both_received_and_unreadable_is_not_claimed() {
+    let b = block(vec![
+        ("coop", "same-origin"),
+        ("unreadable", "cross-origin-opener-policy"),
+    ]);
+    assert_eq!(render_with(&b, None), None);
+}
