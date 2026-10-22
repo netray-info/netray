@@ -158,6 +158,7 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **A `base.html` block default compiles against every child**: put frame-struct fields only inside blocks a struct-less child overrides (v2-entries' pages override `meta`).
 - **Stub a third-party API with a body captured from the live endpoint**, never the shape the code reads (status island: the event feed answers `results`, not `data`).
 - **A purity guard is an allowlist.** `tests/repo/test_spectrum_module.sh` admits named imports, std paths and macros; a blocklist of I/O names let print macros and `std::process` through.
+- **Spectrum labels are placed twice**: desktop (`labels`) and phone (`phone_labels`, 358 px plate); the phone media query in `spectrum.css` overrides the inline desktop geometry with `!important`, so a new label style needs its phone twin.
 - **The spectrum follows the grade.** `spectrum::layout` mutes a section with a weighted unmeasured check and sums M over the profile, as `scoring.rs` does; change both together.
 - **No `Router` word in `crates/web/src` outside `entries/`, `pages/`, `api/`**, comments included: `tests/repo/test_web_crate.sh` greps the text.
 - **`pages/inspect.rs` and `pages/inspect/` name no module crate** (`tests/it/inspect_seam.rs`): reach module data through `api::jobs` helpers or a seam trait (`DnsResults`).
