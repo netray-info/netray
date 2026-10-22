@@ -93,7 +93,7 @@ Read: builder card with Types, Job (query pressed), Resolver; the +check note sh
 |---|---|---|
 | AMENDMENT | the +check note missed field writes the shell makes without an input event (suggestion accept, clear, chips, history) | repaired in phase: the dns island re-reads the field after each click, keyup and submit in the shell and on popstate; island test added |
 | AMENDMENT | an email "busy" refusal (every email slot taken) rendered without the warn tone | repaired in phase: `Refusal::Busy` carries it through the job's gate, 503 with the warn notice |
-| AMENDMENT | the caller's own IP run kept the old notice | repaired in phase: same card, `role="status"` and warn tone; it keeps the caller's address as h1 and has no example chips (the caller page has no input to fill) |
+| AMENDMENT | the caller's own IP run kept the old notice | repaired in phase: same card, `role="status"` and warn tone; it keeps the caller's address as h1 (v2-ip-ui requirement 3); the example chips followed in the branch review |
 | NIT | C14's link half renders no links in the stub | kept: the template puts every row link inside the card by construction; recorded |
 | NIT | row links touched the card's edge at phone width | fixed: inset by `--space-4` inside the card |
 

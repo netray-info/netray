@@ -641,6 +641,7 @@ struct CallerNotice {
     target: String,
     message: String,
     tone: Option<&'static str>,
+    examples: Vec<ExampleView>,
 }
 
 /// The band region of the start fragment: none, a placeholder the stream fills, or rendered.
@@ -778,9 +779,10 @@ async fn show(
     let name = tool.as_str();
     let slot = match tool {
         Tool::Dns => (DnsBuilder {
-            check_note: prefill
-                .as_deref()
-                .is_some_and(|q| q.split_whitespace().any(|t| t == "+check")),
+            check_note: prefill.as_deref().is_some_and(|q| {
+                q.split_whitespace()
+                    .any(|t| t.eq_ignore_ascii_case("+check"))
+            }),
         })
         .render()
         .ok(),
@@ -865,6 +867,7 @@ async fn caller_run(
             target: target.clone(),
             message,
             tone: warn.then_some("warn"),
+            examples: examples(Tool::Ip),
         })
         .render()
         .ok()

@@ -76,7 +76,9 @@ V24, V25, HTTP-UI V9, IP-UI V11, site-nav V2, V4, V6, V7, V9, V10, V14, V15.
    busy, invalid input, timed out) renders the idle result frame: the visually hidden h1, the
    notice as the shell's notice card (board F's card frame with a warn-tone marker for "too many
    requests", "busy" and "timed out"; no tone for invalid input) with `role="status"`, and the
-   inspector's example chips below it. The text of each notice is unchanged.
+   inspector's example chips below it. The text of each notice is unchanged. The IP inspector's
+   own-address page keeps the caller's address as its h1 (v2-ip-ui requirement 3: the refusal
+   stands under the address) and gets the same card, tone and chips.
 6. **Check list card.** The shell's check list (every inspector's band checks, live and shared)
    is board F's card: the heading and meta above, the rows inside one 1 px line border with
    radius 2 px on the surface background, rows divided by the rows' own top rule (none above the
@@ -222,6 +224,12 @@ GIVEN every captured page at 390 px WHEN measured THEN the document is not wider
   the guide tool card's heading and control heights; every other finding is kept by an earlier
   feature's decision or listed as a proposal (report.md N1–N22) (implementer under the
   operator's autonomy mandate, 2026-10-22).
+- Branch review: the `+check` note reads the flag in any case, as the DNS parser does (the
+  blocker, fixed on this branch rather than splitting the change); the caller's own-address
+  refusal gains the example chips and keeps its address h1 by v2-ip-ui requirement 3 (requirement
+  5 amended); an email "busy" refusal answers 503 like the inspector's own slot refusal
+  (deferred row kept as the record) (implementer under the operator's autonomy mandate,
+  2026-10-22).
 - The guide column uses a `ch` width, not a token: the gate tokens colours, radii, fonts and
   lines, and no board draws a guide (implementer under the operator's autonomy mandate,
   2026-10-22).
