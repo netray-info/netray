@@ -63,7 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Badges and OG cards say netray.** The default badge label (`[badges] default_label`) and the OG card's label are `netray` instead of `lens`; the card's footer reads `netray · netray.info`. `?label=` still sets a badge's label.
+- **Badges and OG cards say netray.** The default badge label (`[badges] default_label`) is `netray` instead of `lens`, and the OG card carries no label by default: its footer reads `netray.info`; `?label=<text>` on a card still reads `<text> · netray.info`, and `?label=` still sets a badge's label.
 - **The header logo leads to the apex.** On every page, the inspector hosts' included, the logo links to `https://netray.info/`; on `dns.`, `tls.`, `http.` and `ip.` it led to the host's own inspector.
 - **One config, `netray.toml`.** Tables `[server]` (`bind`, `metrics_bind`, `trusted_proxies`, `apex`), `[engine]`, `[store]`, `[admission]`, `[api]` with `[api.<inspector>]`, `[inspect.<tool>]`, `[badges]`, `[og_cards]`, `[telemetry]` and `[modules.<name>]` with each module's `deadline_ms`; every table refuses unknown keys. Variables use the prefix `NETRAY_` (`NETRAY_SERVER__BIND`), and `NETRAY_CONFIG` names the file. `crates/netray/netray.example.toml` lists every key at its default. A key of an old file is refused at load and by `--check-config`, naming where its value lives now:
 
