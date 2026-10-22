@@ -4,7 +4,7 @@ use crate::backend::{
     AsnInfo, BotDb, CinsArmyIps, CloudProviderDb, DatacenterRanges, FeodoBotnetIps, GeoIpAsnDb, GeoIpCityDb,
     SpamhausDrop, TorExitNodes, VpnRanges,
 };
-use crate::config::Config;
+use crate::config::ModuleConfig;
 use mhost::resolver::{ResolverGroup, ResolverGroupBuilder};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -47,7 +47,7 @@ pub struct DataFileDates {
     pub cins: Option<String>,
 }
 
-/// Record `data_file_age_seconds{source=<label>}` from the file's mtime.
+/// Record `netray_ip_data_file_age_seconds{source=<label>}` from the file's mtime.
 /// Silently skips if mtime cannot be read (file may be synthetic or on a
 /// filesystem that doesn't support mtime).
 fn emit_file_age(path: &str, source_label: &'static str) {
@@ -57,7 +57,7 @@ fn emit_file_age(path: &str, source_label: &'static str) {
         .and_then(|mtime| SystemTime::now().duration_since(mtime).ok())
         .map(|d| d.as_secs_f64());
     if let Some(age) = age_secs {
-        metrics::gauge!("data_file_age_seconds", "source" => source_label).set(age);
+        metrics::gauge!("netray_ip_data_file_age_seconds", "source" => source_label).set(age);
     }
 }
 
@@ -65,9 +65,7 @@ fn emit_file_age(path: &str, source_label: &'static str) {
 #[error("{0}")]
 pub struct LoadError(String);
 
-/// Groups all reloadable backend resources. Stored behind `ArcSwap` in `AppState`
-/// so SIGHUP can atomically swap in a freshly loaded context without dropping
-/// in-flight requests.
+/// Groups all backend resources the lookups read.
 pub struct EnrichmentContext {
     pub user_agent_parser: Option<Arc<UserAgentParser>>,
     pub geoip_city_db: Option<Arc<GeoIpCityDb>>,
@@ -91,19 +89,13 @@ pub struct EnrichmentContext {
 }
 
 impl EnrichmentContext {
-    /// Load all backends from the paths specified in `config`.
-    /// DNS resolver is built from system config (async).
-    pub async fn load(config: &Config) -> Result<Self, LoadError> {
-        Self::load_with(config, true).await
+    /// Load all backends from the paths in `config`: the User-Agent parser loads only when
+    /// `user_agent_regexes` is set, and no log line says otherwise.
+    pub async fn load_for_module(config: &ModuleConfig) -> Result<Self, LoadError> {
+        Self::load_with(config, config.user_agent_regexes.is_some()).await
     }
 
-    /// Like [`load`](Self::load), for the engine module: no User-Agent parser, and no log line
-    /// about it, since the module never sees a User-Agent header.
-    pub async fn load_for_module(config: &Config) -> Result<Self, LoadError> {
-        Self::load_with(config, false).await
-    }
-
-    async fn load_with(config: &Config, with_user_agent: bool) -> Result<Self, LoadError> {
+    async fn load_with(config: &ModuleConfig, with_user_agent: bool) -> Result<Self, LoadError> {
         let geoip_city_db = if let Some(path) = config.geoip_city_db.as_deref() {
             match GeoIpCityDb::new(path).await {
                 Some(db) => {
@@ -439,34 +431,34 @@ impl EnrichmentContext {
         };
 
         // Report which enrichment sources are loaded (updates on reload too).
-        metrics::gauge!("enrichment_sources_loaded", "source" => "geoip_city")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "geoip_city")
             .set(f64::from(ctx.geoip_city_db.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "geoip_asn")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "geoip_asn")
             .set(f64::from(ctx.geoip_asn_db.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "user_agent")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "user_agent")
             .set(f64::from(ctx.user_agent_parser.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "tor_exit_nodes")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "tor_exit_nodes")
             .set(f64::from(ctx.tor_exit_nodes.is_loaded() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "cloud_provider")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "cloud_provider")
             .set(f64::from(ctx.cloud_provider_db.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "vpn_ranges")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "vpn_ranges")
             .set(f64::from(ctx.vpn_ranges.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "datacenter_ranges")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "datacenter_ranges")
             .set(f64::from(ctx.datacenter_ranges.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "bot_ranges")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "bot_ranges")
             .set(f64::from(ctx.bot_db.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "feodo_botnet")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "feodo_botnet")
             .set(f64::from(ctx.feodo_botnet_ips.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "cins_army")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "cins_army")
             .set(f64::from(ctx.cins_army_ips.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "spamhaus_drop")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "spamhaus_drop")
             .set(f64::from(ctx.spamhaus_drop.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "asn_patterns")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "asn_patterns")
             .set(f64::from(config.asn_patterns.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "asn_info")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "asn_info")
             .set(f64::from(ctx.asn_info.is_some() as u8));
 
-        // Emit data_file_age_seconds for each successfully loaded optional file.
+        // Emit netray_ip_data_file_age_seconds for each successfully loaded optional file.
         if ctx.feodo_botnet_ips.is_some()
             && let Some(path) = config.feodo_botnet_ips.as_deref()
         {
@@ -520,12 +512,12 @@ impl EnrichmentContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
+    use crate::config::ModuleConfig;
 
     #[tokio::test]
     async fn load_with_no_paths_succeeds() {
-        let config = Config::load(None).unwrap();
-        let ctx = EnrichmentContext::load(&config).await;
+        let config = ModuleConfig::default();
+        let ctx = EnrichmentContext::load_for_module(&config).await;
         assert!(ctx.is_ok());
         let ctx = ctx.unwrap();
         assert!(ctx.geoip_city_db.is_none());
@@ -538,32 +530,32 @@ mod tests {
 
     #[tokio::test]
     async fn nonexistent_geoip_city_path_returns_error() {
-        let mut config = Config::load(None).unwrap();
+        let mut config = ModuleConfig::default();
         config.geoip_city_db = Some("/nonexistent/GeoLite2-City.mmdb".to_string());
-        let result = EnrichmentContext::load(&config).await;
+        let result = EnrichmentContext::load_for_module(&config).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn nonexistent_geoip_asn_path_returns_error() {
-        let mut config = Config::load(None).unwrap();
+        let mut config = ModuleConfig::default();
         config.geoip_asn_db = Some("/nonexistent/GeoLite2-ASN.mmdb".to_string());
-        let result = EnrichmentContext::load(&config).await;
+        let result = EnrichmentContext::load_for_module(&config).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn nonexistent_ua_regex_path_returns_error() {
-        let mut config = Config::load(None).unwrap();
+        let mut config = ModuleConfig::default();
         config.user_agent_regexes = Some("/nonexistent/regexes.yaml".to_string());
-        let result = EnrichmentContext::load(&config).await;
+        let result = EnrichmentContext::load_for_module(&config).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn no_geoip_means_build_epoch_is_none() {
-        let config = Config::load(None).unwrap();
-        let ctx = EnrichmentContext::load(&config).await.unwrap();
+        let config = ModuleConfig::default();
+        let ctx = EnrichmentContext::load_for_module(&config).await.unwrap();
         assert!(ctx.geoip_city_build_epoch.is_none());
     }
 }

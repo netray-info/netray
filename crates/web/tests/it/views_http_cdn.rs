@@ -113,7 +113,6 @@ async fn c8_a_run_without_http_cdn_renders_no_cdn_view() {
     };
     let app: Router = evidence_router(EvidenceDeps {
         history: Arc::new(store),
-        v1: None,
     });
     let resp = app
         .oneshot(

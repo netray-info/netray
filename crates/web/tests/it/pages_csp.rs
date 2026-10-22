@@ -30,7 +30,7 @@ fn csp_for(h: &str) -> String {
         "default-src 'self'; script-src 'self' 'sha256-{h}'; style-src 'self' 'unsafe-inline'; \
          font-src 'self'; img-src 'self' data:; connect-src 'self' https://stats.uptimerobot.com; \
          frame-ancestors 'none'; base-uri 'self'; object-src 'none'; \
-         form-action 'self' https://*.netray.info"
+         form-action 'self' https://netray.info https://*.netray.info"
     )
 }
 

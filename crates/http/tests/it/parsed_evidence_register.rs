@@ -44,7 +44,11 @@ const THIRTEEN: [&str; 13] = [
 ];
 
 fn module() -> HttpModule {
-    HttpModule::new(toml::from_str::<ModuleConfig>("").expect("empty config")).expect("builds")
+    HttpModule::new(
+        toml::from_str::<ModuleConfig>("").expect("empty config"),
+        None,
+    )
+    .expect("builds")
 }
 
 #[test]

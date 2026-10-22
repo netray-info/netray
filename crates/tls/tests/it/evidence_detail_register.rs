@@ -61,7 +61,7 @@ fn fixture_translation_validates_against_the_register() {
 #[tokio::test]
 async fn volatile_paths_cover_ocsp_times_and_live_answer_but_not_serial() {
     let cfg: ModuleConfig = toml::from_str("[limits]\nmax_ports = 3").unwrap();
-    let module = TlsModule::new(cfg).await.expect("module builds");
+    let module = TlsModule::new(cfg, None).await.expect("module builds");
     let got: BTreeSet<&str> = module
         .volatile()
         .iter()

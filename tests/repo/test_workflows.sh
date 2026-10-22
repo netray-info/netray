@@ -118,12 +118,19 @@ elsif rel
   texts = steps.map { |s| text_of(s) }
   i_check = texts.index { |t| t =~ /imagetools inspect|manifest inspect/ }
   i_build = texts.index { |t| t =~ /docker build|buildx build|build-push-action|docker\/build/ }
-  subs = %w[lens dns tls http email ip site]
-  i_smoke = texts.index { |t| t.include?("docker run") && subs.all? { |c| t =~ /(^|[^a-z])#{c}([^a-z]|$)/ } }
+  # v2-cutover requirement 8: the smoke step starts `serve` once and asks /health with the apex
+  # Host and with each inspector host; no V1 subcommand is started.
+  hosts = %w[dns tls http ip]
+  i_smoke = texts.index { |t|
+    t.include?("docker run") && t.scan(/docker run\b/).size == 1 && t =~ /(^|[^a-z])serve([^a-z]|$)/ &&
+      t.include?("/health") && t.include?("netray.info") && t =~ /"\$host" \/ / &&
+      hosts.all? { |h| t.include?("#{h}.netray.info") || t =~ /\b#{h}\b/ } &&
+      t !~ /"\$image" +"?(lens|dns|tls|http|email|ip|site)\b/ && t !~ /"\$sub"/
+  }
   i_push = texts.rindex { |t| t =~ /push/i }
   fails << "release.yml: no registry-exists check step (imagetools/manifest inspect)" if i_check.nil?
   fails << "release.yml: no build step" if i_build.nil?
-  fails << "release.yml: no smoke step (docker run + all subcommands)" if i_smoke.nil?
+  fails << "release.yml: no smoke step (one docker run of serve, /health on the apex and dns., tls., http., ip.)" if i_smoke.nil?
   fails << "release.yml: no push step" if i_push.nil?
   fails << "release.yml: registry check does not come before build" if i_check && i_build && i_check >= i_build
   fails << "release.yml: smoke step does not come before push step" if i_smoke && i_push && i_smoke >= i_push

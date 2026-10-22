@@ -18,7 +18,6 @@ async fn c11_a_dotted_address_answers_404() {
     store.migrate().await.unwrap();
     let app = evidence_router(EvidenceDeps {
         history: Arc::new(store),
-        v1: None,
     });
     for (uri, page) in [("/192.0.2.1./dns", "/192.0.2.1"), ("/1.2.3/dns", "/1.2.3")] {
         let res = app

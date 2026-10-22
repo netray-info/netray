@@ -21,7 +21,6 @@ netray-web = { path = "crates/web" }
 
 # Web framework
 axum = "0.8"
-axum-extra = "0.12"
 tower = "0.5"
 tower-http = "0.6"
 governor = "0.10"
@@ -56,9 +55,7 @@ metrics-exporter-prometheus = "0.18"
 # Templates
 askama = "0.16"
 
-# Embedded frontend and OpenAPI
-rust-embed = "8"
-mime_guess = "2"
+# OpenAPI
 utoipa = "5"
 utoipa-axum = "0.2"
 utoipa-scalar = "0.3"

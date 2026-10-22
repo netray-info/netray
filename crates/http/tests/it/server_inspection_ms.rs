@@ -32,7 +32,7 @@ fn server_block_holds_inspection_ms_equal_to_duration_ms() {
 #[test]
 fn volatile_list_names_inspection_ms_not_response_ms() {
     let cfg: ModuleConfig = toml::from_str("[inspect]\nrequest_timeout_secs = 5").unwrap();
-    let m = HttpModule::new(cfg).expect("module builds");
+    let m = HttpModule::new(cfg, None).expect("module builds");
     let paths: Vec<&str> = m.volatile().iter().map(|p| p.0).collect();
     assert!(paths.contains(&"http.server/inspection_ms"), "{paths:?}");
     assert!(!paths.contains(&"http.server/response_ms"), "{paths:?}");

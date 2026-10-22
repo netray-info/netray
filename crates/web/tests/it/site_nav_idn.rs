@@ -181,10 +181,7 @@ async fn c1_history_heading_shows_both_forms() {
 #[tokio::test]
 async fn c5_evidence_view_heading_shows_both_forms() {
     let (store, _entry, _dir) = stored(A).await;
-    let app = evidence_router(EvidenceDeps {
-        history: store,
-        v1: None,
-    });
+    let app = evidence_router(EvidenceDeps { history: store });
     let (status, body) = get(&app, &format!("/{A}/email")).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(h1(&body), format!("bücher.example {SPAN} · email"));
@@ -214,10 +211,7 @@ async fn c1_the_api_keeps_the_a_label_only() {
 #[tokio::test]
 async fn c5_an_evidence_view_without_an_entry_shows_both_forms() {
     let (store, _entry, _dir) = stored("example.com").await;
-    let app = evidence_router(EvidenceDeps {
-        history: store,
-        v1: None,
-    });
+    let app = evidence_router(EvidenceDeps { history: store });
     let (_, body) = get(&app, &format!("/{A}/email")).await;
     assert_eq!(h1(&body), format!("No entry for bücher.example {SPAN}"));
     assert!(

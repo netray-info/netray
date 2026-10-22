@@ -11,24 +11,16 @@ use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::time::Duration;
 
-use axum::Json;
-use axum::extract::{ConnectInfo, Query, State};
-use axum::http::HeaderMap;
-use axum::response::Response;
-use axum::response::sse::Event;
 use mhost::RecordType;
 use mhost::nameserver::predefined::PredefinedProvider;
 use mhost::nameserver::{NameServerConfig, NameServerConfigGroup};
 use mhost::resolver::{Lookups, ResolverGroup, ResolverGroupBuilder};
 use serde::Deserialize;
 
-use crate::RequestId;
-use crate::api::{AppState, respond};
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::config::Config;
-use crate::error::{ApiError, ErrorResponse};
-use crate::jobs::DnsErrorEvent;
-use crate::parser::{self, ParsedQuery, ServerSpec, Transport};
+use crate::error::ApiError;
+use crate::parser::{ParsedQuery, ServerSpec, Transport};
 use crate::result_cache::CachedEvent;
 use std::sync::Arc;
 
@@ -67,129 +59,9 @@ pub(crate) fn extract_ips_from_cached_events(events: &[CachedEvent]) -> Vec<IpAd
 // GET handler
 // ---------------------------------------------------------------------------
 
-/// Shared query parameters for all streaming endpoints.
-#[derive(Deserialize, utoipa::IntoParams)]
-pub struct StreamParams {
-    /// Set to `false` to collect all events and return a single JSON response
-    /// instead of streaming Server-Sent Events.
-    #[serde(default = "default_stream")]
-    pub stream: bool,
-}
-
-fn default_stream() -> bool {
-    true
-}
-
-#[derive(Deserialize, utoipa::IntoParams)]
-pub struct QueryParams {
-    /// Query string in dig-inspired syntax: `domain [TYPE...] [@server...] [+flag...]`.
-    /// Example: `example.com MX @cloudflare +tls`
-    q: Option<String>,
-    /// Set to `false` to receive a single JSON response instead of SSE.
-    #[serde(default = "default_stream")]
-    stream: bool,
-}
-
-/// Run a DNS query using the dig-inspired query language.
-///
-/// Parses the `q` parameter, fans out per-record-type lookups across all specified
-/// resolvers concurrently, and streams results as Server-Sent Events.
-///
-/// ## SSE Events
-///
-/// - `batch` — one per record type: `{"request_id","record_type","lookups","completed","total"}`
-/// - `done` — final summary: `{"request_id","total_queries","duration_ms","warnings","transport","dnssec"}`
-/// - `error` — non-fatal error: `{"code","message"}`
-#[utoipa::path(
-    get, path = "/api/query",
-    tag = "Query",
-    params(QueryParams),
-    responses(
-        (status = 200, description = "SSE stream of DNS lookup results", content_type = "text/event-stream"),
-        (status = 400, description = "Bad request (invalid query syntax, domain, or server)", body = ErrorResponse),
-        (status = 422, description = "Query rejected by policy (blocked type, private IP, limits exceeded)", body = ErrorResponse),
-        (status = 429, description = "Rate limit exceeded", body = ErrorResponse),
-    )
-)]
-pub async fn get_handler(
-    State(state): State<AppState>,
-    ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
-    headers: HeaderMap,
-    axum::extract::Extension(request_id): axum::extract::Extension<RequestId>,
-    Query(params): Query<QueryParams>,
-) -> Result<Response, ApiError> {
-    let q = params
-        .q
-        .ok_or(ApiError::ParseError("missing query parameter 'q'".into()))?;
-
-    let parsed = parser::parse(&q).map_err(|e| ApiError::ParseError(e.to_string()))?;
-
-    let client_ip = state.ip_extractor.extract(&headers, peer_addr);
-    tracing::Span::current().record("client_ip", tracing::field::display(&client_ip));
-    tracing::debug!(%client_ip, %peer_addr, "query GET");
-
-    let limiter = state.hot_state.rate_limiter.load_full();
-    let job = state
-        .jobs()
-        .query_parsed(parsed, client_ip, &limiter, request_id.0)
-        .await?;
-    Ok(respond(
-        job,
-        Some((state.result_cache.clone(), "query", q)),
-        params.stream,
-    )
-    .await)
-}
-
 // ---------------------------------------------------------------------------
 // POST handler
 // ---------------------------------------------------------------------------
-
-/// Run a DNS query using a structured JSON body.
-///
-/// Fans out per-record-type lookups across all specified resolvers concurrently
-/// and streams results as Server-Sent Events.
-///
-/// ## SSE Events
-///
-/// - `batch` — one per record type: `{"request_id","record_type","lookups","completed","total"}`
-/// - `done` — final summary: `{"request_id","total_queries","duration_ms","warnings","transport","dnssec"}`
-/// - `error` — non-fatal error: `{"code","message"}`
-#[utoipa::path(
-    post, path = "/api/query",
-    tag = "Query",
-    request_body = PostQueryRequest,
-    responses(
-        (status = 200, description = "SSE stream of DNS lookup results", content_type = "text/event-stream"),
-        (status = 400, description = "Bad request (invalid domain, record type, or server)", body = ErrorResponse),
-        (status = 422, description = "Query rejected by policy (blocked type, private IP, limits exceeded)", body = ErrorResponse),
-        (status = 429, description = "Rate limit exceeded", body = ErrorResponse),
-    )
-)]
-pub async fn post_handler(
-    State(state): State<AppState>,
-    ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
-    headers: HeaderMap,
-    axum::extract::Extension(request_id): axum::extract::Extension<RequestId>,
-    Query(stream_params): Query<StreamParams>,
-    Json(body): Json<PostQueryRequest>,
-) -> Result<Response, ApiError> {
-    let client_ip = state.ip_extractor.extract(&headers, peer_addr);
-    tracing::Span::current().record("client_ip", tracing::field::display(&client_ip));
-    tracing::debug!(%client_ip, %peer_addr, "query POST");
-
-    let limiter = state.hot_state.rate_limiter.load_full();
-    let job = state
-        .jobs()
-        .query(&body, client_ip, &limiter, request_id.0)
-        .await?;
-    Ok(respond(
-        job,
-        Some((state.result_cache.clone(), "query", body.domain)),
-        stream_params.stream,
-    )
-    .await)
-}
 
 #[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 pub struct PostQueryRequest {
@@ -433,30 +305,13 @@ fn is_ipv4_config(config: &NameServerConfig) -> bool {
     ip.is_ipv4()
 }
 
-pub(crate) fn make_error_event(code: &str, message: &str) -> Event {
-    let payload = DnsErrorEvent::new(code, message);
-    Event::default()
-        .event("error")
-        .json_data(&payload)
-        .unwrap_or_else(|_| Event::default().event("error").data("{}"))
-}
-
 #[cfg(test)]
 pub(super) mod build_resolver_group_tests {
     use super::*;
-    use crate::config::{
-        CircuitBreakerConfig, DnsConfig, EcosystemConfig, LimitsConfig, ServerConfig,
-        TelemetryConfig, TraceConfig,
-    };
+    use crate::config::{CircuitBreakerConfig, DnsConfig, LimitsConfig, TraceConfig};
 
     pub(super) fn config(allow_system_resolvers: bool) -> Config {
         Config {
-            site_name: "prism".to_string(),
-            server: ServerConfig {
-                bind: ([127, 0, 0, 1], 8080).into(),
-                metrics_bind: ([127, 0, 0, 1], 9090).into(),
-                trusted_proxies: vec![],
-            },
             limits: LimitsConfig {
                 per_ip_per_minute: 120,
                 per_ip_burst: 40,
@@ -464,7 +319,6 @@ pub(super) mod build_resolver_group_tests {
                 per_target_burst: 20,
                 global_per_minute: 1000,
                 global_burst: 50,
-                max_concurrent_connections: 256,
                 per_ip_max_streams: 10,
                 max_timeout_secs: 10,
                 max_record_types: 10,
@@ -485,9 +339,6 @@ pub(super) mod build_resolver_group_tests {
                 max_hops: 10,
                 query_timeout_secs: 3,
             },
-            telemetry: TelemetryConfig::default(),
-            ecosystem: EcosystemConfig::default(),
-            backends: crate::config::BackendsConfig::default(),
         }
     }
 

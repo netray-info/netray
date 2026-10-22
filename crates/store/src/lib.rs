@@ -1,7 +1,10 @@
 //! The V2 history (`history.db`, SDD §4): entries per domain, identical-run detection, the stored
 //! diff and the retention sweep.
 
+pub mod record;
 pub mod seed;
+
+pub use record::{now_unix, record, record_timed, run_sweep_loop, set_gauges};
 
 use std::fmt;
 use std::path::Path;
@@ -279,6 +282,15 @@ impl HistoryStore {
             format!("SELECT {ENTRY_COLUMNS} FROM entries e WHERE e.domain = ? {NEWEST_FIRST}");
         let rows = sqlx::query(&sql).bind(domain).fetch_all(&self.pool).await?;
         rows.iter().map(entry_from_row).collect()
+    }
+
+    /// The number of entries and of distinct domains held.
+    pub async fn totals(&self) -> Result<(u64, u64), StoreError> {
+        let (entries, domains): (i64, i64) =
+            sqlx::query_as("SELECT COUNT(*), COUNT(DISTINCT domain) FROM entries")
+                .fetch_one(&self.pool)
+                .await?;
+        Ok((entries as u64, domains as u64))
     }
 
     /// The retention sweep at `now`; returns the number of deleted entries. A domain whose latest

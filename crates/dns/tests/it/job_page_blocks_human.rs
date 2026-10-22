@@ -28,7 +28,7 @@ fn collect_txt<'a>(node: &'a Node, out: &mut Vec<&'a Node>) {
 #[tokio::test]
 async fn txt_record_node_carries_the_human_text() {
     let client: IpAddr = "203.0.113.7".parse().unwrap();
-    let limiter = RateLimitState::new(&Config::load(None).expect("default config").limits);
+    let limiter = RateLimitState::new(&Config::default().limits);
     let parsed = netray_dns::parser::parse("example.com TXT").expect("query parses");
     let result = testing::stub_jobs()
         .query_parsed(parsed, client, &limiter, "rid".into())

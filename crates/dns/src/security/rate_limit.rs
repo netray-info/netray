@@ -290,7 +290,6 @@ mod tests {
             per_target_burst: 20,
             global_per_minute: 500,
             global_burst: 50,
-            max_concurrent_connections: 256,
             per_ip_max_streams: 3,
             max_timeout_secs: 10,
             max_record_types: 10,

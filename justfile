@@ -6,15 +6,15 @@ default: adlc-verify
 
 # --- the contract ------------------------------------------------------------
 
-# The ADLC gate: offline, no browser. Needs `just adlc-setup` once (frontend/dist is embedded by the crates).
-adlc-verify: test-repo check-frontend-dist fmt-check clippy test-rust-offline test-frontend validate-site check-sitemap
+# The ADLC gate: offline, no browser. Needs `just adlc-setup` once (netray-web embeds the islands bundle).
+adlc-verify: test-repo check-frontend-dist fmt-check clippy test-rust-offline test-frontend
 
 # Every test the gate runs, plus the full Rust suite (ifconfig-rs integration tests need `just ifconfig-data`).
 # test-rust stands in for test-rust-offline: one feature set, so the workspace tests compile once
 # (tests/repo/lib/verbs.sh holds it to a superset). With GeoIP data the tests run under the unified
 # workspace features only; the gate's own feature sets (--exclude netray-ip, -p netray-ip) run in
 # `adlc verify`, whose receipt every push needs.
-check: test-repo check-frontend-dist fmt-check clippy test-frontend validate-site check-sitemap deny test-rust
+check: test-repo check-frontend-dist fmt-check clippy test-frontend deny test-rust
 
 # Deterministic supply-chain checks; advisories run on a schedule elsewhere (workflow-rules R-J6).
 deny:
@@ -31,16 +31,11 @@ test-repo:
     done
     exit $fail
 
-# The crates embed frontend/dist (RustEmbed); without it nothing compiles.
+# netray-web embeds the islands bundle; without it the pages ship no islands.
 check-frontend-dist:
     #!/usr/bin/env bash
-    missing=0
-    for d in crates/*/frontend/dist; do
-        [ -d "$d" ] || { echo "$d is missing" >&2; missing=1; }
-    done
-    [ -f crates/web/islands/dist/islands.js ] || { echo "crates/web/islands/dist/islands.js is missing" >&2; missing=1; }
-    if [ "$missing" -ne 0 ]; then
-        echo "the crates embed frontend/dist and the islands bundle (RustEmbed) and do not compile without it; run 'just adlc-setup'" >&2
+    if [ ! -f crates/web/islands/dist/islands.js ]; then
+        echo "crates/web/islands/dist/islands.js is missing; run 'just adlc-setup'" >&2
         exit 1
     fi
 
@@ -56,7 +51,7 @@ clippy:
 test-rust-offline:
     cargo test --workspace --exclude netray-ip
     cargo test -p netray-ip --lib
-    cargo test -p netray-ip --features testing --test module --test module_data --test module_v3 --test contract_status --test evidence --test offline_routes
+    cargo test -p netray-ip --features testing --test module --test module_data --test module_ua --test module_v3 --test contract_status --test evidence
     @git ls-files 'crates/*/tests/it/*.rs' 'crates/*/tests/it/**/*.rs' | grep -v '/main\.rs$' | sed 's/^/ADLC-RAN /'
 
 # The full Rust suite. Most ifconfig-rs integration tests need GeoIP data (`just ifconfig-data`,
@@ -79,30 +74,10 @@ test-ifconfig-data:
 test-frontend:
     npm test --workspaces --if-present
 
-# Every site/ HTML file is well-formed.
-validate-site:
-    @find site/ -name '*.html' -print0 | sort -z | xargs -0 -I{} \
-      python3 -c "import html.parser, sys; html.parser.HTMLParser().feed(open(sys.argv[1]).read()); print('ok', sys.argv[1])" "{}" \
-        || { echo "FAIL"; exit 1; }
-
-# sitemap.xml matches what site/ would generate.
-check-sitemap:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    generated="$(mktemp "${TMPDIR:-/tmp}/sitemap.XXXXXX")"
-    trap 'rm -f "$generated"' EXIT
-    node site/scripts/build-sitemap.mjs --stdout > "$generated"
-    if ! diff -u site/sitemap.xml "$generated"; then
-        echo "sitemap drift: run 'node site/scripts/build-sitemap.mjs' and commit the result" >&2
-        exit 1
-    fi
-    echo "ok site/sitemap.xml is up to date"
-
 # --- build and ship ----------------------------------------------------------
 
-# Frontends first (the crates embed their dist), then the release binaries.
+# The islands bundle first (netray-web embeds it), then the release binary.
 build:
-    npm run build:types -w @netray-info/common-frontend
     npm run build --workspaces --if-present
     cargo build --release -p netray
 
@@ -115,8 +90,10 @@ image:
 acceptance:
     cd tests/acceptance && TEST_ENV={{test_env}} npx playwright test --project prod
 
-# Playwright acceptance against a local stack: `netray site` and the six services on free 127.0.0.1 ports
-# (passed to the suite as LOCAL_<NAME>_URL), from their dev configs. Default specs: the two that need no network.
+# Playwright acceptance against one local `netray serve` on a free 127.0.0.1 port, apex `localhost`
+# (inspector hosts `<tool>.localhost`), over a temporary store seeded from
+# tests/acceptance/fixtures/history. ACCEPTANCE_ENV adds NETRAY_ keys to its environment
+# (`ACCEPTANCE_ENV="NETRAY_ADMISSION__CLIENT_BUDGET_PER_HOUR=0"`). Default specs: the two that need no network.
 acceptance-local *args:
     #!/usr/bin/env bash
     set -uo pipefail
@@ -124,44 +101,20 @@ acceptance-local *args:
     bin=$(netray_bin) || exit 1
     tmp=$(mktemp -d)
     trap 'rm -rf "$tmp"; _netray_cleanup' EXIT
-    mkdir -p "$tmp/custom_cas"
 
     cargo run -q -p netray-store --example seed -- "$tmp/history.db" tests/acceptance/fixtures/history || { echo "seed failed" >&2; exit 1; }
 
-    site_port=$(free_port)
-    start_bg "$tmp/site.log" "$bin" site --bind "127.0.0.1:$site_port" --root site
-    wait_http "http://127.0.0.1:$site_port/" 30 || { echo "netray site did not answer on 127.0.0.1:$site_port" >&2; exit 1; }
-    export LOCAL_SITE_URL="http://localhost:$site_port"
-
-    # sub | crate dir | config | bind var | metrics bind var | extra env (see tests/repo/test_smoke_services.sh)
-    rows=(
-      "lens|lens|lens.dev.toml|LENS_SERVER__BIND|LENS_SERVER__METRICS_BIND|LENS_SNAPSHOTS__DB_PATH=$tmp/snapshots.db LENS_HISTORY__DB_PATH=$tmp/history.db ${LENS_EXTRA:-}"
-      "dns|dns|prism.dev.toml|NETRAY_DNS_SERVER__BIND|NETRAY_DNS_SERVER__METRICS_BIND|"
-      "tls|tls|tlsight.dev.toml|NETRAY_TLS_SERVER__BIND|NETRAY_TLS_SERVER__METRICS_BIND|NETRAY_TLS_VALIDATION__CUSTOM_CA_DIR=$tmp/custom_cas"
-      "http|http|spectra.dev.toml|NETRAY_HTTP_SERVER__BIND|NETRAY_HTTP_SERVER__METRICS_BIND|"
-      "email|email|beacon.dev.toml|NETRAY_EMAIL_SERVER__BIND|NETRAY_EMAIL_SERVER__METRICS_BIND|"
-      "ip|ip|$REPO_ROOT/tests/repo/fixtures/ifconfig.smoke.toml|NETRAY_IP_SERVER__BIND|NETRAY_IP_SERVER__ADMIN_BIND|"
-    )
-    # lens's config loader reads every LENS_* variable as a key: LENS_EXTRA itself must not reach it.
-    unset LENS_EXTRA
-    for row in "${rows[@]}"; do
-        IFS='|' read -r sub dir cfg bind_var metrics_var extra <<<"$row"
-        port=$(free_port)
-        (
-            cd "$REPO_ROOT/crates/$dir" || exit 1
-            # shellcheck disable=SC2086
-            start_bg "$tmp/$sub.log" env "$bind_var=127.0.0.1:$port" "$metrics_var=127.0.0.1:$(free_port)" $extra \
-                "$bin" "$sub" "$cfg"
-            echo "$!" >"$tmp/$sub.pid"
-        )
-        _NETRAY_PIDS+=("$(cat "$tmp/$sub.pid")")
-        wait_http "http://127.0.0.1:$port/health" 30 \
-            || { echo "netray $sub did not answer on 127.0.0.1:$port: $(tail -n 1 "$tmp/$sub.log")" >&2; exit 1; }
-        export "LOCAL_$(printf %s "$sub" | tr a-z A-Z)_URL=http://localhost:$port"
-    done
+    port=$(free_port)
+    # shellcheck disable=SC2086
+    start_bg "$tmp/serve.log" env NETRAY_SERVER__BIND="127.0.0.1:$port" NETRAY_SERVER__METRICS_BIND="127.0.0.1:$(free_port)" \
+        NETRAY_SERVER__APEX=localhost NETRAY_STORE__DB_PATH="$tmp/history.db" ${ACCEPTANCE_ENV:-} \
+        "$bin" serve crates/netray/netray.dev.toml
+    wait_http "http://127.0.0.1:$port/health" 30 \
+        || { echo "netray serve did not answer on 127.0.0.1:$port: $(tail -n 1 "$tmp/serve.log")" >&2; exit 1; }
+    export LOCAL_URL="http://localhost:$port" LOCAL_APEX=localhost
 
     specs=({{args}})
-    [ ${#specs[@]} -gt 0 ] || specs=(smoke/security-headers.spec.ts static-site/assets.spec.ts)
+    [ ${#specs[@]} -gt 0 ] || specs=(smoke/security-headers.spec.ts smoke/health.spec.ts)
     specs=("${specs[@]#tests/acceptance/}")
     cd tests/acceptance
     # Playwright matches a file filter against the absolute path: anchor an existing relative
@@ -179,8 +132,8 @@ acceptance-local *args:
     status=$?
     exit $status
 
-# V2 pages against the private design canvas (specs/rules/design-rules.md): seeds lens's history,
-# starts lens and the manifest's inspectors on free ports, writes target/design/. Exit 0 within
+# V2 pages against the private design canvas (specs/rules/design-rules.md): seeds a history,
+# starts one `netray serve` on a free port, writes target/design/. Exit 0 within
 # tolerance, 1 deviations, 2 setup error. Manifest: the argument, else $NETRAY_DESIGN_DIR/manifest.json
 # (default: the netray.info checkout beside the main checkout).
 design-check manifest="":
@@ -237,7 +190,6 @@ adlc-setup:
     @for t in cargo node npm bash; do command -v "$t" >/dev/null || { echo "$t is not on PATH" >&2; exit 1; }; done
     @command -v cargo-deny >/dev/null || cargo install cargo-deny --locked
     npm ci
-    npm run build:types -w @netray-info/common-frontend
     npm run build --workspaces --if-present
 
 # --- data (network) ----------------------------------------------------------

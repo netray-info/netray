@@ -26,7 +26,7 @@ fn refused(outcome: &SectionOutcome) -> bool {
 #[tokio::test]
 async fn the_registry_module_refuses_over_its_per_target_limit() {
     let cfg: ModuleConfig = toml::from_str(CONFIG).expect("config parses");
-    let module = DnsModule::new(cfg).await.expect("module builds");
+    let module = DnsModule::new(cfg, None).await.expect("module builds");
 
     let outcome = run(&module).await;
 
@@ -43,7 +43,7 @@ fn the_admitted_band_module_charges_no_per_target_limit() {
         .expect("runtime builds");
     let outcome = rt.block_on(async {
         let cfg: ModuleConfig = toml::from_str(CONFIG).expect("config parses");
-        let module = DnsModule::new(cfg)
+        let module = DnsModule::new(cfg, None)
             .await
             .expect("module builds")
             .admitted_by_caller();

@@ -3,11 +3,13 @@
 //! drives one check through them. The engine never names a module crate (P40).
 
 pub mod catalogue;
+pub mod domain_run;
 pub mod history;
 pub mod profile;
 pub mod scoring;
 
 pub use catalogue::catalogue;
+pub use domain_run::{DomainRun, run_domain, section_plan};
 pub use scoring::score;
 
 use std::collections::HashSet;

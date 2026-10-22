@@ -17,8 +17,6 @@
 //! // extractor.extract(&headers, peer_addr) returns the real client IP
 //! ```
 
-#[cfg(feature = "backend")]
-pub mod backend;
 pub mod config;
 #[cfg(feature = "cors")]
 pub mod cors;

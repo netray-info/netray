@@ -4,12 +4,10 @@ import { isProduction } from '../fixtures/env.js';
 
 const PRODUCTION_HOSTS = [
   'netray.info',
-  'ip.netray.info',
   'dns.netray.info',
   'tls.netray.info',
   'http.netray.info',
-  'email.netray.info',
-  'lens.netray.info',
+  'ip.netray.info',
 ];
 
 const MIN_DAYS_REMAINING = 14;
@@ -35,7 +33,6 @@ function getCertExpiry(host: string): Promise<Date> {
 
 for (const host of PRODUCTION_HOSTS) {
   test(`${host}: TLS certificate not expiring within ${MIN_DAYS_REMAINING} days`, async () => {
-    test.fixme(host === 'email.netray.info', 'beacon not yet deployed behind Traefik');
     test.skip(!isProduction(), 'TLS cert checks only in production');
 
     const expiry = await getCertExpiry(host);

@@ -250,7 +250,6 @@ async fn stored_evidence_view_links_addresses_without_badges() {
         .unwrap();
     let app = evidence_router(EvidenceDeps {
         history: Arc::new(store),
-        v1: None,
     });
 
     let (status, page) = body(

@@ -13,10 +13,3 @@ async fn missing_reputation_list_without_geoip_dbs_still_loads() {
         .await
         .expect("a missing optional list only warns at the module level");
 }
-
-#[test]
-fn module_config_refuses_user_agent_regexes() {
-    let err = toml::from_str::<ModuleConfig>(r#"user_agent_regexes = "/nonexistent.yaml""#)
-        .expect_err("lens never reads user_agent_regexes; the key must be unknown");
-    assert!(err.to_string().contains("user_agent_regexes"), "{err}");
-}

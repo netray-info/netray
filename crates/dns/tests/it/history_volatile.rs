@@ -38,7 +38,7 @@ fn run(a_data: &str, rrsig_data: &str) -> Run {
 
 async fn paths() -> Vec<&'static str> {
     let cfg: ModuleConfig = toml::from_str("servers = [\"cloudflare\"]").unwrap();
-    let module = DnsModule::new(cfg).await.expect("module builds");
+    let module = DnsModule::new(cfg, None).await.expect("module builds");
     module.volatile().iter().map(|p| p.0).collect()
 }
 

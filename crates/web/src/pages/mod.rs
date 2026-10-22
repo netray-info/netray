@@ -2,6 +2,7 @@
 //! `router()` holds only what is common; a service adds its own `/`, `/robots.txt` and fallback.
 
 mod assets;
+pub mod badge;
 pub mod compare;
 mod errors;
 mod evidence;
@@ -9,6 +10,7 @@ pub mod guides;
 pub(crate) mod headers;
 mod inspect;
 mod jsonld;
+pub mod og;
 pub mod result;
 mod status;
 mod tools;
@@ -21,12 +23,13 @@ use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 
-pub use errors::{not_found, query_redirect, server_error};
+pub(crate) use errors::domain_path;
+pub use errors::{not_found, query_redirect, query_redirect_absolute, server_error};
 pub use evidence::{EvidenceDeps, evidence_router};
 pub use inspect::{
     CachedDns, CallerRequest, DnsResults, InspectConfig, InspectDeps, InspectLimits, InspectorJobs,
-    Job, JobPart, JobRequest, Refusal, SharedRuns, Tool, email_input, inspect_router,
-    registrable_domain,
+    Job, JobPart, JobRequest, Refusal, SharedRuns, Tool, email_input, inspect_host_router,
+    inspect_router, registrable_domain,
 };
 
 /// The speculation rules every page embeds; the CSP allows exactly their hash.

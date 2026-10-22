@@ -7,11 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+**0.30.0 is the breaking release of V2: one process, one config, and every V1 API and app gone.** `netray serve` serves the apex, `dns.`, `tls.`, `http.`, `ip.`, `email.`, `lens.` and `mta-sts.` by `Host` from one `netray.toml`. It carries SDD Phases 2, 3, 4, 4a and 5 together; 0.27.0, 0.28.0 and 0.29.0 are not released. The operator's migration is the configuration table under Changed; `netray serve --check-config <path>` checks a migrated file.
+
 **Grades change (scoring profile v5).** `dns.https_svcb` warns instead of failing when a domain publishes no HTTPS or SVCB record; a malformed record already warned, so the check no longer fails at all, and a failed lookup stays unmeasured. Profile v5 carries v4's weights and marks the change: the first v5 run of each domain is a new history entry. A domain without the record gains about 0.6 to 0.7 points, which moves some letters (B to A, C to B). The diff's grade split cannot attribute the change to the profile, because a stored v4 run keeps its stored `fail`. A legacy-version probe (SSLv3, TLS 1.0, TLS 1.1, TLS 1.2) answered with a TLS alert that refuses the ClientHello (close_notify, or a fatal unexpected_message, handshake_failure, illegal_parameter, decode_error, protocol_version, insufficient_security, inappropriate_fallback or unrecognized_name) has refused that version: nginx answers SSLv3 with `unrecognized_name`, and such servers move `tls.legacy_versions` from unmeasured to a verdict and their run from incomplete to graded. An internal_error or a timeout still leaves the probe unanswered.
 
 **Grades change (scoring profile v4).** Three new graded checks: `tls.legacy_versions` (SSLv3, TLS 1.0 or TLS 1.1 accepted fails), `tls.weak_suites` (RC4, 3DES, DES, export, NULL or anonymous suites fail; CBC or static RSA suites warn) and `http.coop` (a missing, `unsafe-none` or unrecognised Cross-Origin-Opener-Policy warns). Every domain's grade may change once; the first v4 run of each domain is recorded as a new history entry whose diff shows the three checks as added by release. The diff's grade split cannot attribute their effect to the profile: the stored v3 run never measured them, so it re-scores under v4 to its old grade, and a letter change they cause appears on the domain step beside the added-by-release rows that name its cause. A server that resets or closes the connection after a probe's ClientHello instead of answering with an alert (Windows SChannel refuses disabled versions this way) has refused that version or suite group: the evidence answers `closed` or `closed (reset)`, and `tls.legacy_versions` and `tls.weak_suites` grade it like an alert. A timeout, a partial answer before the close or a failure before the ClientHello was sent leaves that probe unanswered; the check is then unmeasured unless another probe decides it.
 
 **Verdicts change (no profile change).** A name below its zone apex (`www.example.com`, `docs.example.com`) is judged by its zone for `dns.ns`, `dns.ns_lame`, `dns.ns_delegation`, `dns.dnssec`, `dns.dnskey_algorithm` and `dns.dnssec_rollover`, and `dns.caa` reads the closest ancestor's CAA records (RFC 8659): subdomains no longer fail the NS checks "Not found", and a subdomain in a signed zone is no longer "DNSSEC not deployed". `dns.ttl` judges a record that a resolver's cache shows below 60 s on the authoritative TTL, so a cached remainder no longer warns. An SPF record whose only remark is informational (overlapping prefixes) passes instead of leaving the score. Email lookups whose UDP answer is truncated (large TXT records) are retried over TCP instead of being unmeasured.
+
+### Removed
+
+- **Subcommands.** `netray lens`, `dns`, `tls`, `http`, `email`, `ip` and `site` are gone; `serve` is the only subcommand, and the image's entrypoint is `netray serve`.
+- **The V1 apps and the static site.** The six Solid apps (`crates/*/frontend`), `@netray-info/common-frontend`, `site/` and the per-service OpenAPI docs pages. The V2 pages, the inspectors at `/inspect/<tool>` and on their hosts, and `/api/v1/docs` replace them.
+- **lens.** The crate, its snapshot store (`snapshots.db`), its V1 wire (`/api/check`), its SPA and its MCP tools. Runs, history, badges and OG cards are served by netray-web, netray-engine and netray-store.
+- **The per-service config files and env prefixes.** `lens.toml`, `prism.toml`, `tlsight.toml`, `spectra.toml`, `beacon.toml` and `ifconfig.toml` and the prefixes `LENS_`, `NETRAY_DNS_`, `NETRAY_TLS_`, `NETRAY_HTTP_`, `NETRAY_EMAIL_`, `NETRAY_IP_`, `PRISM_`, `TLSIGHT_`, `SPECTRA_`, `BEACON_` and `IFCONFIG_`: `serve` refuses to start while any such variable is set, naming `NETRAY_*` and `NETRAY_CONFIG`.
+- **The HTTP enrichment client.** The DNS, TLS, HTTP and email modules enrich addresses by calling the IP module in-process; without `[modules.ip]` enrichment is off.
+- **V1 endpoints, with their successors:**
+
+| Request | Answer |
+|---|---|
+| any path on `lens.netray.info` but `/health` and `/ready` | 301 to the same path and query on `netray.info` |
+| `email.netray.info/?q=<domain> …` or `/?domain=<domain>` | 301 `https://netray.info/<domain>/email` (`q` wins; selectors are dropped) |
+| any other path on `email.netray.info` | 301 `https://netray.info/` |
+| `email.netray.info/inspect`, `/inspect/<domain>` | 410, successor `/api/v1/email/inspect` |
+| `/api/*` on `dns.`, `tls.`, `http.`, `email.`, `ip.` | 410, successor `/api/v1` |
+| `/docs`, `/docs/` on those hosts and on `netray.info` | 301 `https://netray.info/api/v1/docs` |
+| `/api-docs/openapi.json` on those hosts and on `netray.info` | 410, successor `/api/v1/openapi.json` |
+| `netray.info/api/check`, `/api/check/<domain>` | 410, successor `/api/v1/domains/{domain}/runs` |
+| any other `netray.info/api/<x>` but `/api/v1` | 410, successor `/api/v1` |
+| `netray.info/api`, `/api/`, `/api/<name>` and `/api/<name>.html` for `index`, `dns`, `tls`, `http`, `email`, `ip`, `lens` (V1 API docs) | 301 `https://netray.info/api/v1/docs` |
+| `netray.info/guide/lens` | 301 `https://netray.info/guide/scoring` |
+| `netray.info/r/<id>` for an ID that is no stored entry (every V1 snapshot link) | 410 page; `/r/<id>/og.png` an empty 410 |
+| `ip.netray.info/range` | 410, successor `/api/v1/ip/range/{cidr}` |
+| `ip.netray.info/ip/<x>` (neither a format nor `cidr`) | 410, successor `/api/v1/ip` |
+| `ip.netray.info/asn/<n>` | 410, successor `/api/v1/asn/{n}` |
+| `ip.netray.info/ipv4`, `/ipv6` (and `/<fmt>`) | 410, successor `/api/v1/ip/{address}` or `curl -4`/`curl -6` against the root |
+| `ip.netray.info/batch`, `/diff`, `/meta`, `/api/meta` | 410, successors `/api/v1/ip/batch`, `/api/v1/ip/diff`, `/api/v1/meta` |
+| any other GET or HEAD on `dns.`, `tls.`, `http.`, `ip.` but `/` and `/static/*` | 301 to the same path on `netray.info` |
+| any unknown `Host`, or none | 404 on every path but `/health` and `/ready` |
+
+  `ip.netray.info` keeps its command-line family (`/`, `/json`, `/yaml`, `/toml`, `/csv`, each field and `/<field>/<fmt>`, `/ip/cidr`, bare `/asn`, `?ip=`, `Accept` negotiation); a browser on `/` gets the IP inspector. `dns./?q=`, `tls./?h=`, `http./?url=` and `ip./?ip=` open their inspector prefilled; `dns./?r=<key>` ignores the V1 key. Old V1 API clients get these answers and nothing else.
 
 ### Added
 
@@ -27,7 +62,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **DNS rate limits.** A domain run no longer charges the DNS module's per-target limit (`[modules.dns.limits] per_target_*`, now accepted but not read): lens admission bounds domain runs, and the limiter keyed by resolver let about eight runs a minute through site-wide before every further DNS section was incomplete, "rate limited (per_target)". The DNS inspector's own limits (`[api.dns]`) are unchanged.
+- **One config, `netray.toml`.** Tables `[server]` (`bind`, `metrics_bind`, `trusted_proxies`, `apex`), `[engine]`, `[store]`, `[admission]`, `[api]` with `[api.<inspector>]`, `[inspect.<tool>]`, `[badges]`, `[og_cards]`, `[telemetry]` and `[modules.<name>]` with each module's `deadline_ms`; every table refuses unknown keys. Variables use the prefix `NETRAY_` (`NETRAY_SERVER__BIND`), and `NETRAY_CONFIG` names the file. `crates/netray/netray.example.toml` lists every key at its default. A key of an old file is refused at load and by `--check-config`, naming where its value lives now:
+
+| Old key path | Old file | In 0.30.0 |
+|---|---|---|
+| `backends.resolve_timeout_ms` | lens | `[engine] resolve_timeout_ms` |
+| `backends.<m>.timeout_ms` | lens | `[modules.<m>] deadline_ms` |
+| `backends.<m>.url` | lens | removed |
+| `backends.ip.url` | prism, tlsight | removed: enrichment calls the in-process ip module |
+| `backends.ip.timeout_ms` | prism, tlsight | removed: enrichment calls the in-process ip module |
+| `backends.ip.max_concurrent` | prism, tlsight | removed: enrichment calls the in-process ip module |
+| `backends.ip.cache_ttl_secs` | prism, tlsight | removed: enrichment calls the in-process ip module |
+| `backends.ip.cache_capacity` | prism, tlsight | removed: enrichment calls the in-process ip module |
+| `backends.ip_url` | beacon | removed: enrichment calls the in-process ip module |
+| `backends.timeout_ms` | beacon | removed: enrichment calls the in-process ip module |
+| `modules.dns.backends.ip` | lens | removed: enrichment calls the in-process ip module |
+| `modules.tls.backends.ip` | lens | removed: enrichment calls the in-process ip module |
+| `modules.http.enrichment` | lens | removed: enrichment calls the in-process ip module |
+| `modules.email.backends.ip_url` | lens | removed: enrichment calls the in-process ip module |
+| `cache.enabled` | lens | `[admission] cache_enabled` |
+| `cache.enabled` | ifconfig | removed |
+| `cache.ttl_seconds` | lens | `[admission] cache_window_seconds` |
+| `cache.ttl_secs` | ifconfig | removed |
+| `cache.max_entries` | ifconfig | removed |
+| `rate_limit.per_ip_per_minute` | lens | `[admission] per_ip_per_minute` |
+| `rate_limit.per_ip_burst` | lens | `[admission] per_ip_burst` |
+| `rate_limit.global_per_minute` | lens | `[admission] global_per_minute` |
+| `rate_limit.global_burst` | lens | `[admission] global_burst` |
+| `rate_limit.per_ip_per_minute` | ifconfig | `[api.ip] per_ip_per_minute` |
+| `rate_limit.per_ip_burst` | ifconfig | `[api.ip] per_ip_burst` |
+| `rate_limit.per_target_per_minute` | ifconfig | `[api.ip] per_target_per_minute` |
+| `rate_limit.per_target_burst` | ifconfig | `[api.ip] per_target_burst` |
+| `rate_limit.exempt_cidrs` | ifconfig | removed |
+| `rate_limit.per_ip` | beacon | removed |
+| `scoring.profile_path` | lens | `[engine] profile_path` |
+| `history.enabled` | lens | `[store] enabled` |
+| `history.db_path` | lens | `[store] db_path` |
+| `snapshots` | lens | removed |
+| `site` | lens | removed |
+| `ecosystem` | lens, prism, tlsight, beacon | removed |
+| `site_name` | prism, tlsight, ifconfig | removed |
+| `meta` | spectra | removed |
+| `base_url` | ifconfig | removed |
+| `project_name` | ifconfig | removed |
+| `project_version` | ifconfig | removed |
+| `inspect.request_timeout_secs` | spectra | `[modules.http.inspect].request_timeout_secs` |
+| `inspect.total_timeout_secs` | spectra | `[modules.http.inspect].total_timeout_secs` |
+| `inspect.max_redirects` | spectra | `[modules.http.inspect].max_redirects` |
+| `inspect.user_agent` | spectra | `[modules.http.inspect].user_agent` |
+| `server.admin_bind` | ifconfig | `[server] metrics_bind` |
+| `server.admin_token` | ifconfig | removed |
+| `circuit_breaker` | prism | `[modules.dns].circuit_breaker` |
+| `validation` | tlsight | `[modules.tls].validation` |
+| `quality` | tlsight | `[modules.tls].quality` |
+| `enrichment` | spectra | removed: enrichment calls the in-process ip module |
+| `dnsbl` | beacon | `[modules.email].dnsbl` |
+| `http` | beacon | `[modules.email].http` |
+| `dkim` | beacon | `[modules.email].dkim` |
+| `limits` | prism, tlsight, spectra | no single destination: the key moved into the module table of the service that read it (`[modules.dns]`, `[modules.tls]`, `[modules.http]`, `[modules.email]` or `[api.ip]`), or went with its routes |
+| `dns` | prism, tlsight, beacon | no single destination: the key moved into the module table of the service that read it (`[modules.dns]`, `[modules.tls]`, `[modules.http]`, `[modules.email]` or `[api.ip]`), or went with its routes |
+| `trace` | prism | no single destination: the key moved into the module table of the service that read it (`[modules.dns]`, `[modules.tls]`, `[modules.http]`, `[modules.email]` or `[api.ip]`), or went with its routes |
+| `batch` | ifconfig | no single destination: the key moved into the module table of the service that read it (`[modules.dns]`, `[modules.tls]`, `[modules.http]`, `[modules.email]` or `[api.ip]`), or went with its routes |
+| `filtered_headers` | ifconfig | no single destination: the key moved into the module table of the service that read it (`[modules.dns]`, `[modules.tls]`, `[modules.http]`, `[modules.email]` or `[api.ip]`), or went with its routes |
+| `internal_mode` | ifconfig | no single destination: the key moved into the module table of the service that read it (`[modules.dns]`, `[modules.tls]`, `[modules.http]`, `[modules.email]` or `[api.ip]`), or went with its routes |
+| `watch_data_files` | ifconfig | no single destination: the key moved into the module table of the service that read it (`[modules.dns]`, `[modules.tls]`, `[modules.http]`, `[modules.email]` or `[api.ip]`), or went with its routes |
+| `dns_base_url` | ifconfig | no single destination: the key moved into the module table of the service that read it (`[modules.dns]`, `[modules.tls]`, `[modules.http]`, `[modules.email]` or `[api.ip]`), or went with its routes |
+| `tls_base_url` | ifconfig | no single destination: the key moved into the module table of the service that read it (`[modules.dns]`, `[modules.tls]`, `[modules.http]`, `[modules.email]` or `[api.ip]`), or went with its routes |
+| `user_agent_regexes` | ifconfig | `[modules.ip].user_agent_regexes` |
+| `geoip_city_db` | ifconfig | `[modules.ip].geoip_city_db` |
+| `geoip_asn_db` | ifconfig | `[modules.ip].geoip_asn_db` |
+| `tor_exit_nodes` | ifconfig | `[modules.ip].tor_exit_nodes` |
+| `cloud_provider_ranges` | ifconfig | `[modules.ip].cloud_provider_ranges` |
+| `feodo_botnet_ips` | ifconfig | `[modules.ip].feodo_botnet_ips` |
+| `cins_army_ips` | ifconfig | `[modules.ip].cins_army_ips` |
+| `vpn_ranges` | ifconfig | `[modules.ip].vpn_ranges` |
+| `datacenter_ranges` | ifconfig | `[modules.ip].datacenter_ranges` |
+| `bot_ranges` | ifconfig | `[modules.ip].bot_ranges` |
+| `spamhaus_drop` | ifconfig | `[modules.ip].spamhaus_drop` |
+| `asn_patterns` | ifconfig | `[modules.ip].asn_patterns` |
+| `asn_info` | ifconfig | `[modules.ip].asn_info` |
+
+- **One metrics listener.** `[server] metrics_bind` serves `/metrics` without a token and replaces ifconfig's `admin_bind`; `admin_token` is removed. `/health` and `/ready` answer on any `Host`.
+- **Metrics are named `netray_*`.** The SDD §9.2 set (`netray_runs_total{outcome,trigger}`, `netray_section_outcomes_total`, `netray_runs_with_predecessor_total`, `netray_run_interval_seconds`, `netray_fixes_observed_total`, `netray_admission_rejections_total{reason}`, `netray_history_entries`, `netray_history_domains`, `netray_api_requests_total{endpoint}`, `netray_entry_views_total`, `netray_badge_requests_total`, the run and time-to-result histograms) is registered at startup. Renamed: `lens_admission_rejections_total` → `netray_admission_rejections_total`, `lens_runs_in_flight` → `netray_runs_in_flight`, `lens_history_record_errors_total` → `netray_history_record_errors_total`, `lens_rate_limit_hits_total` → `netray_rate_limit_hits_total{scope}` (DNS's own limiter: `netray_dns_rate_limit_hits_total`), `lens_badge_*` → `netray_badge_*`, the modules' series `prism_*` → `netray_dns_*` (label `endpoint` → `operation`), `beacon_*` → `netray_email_*` (label `target` → `fetch`), `tlsight_*` → `netray_tls_*`, `spectra_*` → `netray_http_*`, `ifconfig_*` → `netray_ip_*`, and the HTTP request series under the prefix `netray`. Ended without successor: `lens_check_requests_total` (counted by `netray_runs_total` and `netray_api_requests_total`) and the per-service `*_http_requests_total` of the deleted routers. Dashboards and alerts move without continuity.
+- **DNS rate limits.** A domain run no longer charges the DNS module's per-target limit (`[modules.dns.limits] per_target_*`, now accepted but not read; the merged production `netray.toml` drops them): admission bounds domain runs, and the limiter keyed by resolver let about eight runs a minute through site-wide before every further DNS section was incomplete, "rate limited (per_target)". The DNS inspector's own limits (`[api.dns]`) are unchanged.
 - **Section labels and domain input.** A section whose every check is unmeasured (all HTTP probes timed out) is labelled `incomplete` with the reason "every check unmeasured: …" instead of `measured`; its checks stay listed. A single-label name is refused as an invalid domain, "a domain needs at least two labels", by `POST /api/v1/domains/{domain}/runs`, the domain reads of API v1, `/og/<name>.png` and `/badge/<name>.svg`, and starts no run; the DNS inspector still takes single-label names.
 - **DNS inspector.** An address query (`192.0.2.1`, `2001:db8::1`) looks up PTR at its reverse name (`1.2.0.192.in-addr.arpa`) instead of the literal address; `@system` queries no longer end empty when the system has several nameservers.
 - **Links are apex-relative.** Pages link the inspectors at `/inspect/<tool>`, not at `<tool>.netray.info`; canonical, Open Graph, JSON-LD, the sitemap and robots (now with its `Sitemap:` line under lens too) build absolute URLs from one origin. The sitemap lists `/tools`, `/api/v1/docs` and the five inspector pages instead of the subdomains. The domain-security-audit guide's API samples read the V2 API (`/api/v1/dns/check`, `/api/v1/tls/inspect`, `/api/v1/email/inspect`, `/api/v1/ip/<address>`) and the run answer's nested `run`.

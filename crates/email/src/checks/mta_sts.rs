@@ -14,7 +14,7 @@
 //! resolved address checked by [`OutboundFetch::allow`], the response body
 //! cut at 64 KB to prevent resource exhaustion. Parsed MX patterns are capped
 //! at 32. Fetch failures are categorised as `timeout`/`tls`/`blocked`/`other`
-//! for the `beacon_upstream_errors_total` metric.
+//! for the `netray_email_upstream_errors_total` metric.
 
 use netray_common::fetch::{self, AtLimit, FetchError, FetchOptions};
 use reqwest::header::HeaderMap;
@@ -29,7 +29,7 @@ const MTA_STS_MAX_BODY_BYTES: usize = 65_536; // generous cap per RFC 8461; real
 const MTA_STS_MAX_MX_PATTERNS: usize = 32;
 
 /// Map a [`FetchError`] to the coarse `kind` label for the
-/// `beacon_upstream_errors_total` counter.
+/// `netray_email_upstream_errors_total` counter.
 fn classify_fetch_error(e: &FetchError) -> &'static str {
     match e {
         FetchError::Timeout => "timeout",
@@ -69,7 +69,7 @@ fn info_without_policy(dns_id: String) -> MtaStsInfo {
 
 fn record_upstream_error(backend: &'static str, kind: &'static str) {
     metrics::counter!(
-        "beacon_upstream_errors_total",
+        "netray_email_upstream_errors_total",
         "backend" => backend,
         "kind" => kind,
     )
@@ -215,7 +215,7 @@ async fn fetch_and_parse_policy(
     let fetch_start = std::time::Instant::now();
     match fetch::fetch(&fetch.settings, fetch.resolver.clone(), policy_url, &opts).await {
         Ok(r) => {
-            metrics::histogram!("beacon_https_fetch_duration_seconds", "target" => "mta_sts")
+            metrics::histogram!("netray_email_https_fetch_duration_seconds", "fetch" => "mta_sts")
                 .record(fetch_start.elapsed().as_secs_f64());
             measured.policy_status = Some(r.status.as_u16());
             measured.content_type = r

@@ -157,6 +157,28 @@ fn normalise(raw: &str) -> Option<String> {
     valid.then(|| domain.to_string())
 }
 
+/// `/<domain>` for a raw domain value, normalised and percent-encoded; `None` for a bad value.
+pub(crate) fn domain_path(raw: &str) -> Option<String> {
+    let domain = normalise(raw)?;
+    Some(format!("/{}", utf8_percent_encode(&domain, LOCATION_SET)))
+}
+
+/// [`domain_path`] with `dkim_selectors` carried over from `params`.
+fn domain_location(raw: &str, params: &HashMap<String, String>) -> Option<String> {
+    let mut location = domain_path(raw)?;
+    // lens's `?d=` with `dkim_selectors` keeps them for the run page (spec
+    // v2-dkim-legacy-urls requirement 7); the page validates them.
+    if let Some(selectors) = params
+        .get("dkim_selectors")
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
+        location.push_str("?dkim_selectors=");
+        location.extend(utf8_percent_encode(selectors, SELECTORS_SET));
+    }
+    Some(location)
+}
+
 /// `GET /?d=<domain>`: a 301 to `/<domain>`, the 404 page without `d`, a 400 for a bad value.
 pub async fn query_redirect(uri: Uri) -> Response {
     let Ok(Query(params)) = Query::<HashMap<String, String>>::try_from_uri(&uri) else {
@@ -165,19 +187,8 @@ pub async fn query_redirect(uri: Uri) -> Response {
     let Some(raw) = params.get("d") else {
         return not_found().await;
     };
-    match normalise(raw) {
-        Some(domain) => {
-            let mut location = format!("/{}", utf8_percent_encode(&domain, LOCATION_SET));
-            // lens's `?d=` with `dkim_selectors` keeps them for the run page (spec
-            // v2-dkim-legacy-urls requirement 7); the page validates them.
-            if let Some(selectors) = params
-                .get("dkim_selectors")
-                .map(|s| s.trim())
-                .filter(|s| !s.is_empty())
-            {
-                location.push_str("?dkim_selectors=");
-                location.extend(utf8_percent_encode(selectors, SELECTORS_SET));
-            }
+    match domain_location(raw, &params) {
+        Some(location) => {
             secure((StatusCode::MOVED_PERMANENTLY, [(LOCATION, location)]).into_response())
         }
         None => not_found_page(
@@ -187,4 +198,27 @@ pub async fn query_redirect(uri: Uri) -> Response {
             None,
         ),
     }
+}
+
+/// The `?d=` redirect with an absolute `Location` on `apex`; `None` without `d`.
+pub fn query_redirect_absolute(apex: &str, uri: &Uri) -> Option<Response> {
+    let Ok(Query(params)) = Query::<HashMap<String, String>>::try_from_uri(uri) else {
+        return None;
+    };
+    let raw = params.get("d")?;
+    Some(match domain_location(raw, &params) {
+        Some(path) => secure(
+            (
+                StatusCode::MOVED_PERMANENTLY,
+                [(LOCATION, format!("https://{apex}{path}"))],
+            )
+                .into_response(),
+        ),
+        None => not_found_page(
+            StatusCode::BAD_REQUEST,
+            Some(raw.clone()),
+            Refused::Domain,
+            None,
+        ),
+    })
 }

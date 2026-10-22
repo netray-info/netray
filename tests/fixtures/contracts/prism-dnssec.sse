@@ -1,6 +1,0 @@
-event: chain
-data: {"level":{"dnskey_records":[],"ds_records":[],"findings":[{"message":"No DNSKEY records found at .","severity":"failed"}],"is_final":false,"latency_ms":0,"level":1,"rrsig_records":[],"servers_queried":13,"zone":"."},"request_id":"golden"}
-
-event: done
-data: {"duration_ms":0,"levels":1,"request_id":"golden"}
-

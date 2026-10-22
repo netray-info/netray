@@ -62,52 +62,36 @@ jobs:
           push: false
           tags: ghcr.io/netray-info/netray:${{ steps.version.outputs.version }}
 
-      - name: Smoke-test every subcommand
+      - name: Smoke-test netray serve on every host
         run: |
           image="ghcr.io/netray-info/netray:${{ steps.version.outputs.version }}"
-          cas="$RUNNER_TEMP/custom_cas"
-          mkdir -p "$cas"
           failed=0
 
-          # sub | config | env prefix for the bind overrides | extra docker run args
-          rows=(
-            "lens|lens.example.toml|LENS_SERVER__|-e LENS_SNAPSHOTS__DB_PATH=/tmp/snapshots.db"
-            "dns|prism.example.toml|NETRAY_DNS_SERVER__|"
-            "tls|tlsight.example.toml|NETRAY_TLS_SERVER__|-e NETRAY_TLS_VALIDATION__CUSTOM_CA_DIR=/tmp/custom_cas -v $cas:/tmp/custom_cas:ro"
-            "http|spectra.example.toml|NETRAY_HTTP_SERVER__|"
-            "email|beacon.toml|NETRAY_EMAIL_SERVER__|"
-            "ip|ifconfig.example.toml|NETRAY_IP_SERVER__|"
-          )
-
           check() {
-            local name="$1" path="$2" i
+            local name="$1" host="$2" path="$3" i
             for i in $(seq 1 30); do
-              if docker exec "$name" wget -qO- "http://127.0.0.1:8080$path" >/dev/null 2>&1; then
-                echo "ok: $name $path"
+              if docker exec "$name" wget -qO- --header "Host: $host" "http://127.0.0.1:8080$path" >/dev/null 2>&1; then
+                echo "ok: $host $path"
                 return 0
               fi
               sleep 1
             done
-            echo "::error::$name did not answer $path within 30 s"
+            echo "::error::$host did not answer $path within 30 s"
             docker logs "$name" 2>&1 | tail -n 20
             return 1
           }
 
-          for row in "${rows[@]}"; do
-            IFS='|' read -r sub cfg prefix extra <<<"$row"
-            admin=METRICS_BIND
-            [ "$sub" = ip ] && admin=ADMIN_BIND
-            # shellcheck disable=SC2086
-            docker run -d --name "smoke-$sub" \
-              -e "${prefix}BIND=127.0.0.1:8080" -e "${prefix}${admin}=127.0.0.1:9090" $extra \
-              "$image" "$sub" "$cfg" >/dev/null
-            check "smoke-$sub" /health || failed=1
-            docker rm -f "smoke-$sub" >/dev/null
+          # One process serves every host by Host; the store lives in the container's /tmp.
+          docker run -d --name smoke-serve \
+            -e NETRAY_SERVER__BIND=127.0.0.1:8080 -e NETRAY_SERVER__METRICS_BIND=127.0.0.1:9090 \
+            -e NETRAY_STORE__DB_PATH=/tmp/history.db \
+            "$image" >/dev/null
+          # /health answers before host routing; / tells the hosts apart (an unknown host is 404).
+          for host in netray.info dns.netray.info tls.netray.info http.netray.info ip.netray.info; do
+            check smoke-serve "$host" /health || failed=1
+            check smoke-serve "$host" / || failed=1
           done
-
-          docker run -d --name smoke-site "$image" site --bind 127.0.0.1:8080 >/dev/null
-          check smoke-site /guide/ || failed=1
-          docker rm -f smoke-site >/dev/null
+          docker rm -f smoke-serve >/dev/null
 
           exit "$failed"
 

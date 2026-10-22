@@ -4,12 +4,17 @@
 
 mod catalogue;
 mod catalogue_for_protocol;
+mod domain_run_ip_enrichment_errors;
+mod domain_run_model_status;
+mod domain_run_score;
+mod domain_run_scoring_regression;
 mod evidence_path;
 mod facts_blocks;
 mod facts_blocks_section_wins;
 mod hard_fail_precedence;
 mod history;
 mod history_fixtures;
+mod history_fixtures_story;
 mod no_address_sections;
 mod profile;
 mod profile_v4;

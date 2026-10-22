@@ -203,7 +203,6 @@ async fn c8_run_without_csp_block_shows_no_csp_view_on_the_evidence_route() {
     };
     let app: Router = evidence_router(EvidenceDeps {
         history: Arc::new(store),
-        v1: None,
     });
     let resp = app
         .oneshot(

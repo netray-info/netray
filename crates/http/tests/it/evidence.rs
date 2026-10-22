@@ -139,8 +139,11 @@ fn https_refused_fails_the_ten_against_http_server_with_error_kind() {
 
 #[test]
 fn volatile_paths_name_registered_keys() {
-    let module = HttpModule::new(toml::from_str::<ModuleConfig>("").expect("empty config"))
-        .expect("module builds");
+    let module = HttpModule::new(
+        toml::from_str::<ModuleConfig>("").expect("empty config"),
+        None,
+    )
+    .expect("module builds");
     let volatile: &[EvidencePath] = module.volatile();
     let got: BTreeSet<&str> = volatile.iter().map(|p| p.0).collect();
     // inspection_ms per run; address, org and network_type follow the resolver's answer order

@@ -6,7 +6,6 @@ use std::net::IpAddr;
 use std::sync::Arc;
 
 use netray_email::checks::run_all_checks;
-use netray_email::config::Config;
 use netray_email::dns::FetchResolver;
 use netray_email::dns::test_support::TestDnsResolver;
 use netray_email::quality::types::{Category, SseEvent, Verdict};
@@ -73,10 +72,10 @@ fn rows() -> Vec<Row> {
     ]
 }
 
-fn config() -> Arc<Config> {
+fn config() -> Arc<ModuleConfig> {
     let module: ModuleConfig =
         toml::from_str("[dnsbl]\nzones = [\"bl1.example.com\"]\ntimeout_ms = 1000\n").unwrap();
-    Arc::new(Config::from_module(module))
+    Arc::new(module)
 }
 
 async fn run_row(row: &Row) -> Vec<SseEvent> {

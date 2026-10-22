@@ -273,7 +273,7 @@ fn probes_are_not_serialised() {
 #[tokio::test]
 async fn probe_blocks_are_not_volatile() {
     let cfg: ModuleConfig = toml::from_str("[limits]\nmax_ports = 3").unwrap();
-    let module = TlsModule::new(cfg).await.expect("module builds");
+    let module = TlsModule::new(cfg, None).await.expect("module builds");
     let got: BTreeSet<&str> = module.volatile().iter().map(|p| p.0).collect();
     for path in &got {
         assert!(

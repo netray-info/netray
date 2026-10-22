@@ -18,10 +18,7 @@ otel = ["telemetry", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentele
 cors = ["dep:tower-http"]
 server = ["dep:tokio"]
 prometheus = ["server", "dep:metrics-exporter-prometheus"]
-spa = ["server", "dep:rust-embed", "dep:mime_guess"]
-enrichment = ["dep:reqwest", "dep:futures"]
-enrichment-cache = ["enrichment", "dep:moka"]
-backend = ["dep:reqwest", "dep:moka", "dep:tokio", "dep:bytes", "dep:thiserror"]
+enrichment = ["dep:futures"]
 fetch = ["dep:reqwest", "dep:tokio", "dep:url", "dep:thiserror", "dep:bytes"]
 
 [dependencies]
@@ -74,19 +71,16 @@ tokio = { workspace = true, features = ["signal", "net", "sync"], optional = tru
 # Optional: Prometheus metrics server (prometheus feature)
 metrics-exporter-prometheus = { workspace = true, optional = true }
 
-# Optional: embedded SPA serving (spa feature)
-rust-embed = { workspace = true, optional = true }
-mime_guess = { workspace = true, optional = true }
-
 # JSON value type for EcosystemMeta features/limits maps
 serde_json = { workspace = true }
 
-# Optional: IP enrichment client (enrichment / enrichment-cache features)
+# Optional: HTTP client (otel exporter, fetch feature)
 reqwest = { workspace = true, features = ["json", "rustls", "webpki-roots"], optional = true }
-futures = { workspace = true, optional = true }
-moka = { workspace = true, features = ["future"], optional = true }
 
-# Optional: backend client (backend feature)
+# Optional: in-process IP enrichment (enrichment feature)
+futures = { workspace = true, optional = true }
+
+# Optional: fetch feature
 bytes = { version = "1", optional = true }
 thiserror = { workspace = true, optional = true }
 
@@ -100,6 +94,10 @@ futures = { workspace = true }
 rcgen = "0.14"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 tokio-rustls = "0.26"
+
+[[test]]
+name = "enrichment_in_process"
+required-features = ["enrichment"]
 
 [[test]]
 name = "metrics_recorder"

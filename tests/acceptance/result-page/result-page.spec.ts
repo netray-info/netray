@@ -2,13 +2,13 @@ import { test, expect, type APIRequestContext, type Page } from '@playwright/tes
 import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveEnv } from '../fixtures/env.js';
+import { apex } from '../fixtures/env.js';
 
 // Spec v2-result-page requirements 26 and 28 and the Phase 8 scenarios.
-// Needs the seeded local stack: LENS_EXTRA="LENS_ADMISSION__CLIENT_BUDGET_PER_HOUR=0 LENS_CACHE__TTL_SECONDS=3600"
+// Needs the seeded local stack: ACCEPTANCE_ENV="NETRAY_ADMISSION__CLIENT_BUDGET_PER_HOUR=0 NETRAY_ADMISSION__CACHE_WINDOW_SECONDS=3600"
 // just acceptance-local result-page/
 
-const lens = process.env.LOCAL_LENS_URL ?? resolveEnv().lens;
+const lens = apex().url;
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const SHOTS = resolve(ROOT, 'target/screenshots/v2-result-page');
 const REFUSAL = 'too many checks from your address; try again in';

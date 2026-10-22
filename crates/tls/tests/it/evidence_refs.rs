@@ -134,7 +134,7 @@ fn chain_items_carry_ca_issuers_url_and_it_is_registered() {
 #[tokio::test]
 async fn volatile_includes_tlsa_and_caa_ttl() {
     let cfg: ModuleConfig = toml::from_str("[limits]\nmax_ports = 3").unwrap();
-    let module = TlsModule::new(cfg).await.expect("module builds");
+    let module = TlsModule::new(cfg, None).await.expect("module builds");
     let got: BTreeSet<String> = module
         .volatile()
         .iter()

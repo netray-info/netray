@@ -87,7 +87,6 @@ async fn c5b_the_ip_evidence_page_puts_attribution_after_the_addresses_block() {
         .unwrap();
     let app = evidence_router(EvidenceDeps {
         history: Arc::new(store),
-        v1: None,
     });
     let resp = app
         .oneshot(

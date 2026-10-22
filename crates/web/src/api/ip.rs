@@ -461,8 +461,10 @@ pub(super) fn charge(
     scope: &'static str,
 ) -> Result<(), V1Error> {
     let cost = NonZeroU32::new(cost).unwrap_or(NonZeroU32::MIN);
-    check_keyed_cost(limiter, &key, cost, scope, "lens").map_err(|rejection| V1Error::RateLimited {
-        retry_after_secs: rejection.retry_after_secs,
+    check_keyed_cost(limiter, &key, cost, scope, "netray").map_err(|rejection| {
+        V1Error::RateLimited {
+            retry_after_secs: rejection.retry_after_secs,
+        }
     })
 }
 

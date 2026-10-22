@@ -58,7 +58,6 @@ async fn unknown_segment_under_an_existing_entry_answers_the_pages_404() {
     };
     let app: Router = evidence_router(EvidenceDeps {
         history: Arc::new(store),
-        v1: None,
     });
 
     let resp = app

@@ -9,7 +9,7 @@ use netray_model::run::{Run, fingerprint};
 
 fn module() -> HttpModule {
     let cfg: ModuleConfig = toml::from_str("[inspect]\nrequest_timeout_secs = 5").unwrap();
-    HttpModule::new(cfg).expect("module builds")
+    HttpModule::new(cfg, None).expect("module builds")
 }
 
 fn headers(variant: &str, hsts: &str) -> Block {

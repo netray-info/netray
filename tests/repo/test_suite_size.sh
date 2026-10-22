@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# C13: the imported suite keeps its size (no tests lost) and runs as one cargo workspace.
+# C13: the suite keeps its size (no tests lost) and runs as one cargo workspace. Floors re-set
+# after the V1 deletion (v2-cutover Phase 7): the Solid apps' tests went with them; the islands
+# are the frontend.
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
-MIN_RUST=1650
-MIN_FRONTEND=171
+MIN_RUST=3488
+MIN_FRONTEND=234
 
 rust=0
 while IFS= read -r f; do
@@ -16,7 +18,7 @@ fe=0
 while IFS= read -r f; do
     n=$(grep -oE '\b(it|test)\(' "$f" | wc -l)
     fe=$((fe + n))
-done < <(git ls-files 'crates/*/frontend/*' 'packages/common-frontend/*' \
+done < <(git ls-files 'crates/web/islands/*' \
     | grep -E '\.(ts|tsx|js)$' | grep -vE '(^|/)(node_modules|dist)/')
 
 echo "rust tests: $rust (min $MIN_RUST); frontend tests: $fe (min $MIN_FRONTEND)"

@@ -73,7 +73,6 @@ async fn page(extra: bool) -> String {
     };
     let app: Router = evidence_router(EvidenceDeps {
         history: Arc::new(store),
-        v1: None,
     });
     let resp = app
         .oneshot(

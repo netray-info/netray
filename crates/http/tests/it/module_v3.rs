@@ -57,7 +57,7 @@ fn http_module_emits_exactly_the_thirteen_catalogue_ids() {
     );
 
     let cfg: ModuleConfig = toml::from_str("[inspect]\nrequest_timeout_secs = 5").unwrap();
-    let module = HttpModule::new(cfg).expect("module builds");
+    let module = HttpModule::new(cfg, None).expect("module builds");
     let declared: Vec<String> = module.checks().iter().map(|c| c.to_string()).collect();
     assert_eq!(declared.len(), 13, "checks() each ID once: {declared:?}");
     assert_eq!(

@@ -243,7 +243,7 @@ fn errored_dnskey_batch_has_no_block_and_definite_empty_has_an_empty_block() {
 #[tokio::test]
 async fn volatile_ttl_paths_are_registered() {
     let cfg: ModuleConfig = toml::from_str("servers = [\"cloudflare\"]").unwrap();
-    let module = DnsModule::new(cfg).await.expect("module builds");
+    let module = DnsModule::new(cfg, None).await.expect("module builds");
     let volatile: &[EvidencePath] = module.volatile();
 
     let want: BTreeSet<String> = [

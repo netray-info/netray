@@ -125,7 +125,6 @@ async fn apps() -> Apps {
         result: router(ResultState::new(store.clone(), Arc::new(StubRuns), 300)),
         evidence: evidence_router(EvidenceDeps {
             history: store.clone(),
-            v1: None,
         }),
         api: netray_web::api::router(
             ApiState::new(ApiConfig::default(), Arc::new(StubRuns)).with_store(Some(store)),

@@ -18,8 +18,8 @@ mod runs;
 mod state;
 
 use axum::extract::rejection::PathRejection;
-use axum::extract::{Path, State};
-use axum::middleware;
+use axum::extract::{MatchedPath, Path, Request, State};
+use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get};
 use axum::{Json, Router};
@@ -125,7 +125,26 @@ pub fn router(state: ApiState) -> Router {
         .route("/", any(not_found))
         .method_not_allowed_fallback(method_not_allowed)
         .fallback(not_found)
+        .route_layer(middleware::from_fn(count_request))
         .with_state(state)
+}
+
+/// Counts every answer of a matched route by its template; unmatched paths reach no route and
+/// count nothing, so no label ever carries a request value.
+async fn count_request(req: Request, next: Next) -> Response {
+    let template = req.extensions().get::<MatchedPath>().map(|m| {
+        let path = m.as_str();
+        if path.starts_with(MOUNT) {
+            path.to_owned()
+        } else {
+            format!("{MOUNT}{}", path.trim_end_matches('/'))
+        }
+    });
+    let response = next.run(req).await;
+    if let Some(endpoint) = template {
+        metrics::counter!("netray_api_requests_total", "endpoint" => endpoint).increment(1);
+    }
+    response
 }
 
 async fn not_found() -> Response {

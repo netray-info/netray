@@ -178,7 +178,7 @@ fn one_address_makes_consistency_checks_not_applicable() {
 #[tokio::test]
 async fn module_declares_all_23_ids_and_wants_facts() {
     let cfg: ModuleConfig = toml::from_str("[limits]\nmax_ports = 3").unwrap();
-    let module = TlsModule::new(cfg).await.expect("module builds");
+    let module = TlsModule::new(cfg, None).await.expect("module builds");
     let ids: Vec<String> = module.checks().iter().map(|i| i.to_string()).collect();
     let want: Vec<String> = IDS.iter().map(|n| format!("tls.{n}")).collect();
     assert_eq!(ids, want);

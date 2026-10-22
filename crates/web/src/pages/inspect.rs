@@ -717,6 +717,62 @@ pub fn inspect_router(deps: InspectDeps) -> Router {
         ))
 }
 
+/// The inspector of `tool` as its own host serves it (`dns.`, `tls.`, `http.`, `ip.`; spec
+/// v2-cutover requirement 2): `GET /` renders the page of `/inspect/{tool}`, so a V1 query string
+/// (`?q=`, `?h=`, `?url=`, `?ip=`) prefills it and a V1 share key `?r=` is ignored (V2 share links
+/// name `/inspect/{tool}?r=` on the apex); `POST /inspect/{tool}/run` streams the job;
+/// `/static/*` serves the assets the page loads. Every other path is the 404 page. On `ip.`, the
+/// command-line answers of `/` come from `netray_web::api::ip_host`, mounted ahead of this router.
+pub fn inspect_host_router(tool: Tool, deps: InspectDeps) -> Router {
+    Router::new()
+        .route(
+            "/",
+            get(move |state: State<InspectDeps>, req: Request| async move {
+                render(state, tool, without_share_key(req)).await
+            }),
+        )
+        .route(
+            "/inspect/{tool}/run",
+            post(
+                move |state: State<InspectDeps>,
+                      name: Result<Path<String>, PathRejection>,
+                      req: Request| async move {
+                    match &name {
+                        Ok(Path(n)) if Tool::parse(n) == Some(tool) => run(state, name, req).await,
+                        _ => not_found().await,
+                    }
+                },
+            ),
+        )
+        .route("/static/{*path}", get(super::assets::serve))
+        .fallback(not_found)
+        .with_state(deps)
+        .layer(axum::middleware::map_response(
+            |response: Response| async move { secure(response) },
+        ))
+}
+
+/// `req` with every `r` parameter removed from its query.
+fn without_share_key(mut req: Request) -> Request {
+    let uri = req.uri();
+    let Some(query) = uri.query() else {
+        return req;
+    };
+    let kept: Vec<&str> = query
+        .split('&')
+        .filter(|pair| pair.split('=').next() != Some("r"))
+        .collect();
+    let path_and_query = if kept.is_empty() {
+        uri.path().to_string()
+    } else {
+        format!("{}?{}", uri.path(), kept.join("&"))
+    };
+    if let Ok(new) = path_and_query.parse() {
+        *req.uri_mut() = new;
+    }
+    req
+}
+
 /// What a share key opens.
 enum Shared {
     Found { input: String, html: String },
@@ -725,13 +781,17 @@ enum Shared {
 }
 
 async fn show(
-    State(deps): State<InspectDeps>,
+    state: State<InspectDeps>,
     tool: Result<Path<String>, PathRejection>,
     req: Request,
 ) -> Response {
     let Some(tool) = tool.ok().and_then(|Path(name)| Tool::parse(&name)) else {
         return not_found().await;
     };
+    render(state, tool, req).await
+}
+
+async fn render(State(deps): State<InspectDeps>, tool: Tool, req: Request) -> Response {
     let mut query = Query::<HashMap<String, String>>::try_from_uri(req.uri())
         .map(|Query(q)| q)
         .unwrap_or_default();

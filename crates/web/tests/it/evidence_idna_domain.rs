@@ -18,7 +18,6 @@ async fn c14_a_full_width_digit_address_answers_404() {
     store.migrate().await.unwrap();
     let app = evidence_router(EvidenceDeps {
         history: Arc::new(store),
-        v1: None,
     });
     // U+FF11 four times, dots ASCII, UTF-8 percent-encoded.
     let uri = "/%EF%BC%91.%EF%BC%91.%EF%BC%91.%EF%BC%91/dns";

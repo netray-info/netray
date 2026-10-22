@@ -9,7 +9,7 @@ use netray_engine::{Domain, Facts, Module, RunContext, RunOptions, SectionOutcom
 
 async fn run(domain: &str, selectors: Option<Vec<String>>) -> SectionOutcome {
     let cfg: ModuleConfig = toml::from_str("[dkim]\nmax_user_selectors = 5").unwrap();
-    let module = EmailModule::new(cfg).await.expect("module builds");
+    let module = EmailModule::new(cfg, None).await.expect("module builds");
     let ctx = RunContext {
         deadline: Instant::now() + Duration::from_secs(5),
         domain: Domain::new(domain),

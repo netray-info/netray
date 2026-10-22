@@ -12,6 +12,7 @@ use mhost::resources::rdata::{
     CAA, CertUsage, DigestType, DnssecAlgorithm, Matching, SSHFP, SVCB, Selector, TLSA,
 };
 use mhost::resources::{RData, Record};
+use netray_common::enrichment::EnrichmentClient;
 use netray_common::rate_limit::{KeyedLimiter, check_keyed_cost};
 use netray_engine::{
     BoxFuture, Domain, EvidencePath, Facts, FactsProvider, Module, ResolveError, RunContext,
@@ -119,10 +120,14 @@ pub struct DnsModule {
     query_semaphore: Arc<Semaphore>,
     /// `None` for an instance admitted by its caller ([`DnsModule::admitted_by_caller`]).
     per_target: Option<KeyedLimiter<String>>,
+    enrichment: Option<Arc<EnrichmentClient>>,
 }
 
 impl DnsModule {
-    pub async fn new(mut config: ModuleConfig) -> Result<Self, ConfigError> {
+    pub async fn new(
+        mut config: ModuleConfig,
+        enrichment: Option<Arc<EnrichmentClient>>,
+    ) -> Result<Self, ConfigError> {
         let servers = std::mem::take(&mut config.servers);
         let config = config.into_config()?;
         let per_target = RateLimiter::keyed(
@@ -139,6 +144,7 @@ impl DnsModule {
             per_target: Some(per_target),
             servers,
             config,
+            enrichment,
         })
     }
 
@@ -149,6 +155,11 @@ impl DnsModule {
     pub fn admitted_by_caller(mut self) -> Self {
         self.per_target = None;
         self
+    }
+
+    /// Whether the registry handed this module an enrichment client.
+    pub fn has_enrichment(&self) -> bool {
+        self.enrichment.is_some()
     }
 
     /// The DNS jobs over this module's configuration, circuit breakers and query semaphore, with
@@ -178,7 +189,7 @@ impl DnsModule {
         let servers = effective_server_specs(parsed, &self.config);
         let cost = NonZeroU32::new(cost).expect("non-zero cost");
         for key in target_keys_from_servers(&servers) {
-            check_keyed_cost(per_target, &key, cost, "per_target", "prism").map_err(|r| {
+            check_keyed_cost(per_target, &key, cost, "per_target", "netray_dns").map_err(|r| {
                 ApiError::RateLimited {
                     retry_after_secs: r.retry_after_secs,
                     scope: r.scope,
@@ -204,7 +215,7 @@ impl DnsModule {
             breaker_keys,
             circuit_breakers: self.circuit_breakers.clone(),
             query_semaphore: self.query_semaphore.clone(),
-            ip_enrichment: None,
+            ip_enrichment: self.enrichment.clone(),
         };
         let (tx, mut rx) = mpsc::channel::<CheckEvent>(32);
         let collect = async move {

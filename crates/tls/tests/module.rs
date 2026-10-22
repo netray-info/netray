@@ -174,7 +174,7 @@ fn module_config_refuses_unknown_key_and_allow_blocked_targets() {
 #[tokio::test]
 async fn tls_module_declares_tls_checks() {
     let cfg: ModuleConfig = toml::from_str("[limits]\nmax_ports = 3").unwrap();
-    let module = TlsModule::new(cfg).await.expect("module builds");
+    let module = TlsModule::new(cfg, None).await.expect("module builds");
     assert_eq!(module.protocol(), Protocol::Tls);
     assert!(!module.checks().is_empty());
     for id in module.checks() {

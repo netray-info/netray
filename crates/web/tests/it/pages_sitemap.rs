@@ -121,7 +121,7 @@ async fn robots_answers_the_content_of_site_robots_txt() {
     assert!(ct.starts_with("text/plain"), "content-type {ct}");
     let want = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../site/robots.txt"
+        "/tests/fixtures/v1-site/robots.txt"
     ))
     .unwrap();
     assert_eq!(body(res).await, want);

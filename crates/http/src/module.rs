@@ -176,17 +176,25 @@ pub struct HttpModule {
 }
 
 impl HttpModule {
-    pub fn new(config: ModuleConfig) -> Result<Self, Infallible> {
+    pub fn new(
+        config: ModuleConfig,
+        enrichment: Option<Arc<EnrichmentClient>>,
+    ) -> Result<Self, Infallible> {
         let per_target = RateLimiter::keyed(
             Quota::per_minute(config.limits.per_target_per_minute)
                 .allow_burst(config.limits.per_target_burst),
         );
         Ok(Self {
             per_target,
-            enrichment: crate::state::enrichment_client(&config.enrichment),
+            enrichment,
             inspect: config.inspect,
             outbound: Outbound::system(),
         })
+    }
+
+    /// Whether the registry handed this module an enrichment client.
+    pub fn has_enrichment(&self) -> bool {
+        self.enrichment.is_some()
     }
 
     async fn measure(&self, ctx: &RunContext, facts: &Facts) -> Result<InspectResponse, AppError> {
@@ -199,7 +207,7 @@ impl HttpModule {
             &hostname,
             NonZeroU32::MIN,
             "per_target",
-            "spectra",
+            "netray_http",
         )
         .map_err(|r| AppError::RateLimited {
             retry_after_secs: r.retry_after_secs,

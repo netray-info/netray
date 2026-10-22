@@ -7,7 +7,6 @@ use governor::Quota;
 use governor::RateLimiter;
 use netray_common::rate_limit::{KeyedLimiter, check_keyed_cost};
 
-use crate::config::LimitsConfig;
 use crate::error::AppError;
 
 /// Per-IP and per-target quotas, per minute with a burst.
@@ -37,22 +36,6 @@ pub struct RateLimitState {
 }
 
 impl RateLimitState {
-    pub fn new(config: &LimitsConfig) -> Self {
-        Self::scoped(
-            &Quotas {
-                per_ip_per_minute: config.per_ip_per_minute,
-                per_ip_burst: config.per_ip_burst,
-                per_target_per_minute: config.per_target_per_minute,
-                per_target_burst: config.per_target_burst,
-            },
-            Scopes {
-                metrics_prefix: "spectra",
-                per_ip: "per_ip",
-                per_target: "per_target",
-            },
-        )
-    }
-
     /// Build the limiters from validated, non-zero quotas.
     pub fn scoped(quotas: &Quotas, scopes: Scopes) -> Self {
         let per_ip = RateLimiter::keyed(
@@ -127,26 +110,32 @@ impl RateLimitState {
 mod tests {
     use super::*;
 
-    fn test_config() -> LimitsConfig {
-        LimitsConfig {
-            per_ip_per_minute: 10,
-            per_ip_burst: 5,
-            per_target_per_minute: 30,
-            per_target_burst: 10,
-            max_concurrent_connections: 256,
-        }
+    fn test_state() -> RateLimitState {
+        RateLimitState::scoped(
+            &Quotas {
+                per_ip_per_minute: 10,
+                per_ip_burst: 5,
+                per_target_per_minute: 30,
+                per_target_burst: 10,
+            },
+            Scopes {
+                metrics_prefix: "spectra",
+                per_ip: "per_ip",
+                per_target: "per_target",
+            },
+        )
     }
 
     #[test]
     fn allows_request_within_budget() {
-        let state = RateLimitState::new(&test_config());
+        let state = test_state();
         let ip: IpAddr = "198.51.100.1".parse().unwrap();
         assert!(state.check(ip, "example.com").is_ok());
     }
 
     #[test]
     fn rejects_when_per_ip_exhausted() {
-        let state = RateLimitState::new(&test_config());
+        let state = test_state();
         let ip: IpAddr = "198.51.100.1".parse().unwrap();
         for _ in 0..5 {
             assert!(state.check(ip, "example.com").is_ok());
@@ -156,7 +145,7 @@ mod tests {
 
     #[test]
     fn per_target_exhausted_blocks_different_ip() {
-        let state = RateLimitState::new(&test_config()); // per_target_burst = 10
+        let state = test_state(); // per_target_burst = 10
         // Use 10 different source IPs (each within their own per-IP budget) to exhaust
         // the per-target burst for a single hostname.
         for i in 0u8..10 {
@@ -170,7 +159,7 @@ mod tests {
 
     #[test]
     fn different_ips_independent() {
-        let state = RateLimitState::new(&test_config());
+        let state = test_state();
         let ip1: IpAddr = "198.51.100.1".parse().unwrap();
         let ip2: IpAddr = "198.51.100.2".parse().unwrap();
         for _ in 0..5 {

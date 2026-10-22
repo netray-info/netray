@@ -1,23 +1,18 @@
 // V2 Phase 5, requirements 27, 28, 31 (C5 crate half, C12, C14): the TLS inspection type called
-// directly with a stub backend and no axum type, and tlsight's POST /api/inspect unchanged over
-// the same stub. Needs `required-features = ["testing"]` on this test target.
+// directly with a stub backend and no axum type. Needs `required-features = ["testing"]` on this test target.
 
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
 
-use axum::body::Body;
-use axum::extract::ConnectInfo;
-use axum::http::{Request, StatusCode};
+use axum::http::StatusCode;
 use http_body_util::BodyExt;
 use netray_engine::SectionOutcome;
 use netray_model::evidence::Block;
-use netray_tls::config::Config;
-use netray_tls::routes::api_router;
 use netray_tls::security::RateLimitState;
+use netray_tls::security::rate_limit::{Quotas, Scopes};
 use netray_tls::testing::{StubTlsBackend, golden_module, stub_config, stub_state};
 use netray_tls::{TlsInspectRequest, TlsRefusal, translate};
 use serde_json::Value;
-use tower::ServiceExt;
 
 const GOLDEN: &str = include_str!("../../../tests/fixtures/contracts/tlsight-inspect.json");
 
@@ -25,9 +20,21 @@ fn caller() -> IpAddr {
     IpAddr::V4(Ipv4Addr::new(198, 51, 100, 1))
 }
 
+/// tlsight's old default quotas: 30 per minute with a burst of 10 per IP, 60 and 20 per target.
 fn limits() -> RateLimitState {
-    let config: Config = stub_config();
-    RateLimitState::new(&config.limits)
+    RateLimitState::scoped(
+        &Quotas {
+            per_ip_per_minute: 30,
+            per_ip_burst: 10,
+            per_target_per_minute: 60,
+            per_target_burst: 20,
+        },
+        Scopes {
+            metrics_prefix: "tlsight",
+            per_ip: "per_ip",
+            per_target: "per_target",
+        },
+    )
 }
 
 fn req(host: &str, port: u16) -> TlsInspectRequest {
@@ -137,70 +144,6 @@ async fn private_literal_and_private_resolution_are_blocked() {
 }
 
 // ---------------------------------------------------------------------------
-// C12: tlsight's POST /api/inspect is unchanged
-// ---------------------------------------------------------------------------
-
-fn post(body: &str) -> Request<Body> {
-    Request::builder()
-        .method("POST")
-        .uri("/api/inspect")
-        .header("content-type", "application/json")
-        .extension(ConnectInfo::<SocketAddr>(SocketAddr::new(caller(), 12345)))
-        .body(Body::from(body.to_owned()))
-        .unwrap()
-}
-
-fn router(stub: Arc<StubTlsBackend>) -> axum::Router {
-    api_router(stub_state(stub)).layer(axum::middleware::from_fn(
-        netray_common::middleware::request_id,
-    ))
-}
-
-async fn answer(router: axum::Router, body: &str) -> (StatusCode, axum::http::HeaderMap, Value) {
-    let resp = router.oneshot(post(body)).await.unwrap();
-    let status = resp.status();
-    let headers = resp.headers().clone();
-    let bytes = resp.into_body().collect().await.unwrap().to_bytes();
-    (status, headers, serde_json::from_slice(&bytes).unwrap())
-}
-
-#[tokio::test]
-async fn tlsight_post_answers_what_the_inspector_answers() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
-    let stub = Arc::new(StubTlsBackend::new());
-    let (status, headers, mut body) =
-        answer(router(stub.clone()), r#"{"hostname":"example.com"}"#).await;
-    assert_eq!(status, StatusCode::OK);
-    assert!(headers.contains_key("x-cert-expiry"));
-
-    let direct = stub_state(stub)
-        .inspector()
-        .inspect(&req("example.com", 443), caller(), &limits(), "rid".into())
-        .await
-        .unwrap();
-    let mut direct = serde_json::to_value(&direct).unwrap();
-    for v in [&mut body, &mut direct] {
-        let o = v.as_object_mut().unwrap();
-        o.remove("request_id");
-        o.remove("duration_ms");
-    }
-    assert_eq!(body, direct);
-}
-
-#[tokio::test]
-async fn tlsight_post_refusals_keep_their_codes() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
-    let stub = Arc::new(StubTlsBackend::new());
-    let (status, _, body) = answer(router(stub.clone()), r#"{"hostname":"localhost"}"#).await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert_eq!(body["error"]["code"], "INVALID_HOSTNAME");
-
-    let (status, _, body) = answer(router(stub), r#"{"hostname":"10.0.0.1"}"#).await;
-    assert_eq!(status, StatusCode::FORBIDDEN);
-    assert_eq!(body["error"]["code"], "BLOCKED_TARGET");
-}
-
-// ---------------------------------------------------------------------------
 // v2-input-edges Phase 2 (req. 8; C3, C11, C12, C13): a cost above the per-IP burst is an
 // input error, never a rate limit
 // ---------------------------------------------------------------------------
@@ -209,7 +152,6 @@ mod cost_limit {
     use super::*;
     use axum::response::IntoResponse;
     use netray_tls::error::AppError;
-    use netray_tls::security::rate_limit::{Quotas, Scopes};
 
     fn limiter(per_ip_burst: u32, per_target_burst: u32) -> RateLimitState {
         RateLimitState::scoped(

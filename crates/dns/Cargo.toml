@@ -9,12 +9,10 @@ description = "Web-based DNS debugging service powered by mhost"
 netray-model = { workspace = true }
 netray-engine = { workspace = true }
 mhost = { workspace = true, features = ["dot", "doh"] }
-netray-common = { workspace = true, features = ["schema", "middleware", "telemetry", "otel", "cors", "server", "prometheus", "spa", "enrichment-cache", "backend", "fetch"] }
+netray-common = { workspace = true, features = ["schema", "middleware", "enrichment", "fetch"] }
 
 # Web framework
 axum = { workspace = true, features = ["json"] }
-tower = { workspace = true, features = ["limit"] }
-tower-http = { workspace = true, features = ["cors", "compression-gzip", "set-header", "trace", "limit"] }
 governor = { workspace = true }
 
 # Async runtime
@@ -45,24 +43,15 @@ tracing = { workspace = true }
 
 # Metrics
 metrics = { workspace = true }
-metrics-exporter-prometheus = { workspace = true }
-
-# Embedded frontend
-rust-embed = { workspace = true }
-mime_guess = { workspace = true }
 
 # Result caching
 moka = { workspace = true, features = ["future"] }
-
-# Hot config reload
-arc-swap = { workspace = true }
-
 
 # Request IDs
 uuid = { workspace = true, features = ["v4", "v7"] }
 
 # OpenAPI
-utoipa = { workspace = true, features = ["axum_extras"] }
+utoipa = { workspace = true }
 
 [features]
 testing = []
@@ -93,18 +82,13 @@ path = "tests/unmeasured_inputs.rs"
 required-features = ["testing"]
 
 [[test]]
-name = "jobs_prism"
-path = "tests/jobs_prism.rs"
-required-features = ["testing"]
-
-[[test]]
 name = "jobs"
 path = "tests/jobs.rs"
 required-features = ["testing"]
 
 [dev-dependencies]
+metrics-exporter-prometheus = { workspace = true }
 toml = { workspace = true }
-tower = { workspace = true, features = ["util"] }
 http-body-util = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true, features = ["rustls"] }

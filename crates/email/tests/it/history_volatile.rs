@@ -12,7 +12,7 @@ use netray_model::{CheckId, Grade, Status};
 
 async fn paths() -> Vec<&'static str> {
     let cfg: ModuleConfig = toml::from_str("[dkim]\nmax_user_selectors = 3").unwrap();
-    let module = EmailModule::new(cfg).await.expect("module builds");
+    let module = EmailModule::new(cfg, None).await.expect("module builds");
     module.volatile().iter().map(|p| p.0).collect()
 }
 

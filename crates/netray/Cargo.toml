@@ -3,26 +3,39 @@ name = "netray"
 version.workspace = true
 edition.workspace = true
 license = "MIT"
-description = "The netray.info suite as one binary: six services and the static site"
+description = "netray.info as one binary: `netray serve`, every host in one process"
 
 [dependencies]
-netray-common = { workspace = true, features = ["server"] }
+netray-common = { workspace = true, features = ["server", "telemetry", "otel"] }
 netray-engine = { workspace = true }
 netray-model = { workspace = true }
 netray-web = { workspace = true }
+netray-store = { workspace = true }
 
 netray-email = { workspace = true }
 netray-ip = { workspace = true }
-lens = { path = "../lens" }
 netray-dns = { workspace = true }
 netray-http = { workspace = true }
 netray-tls = { workspace = true }
 
 axum = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "fs", "signal"] }
-mime_guess = { workspace = true }
-percent-encoding = { workspace = true }
 anyhow = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+toml = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = "0.3"
 clap = { version = "4", features = ["derive"] }
+
+[dev-dependencies]
+netray-ip = { path = "../ip", features = ["testing"] }
+netray-tls = { workspace = true, features = ["testing"] }
+netray-http = { workspace = true, features = ["testing"] }
+netray-email = { workspace = true, features = ["testing"] }
+netray-dns = { workspace = true, features = ["testing"] }
+metrics = { workspace = true }
+metrics-util = { version = "0.20", default-features = false, features = ["debugging"] }
+serde_json = { workspace = true }
+tempfile = "3"
+tower = { workspace = true, features = ["util"] }
+tokio = { workspace = true, features = ["test-util"] }

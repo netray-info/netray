@@ -197,10 +197,7 @@ async fn live_list_and_stored_view_render_the_same_rows() {
             )
             .with_history(Some(store.clone())),
         );
-        let stored_app = evidence_router(EvidenceDeps {
-            history: store,
-            v1: None,
-        });
+        let stored_app = evidence_router(EvidenceDeps { history: store });
 
         let live = articles(&live_html(&live_app, row.tool, row.form).await);
         let (status, page) = body(

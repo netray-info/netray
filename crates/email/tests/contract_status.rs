@@ -22,7 +22,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use netray_email::checks::run_all_checks;
-use netray_email::config::Config;
 use netray_email::dns::test_support::TestDnsResolver;
 use netray_email::dns::{FetchResolver, TlsaRecord};
 use netray_email::quality::types::SseEvent;
@@ -237,11 +236,11 @@ fn expected(id: &str, kind: Kind) -> Status {
     }
 }
 
-fn config() -> Arc<Config> {
+fn config() -> Arc<ModuleConfig> {
     let zones = ZONES.map(|z| format!("\"{z}\"")).join(", ");
     let module: ModuleConfig =
         toml::from_str(&format!("[dnsbl]\nzones = [{zones}]\ntimeout_ms = 1000\n")).unwrap();
-    Arc::new(Config::from_module(module))
+    Arc::new(module)
 }
 
 async fn run_row(row: &Row) -> SectionOutcome {

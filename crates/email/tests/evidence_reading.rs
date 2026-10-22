@@ -13,7 +13,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use netray_email::checks::run_all_checks;
-use netray_email::config::Config;
 use netray_email::dns::test_support::TestDnsResolver;
 use netray_email::dns::{FetchResolver, TlsaRecord};
 use netray_email::module::REGISTER;
@@ -54,7 +53,7 @@ fn mail_domain(spf: &str, dmarc: &str) -> TestDnsResolver {
         .with_txt("_dmarc.example.com", vec![dmarc])
 }
 
-fn config(zones: &[&str]) -> Arc<Config> {
+fn config(zones: &[&str]) -> Arc<ModuleConfig> {
     let zones = zones
         .iter()
         .map(|z| format!("\"{z}\""))
@@ -62,7 +61,7 @@ fn config(zones: &[&str]) -> Arc<Config> {
         .join(", ");
     let module: ModuleConfig =
         toml::from_str(&format!("[dnsbl]\nzones = [{zones}]\ntimeout_ms = 1000\n")).unwrap();
-    Arc::new(Config::from_module(module))
+    Arc::new(module)
 }
 
 /// The checks and blocks of a run over `dns`.

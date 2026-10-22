@@ -13,7 +13,7 @@
 //! four redirects, every resolved address and IP literal checked by
 //! [`OutboundFetch::allow`] before a connection is made. Failures are
 //! classified as `timeout`/`tls`/`blocked`/`other` for the
-//! `beacon_upstream_errors_total` metric. BIMI is advisory in the suite: most verdicts degrade to `Info`/`Warn`
+//! `netray_email_upstream_errors_total` metric. BIMI is advisory in the suite: most verdicts degrade to `Info`/`Warn`
 //! rather than `Fail`, since DMARC enforcement (policy `quarantine` or
 //! `reject`) is a prerequisite that the cross-validation step reports on
 //! separately.
@@ -27,7 +27,7 @@ use crate::quality::{BimiMeasured, Category, CheckResult, SubCheck, Verdict};
 use crate::state::OutboundFetch;
 
 /// Map a [`FetchError`] to the coarse `kind` label for the
-/// `beacon_upstream_errors_total` counter.
+/// `netray_email_upstream_errors_total` counter.
 fn classify_fetch_error(e: &FetchError) -> &'static str {
     match e {
         FetchError::Timeout => "timeout",
@@ -114,7 +114,7 @@ fn fetch_error_sub_check(e: &FetchError, initial_is_name: bool) -> SubCheck {
 
 fn record_upstream_error(kind: &'static str) {
     metrics::counter!(
-        "beacon_upstream_errors_total",
+        "netray_email_upstream_errors_total",
         "backend" => "bimi_logo",
         "kind" => kind,
     )
@@ -237,7 +237,7 @@ pub async fn check_bimi_measured(
                     sub_checks.push(fetch_error_sub_check(&e, initial_is_name));
                 }
             }
-            metrics::histogram!("beacon_https_fetch_duration_seconds", "target" => "bimi_logo")
+            metrics::histogram!("netray_email_https_fetch_duration_seconds", "fetch" => "bimi_logo")
                 .record(fetch_start.elapsed().as_secs_f64());
         }
         _ => {

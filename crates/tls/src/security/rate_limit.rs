@@ -18,7 +18,6 @@ use governor::Quota;
 use governor::RateLimiter;
 use netray_common::rate_limit::{KeyedLimiter, check_keyed_cost};
 
-use crate::config::LimitsConfig;
 use crate::error::AppError;
 
 /// Per-IP and per-target quotas, per minute with a burst.
@@ -51,27 +50,6 @@ pub struct RateLimitState {
 }
 
 impl RateLimitState {
-    /// Build rate limiters from configuration values.
-    ///
-    /// Note: Governor's `DefaultKeyedStateStore` (DashMap) never evicts entries.
-    /// Memory grows ~50 bytes per unique IP/target key. This is acceptable for
-    /// production workloads — a server restart clears all state.
-    pub fn new(config: &LimitsConfig) -> Self {
-        Self::scoped(
-            &Quotas {
-                per_ip_per_minute: config.per_ip_per_minute,
-                per_ip_burst: config.per_ip_burst,
-                per_target_per_minute: config.per_target_per_minute,
-                per_target_burst: config.per_target_burst,
-            },
-            Scopes {
-                metrics_prefix: "tlsight",
-                per_ip: "per_ip",
-                per_target: "per_target",
-            },
-        )
-    }
-
     /// Build the limiters from validated, non-zero quotas.
     pub fn scoped(quotas: &Quotas, scopes: Scopes) -> Self {
         let per_ip = RateLimiter::keyed(
@@ -219,26 +197,25 @@ pub fn select_representative_ips(ips: &[IpAddr], budget: usize) -> (Vec<IpAddr>,
 mod tests {
     use super::*;
 
-    fn test_config() -> LimitsConfig {
-        LimitsConfig {
-            per_ip_per_minute: 30,
-            per_ip_burst: 10,
-            per_target_per_minute: 60,
-            per_target_burst: 20,
-            max_concurrent_connections: 256,
-            max_concurrent_handshakes: 10,
-            handshake_timeout_secs: 5,
-            request_timeout_secs: 15,
-            max_ports: 7,
-            max_ips_per_hostname: 10,
-            max_domain_length: 253,
-            allow_blocked_targets: false,
-        }
+    fn test_state() -> RateLimitState {
+        RateLimitState::scoped(
+            &Quotas {
+                per_ip_per_minute: 30,
+                per_ip_burst: 10,
+                per_target_per_minute: 60,
+                per_target_burst: 20,
+            },
+            Scopes {
+                metrics_prefix: "tlsight",
+                per_ip: "per_ip",
+                per_target: "per_target",
+            },
+        )
     }
 
     #[test]
     fn allows_request_within_budget() {
-        let state = RateLimitState::new(&test_config());
+        let state = test_state();
         let ip: IpAddr = "198.51.100.1".parse().unwrap();
 
         // Cost 4 (e.g. 2 ports * 2 IPs) should succeed.
@@ -247,7 +224,7 @@ mod tests {
 
     #[test]
     fn rejects_when_per_ip_exhausted() {
-        let state = RateLimitState::new(&test_config());
+        let state = test_state();
         let ip: IpAddr = "198.51.100.1".parse().unwrap();
 
         // Burst is 10 — first call with cost 10 should succeed.
@@ -258,7 +235,7 @@ mod tests {
 
     #[test]
     fn different_ips_have_independent_budgets() {
-        let state = RateLimitState::new(&test_config());
+        let state = test_state();
         let ip1: IpAddr = "198.51.100.1".parse().unwrap();
         let ip2: IpAddr = "198.51.100.2".parse().unwrap();
 
@@ -270,7 +247,7 @@ mod tests {
 
     #[test]
     fn rejects_when_per_target_exhausted() {
-        let state = RateLimitState::new(&test_config());
+        let state = test_state();
         let ip1: IpAddr = "198.51.100.1".parse().unwrap();
         let ip2: IpAddr = "198.51.100.2".parse().unwrap();
 
@@ -284,7 +261,7 @@ mod tests {
 
     #[test]
     fn cost_exceeding_burst_is_rejected() {
-        let state = RateLimitState::new(&test_config());
+        let state = test_state();
         let ip: IpAddr = "198.51.100.1".parse().unwrap();
 
         // Per-IP burst is 10 — cost 11 exceeds it entirely (InsufficientCapacity).
@@ -293,7 +270,7 @@ mod tests {
 
     #[test]
     fn zero_cost_treated_as_one() {
-        let state = RateLimitState::new(&test_config());
+        let state = test_state();
         let ip: IpAddr = "198.51.100.1".parse().unwrap();
 
         // Cost 0 is clamped to 1.
@@ -302,7 +279,7 @@ mod tests {
 
     #[test]
     fn hostname_is_case_insensitive() {
-        let state = RateLimitState::new(&test_config());
+        let state = test_state();
         let ip: IpAddr = "198.51.100.1".parse().unwrap();
 
         // Both map to the same per-target key.
@@ -373,7 +350,7 @@ mod tests {
 
     #[test]
     fn rate_limited_error_has_scope() {
-        let state = RateLimitState::new(&test_config());
+        let state = test_state();
         let ip: IpAddr = "198.51.100.1".parse().unwrap();
 
         // Exhaust per-IP budget.

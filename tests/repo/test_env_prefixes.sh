@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Phase 1, requirement 3 (env prefix): each service reads NETRAY_<SVC>_ variables only.
-# The legacy prefix and legacy *_CONFIG variable fail fast and name the new prefix.
+# v2-cutover requirement 10: `netray serve` reads NETRAY_ variables; every legacy prefix (the
+# per-service NETRAY_<SVC>_ ones and the codenames') fails fast naming NETRAY_CONFIG.
 # C6: no file of the old crates/spectra, beacon or ifconfig-rs directory stays tracked.
 set -u
 source "$(dirname "$0")/lib/netray.sh"
@@ -11,15 +11,6 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 NETRAY=$(netray_bin) || exit 1
 TMP=$(mktemp -d)
 trap '_netray_cleanup; rm -rf "$TMP"' EXIT
-
-# sub | dev config | new prefix | legacy prefix | legacy config var | second bind key
-rows=(
-  "tls|crates/tls/tlsight.dev.toml|NETRAY_TLS_|TLSIGHT_|TLSIGHT_CONFIG|METRICS_BIND"
-  "http|crates/http/spectra.dev.toml|NETRAY_HTTP_|SPECTRA__|SPECTRA_CONFIG|METRICS_BIND"
-  "email|crates/email/beacon.dev.toml|NETRAY_EMAIL_|BEACON__|BEACON_CONFIG|METRICS_BIND"
-  "dns|crates/dns/prism.dev.toml|NETRAY_DNS_|PRISM_|PRISM_CONFIG|METRICS_BIND"
-  "ip|$REPO_ROOT/tests/repo/fixtures/ifconfig.smoke.toml|NETRAY_IP_|IFCONFIG_|IFCONFIG_CONFIG|ADMIN_BIND"
-)
 
 # run_expect_reject <log> <expected text> <env assignment> <netray args...>
 # returns 0 = rejected as expected, 1 = did not exit non-zero in time, 2 = output lacks text
@@ -41,30 +32,19 @@ run_expect_reject() {
     return 0
 }
 
-for row in "${rows[@]}"; do
-    IFS='|' read -r sub cfg new old oldcfg bind2 <<<"$row"
-    p=$(free_port); m=$(free_port); q=$(free_port)
+# (a) serve reads NETRAY_
+p=$(free_port); m=$(free_port)
+start_bg "$TMP/serve.log" env "NETRAY_SERVER__BIND=127.0.0.1:$p" "NETRAY_SERVER__METRICS_BIND=127.0.0.1:$m" \
+    "NETRAY_STORE__DB_PATH=$TMP/history.db" "$NETRAY" serve
+wait_http "http://127.0.0.1:$p/health" 30 || fail "netray serve ignores NETRAY_SERVER__BIND (no /health on $p)"
 
-    # (a) new prefix is read
-    start_bg "$TMP/$sub-new.log" \
-        env "${new}SERVER__BIND=127.0.0.1:$p" "${new}SERVER__${bind2}=127.0.0.1:$m" "$NETRAY" "$sub"
-    wait_http "http://127.0.0.1:$p/health" 30 \
-        || fail "netray $sub ignores ${new}SERVER__BIND (no /health on $p)"
-
-    # (b) legacy prefix is rejected, naming the new one
-    run_expect_reject "$TMP/$sub-old.log" "$new" "${old}SERVER__BIND=127.0.0.1:$q" "$sub" "$cfg"
+# (b) every legacy prefix is refused, naming NETRAY_CONFIG (requirement 10)
+for old in LENS_ NETRAY_DNS_ NETRAY_TLS_ NETRAY_HTTP_ NETRAY_EMAIL_ NETRAY_IP_ PRISM_ TLSIGHT_ SPECTRA_ BEACON_ IFCONFIG_; do
+    run_expect_reject "$TMP/$old.log" "NETRAY_CONFIG" "${old}SERVER__BIND=127.0.0.1:$(free_port)" serve
     case $? in
         0) ;;
-        2) fail "netray $sub: rejection of ${old} does not name ${new}" ;;
-        *) fail "netray $sub did not exit non-zero within 10 s with ${old}SERVER__BIND set" ;;
-    esac
-
-    # (c) legacy config variable is rejected, naming the new one
-    run_expect_reject "$TMP/$sub-oldcfg.log" "${new}CONFIG" "$oldcfg=$cfg" "$sub"
-    case $? in
-        0) ;;
-        2) fail "netray $sub: rejection of $oldcfg does not name ${new}CONFIG" ;;
-        *) fail "netray $sub did not exit non-zero within 10 s with $oldcfg set" ;;
+        2) fail "netray serve: refusal of ${old} does not name NETRAY_CONFIG" ;;
+        *) fail "netray serve did not exit non-zero within 10 s with ${old}SERVER__BIND set" ;;
     esac
 done
 

@@ -4,7 +4,7 @@ Canonical rules for logging, tracing, and telemetry configuration across all
 backend services. Apply these rules when creating or modifying telemetry setup
 in any tool, or when configuring production deployments.
 
-Services in scope: `ifconfig-rs`, `mhost-prism`, `tlsight`, `spectra`, `lens`, `beacon`.
+In scope: the one process `netray serve` (crates/netray) and the crates it composes. Since 0.30.0 there is no other service; "tool" below means that process.
 
 ---
 
@@ -60,7 +60,8 @@ this pattern:
 info,{crate}=debug,hyper=warn,h2=warn
 ```
 
-Where `{crate}` is the tool's own crate name (e.g. `lens`, `prism`, `tlsight`).
+Where `{crate}` is each crate of the process that logs: `netray serve` uses
+`info,netray=debug,netray_web=debug,netray_engine=debug,netray_store=debug,hyper=warn,h2=warn`.
 
 Rationale:
 - **`info` global base**: Ensures warnings and info from dependencies
@@ -118,7 +119,7 @@ filtered out in production.
 
 ### A5. Metrics port
 
-All tools MUST default to `127.0.0.1:9090` for the metrics/admin bind address.
+`[server] metrics_bind` MUST default to `127.0.0.1:9090`; it is the only metrics listener and carries no token.
 
 ### A6. Graceful shutdown
 
@@ -133,8 +134,7 @@ netray_common::telemetry::shutdown();
 ### A7. Service name
 
 All tools MUST set a non-empty default for `service_name` in their config
-defaults or example config. Use the canonical short name: `ifconfig`, `prism`,
-`tlsight`, `lens`.
+defaults or example config. The canonical name is `netray`.
 
 ---
 
@@ -163,15 +163,11 @@ in production to avoid excessive output.
 
 ### B3. Service name
 
-All services MUST set `service_name` in the production `[telemetry]` config:
+The production `[telemetry]` config MUST set `service_name`:
 
-| Service | `service_name` |
+| Process | `service_name` |
 |---------|---------------|
-| ifconfig-rs | `ifconfig` |
-| mhost-prism | `prism` |
-| tlsight | `tlsight` |
-| lens | `lens` |
-| beacon | `beacon` |
+| `netray serve` | `netray` |
 
 ### B4. Docker log rotation
 
@@ -212,8 +208,8 @@ abuse is occurring -- without reading source code.
   "why was this client blocked?") AND a metric (alert on spike).
 - Every rejected request must leave a trace. If the service returns 4xx/5xx,
   a log line must exist that an operator can find.
-- Inter-service calls are the #1 debugging blind spot. When lens calls prism
-  and gets nothing back, the operator needs to know: which backend, what URL,
+- Outbound calls are the #1 debugging blind spot. When a module's lookup or
+  fetch gets nothing back, the operator needs to know: which target, what URL,
   how long, what failed.
 - DEBUG is free in production (because `RUST_LOG=info` filters it out).
   Instrument liberally at DEBUG; be selective at INFO/WARN.
@@ -250,32 +246,14 @@ potential abuse and are low-volume enough to log. Validation errors at DEBUG
 because they are high-volume and usually benign user typos. 404s excluded
 because bots generate millions.
 
-### C3. Inter-service call instrumentation
+### C3. Outbound call instrumentation
 
-Every outbound HTTP call to another netray service MUST be wrapped in a
-tracing span that captures:
-
-- `service`: target service name (`ifconfig`, `prism`, `tlsight`)
-- `url`: request URL
-- Duration (automatic via span lifetime)
-- Outcome: success status, timeout, HTTP error, network error
-
-Failures MUST be logged at WARN. Successes SHOULD be logged at DEBUG.
-
-```rust
-// Success
-tracing::debug!(service = "ifconfig", url = %url, status = %status, "enrichment call");
-
-// Failure
-tracing::warn!(service = "ifconfig", url = %url, error = %e, "enrichment call failed");
-```
-
-**Ownership:**
-
-- `netray_common::enrichment::EnrichmentClient` instruments its own calls.
-  This covers prism and tlsight automatically.
-- lens instruments its own backend calls in `backends/` using the same field
-  conventions. Lens knows the service names; a generic library does not.
+The module crates call no other netray service since 0.30.0: IP enrichment calls
+the IP module in-process (`netray_common::enrichment::EnrichmentClient`), so there
+is no inter-service HTTP call to instrument. Every outbound fetch of a user- or
+domain-controlled URL goes through `netray_common::fetch`; its caller MUST log a
+refused or failed fetch at WARN with the target and the reason, and SHOULD log a
+success at DEBUG.
 
 ### C4. Startup inventory
 
@@ -284,7 +262,6 @@ configuration. An operator reading the first few log lines should know:
 
 - Bind addresses (server + metrics/admin)
 - Which optional features are enabled/disabled
-- Backend URLs (for tools that call other services)
 - Rate limit parameters (per-IP rate, burst)
 - Trusted proxy count (not the CIDRs themselves)
 

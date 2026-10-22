@@ -125,7 +125,7 @@ async fn policy_refusals_answer_400_invalid_input() {
 /// C6: with arbitrary servers allowed, a private server address is 403.
 #[tokio::test]
 async fn a_blocked_server_address_answers_403_target_blocked() {
-    let mut config = Config::load(None).expect("default config loads");
+    let mut config = Config::default();
     config.dns.allow_arbitrary_servers = true;
     let (app, _) = setup_with(ApiConfig::default(), stub_jobs_with(config));
     let r = post(

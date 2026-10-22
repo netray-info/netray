@@ -15,17 +15,17 @@ use tracing::Instrument;
 use utoipa::ToSchema;
 
 use crate::checks::run_all_checks;
-use crate::config::Config;
+use crate::config::ModuleConfig;
 use crate::dns::{DnsLookup, DnsResolver};
 use crate::error::MailError;
 use crate::input;
 use crate::quality::types::{CheckResult, Grade, SseEvent, Verdict};
 use crate::security::RateLimitState;
-use crate::state::{AppState, OutboundFetch};
+use crate::state::OutboundFetch;
 
 /// Everything `run_all_checks` needs except the domain, the selectors and the channel.
 pub struct EmailInspector<R: DnsLookup + 'static = DnsResolver> {
-    config: Arc<Config>,
+    config: Arc<ModuleConfig>,
     dns: Arc<R>,
     dnsbl: Arc<R>,
     fetch: OutboundFetch,
@@ -46,7 +46,7 @@ impl<R: DnsLookup + 'static> Clone for EmailInspector<R> {
 
 impl<R: DnsLookup + 'static> EmailInspector<R> {
     pub fn new(
-        config: Arc<Config>,
+        config: Arc<ModuleConfig>,
         dns: Arc<R>,
         dnsbl: Arc<R>,
         fetch: OutboundFetch,
@@ -101,19 +101,6 @@ impl<R: DnsLookup + 'static> EmailInspector<R> {
             handle,
             _permit: permit,
         })
-    }
-}
-
-impl AppState {
-    /// The inspector over beacon's own config, resolvers, fetch and enrichment.
-    pub fn inspector(&self) -> EmailInspector {
-        EmailInspector::new(
-            self.config.clone(),
-            self.dns_resolver.clone(),
-            self.dnsbl_resolver.clone(),
-            self.fetch.clone(),
-            self.enrichment_client.clone(),
-        )
     }
 }
 

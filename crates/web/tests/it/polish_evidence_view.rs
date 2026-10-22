@@ -108,7 +108,6 @@ async fn stored_email_view() -> String {
         .unwrap();
     let app = evidence_router(EvidenceDeps {
         history: Arc::new(store),
-        v1: None,
     });
     let resp = app
         .oneshot(

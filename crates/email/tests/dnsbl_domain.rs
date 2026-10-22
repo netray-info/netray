@@ -13,7 +13,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use netray_email::checks::run_all_checks;
-use netray_email::config::Config;
 use netray_email::dns::FetchResolver;
 use netray_email::dns::test_support::TestDnsResolver;
 use netray_email::module::REGISTER;
@@ -56,7 +55,7 @@ fn mail_domain(spf: &str, dmarc: &str) -> TestDnsResolver {
         .with_txt("_dmarc.example.com", vec![dmarc])
 }
 
-fn config(zones: &[&str]) -> Arc<Config> {
+fn config(zones: &[&str]) -> Arc<ModuleConfig> {
     let zones = zones
         .iter()
         .map(|z| format!("\"{z}\""))
@@ -64,7 +63,7 @@ fn config(zones: &[&str]) -> Arc<Config> {
         .join(", ");
     let module: ModuleConfig =
         toml::from_str(&format!("[dnsbl]\nzones = [{zones}]\ntimeout_ms = 1000\n")).unwrap();
-    Arc::new(Config::from_module(module))
+    Arc::new(module)
 }
 
 /// The checks and blocks of a run over `dns`.
@@ -264,7 +263,7 @@ fn run_of(checks: &[CheckResult], blocks: Vec<Block>) -> Run {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_new_domain_listing_changes_fingerprint_and_diff() {
     let cfg: ModuleConfig = toml::from_str("[dkim]\nmax_user_selectors = 3").unwrap();
-    let module = EmailModule::new(cfg).await.expect("module builds");
+    let module = EmailModule::new(cfg, None).await.expect("module builds");
     let volatile: Vec<&'static str> = module.volatile().iter().map(|p| p.0).collect();
 
     let (c1, b1) = run(dnsbl_dns(false), &ZONES, &[]).await;
@@ -290,7 +289,7 @@ async fn a_new_domain_listing_changes_fingerprint_and_diff() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_policy_answer_from_the_domain_zone_keeps_its_code_and_is_recorded() {
     let cfg: ModuleConfig = toml::from_str("[dkim]\nmax_user_selectors = 3").unwrap();
-    let module = EmailModule::new(cfg).await.expect("module builds");
+    let module = EmailModule::new(cfg, None).await.expect("module builds");
     let volatile: Vec<&'static str> = module.volatile().iter().map(|p| p.0).collect();
 
     let (c1, b1) = run(dnsbl_dns(false), &ZONES, &[]).await;
@@ -309,7 +308,7 @@ async fn a_policy_answer_from_the_domain_zone_keeps_its_code_and_is_recorded() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_failed_domain_zone_lookup_is_recorded() {
     let cfg: ModuleConfig = toml::from_str("[dkim]\nmax_user_selectors = 3").unwrap();
-    let module = EmailModule::new(cfg).await.expect("module builds");
+    let module = EmailModule::new(cfg, None).await.expect("module builds");
     let volatile: Vec<&'static str> = module.volatile().iter().map(|p| p.0).collect();
 
     let (c1, b1) = run(dnsbl_dns(false), &ZONES, &[]).await;

@@ -105,16 +105,18 @@ pub async fn inspect(
         Ok((https, upgrade, cors)) => {
             if let Some(ref e) = https.error {
                 tracing::warn!(error = %e, "https probe failed");
-                metrics::counter!("spectra_probe_failures_total", "probe" => "https").increment(1);
+                metrics::counter!("netray_http_probe_failures_total", "probe" => "https")
+                    .increment(1);
             }
             if let Some(ref e) = upgrade.as_ref().and_then(|r| r.error.as_ref()) {
                 tracing::warn!(error = %e, "http_upgrade probe failed");
-                metrics::counter!("spectra_probe_failures_total", "probe" => "http_upgrade")
+                metrics::counter!("netray_http_probe_failures_total", "probe" => "http_upgrade")
                     .increment(1);
             }
             if let Some(ref e) = cors.error {
                 tracing::warn!(error = %e, "cors probe failed");
-                metrics::counter!("spectra_probe_failures_total", "probe" => "cors").increment(1);
+                metrics::counter!("netray_http_probe_failures_total", "probe" => "cors")
+                    .increment(1);
             }
             Ok(InspectResult {
                 https,

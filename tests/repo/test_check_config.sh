@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# C3/C4/C10: `netray <sub> --check-config <path>` validates a config file and exits
-# without starting a listener, against the production-shaped fixture of each service.
+# v2-cutover requirement 12 (and requirements 1, 9): `netray serve --check-config <path>` validates
+# a config file and exits without starting a listener; values `serve` refuses at startup fail the
+# check too (startup_rejects), except files the config names (the store, the GeoIP data), which
+# only startup opens. Fixture: crates/netray/tests/fixtures/netray.production.toml.
 set -u
 source "$(dirname "$0")/lib/netray.sh"
 
@@ -11,10 +13,10 @@ trap 'rm -rf "$tmp"; _netray_cleanup' EXIT
 failures=0
 fail() { echo "FAIL: $*" >&2; failures=$((failures + 1)); }
 
-# run_check <sub> <path>: sets rc and out; kills the run after 20 s (rc 137).
+# run_check <path>: sets rc and out; kills the run after 20 s (rc 137).
 run_check() {
     local log="$tmp/run.log" pid watchdog
-    "$bin" "$1" --check-config "$2" >"$log" 2>&1 </dev/null &
+    "$bin" serve --check-config "$1" >"$log" 2>&1 </dev/null &
     pid=$!
     ( sleep 20; kill -9 "$pid" 2>/dev/null ) &
     watchdog=$!
@@ -22,337 +24,146 @@ run_check() {
     rc=$?
     kill "$watchdog" 2>/dev/null
     wait "$watchdog" 2>/dev/null
-    [ "$rc" -eq 137 ] && echo "FAIL: $1 --check-config did not exit within 20 s" >&2
+    [ "$rc" -eq 137 ] && echo "FAIL: serve --check-config did not exit within 20 s" >&2
     out=$(cat "$log")
 }
 
-# The lens production fixture names the production data under /netray/data, which a checkout
-# does not have, and `[modules.ip]` refuses a missing city or ASN database. Checks that need a
-# lens config that loads anywhere run on this copy, without the data paths.
-lens_fixture="$REPO_ROOT/crates/lens/tests/fixtures/lens.production.toml"
-lens_nodata="$tmp/lens.production.nodata.toml"
-perl -ne 'if (/^\[/) { $skip = /^\[modules\.ip\]\s*$/ } print unless $skip' "$lens_fixture" >"$lens_nodata"
-grep -q '^\[modules\.ip\]' "$lens_nodata" && fail "lens: [modules.ip] was not stripped from the data-free copy"
-grep -q '^\[modules\.ip\]' "$lens_fixture" || fail "lens: production fixture has no [modules.ip]"
-grep -q '^geoip_city_db = "/netray/data/' "$lens_fixture" || fail "lens: [modules.ip] does not carry the production data paths"
-sed -n '/^\[backends\.ip\]/,/^\[/p' "$lens_fixture" | grep -q '^url' && fail "lens: [backends.ip] still carries url"
-sed -n '/^\[backends\.tls\]/,/^\[/p' "$lens_fixture" | grep -q '^url' && fail "lens: [backends.tls] still carries url"
-grep -q '^\[modules\.tls\.limits\]' "$lens_fixture" || fail "lens: production fixture has no [modules.tls.limits]"
-sed -n '/^\[backends\.dns\]/,/^\[/p' "$lens_fixture" | grep -q '^url' && fail "lens: [backends.dns] still carries url"
-grep -q '^dns_servers' "$lens_fixture" && fail "lens: production fixture still carries [backends] dns_servers"
-grep -q '^\[modules\.dns\]' "$lens_fixture" || fail "lens: production fixture has no [modules.dns]"
-sed -n '/^\[modules\.dns\.dns\]/,/^\[/p' "$lens_fixture" | grep -q '^allow_system_resolvers = false' || fail "lens: [modules.dns.dns] does not carry allow_system_resolvers = false"
+# start_out <path>: runs `serve` for at most 20 s; sets startup_rc and startup_out.
+start_out() {
+    startup_out=$(env NETRAY_SERVER__BIND="127.0.0.1:$(free_port)" NETRAY_SERVER__METRICS_BIND="127.0.0.1:$(free_port)" \
+        perl -e 'alarm 20; exec @ARGV' "$bin" serve "$1" 2>&1 </dev/null)
+    startup_rc=$?
+}
 
-# sub:fixture:bad-value sed expression ("" = validate() has no rejecting rule to exercise)
-table=(
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
-    "dns:crates/dns/tests/fixtures/prism.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
-    "tls:crates/tls/tests/fixtures/tlsight.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
-    "http:crates/http/tests/fixtures/spectra.production.toml:"
-    "email:crates/email/tests/fixtures/beacon.production.toml:"
-    "ip:crates/ip/tests/fixtures/ifconfig.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
-)
+# The production fixture names the production data under /netray/data, which a checkout does not
+# have. Checks that need a config that loads anywhere run on this copy, without [modules.ip].
+fixture="$REPO_ROOT/crates/netray/tests/fixtures/netray.production.toml"
+nodata="$tmp/netray.production.nodata.toml"
+perl -ne 'if (/^\[/) { $skip = /^\[modules\.ip\]\s*$/ } print unless $skip' "$fixture" >"$nodata"
+grep -q '^\[modules\.ip\]' "$fixture" || fail "production fixture has no [modules.ip]"
+grep -q '^geoip_city_db = "/netray/data/' "$fixture" || fail "[modules.ip] does not carry the production data paths"
+grep -q '^\[modules\.ip\]' "$nodata" && fail "[modules.ip] was not stripped from the data-free copy"
 
-for row in "${table[@]}"; do
-    IFS=: read -r sub fixture badsed <<<"$row"
-    fixture="$REPO_ROOT/$fixture"
-    [ -f "$fixture" ] || { fail "$sub: fixture missing: $fixture"; continue; }
-
-    ok_fixture="$fixture"
-    [ "$sub" = lens ] && ok_fixture="$lens_nodata"
-    run_check "$sub" "$ok_fixture"
-    [ "$rc" -eq 0 ] || fail "$sub: valid fixture exited $rc, expected 0 ($out)"
-    grep -qF "config ok: $ok_fixture" <<<"$out" || fail "$sub: stdout lacks 'config ok: $ok_fixture' ($out)"
-
-    { echo 'bogus_key = 1'; cat "$ok_fixture"; } >"$tmp/$sub.unknown.toml"
-    run_check "$sub" "$tmp/$sub.unknown.toml"
-    [ "$rc" -eq 1 ] || fail "$sub: unknown key exited $rc, expected 1"
-
-    run_check "$sub" "$tmp/$sub.does-not-exist.toml"
-    [ "$rc" -eq 1 ] || fail "$sub: missing file exited $rc, expected 1"
-
-    if [ -n "$badsed" ]; then
-        sed "$badsed" "$ok_fixture" >"$tmp/$sub.invalid.toml"
-        run_check "$sub" "$tmp/$sub.invalid.toml"
-        [ "$rc" -eq 1 ] || fail "$sub: validate()-rejected value exited $rc, expected 1"
-    fi
+# The shipped configs and the data-free fixture load.
+for f in "$nodata" "$REPO_ROOT/crates/netray/netray.example.toml" "$REPO_ROOT/crates/netray/netray.dev.toml"; do
+    run_check "$f"
+    [ "$rc" -eq 0 ] || fail "$f exited $rc, expected 0 ($out)"
+    grep -qF "config ok: $f" <<<"$out" || fail "stdout lacks 'config ok: $f' ($out)"
 done
+{ echo 'bogus_key = 1'; cat "$nodata"; } >"$tmp/unknown.toml"
+run_check "$tmp/unknown.toml"
+[ "$rc" -eq 1 ] || fail "unknown key exited $rc, expected 1"
+grep -qF 'config error:' <<<"$out" || fail "unknown key output lacks 'config error:' ($out)"
+run_check "$tmp/does-not-exist.toml"
+[ "$rc" -eq 1 ] || fail "missing file exited $rc, expected 1"
 
-# Values the service refuses at startup must fail the check too, or the operator check
-# passes a config that crash-loops (sub:fixture:perl substitution).
+# startup_rejects: section|body|must-name. Each body is inserted after the section's header of the
+# data-free fixture, or appended as a new table when the fixture lacks the section.
 startup_rejects=(
-    "http:crates/http/tests/fixtures/spectra.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
-    "http:crates/http/tests/fixtures/spectra.production.toml:s/^per_ip_burst = .*/per_ip_burst = 0/"
-    "email:crates/email/tests/fixtures/beacon.production.toml:s|^per_ip = .*|per_ip = \"0/min\"|"
-    "email:crates/email/tests/fixtures/beacon.production.toml:s|^per_ip = .*|per_ip = \"ten\"|"
-    "tls:crates/tls/tests/fixtures/tlsight.production.toml:s|^\\[validation\\]\$|[validation]\\ncustom_ca_dir = \"/nonexistent-ca-dir\"|"
-    "ip:crates/ip/tests/fixtures/ifconfig.production.toml:s|^bind = .*|bind = \"nope\"|"
-    "ip:crates/ip/tests/fixtures/ifconfig.production.toml:s|^admin_bind = .*|admin_bind = \"nope\"|"
-    "ip:crates/ip/tests/fixtures/ifconfig.production.toml:s/^per_target_per_minute = .*/per_target_per_minute = 0/"
-    "ip:crates/ip/tests/fixtures/ifconfig.production.toml:s/^per_target_burst = .*/per_target_burst = 0/"
-    "ip:crates/ip/tests/fixtures/ifconfig.production.toml:s/^max_size = .*/max_size = 0/"
-    "email:crates/email/tests/fixtures/beacon.production.toml:s|^bind = .*|bind = \"nope\"|"
-    "email:crates/email/tests/fixtures/beacon.production.toml:s|^metrics_bind = .*|metrics_bind = \"nope\"|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[badges]\\nttl_seconds = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s/^domain_run_slots = .*/domain_run_slots = 0/"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api]\\nper_ip_per_minute = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api]\\nper_ip_burst = 0\\n\\n[site]|"
-    # specs/features/v2-api C7, C18, C25: the `[api.ip]` limits, checked below by key name
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_ip_per_minute = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_ip_per_minute = 601\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_ip_burst = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_ip_burst = 1\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_ip_burst = 101\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_target_per_minute = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_target_per_minute = 601\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_target_burst = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_target_burst = 101\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_max_size = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_max_size = 101\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_addresses_per_minute = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_addresses_per_minute = 601\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_addresses_burst = 50\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_addresses_burst = 101\\n\\n[site]|"
-    # specs/features/v2-inspectors C13: the `[inspect.<tool>]` limits, checked below by key name
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[inspect.dns]\\nmax_concurrent = 0\\n\\n[site]|"
-    # specs/features/v2-api Phase 5: [api.tls] / [api.http] limits
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.tls]\\nper_ip_per_minute = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.tls]\\nper_ip_burst = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.tls]\\nper_target_per_minute = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.tls]\\nper_target_burst = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.http]\\nper_ip_per_minute = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.http]\\nper_ip_burst = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.http]\\nper_target_per_minute = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.http]\\nper_target_burst = 0\\n\\n[site]|"
-    # specs/features/v2-api Phase 6: [api.email] limits
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.email]\\nper_ip_per_minute = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.email]\\nper_ip_burst = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.email]\\nmax_concurrent_inspections = 0\\n\\n[site]|"
-    # specs/features/v2-api Phase 7: [api.dns] limits
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nper_ip_per_minute = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nper_ip_burst = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nper_target_per_minute = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nper_target_burst = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nglobal_per_minute = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nglobal_burst = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nper_ip_max_streams = 0\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nper_ip_burst = 17\\n\\n[site]|"
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nglobal_burst = 17\\n\\n[site]|"
+    "admission|domain_run_slots = 0|"
+    "admission|per_ip_per_minute = 0|"
+    "admission|per_ip_burst = 0|"
+    "admission|global_per_minute = 0|"
+    "admission|global_burst = 0|"
+    "badges|ttl_seconds = 0|"
+    "api|per_ip_per_minute = 0|api.per_ip_per_minute"
+    "api|per_ip_burst = 0|api.per_ip_burst"
+    "api.ip|per_ip_per_minute = 0|api.ip.per_ip_per_minute"
+    "api.ip|per_ip_per_minute = 601|api.ip.per_ip_per_minute"
+    "api.ip|per_ip_burst = 1|api.ip.per_ip_burst"
+    "api.ip|per_ip_burst = 101|api.ip.per_ip_burst"
+    "api.ip|per_target_per_minute = 0|api.ip.per_target_per_minute"
+    "api.ip|per_target_burst = 101|api.ip.per_target_burst"
+    "api.ip|batch_max_size = 0|api.ip.batch_max_size"
+    "api.ip|batch_max_size = 101|api.ip.batch_max_size"
+    "api.ip|batch_addresses_per_minute = 601|api.ip.batch_addresses_per_minute"
+    "api.ip|batch_addresses_burst = 50|api.ip.batch_addresses_burst"
+    "api.tls|per_ip_per_minute = 0|api.tls.per_ip_per_minute"
+    "api.tls|per_target_burst = 0|api.tls.per_target_burst"
+    "api.http|per_ip_burst = 0|api.http.per_ip_burst"
+    "api.http|per_target_per_minute = 0|api.http.per_target_per_minute"
+    "api.email|per_ip_per_minute = 0|api.email.per_ip_per_minute"
+    "api.email|max_concurrent_inspections = 0|api.email.max_concurrent_inspections"
+    "api.dns|per_ip_burst = 17|api.dns.per_ip_burst"
+    "modules.tls.validation|custom_ca_dir = \"/nonexistent-ca-dir\"|custom_ca_dir"
+    "api.dns|per_ip_per_minute = 0|api.dns.per_ip_per_minute"
+    "api.dns|per_target_per_minute = 0|api.dns.per_target_per_minute"
+    "api.dns|per_target_burst = 0|api.dns.per_target_burst"
+    "api.dns|global_per_minute = 0|api.dns.global_per_minute"
+    "api.tls|per_ip_burst = 0|api.tls.per_ip_burst"
+    "api.tls|per_target_per_minute = 0|api.tls.per_target_per_minute"
+    "api.http|per_ip_per_minute = 0|api.http.per_ip_per_minute"
+    "api.http|per_target_burst = 0|api.http.per_target_burst"
+    "api.email|per_ip_burst = 0|api.email.per_ip_burst"
+    "api.ip|per_ip_burst = 0|api.ip.per_ip_burst"
+    "api.ip|per_target_per_minute = 601|api.ip.per_target_per_minute"
+    "api.ip|per_target_burst = 0|api.ip.per_target_burst"
+    "api.ip|batch_addresses_per_minute = 0|api.ip.batch_addresses_per_minute"
+    "api.ip|batch_addresses_burst = 101|api.ip.batch_addresses_burst"
+    "api.dns|global_burst = 17|api.dns.global_burst"
+    "api.dns|per_ip_max_streams = 0|api.dns.per_ip_max_streams"
+    "inspect.dns|max_concurrent = 0|inspect.dns.max_concurrent"
+    "inspect.tls|deadline_ms = 0|inspect.tls.deadline_ms"
+    "telemetry|enabled = true\\notlp_endpoint = \"http://bad host:4318\"|telemetry.otlp_endpoint"
 )
 n=0
 for row in "${startup_rejects[@]}"; do
-    IFS=: read -r sub fixture expr <<<"$row"
-    fixture="$REPO_ROOT/$fixture"
+    IFS='|' read -r section body names <<<"$row"
     n=$((n + 1))
-    perl -pe "$expr" "$fixture" >"$tmp/$sub.reject$n.toml"
-    if cmp -s "$fixture" "$tmp/$sub.reject$n.toml"; then
-        fail "$sub: substitution '$expr' did not change the fixture"
-        continue
+    f="$tmp/reject$n.toml"
+    if grep -q "^\\[$section\\]\$" "$nodata"; then
+        perl -pe "s|^\\[$section\\]\$|[$section]\\n$body|" "$nodata" >"$f"
+    else
+        { cat "$nodata"; printf '\n[%s]\n%b\n' "$section" "$body"; } >"$f"
     fi
-    run_check "$sub" "$tmp/$sub.reject$n.toml"
-    [ "$rc" -eq 1 ] || fail "$sub: startup-rejected value ($expr) exited $rc, expected 1"
-    # An `[api.ip]`, `[api.tls]`, `[api.http]`, `[api.email]` or `[api.dns]` row must be refused by its
-    # rule, not as an unknown field: the output names the key and does not say "unknown field".
-    if [[ "$expr" =~ \[api\.(ip|tls|http|email|dns)\] ]]; then
-        section="${BASH_REMATCH[1]}"
-        key="${expr#*\\n}"
-        key="${key%% =*}"
-        grep -qF "api.$section.$key" <<<"$out" || fail "lens: [api.$section] $key row error does not name api.$section.$key ($out)"
-        ! grep -qi 'unknown field' <<<"$out" || fail "lens: [api.$section] $key row was refused as an unknown field ($out)"
-    fi
-    # An `[inspect.<tool>]` row is refused by its rule too: the output names `inspect.<tool>.<key>`.
-    if [[ "$expr" == *'[inspect.'* ]]; then
-        section="${expr#*|[}"
-        section="${section%%\]*}"
-        key="${expr#*\\n}"
-        key="${key%% =*}"
-        grep -qF "$section.$key" <<<"$out" || fail "lens: [$section] $key row error does not name $section.$key ($out)"
-        ! grep -qi 'unknown field' <<<"$out" || fail "lens: [$section] $key row was refused as an unknown field ($out)"
+    cmp -s "$nodata" "$f" && { fail "[$section] $body did not change the fixture"; continue; }
+    run_check "$f"
+    [ "$rc" -eq 1 ] || fail "startup-rejected value ([$section] $body) exited $rc, expected 1 ($out)"
+    if [ -n "$names" ]; then
+        grep -qF "$names" <<<"$out" || fail "[$section] $body error does not name $names ($out)"
+        ! grep -qi 'unknown field' <<<"$out" || fail "[$section] $body was refused as an unknown field ($out)"
     fi
 done
 
-# specs/features/v2-admission C6: the lens fixture carries `[admission]` with both keys, and
-# `client_budget_per_hour = 0` is valid (it means "no per-client budget"), unlike
-# `domain_run_slots = 0` (a startup_rejects row above).
-sed -n '/^\[admission\]/,/^\[/p' "$lens_fixture" | grep -q '^client_budget_per_hour = 30$' || fail "lens: [admission] does not carry client_budget_per_hour = 30"
-sed -n '/^\[admission\]/,/^\[/p' "$lens_fixture" | grep -q '^domain_run_slots = 8$' || fail "lens: [admission] does not carry domain_run_slots = 8"
-perl -pe 's/^client_budget_per_hour = .*/client_budget_per_hour = 0/' "$lens_nodata" >"$tmp/lens.budget0.toml"
-if cmp -s "$lens_nodata" "$tmp/lens.budget0.toml"; then
-    fail "lens: client_budget_per_hour substitution did not change the data-free copy"
-else
-    run_check lens "$tmp/lens.budget0.toml"
-    [ "$rc" -eq 0 ] || fail "lens: client_budget_per_hour = 0 exited $rc, expected 0 ($out)"
-fi
+# `client_budget_per_hour = 0` is valid (no per-client budget).
+perl -pe 's/^client_budget_per_hour = .*/client_budget_per_hour = 0/' "$nodata" >"$tmp/budget0.toml"
+run_check "$tmp/budget0.toml"
+[ "$rc" -eq 0 ] || fail "client_budget_per_hour = 0 exited $rc, expected 0 ($out)"
 
-# specs/features/v2-api C32, v2-inspectors C13: an unknown key under `[api]`, `[api.ip]` or `[inspect.tls]` fails the check and the
-# output names the key.
-api_rejects=(
-    "api bogus|[api]\nbogus = 1"
-    "api.ip bogus|[api.ip]\nbogus = 1"
-    "inspect.tls bogus|[inspect.tls]\nbogus = 1"
-)
-n=0
-for row in "${api_rejects[@]}"; do
-    IFS='|' read -r label body <<<"$row"
-    n=$((n + 1))
-    { cat "$lens_nodata"; printf '\n%b\n' "$body"; } >"$tmp/lens.api$n.toml"
-    run_check lens "$tmp/lens.api$n.toml"
-    [ "$rc" -eq 1 ] || fail "lens: [$label] exited $rc, expected 1 ($out)"
-    grep -qF 'bogus' <<<"$out" || fail "lens: [$label] error does not name 'bogus' ($out)"
+# An unknown key under [api], [api.ip], [inspect.tls] or a module table fails and names the key.
+for body in "[api]\nbogus = 1" "[api.ip]\nbogus = 1" "[inspect.tls]\nbogus = 1" "[modules.http]\nbogus = 1"; do
+    { cat "$nodata"; printf '\n%b\n' "$body"; } >"$tmp/bogus.toml"
+    run_check "$tmp/bogus.toml"
+    [ "$rc" -eq 1 ] || fail "$body exited $rc, expected 1 ($out)"
+    grep -qF 'bogus' <<<"$out" || fail "$body error does not name 'bogus' ($out)"
 done
 
-# Telemetry init panics on an OTLP endpoint that is not a valid URI; the check must name
-# the key, so a row cannot pass by tripping over an unknown field instead.
-bad_otlp='otlp_endpoint = \"http://bad host:4318\"'
-telemetry_rejects=(
-    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
-    "dns:crates/dns/tests/fixtures/prism.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
-    "tls:crates/tls/tests/fixtures/tlsight.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
-    "http:crates/http/tests/fixtures/spectra.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
-    "email:crates/email/tests/fixtures/beacon.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\n$bad_otlp|"
-    "ip:crates/ip/tests/fixtures/ifconfig.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
-)
-for row in "${telemetry_rejects[@]}"; do
-    IFS=: read -r sub fixture expr <<<"$row"
-    fixture="$REPO_ROOT/$fixture"
-    perl -pe "$expr" "$fixture" >"$tmp/$sub.otlp.toml"
-    if cmp -s "$fixture" "$tmp/$sub.otlp.toml"; then
-        fail "$sub: telemetry substitution did not change the fixture"
-        continue
-    fi
-    run_check "$sub" "$tmp/$sub.otlp.toml"
-    [ "$rc" -eq 1 ] || fail "$sub: invalid otlp_endpoint exited $rc, expected 1"
-    grep -qF 'telemetry.otlp_endpoint' <<<"$out" || fail "$sub: invalid otlp_endpoint error does not name telemetry.otlp_endpoint ($out)"
+# A configured IP section names both GeoIP databases: a list-only section fails. (An empty
+# `[modules.ip]` table is no configured section under `serve`: the IP section stays off.)
+for body in 'feodo_botnet_ips = "/nonexistent.txt"'; do
+    { cat "$nodata"; printf '\n[modules.ip]\n%s\n' "$body"; } >"$tmp/ipdata.toml"
+    run_check "$tmp/ipdata.toml"
+    [ "$rc" -eq 1 ] || fail "[modules.ip] '$body' exited $rc, expected 1 ($out)"
+    grep -qF 'geoip_city_db' <<<"$out" || fail "[modules.ip] '$body' error does not name geoip_city_db ($out)"
 done
 
-# C7: backend timeouts that exceed the deadline budget (dns/tls/http/email 20000, ip 2000,
-# forced regardless of the fixture) must fail the check and name the budget.
-perl -pe '
-    $s = $1 if /^\[backends\.(\w+)\]/;
-    $s = "" if /^\[(?!backends\.)/;
-    s/^timeout_ms = .*/"timeout_ms = " . ($s eq "ip" ? 2000 : $s ne "" ? 20000 : 0)/e if $s ne "";
-' "$lens_fixture" >"$tmp/lens.budget.toml"
-if [ "$(grep -c '^timeout_ms = 20000$' "$tmp/lens.budget.toml")" -ne 4 ] \
-    || ! grep -qx 'timeout_ms = 2000' "$tmp/lens.budget.toml"; then
-    fail "lens: budget substitution did not force 20000/2000"
-else
-    run_check lens "$tmp/lens.budget.toml"
-    [ "$rc" -eq 1 ] || fail "lens: timeouts over the deadline budget exited $rc, expected 1"
-    grep -qi 'timeout' <<<"$out" && grep -qi 'deadline' <<<"$out" \
-        || fail "lens: over-budget error does not mention timeout and deadline ($out)"
-fi
+# GeoIP files at missing paths pass the check (no data is read) and refuse startup, naming the key.
+ipfiles="$tmp/ipfiles.toml"
+{ cat "$nodata"; printf '\n[store]\nenabled = false\n\n[modules.ip]\ngeoip_city_db = "/nonexistent.mmdb"\ngeoip_asn_db = "/nonexistent-asn.mmdb"\n'; } >"$ipfiles"
+run_check "$ipfiles"
+[ "$rc" -eq 0 ] || fail "--check-config with missing GeoIP files exited $rc, expected 0 ($out)"
+start_out "$ipfiles"
+[ "$startup_rc" -ne 0 ] && [ "$startup_rc" -ne 142 ] || fail "startup with missing GeoIP files did not refuse (rc $startup_rc)"
+grep -qF 'geoip_city_db' <<<"$startup_out" || fail "startup refusal does not name geoip_city_db ($startup_out)"
 
-# V2 Phase 6: the resolve stage has its own budget inside the IP section's window (both count
-# from the run start), so resolve_timeout_ms must stay below [backends.ip] timeout_ms; the error
-# names resolve_timeout_ms.
-perl -pe 's/^resolve_timeout_ms = .*/resolve_timeout_ms = 2000/' "$lens_nodata" >"$tmp/lens.resolve.toml"
-grep -qx 'resolve_timeout_ms = 2000' "$tmp/lens.resolve.toml" \
-    || fail "lens: resolve_timeout_ms substitution did not change the data-free copy"
-run_check lens "$tmp/lens.resolve.toml"
-[ "$rc" -eq 1 ] || fail "lens: resolve_timeout_ms 2000 >= ip 2000 exited $rc, expected 1 ($out)"
-grep -qF 'resolve_timeout_ms' <<<"$out" || fail "lens: over-budget resolve error does not name resolve_timeout_ms ($out)"
-
-# C8: the shipped lens configs stay loadable.
-# The production fixture is checked without its data paths (`lens_nodata`).
-for f in "$lens_nodata" "$REPO_ROOT/crates/lens/lens.dev.toml" "$REPO_ROOT/crates/lens/lens.example.toml"; do
-    run_check lens "$f"
-    [ "$rc" -eq 0 ] || fail "lens: $f exited $rc, expected 0 ($out)"
-done
-
-# V2 Phases 1 to 5: the HTTP, email, IP, TLS and DNS sections are modules. A leftover `[backends.<x>] url`
-# and an unknown `[modules.<x>]` key both fail the check and the output names the offending key.
-module_rejects=(
-    "backends.http url:url:s|^\\[backends\\.http\\]\$|[backends.http]\\nurl = 'http://spectra:8082'|"
-    "modules.http bogus:bogus:s|^\\[ecosystem\\]\$|[modules.http]\\nbogus = 1\\n\\n[ecosystem]|"
-    "backends.email url:url:s|^\\[backends\\.email\\]\$|[backends.email]\\nurl = 'http://beacon:8084'|"
-    "modules.email bogus:bogus:s|^\\[ecosystem\\]\$|[modules.email]\\nbogus = 1\\n\\n[ecosystem]|"
-    "backends.ip url:url:s|^\\[backends\\.ip\\]\$|[backends.ip]\\nurl = 'http://ifconfig-rs:8000'|"
-    "modules.ip bogus:bogus:s|^\\[modules\\.ip\\]\$|[modules.ip]\\nbogus = 1|"
-    "backends.tls url:url:s|^\\[backends\\.tls\\]\$|[backends.tls]\\nurl = 'http://tlsight:8081'|"
-    "modules.tls bogus:bogus:s|^\\[modules\\.tls\\.limits\\]\$|[modules.tls]\\nbogus = 1\\n\\n[modules.tls.limits]|"
-    "backends.dns url:url:s|^\\[backends\\.dns\\]\$|[backends.dns]\\nurl = 'http://prism:8080'|"
-    "backends dns_servers:dns_servers:s|^resolve_timeout_ms = .*\$|resolve_timeout_ms = 1500\\ndns_servers = ['google']|"
-    "modules.dns bogus:bogus:s|^servers = .*\$|servers = ['google']\\nbogus = 1|"
-)
-n=0
-for row in "${module_rejects[@]}"; do
-    IFS=: read -r label key expr <<<"$row"
-    n=$((n + 1))
-    perl -pe "$expr" "$lens_fixture" >"$tmp/lens.module$n.toml"
-    if cmp -s "$lens_fixture" "$tmp/lens.module$n.toml"; then
-        fail "lens: substitution for '$label' did not change the fixture"
-        continue
-    fi
-    run_check lens "$tmp/lens.module$n.toml"
-    [ "$rc" -eq 1 ] || fail "lens: $label exited $rc, expected 1 ($out)"
-    grep -qF "$key" <<<"$out" || fail "lens: $label error does not name '$key' ($out)"
-done
-
-# V2 Phase 3, C5: a configured IP section must name both `geoip_city_db` and `geoip_asn_db`:
-# a list-only section and an empty table refuse at `--check-config` and the output names
-# `geoip_city_db`. All rows run on the data-free copy with a `[modules.ip]` appended.
-# (specs/features/lens-check-config-data: `--check-config` checks config only, as `netray ip`
-# does; data files are checked at startup, below.)
-ip_data_rows=(
-    "list only|feodo_botnet_ips = \"/nonexistent.txt\""
-    "empty table|"
-)
-n=0
-for row in "${ip_data_rows[@]}"; do
-    IFS='|' read -r label body <<<"$row"
-    n=$((n + 1))
-    ipdata="$tmp/lens.ipdata$n.toml"
-    { cat "$lens_nodata"; printf '\n[modules.ip]\n'; [ -n "$body" ] && printf '%b\n' "$body"; } >"$ipdata"
-    run_check lens "$ipdata"
-    [ "$rc" -eq 1 ] || fail "lens: [modules.ip] $label exited $rc, expected 1 ($out)"
-    grep -qF 'geoip_city_db' <<<"$out" || fail "lens: [modules.ip] $label error does not name geoip_city_db ($out)"
-done
-
-# specs/features/lens-check-config-data: both GeoIP keys at missing paths pass the config
-# check (no data is read), and lens's startup refuses them, naming the key.
-ipfiles="$tmp/lens.ipfiles.toml"
-{ cat "$lens_nodata"; printf '\n[modules.ip]\ngeoip_city_db = "/nonexistent.mmdb"\ngeoip_asn_db = "/nonexistent-asn.mmdb"\n'; } >"$ipfiles"
-run_check lens "$ipfiles"
-[ "$rc" -eq 0 ] || fail "lens: --check-config with missing GeoIP files exited $rc, expected 0 ($out)"
-startup_out=$(perl -e 'alarm 20; exec @ARGV' "$bin" lens "$ipfiles" 2>&1 </dev/null)
-startup_rc=$?
-[ "$startup_rc" -ne 0 ] && [ "$startup_rc" -ne 142 ] || fail "lens: startup with missing GeoIP files did not refuse (rc $startup_rc)"
-grep -qF 'geoip_city_db' <<<"$startup_out" || fail "lens: startup refusal does not name geoip_city_db ($startup_out)"
-
-# A GeoIP file that exists but does not parse: startup refuses and names the key too.
-: >"$tmp/empty-city.mmdb"; : >"$tmp/empty-asn.mmdb"
-ipbad="$tmp/lens.ipbad.toml"
-{ cat "$lens_nodata"; printf '\n[modules.ip]\ngeoip_city_db = "%s"\ngeoip_asn_db = "%s"\n' "$tmp/empty-city.mmdb" "$tmp/empty-asn.mmdb"; } >"$ipbad"
-startup_out=$(perl -e 'alarm 20; exec @ARGV' "$bin" lens "$ipbad" 2>&1 </dev/null)
-startup_rc=$?
-[ "$startup_rc" -ne 0 ] && [ "$startup_rc" -ne 142 ] || fail "lens: startup with an unparsable GeoIP file did not refuse (rc $startup_rc)"
-grep -qF 'geoip_city_db' <<<"$startup_out" || fail "lens: unparsable GeoIP refusal does not name geoip_city_db ($startup_out)"
-
-# specs/features/v2-history C2/C16: an unopenable history store passes --check-config (it is
-# not opened there) and refuses startup, naming "history store". Snapshots are off so a
-# startup that got further would write nothing into the cwd.
-histbad="$tmp/lens.histbad.toml"
-{ cat "$lens_nodata"; printf '\n[history]\ndb_path = "/nonexistent-dir/history.db"\n\n[snapshots]\nenabled = false\n'; } >"$histbad"
-run_check lens "$histbad"
-[ "$rc" -eq 0 ] || fail "lens: --check-config with an unopenable history db_path exited $rc, expected 0 ($out)"
-startup_out=$(perl -e 'alarm 20; exec @ARGV' "$bin" lens "$histbad" 2>&1 </dev/null)
-startup_rc=$?
-[ "$startup_rc" -ne 0 ] && [ "$startup_rc" -ne 142 ] || fail "lens: startup with an unopenable history store did not refuse (rc $startup_rc)"
-grep -qF 'history store' <<<"$startup_out" || fail "lens: history store refusal does not name the history store ($startup_out)"
-
-# V2 Phase 3: an unconfigured section is off, and --check-config says so (exit stays 0).
-run_check lens "$lens_nodata"
-[ "$rc" -eq 0 ] || fail "lens: config without [modules.ip] exited $rc, expected 0 ($out)"
-grep -qF 'modules.ip is not configured: the IP section is off' <<<"$out" \
-    || fail "lens: config without [modules.ip] does not warn that the IP section is off ($out)"
-
-# Without `[modules.http.enrichment] ip_url` the check warns (exit stays 0).
-perl -ne 'if (/^\[/) { $skip = /^\[modules\.http\.enrichment\]\s*$/ } print unless $skip' "$lens_nodata" >"$tmp/lens.noipurl.toml"
-cmp -s "$lens_nodata" "$tmp/lens.noipurl.toml" && fail "lens: ip_url removal did not change the data-free copy"
-run_check lens "$tmp/lens.noipurl.toml"
-[ "$rc" -eq 0 ] || fail "lens: config without enrichment ip_url exited $rc, expected 0 ($out)"
-grep -qF 'modules.http.enrichment.ip_url is not set' <<<"$out" \
-    || fail "lens: config without enrichment ip_url does not warn ($out)"
+# An unopenable store passes the check and refuses startup, naming the history store.
+storebad="$tmp/storebad.toml"
+{ cat "$nodata"; printf '\n[store]\ndb_path = "/nonexistent-dir/history.db"\n'; } >"$storebad"
+run_check "$storebad"
+[ "$rc" -eq 0 ] || fail "--check-config with an unopenable store exited $rc, expected 0 ($out)"
+start_out "$storebad"
+[ "$startup_rc" -ne 0 ] && [ "$startup_rc" -ne 142 ] || fail "startup with an unopenable store did not refuse (rc $startup_rc)"
+grep -qF 'history store' <<<"$startup_out" || fail "store refusal does not name the history store ($startup_out)"
 
 [ "$failures" -eq 0 ] || { echo "FAIL: test_check_config: $failures failure(s)" >&2; exit 1; }
 echo "PASS: test_check_config"

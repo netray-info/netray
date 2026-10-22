@@ -39,7 +39,7 @@ fn v1_name(slug: &str) -> &str {
 
 fn v1_source(slug: &str) -> String {
     let path = format!(
-        "{}/../../site/guide/{}.html",
+        "{}/tests/fixtures/v1-site/guide/{}.html",
         env!("CARGO_MANIFEST_DIR"),
         v1_name(slug)
     );

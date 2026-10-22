@@ -2,12 +2,12 @@ import { test, expect, type APIRequestContext, type Page } from '@playwright/tes
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveEnv } from '../fixtures/env.js';
+import { apex } from '../fixtures/env.js';
 
 // Spec v2-inspectors requirement 24 and the Phase 8 scenarios C7-C10.
 // Needs the local stack with the seeded `example.com` entry (`just acceptance-local`).
 
-const lens = resolveEnv().lens;
+const lens = apex().url;
 const SHOTS = resolve(dirname(fileURLToPath(import.meta.url)), '../test-results/v2-inspectors');
 const DOMAIN = 'example.com';
 

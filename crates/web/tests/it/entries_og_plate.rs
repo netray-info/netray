@@ -77,7 +77,6 @@ async fn plate_for(store: Arc<HistoryStore>, id: &str) -> String {
     });
     let app: Router = router(EntriesDeps {
         history: store,
-        v1: None,
         card,
     });
     let resp = app

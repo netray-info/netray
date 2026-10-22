@@ -274,7 +274,7 @@ async fn run_with_glue(domain: &str, zones: Zones, extra_glue: &[(&str, &[IpAddr
         .build()
         .await
         .expect("resolver group over documentation addresses");
-    let config = crate::config::Config::load(None).expect("default config");
+    let config = crate::config::Config::default();
     let sender = RecordingSender::new(authoritative);
     let (ip1, ip2) = ([v4(192, 0, 2, 53)], [v4(192, 0, 2, 54)]);
     let mut glue_table: Vec<(&str, &[IpAddr])> =

@@ -210,7 +210,7 @@ fn module_config_refuses_unknown_keys() {
 #[tokio::test]
 async fn dns_module_declares_dns_checks() {
     let cfg: ModuleConfig = toml::from_str("servers = [\"cloudflare\"]").unwrap();
-    let module = DnsModule::new(cfg).await.expect("module builds");
+    let module = DnsModule::new(cfg, None).await.expect("module builds");
     assert_eq!(module.protocol(), Protocol::Dns);
     assert!(!module.checks().is_empty());
     for id in module.checks() {

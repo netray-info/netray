@@ -199,7 +199,7 @@ fn module_config_refuses_unknown_key_and_accepts_dkim_max_user_selectors() {
 #[tokio::test]
 async fn email_module_declares_email_checks() {
     let cfg: ModuleConfig = toml::from_str("[dkim]\nmax_user_selectors = 3").unwrap();
-    let module = EmailModule::new(cfg).await.expect("module builds");
+    let module = EmailModule::new(cfg, None).await.expect("module builds");
     assert_eq!(module.protocol(), Protocol::Email);
     assert!(!module.checks().is_empty());
     for id in module.checks() {

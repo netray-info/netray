@@ -136,17 +136,8 @@ mod tests {
     // ---- domain length ----
 
     fn test_config() -> crate::config::Config {
-        use crate::config::{
-            CircuitBreakerConfig, Config, DnsConfig, EcosystemConfig, LimitsConfig, ServerConfig,
-            TelemetryConfig, TraceConfig,
-        };
+        use crate::config::{CircuitBreakerConfig, Config, DnsConfig, LimitsConfig, TraceConfig};
         Config {
-            site_name: "prism".to_string(),
-            server: ServerConfig {
-                bind: ([127, 0, 0, 1], 8080).into(),
-                metrics_bind: ([127, 0, 0, 1], 9090).into(),
-                trusted_proxies: vec![],
-            },
             limits: LimitsConfig {
                 per_ip_per_minute: 120,
                 per_ip_burst: 40,
@@ -154,7 +145,6 @@ mod tests {
                 per_target_burst: 20,
                 global_per_minute: 1000,
                 global_burst: 50,
-                max_concurrent_connections: 256,
                 per_ip_max_streams: 10,
                 max_timeout_secs: 10,
                 max_record_types: 10,
@@ -175,9 +165,6 @@ mod tests {
                 max_hops: 10,
                 query_timeout_secs: 3,
             },
-            telemetry: TelemetryConfig::default(),
-            ecosystem: EcosystemConfig::default(),
-            backends: crate::config::BackendsConfig::default(),
         }
     }
 

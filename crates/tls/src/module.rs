@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU32;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 use std::time::Instant;
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use governor::{Quota, RateLimiter};
+use netray_common::enrichment::EnrichmentClient;
 use netray_common::rate_limit::{KeyedLimiter, check_keyed_cost};
 use netray_engine::{BoxFuture, EvidencePath, Facts, Module, RunContext, SectionOutcome};
 use netray_model::evidence::{
@@ -181,7 +182,10 @@ pub struct TlsModule {
 }
 
 impl TlsModule {
-    pub async fn new(config: ModuleConfig) -> Result<Self, ConfigError> {
+    pub async fn new(
+        config: ModuleConfig,
+        enrichment: Option<Arc<EnrichmentClient>>,
+    ) -> Result<Self, ConfigError> {
         let _ = rustls::crypto::ring::default_provider().install_default();
         let check_budget = config.limits.check_budget;
         let config = config.into_config()?;
@@ -194,6 +198,7 @@ impl TlsModule {
             ),
         );
         let mut state = AppState::new(&config);
+        state.enrichment_client = enrichment;
         state.init_dns_resolver(&config).await;
         Ok(Self {
             state,
@@ -205,6 +210,11 @@ impl TlsModule {
     /// The inspection over this module's own state.
     pub fn inspector(&self) -> crate::inspector::TlsInspector {
         self.state.inspector()
+    }
+
+    /// Whether the registry handed this module an enrichment client.
+    pub fn has_enrichment(&self) -> bool {
+        self.state.enrichment_client.is_some()
     }
 
     async fn measure(&self, ctx: &RunContext, facts: &Facts) -> Result<InspectResponse, AppError> {
@@ -235,7 +245,7 @@ impl TlsModule {
             &hostname.to_lowercase(),
             NonZeroU32::new(cost.max(1)).expect("max(1) is non-zero"),
             "per_target",
-            "tlsight",
+            "netray_tls",
         )
         .map_err(|r| AppError::RateLimited {
             retry_after_secs: r.retry_after_secs,

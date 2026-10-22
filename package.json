@@ -2,11 +2,6 @@
   "name": "netray",
   "private": true,
   "workspaces": [
-    "crates/*/frontend",
-    "packages/common-frontend",
     "crates/web/islands"
-  ],
-  "devDependencies": {
-    "ajv": "^6.12.6"
-  }
+  ]
 }
