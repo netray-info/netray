@@ -153,6 +153,9 @@ GIVEN the cleaned tree WHEN it runs THEN it passes, and `cargo build --workspace
   an empty label as "no label", the callers and tests keep one name for the default, and an
   explicit `?label=netray` still renders "netray · netray.info" (implementer under the operator's
   autonomy mandate, 2026-10-22).
+- This supersedes v2-release-cleanup's requirement 6 for the OG card and its decision that the
+  card footer reads "netray · netray.info": the default card carries no label and reads
+  "netray.info"; the badge label stays "netray" (operator, 2026-10-22).
 - An explicit empty `?label=` renders "netray.info" too, over keeping " · netray.info": the
   operator's "no label, no leading separator", and the old form was a leading separator with no
   label (implementer under the operator's autonomy mandate, 2026-10-22).

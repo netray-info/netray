@@ -97,7 +97,7 @@ fn card_svg(
     let timestamp_display = format_utc_timestamp(checked_at);
 
     let footer_text = if label.is_empty() {
-        xml_escape(" \u{00b7} netray.info")
+        "netray.info".to_string()
     } else {
         format!("{} \u{00b7} netray.info", xml_escape(label))
     };
@@ -238,7 +238,7 @@ mod tests {
     fn svg_empty_label_renders_the_apex_alone() {
         let svg = svg_for_grade("example.com", "A", "", 80.0, ts(), None);
         assert!(svg.contains(">netray.info</text>"));
-        assert!(!svg.contains('\u{00b7}'));
+        assert!(!svg.contains("\u{00b7} netray.info"));
     }
 
     #[test]
