@@ -94,8 +94,9 @@ single-label name in an OG card URL starts a domain run.
 7. `dns.ttl` judges a record whose highest recursive TTL is below 60 s on its TTL as served by the
    zone's authoritative nameservers: the record's name and type are looked up at those servers
    and the answer is sent as a batch of that type, so the records block shows the highest TTL
-   across all answers, the authoritative one included. A record whose authoritative TTL is 60 s
-   or more is not low. When no authoritative server answers, the recursive TTL is judged, as
+   across all answers, the authoritative one included; the authoritative TTL applies to the whole
+   RRset (RFC 2181 §5.2). Only names at or below the zone are re-read. A record whose
+   authoritative TTL is 60 s or more is not low. When no authoritative server answers, the recursive TTL is judged, as
    today.
 8. A DNS inspector query whose domain is an IP address queries PTR at the address's reverse name:
    `d.c.b.a.in-addr.arpa.` for an IPv4 address, the nibble form under `ip6.arpa.` for an IPv6
@@ -175,9 +176,13 @@ GIVEN a name with ten labels below example.com and no SOA anywhere below example
 ### Test Scenarios
 
 GIVEN example.com A 192.0.2.10 answered by the resolvers with TTL 29 and by the zone's authoritative server with TTL 60 WHEN the check runs THEN `dns.ttl` is `pass` and the `dns.a` block shows TTL 60.
-GIVEN the same record answered with TTL 29 by the resolvers and TTL 30 by the authoritative server WHEN the check runs THEN `dns.ttl` is `warn` naming example.com. with 30s.
+GIVEN the same record answered with TTL 29 by the resolvers and TTL 30 by the authoritative server WHEN the check runs THEN `dns.ttl` is `warn` naming example.com with 30s.
 GIVEN a resolver TTL of 29 and no authoritative server answering WHEN the check runs THEN `dns.ttl` is `warn` with 29s, as today.
 GIVEN every resolver TTL at 60 s or more WHEN the check runs THEN no authoritative TTL lookup is made.
+GIVEN example.com A answered by the resolvers as 192.0.2.10 (TTL 60) and 192.0.2.11 (TTL 29) and by the authoritative server as 192.0.2.10 alone (TTL 60) WHEN the check runs THEN `dns.ttl` is `pass`: the TTL belongs to the RRset.
+GIVEN xn--bcher-kva.example A at TTL 29 from the resolvers and 300 from its authoritative server WHEN the check runs THEN `dns.ttl` is `pass`.
+GIVEN www.example.com CNAME web.example.com at TTL 29 from the resolvers, carried only in the A lookup, and 300 from the authoritative server WHEN the check runs THEN `dns.ttl` is `pass`.
+GIVEN www.example.com CNAME shop.example.net whose A is TTL 20 from the resolvers WHEN the check runs THEN no authoritative lookup is made for shop.example.net and `dns.ttl` warns with 20s.
 
 ## Phase 4 — DNS inspector: reverse names and `@system`
 

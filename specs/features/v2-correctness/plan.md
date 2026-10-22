@@ -24,3 +24,15 @@ G1: C1-C16 (one production file, `crates/dns/src/api/check.rs`).
 - Zone unknown: emit the six zone checks (`ns`, `ns_lame`, `ns_delegation`, `dnssec`, `dnskey_algorithm`, `dnssec_rollover`) as `unmeasured` with that finding. The translation in `module::translate` takes check verdicts from lint events and batch errors: either send a failed batch event the translator turns into unmeasured, or add an event/lint path that carries the unmeasured status; pick the smallest change that keeps `translate` the single place statuses are made (e.g. a `CheckEvent::Unanswered { category, silent, none_answered: true }` per check carrying the finding, which `translate` already maps to Unmeasured).
 - CAA: when the CAA batch at the name holds no CAA record, `fan_out_lookup` CAA at each ancestor (same stop rule) until one answers CAA records; send that as a "CAA" batch and merge it. An ancestor CAA lookup with no definite answer stops: `dns.caa` unmeasured naming "CAA lookup of <ancestor> failed: ..." (same Unanswered path).
 - Apex names: no extra lookup at all.
+
+## Phase 3 — DNS: TTLs from the authoritative servers
+
+### Groups
+
+G1: C1-C5 (`crates/dns/src/api/check.rs`).
+
+### Plan
+
+- After the zone phase, before the lints: collect the (name, type) pairs whose highest TTL in the unique records is below 60 s (and above 0, as `check_ttl` judges). None: nothing more. Otherwise resolve the zone's nameserver addresses as the lame check does (`resolve_missing_glue`, `build_server_list`), query each pair at those servers (RD=0 raw queries, `RawOutbound::parallel_queries`) and, for answers with AA=1, take the highest TTL per record. Build mhost `Lookups` for those answers through the serde form (as `unique_records` rewrites lookups), send them as a batch of the pair's type and merge them into what the lints read, so `check_ttl` and the records block see the authoritative TTL. No answer: nothing is sent (the recursive TTL stays).
+- Bounded by the stream deadline, like the zone phase.
+- Review: names compare as A-labels; every lookup is searched for the pair's records; only names at or below the zone are re-read; the authoritative TTL covers the RRset.

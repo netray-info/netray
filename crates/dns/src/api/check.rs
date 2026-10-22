@@ -657,11 +657,29 @@ pub(crate) async fn run_check_on(
     // ------------------------------------------------------------------
     let query_timeout = Duration::from_secs(3);
     let unique = unique_records(&all_lookups);
-    let (lame, delegation, mta_sts_results) = tokio::join!(
+    let (lame, delegation, mta_sts_results, ttl_batches) = tokio::join!(
         check_ns_lame_delegation(&unique, &zone.judged, query_timeout, &raw_outbound),
         check_ns_delegation_consistency(&unique, &zone.judged, query_timeout, &raw_outbound),
         check_mta_sts(&mta_sts_lookups, &domain, &unique, &outbound),
+        async {
+            tokio::time::timeout_at(
+                deadline,
+                authoritative_ttls(&unique, &zone.judged, query_timeout, &raw_outbound),
+            )
+            .await
+            .unwrap_or_default()
+        },
     );
+    for (rt, lookups) in ttl_batches {
+        completed += 1;
+        let cache = enrichment_svc.is_some().then_some(&mut batch_events);
+        if !send_batch(&tx, &rid, &rt.to_string(), &lookups, completed, cache).await {
+            metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error")
+                .increment(1);
+            return;
+        }
+        all_lookups = all_lookups.merge(lookups);
+    }
 
     // ------------------------------------------------------------------
     // Phase 2: Lint checks (synchronous, pure)
@@ -1176,6 +1194,154 @@ pub(crate) fn unique_records(lookups: &Lookups) -> Lookups {
     }
 
     Lookups::new(out)
+}
+
+/// The TTL below which `check_ttl` calls a record low.
+const LOW_TTL: u32 = 60;
+
+/// Two names compared as A-labels: hickory serialises and displays `xn--` labels as Unicode.
+fn same_name(a: &str, b: &str) -> bool {
+    a_label(a).eq_ignore_ascii_case(&a_label(b))
+}
+
+/// `name` as an A-label without the trailing dot; unparsable names stay as given.
+fn a_label(name: &str) -> String {
+    let ascii = hickory_proto::rr::Name::from_utf8(name)
+        .map(|n| n.to_ascii())
+        .unwrap_or_else(|_| name.to_owned());
+    ascii.trim_end_matches('.').to_owned()
+}
+
+/// Whether `name` is `zone` or below it.
+fn in_zone(name: &str, zone: &str) -> bool {
+    let (name, zone) = (
+        a_label(name).to_ascii_lowercase(),
+        a_label(zone).to_ascii_lowercase(),
+    );
+    name == zone || name.ends_with(&format!(".{zone}"))
+}
+
+/// One batch per (name, type) at or below `zone` whose highest TTL in `unique` is below
+/// [`LOW_TTL`]: the pair's records with the highest TTL an authoritative (AA) answer of the
+/// zone's nameservers carries for that name and type, from the nameserver that served it. A pair
+/// no nameserver answers authoritatively, or owned outside the zone (a CNAME target elsewhere),
+/// gets no batch.
+async fn authoritative_ttls(
+    unique: &Lookups,
+    zone: &str,
+    timeout: Duration,
+    raw: &RawOutbound,
+) -> Vec<(RecordType, Lookups)> {
+    let mut pairs: Vec<(String, RecordType)> = Vec::new();
+    for record in unique.records() {
+        let pair = (record.name().to_ascii(), record.record_type());
+        if record.ttl() > 0
+            && record.ttl() < LOW_TTL
+            && in_zone(&pair.0, zone)
+            && !pairs.contains(&pair)
+        {
+            pairs.push(pair);
+        }
+    }
+    if pairs.is_empty() {
+        return Vec::new();
+    }
+
+    let mut ns_ips: HashMap<String, Vec<IpAddr>> = unique
+        .ns()
+        .into_iter()
+        .map(|n| (n.to_ascii(), Vec::new()))
+        .collect();
+    if ns_ips.is_empty() {
+        return Vec::new();
+    }
+    raw.resolve_missing_glue(&mut ns_ips).await;
+    let servers: Vec<SocketAddr> = raw
+        .build_server_list(&ns_ips)
+        .servers
+        .into_iter()
+        .map(|(addr, _)| addr)
+        .collect();
+    if servers.is_empty() {
+        return Vec::new();
+    }
+
+    let answers = futures::future::join_all(pairs.iter().map(|(name, rt)| {
+        let servers = &servers;
+        async move {
+            let qname =
+                hickory_proto::rr::Name::from_ascii(format!("{}.", name.trim_end_matches('.')))
+                    .ok()?;
+            let qtype = hickory_proto::rr::RecordType::from(u16::from(*rt));
+            raw.parallel_queries(servers, &qname, qtype, timeout)
+                .await
+                .into_iter()
+                .filter_map(|qr| {
+                    let resp = qr.result.ok().filter(|r| r.is_authoritative())?;
+                    resp.answers()
+                        .iter()
+                        .filter(|rec| {
+                            rec.record_type() == qtype && same_name(&rec.name.to_ascii(), name)
+                        })
+                        .map(|rec| rec.ttl)
+                        .max()
+                        .map(|ttl| (ttl, qr.server))
+                })
+                .max_by_key(|(ttl, _)| *ttl)
+        }
+    }))
+    .await;
+
+    pairs
+        .iter()
+        .zip(answers)
+        .filter_map(|((name, rt), answer)| {
+            let (ttl, server) = answer?;
+            let lookups = with_ttl(unique, name, *rt, ttl, server);
+            (!lookups.is_empty()).then(|| (*rt, Lookups::new(lookups)))
+        })
+        .collect()
+}
+
+/// Every lookup in `lookups` holding records of (`name`, `rt`), reduced to those
+/// records, each carrying `ttl`, as answered by `server`. The TTL belongs to the RRset
+/// (RFC 2181 §5.2), so it covers records the authoritative answer did not repeat, such as a
+/// rotating address set.
+fn with_ttl(
+    lookups: &Lookups,
+    name: &str,
+    rt: RecordType,
+    ttl: u32,
+    server: SocketAddr,
+) -> Vec<mhost::resolver::Lookup> {
+    use serde_json::Value;
+
+    let rtype = rt.to_string();
+    let owned = |rec: &Value| {
+        rec["type"].as_str() == Some(rtype.as_str())
+            && rec["name"].as_str().is_some_and(|n| same_name(n, name))
+    };
+    // Every lookup, whatever its query type: `unique_records` keeps a record in the first
+    // lookup that carried it (a CNAME in the A lookup, glue in the NS lookup).
+    lookups
+        .iter()
+        .filter_map(|l| serde_json::to_value(l).ok())
+        .filter_map(|mut value| {
+            let records = value
+                .pointer_mut("/result/Response/records")?
+                .as_array_mut()?;
+            records.retain(|rec| owned(rec));
+            if records.is_empty() {
+                return None;
+            }
+            for rec in records.iter_mut() {
+                rec["ttl"] = Value::from(ttl);
+            }
+            value["name_server"] =
+                Value::from(mhost::nameserver::NameServerConfig::udp(server).to_string());
+            serde_json::from_value(value).ok()
+        })
+        .collect()
 }
 
 /// The synchronous record lints in emit order, run over the unique records of all resolvers,
