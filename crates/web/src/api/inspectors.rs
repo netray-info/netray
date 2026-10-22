@@ -35,7 +35,7 @@ pub(super) fn request_id(headers: &HeaderMap) -> String {
     tag = "tls",
     request_body = TlsInspectRequest,
     responses(
-        (status = 200, description = "The inspection of the host on the port", body = netray_tls::routes::InspectResponse),
+        (status = 200, description = "The inspection of the host on the port", body = netray_tls::inspection::InspectResponse),
         (status = 400, description = "Malformed body, unknown field, invalid host or port", body = ErrorResponse),
         (status = 403, description = "The target is not a public address (`TARGET_BLOCKED`)", body = ErrorResponse),
         (status = 413, description = "Request body over the 8 KiB limit", body = ErrorResponse),
@@ -48,7 +48,7 @@ pub(super) async fn tls_inspect(
     peer: Peer,
     headers: HeaderMap,
     body: Result<Json<TlsInspectRequest>, JsonRejection>,
-) -> Result<Json<netray_tls::routes::InspectResponse>, V1Error> {
+) -> Result<Json<netray_tls::inspection::InspectResponse>, V1Error> {
     let inspector = state
         .tls_inspector()
         .ok_or_else(|| V1Error::Unavailable(TLS_OFF.into()))?;

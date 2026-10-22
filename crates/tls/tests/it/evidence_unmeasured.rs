@@ -7,8 +7,8 @@ use std::path::PathBuf;
 use netray_engine::SectionOutcome;
 use netray_model::evidence::BlockId;
 use netray_model::{CheckResult, Status};
+use netray_tls::inspection::InspectResponse;
 use netray_tls::module::translate_with_facts;
-use netray_tls::routes::InspectResponse;
 use serde_json::{Value, json};
 
 fn golden() -> Value {

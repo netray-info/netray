@@ -2,7 +2,7 @@
 # Every config struct rejects unknown keys (specs/features/monorepo-p3, Phase 1, R2).
 # Scope: (a) every struct deriving Deserialize in crates/*/src/config.rs, (b) every struct
 # named *Config deriving Deserialize anywhere under crates/*/src/ (netray-common's shared
-# BackendConfig, EcosystemConfig, TelemetryConfig). Enums are out of scope; #[cfg(test)]
+# TelemetryConfig). Enums are out of scope; #[cfg(test)]
 # modules are skipped.
 set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 1

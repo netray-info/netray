@@ -3,12 +3,11 @@ name = "netray-ip"
 version.workspace = true
 authors = ["Lukas Pustina <lukas@pustina.net>"]
 
-description = "IP address and network information service"
-repository = "https://github.com/lukaspustina/ifconfig-rs"
-readme = "Readme.md"
+description = "The IP module and inspector of netray: address and network information"
+repository = "https://github.com/netray-info/netray"
+readme = "README.md"
 license = "MIT"
 keywords = ["ifconfig", "ip", "network", "webservice"]
-include = ["Readme.md", "LICENSE", "**/*.rs", "Cargo.toml", "build.rs", "ifconfig.example.toml", "ifconfig.dev.toml", "frontend/dist/**"]
 edition.workspace = true
 
 [dependencies]

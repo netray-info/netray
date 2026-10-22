@@ -1,4 +1,4 @@
-//! The domain-name input rule shared by lens and the evidence pages.
+//! The domain-name input rule shared by domain runs, the inspectors and the evidence pages.
 
 use std::net::IpAddr;
 

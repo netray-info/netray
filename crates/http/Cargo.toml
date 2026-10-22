@@ -3,7 +3,7 @@ name = "netray-http"
 version.workspace = true
 edition.workspace = true
 license = "MIT"
-description = "HTTP header inspection and security audit service for netray.info"
+description = "The HTTP module and inspector of netray: headers and security audit"
 
 [dependencies]
 netray-model = { workspace = true }
@@ -11,7 +11,7 @@ netray-engine = { workspace = true }
 # Web framework
 axum = { workspace = true, features = ["json"] }
 governor = { workspace = true }
-netray-common = { workspace = true, features = ["schema", "middleware", "enrichment", "fetch"] }
+netray-common = { workspace = true, features = ["schema", "enrichment", "fetch"] }
 
 # HTTP client for outbound inspection requests
 reqwest = { workspace = true, features = ["json", "rustls", "webpki-roots", "http2", "stream"] }

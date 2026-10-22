@@ -248,6 +248,7 @@ mod ip_host_review;
 mod ip_host_root;
 mod ip_lookup_block;
 mod metrics_zero_series;
+mod og_footer;
 mod og_label_bounds;
 mod og_plate;
 mod og_plate_history;

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::routes::ConsistencyResult;
+use crate::inspection::ConsistencyResult;
 use crate::tls::{CertInfo, IpInspectionResult};
 use crate::validate::{CheckStatus, ValidationResult};
 
@@ -1188,7 +1188,7 @@ mod tests {
 
     #[test]
     fn consistency_warn_with_mismatches() {
-        use crate::routes::ConsistencyMismatch;
+        use crate::inspection::ConsistencyMismatch;
         use std::collections::HashMap;
         let c = ConsistencyResult {
             certificates_match: false,

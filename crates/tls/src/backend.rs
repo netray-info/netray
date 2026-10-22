@@ -8,7 +8,7 @@ use netray_engine::BoxFuture;
 
 use crate::dns::DnsResolver;
 use crate::error::AppError;
-use crate::routes::resolve_hostname;
+use crate::inspection::resolve_hostname;
 use crate::tls::probe::ProtocolProbes;
 use crate::tls::{self, IpInspectionResult};
 

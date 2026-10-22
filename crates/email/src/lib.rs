@@ -1,19 +1,16 @@
-//! Beacon — DNS-only email-security inspector (fifth pillar of the netray
-//! suite: IP -> DNS -> TLS -> HTTP -> Email).
+//! The email inspector as a library: its `Module` implementation (`email.*` checks, from DNS
+//! plus the MTA-STS policy and BIMI logo fetches) and the inspection netray-web runs for API v1
+//! and the email page.
 //!
-//! Given a domain (e.g. `example.com`), beacon evaluates twelve email
-//! security categories (MX, SPF, DKIM, DMARC, MTA-STS, TLS-RPT, DANE, DNSSEC,
-//! BIMI, FCrDNS, DNSBL, cross-validation) and produces an aggregate A–F
-//! grade.
+//! Given a domain (e.g. `example.com`), the checks cover twelve mail security categories (MX,
+//! SPF, DKIM, DMARC, MTA-STS, TLS-RPT, DANE, DNSSEC, BIMI, FCrDNS, DNSBL, cross-validation).
 //!
-//! The crate is split into self-contained modules: [`checks`] implements the
-//! per-category probes and the three-phase orchestration; [`config`] holds the
-//! `[modules.email]` sections; [`dns`] wraps `mhost` into a shared round-robin
-//! resolver; [`quality`] defines the `Verdict` / `Grade` / `CheckResult` model
-//! and grade computation; [`input`] validates domains and DKIM selectors;
-//! [`security`] holds the rate limiter; [`state`] the outbound fetch settings.
-//!
-//! See `CLAUDE.md` and `specs/done/sdd/beacon.md` for design rationale.
+//! [`checks`] implements the per-category probes and the three-phase orchestration; [`module`]
+//! translates their results onto the `email.*` checks and evidence blocks; [`job`] holds the
+//! inspector netray-web runs; [`config`] the `[modules.email]` table; [`dns`] wraps `mhost` into
+//! a shared round-robin resolver; [`quality`] defines the `Verdict` / `Grade` / `CheckResult`
+//! model; [`input`] validates domains and DKIM selectors; [`security`] holds the rate limiter;
+//! [`state`] the outbound fetch settings.
 
 pub mod checks;
 pub mod config;
@@ -34,4 +31,3 @@ pub use job::{
     EmailSummary, InspectSlots,
 };
 pub use module::{EmailModule, translate};
-pub use netray_common::middleware::RequestId;

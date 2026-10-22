@@ -17,7 +17,7 @@ repeated here.
 | `src/handlers.rs`, `src/format.rs`, `src/negotiate.rs`, `src/extractors.rs` | the V1 renderers, serialisation, negotiation and header extraction netray-web reuses |
 | `src/testing.rs` | feature `testing`: `StubIpLookup`, `stub_ip_module`, `golden_module`, `from_evidence` |
 | `data/` | `fetch.sh` behind `just ifconfig-data`, the tracked `asn_patterns.toml`, the data image's `Dockerfile`; sources in `data/README.md` |
-| `docs/enrichment.md` | the classification reference |
+| [`docs/ip-enrichment.md`](../../docs/ip-enrichment.md) (repository root) | the classification reference |
 
 ## Rules
 

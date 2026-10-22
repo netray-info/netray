@@ -3,8 +3,8 @@ name = "netray-common"
 version.workspace = true
 edition.workspace = true
 license = "MIT"
-description = "Shared utilities for the netray.info service ecosystem"
-repository = "https://github.com/netray-info/netray-common"
+description = "Shared Rust of the netray workspace"
+repository = "https://github.com/netray-info/netray"
 homepage = "https://netray.info"
 keywords = ["networking", "security", "middleware", "axum"]
 categories = ["web-programming::http-server"]
@@ -71,9 +71,6 @@ tokio = { workspace = true, features = ["signal", "net", "sync"], optional = tru
 # Optional: Prometheus metrics server (prometheus feature)
 metrics-exporter-prometheus = { workspace = true, optional = true }
 
-# JSON value type for EcosystemMeta features/limits maps
-serde_json = { workspace = true }
-
 # Optional: HTTP client (otel exporter, fetch feature)
 reqwest = { workspace = true, features = ["json", "rustls", "webpki-roots"], optional = true }
 
@@ -88,6 +85,7 @@ thiserror = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 
 [dev-dependencies]
+serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "time"] }
 tower = { workspace = true, features = ["util"] }
 futures = { workspace = true }

@@ -277,3 +277,35 @@ async fn c6_c22_fresh_head_serves_the_og_card_without_a_run() {
         "PNG differs from the head's card"
     );
 }
+
+/// Without `?label=` the route draws the card with no label (spec v2-v1-remnants, Phase 1,
+/// requirement 1): its PNG equals the card built with the empty label.
+#[tokio::test]
+async fn v1r_c8_the_og_route_draws_no_label_by_default() {
+    let (state, _calls, _dir, seeded) = setup(Some((Grade::B, 10)), "A", true).await;
+    let (run, last_seen_at) = seeded.unwrap();
+    let pct = netray_engine::history::score_run(&run, &state.scoring_profile).overall_percentage;
+    let plate = netray_web::plate::card_plate(&netray_web::plate::card_layout(&run, None));
+    let svg = netray_web::og::render::svg_for_grade(
+        DOMAIN,
+        "B",
+        "",
+        pct,
+        UNIX_EPOCH + Duration::from_secs(last_seen_at as u64),
+        Some(&plate),
+    );
+    let expected = netray_web::og::render::svg_to_png(&svg, state.font_db.clone()).unwrap();
+
+    let app = netray_web::pages::og::router(state);
+    let req = Request::builder()
+        .uri("/og/example.com.png")
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let bytes = to_bytes(resp.into_body(), 8 * 1024 * 1024).await.unwrap();
+    assert!(
+        bytes.as_ref() == expected.as_slice(),
+        "PNG differs from the no-label card"
+    );
+}

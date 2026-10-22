@@ -3,13 +3,13 @@ name = "netray-dns"
 version.workspace = true
 edition.workspace = true
 license = "MIT"
-description = "Web-based DNS debugging service powered by mhost"
+description = "The DNS module and inspector of netray, powered by mhost"
 
 [dependencies]
 netray-model = { workspace = true }
 netray-engine = { workspace = true }
 mhost = { workspace = true, features = ["dot", "doh"] }
-netray-common = { workspace = true, features = ["schema", "middleware", "enrichment", "fetch"] }
+netray-common = { workspace = true, features = ["schema", "enrichment", "fetch"] }
 
 # Web framework
 axum = { workspace = true, features = ["json"] }

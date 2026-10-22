@@ -15,5 +15,3 @@ pub mod testing;
 pub use config::ModuleConfig;
 pub use job::{HttpInspect, HttpInspectRequest, HttpRefusal};
 pub use module::{HttpModule, translate};
-
-pub use netray_common::middleware::RequestId;

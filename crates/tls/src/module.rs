@@ -21,8 +21,8 @@ use crate::dns::CaaLookup;
 use crate::dns::https_record::ech_in_presentation;
 use crate::error::AppError;
 use crate::input::{self, Target};
+use crate::inspection::{self, CaaSource, InspectRequest, InspectResponse, PortResult};
 use crate::quality::{self, HealthCheck, checks};
-use crate::routes::{self, CaaSource, InspectRequest, InspectResponse, PortResult};
 use crate::state::AppState;
 use crate::tls::probe::{ProbeOutcome, ProtocolProbes, Verdict};
 use crate::tls::{CertInfo, IpInspectionResult, TlsParams};
@@ -226,7 +226,7 @@ impl TlsModule {
             Target::Ip(ip) => ip.to_string(),
         };
 
-        let ips: Vec<IpAddr> = routes::resolve_target(&self.state, &parsed.target).await?;
+        let ips: Vec<IpAddr> = inspection::resolve_target(&self.state, &parsed.target).await?;
         // Probe connections count: the plan fits handshakes and probes into the check budget and
         // the per-target burst it is charged to.
         let selection = select_ips(
@@ -253,7 +253,7 @@ impl TlsModule {
         })?;
         let Selection { plan, warnings } = selection?;
 
-        routes::inspect(
+        inspection::inspect(
             &self.state,
             &config,
             InspectRequest {
@@ -274,7 +274,7 @@ impl TlsModule {
 
 /// The plan (addresses, probed addresses, cost) and the warnings so far.
 struct Selection {
-    plan: routes::Plan,
+    plan: inspection::Plan,
     warnings: Vec<String>,
 }
 
@@ -289,8 +289,8 @@ fn select_ips(
     probes: u32,
 ) -> Result<Selection, AppError> {
     let mut warnings = Vec::new();
-    let allowed = routes::filter_allowed(ips, allow_blocked, hostname, &mut warnings)?;
-    let plan = routes::plan_budget(&allowed, ports, budget, probes, &mut warnings);
+    let allowed = inspection::filter_allowed(ips, allow_blocked, hostname, &mut warnings)?;
+    let plan = inspection::plan_budget(&allowed, ports, budget, probes, &mut warnings);
     Ok(Selection { plan, warnings })
 }
 

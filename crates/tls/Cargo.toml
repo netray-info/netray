@@ -3,7 +3,7 @@ name = "netray-tls"
 version.workspace = true
 edition.workspace = true
 license = "MIT"
-description = "Web-based TLS certificate inspection and diagnostics service"
+description = "The TLS module and inspector of netray: certificates, handshakes and probes"
 
 [dependencies]
 netray-model = { workspace = true }
@@ -32,7 +32,7 @@ time = "0.3"
 # Web framework
 axum = { workspace = true, features = ["json"] }
 governor = { workspace = true }
-netray-common = { workspace = true, features = ["schema", "middleware", "enrichment", "fetch"] }
+netray-common = { workspace = true, features = ["schema", "enrichment", "fetch"] }
 
 # Async runtime
 tokio = { workspace = true, features = ["full"] }

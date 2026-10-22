@@ -258,7 +258,7 @@ mod probes_phase2 {
         (ip("93.184.215.14"), ip("93.184.215.15"))
     }
 
-    fn block_ids(resp: &netray_tls::routes::InspectResponse) -> Vec<String> {
+    fn block_ids(resp: &netray_tls::inspection::InspectResponse) -> Vec<String> {
         match translate(resp) {
             SectionOutcome::Measured { evidence, .. } => {
                 let evidence: Vec<Block> = evidence;

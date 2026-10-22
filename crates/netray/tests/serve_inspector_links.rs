@@ -3,6 +3,8 @@
 //! `/static/*` answers 301 to the same path and query on the apex; other methods stay on the
 //! host's inspector router. Helpers copied from `serve_inspector_hosts.rs`.
 
+mod support;
+
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
@@ -86,9 +88,12 @@ fn start(tag: &str) -> Server {
     let dir: PathBuf =
         std::env::temp_dir().join(format!("netray-links-{tag}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let (port, metrics) = (free_port(), free_port());
-    let cfg = dir.join("netray.toml");
-    std::fs::write(
+    let mut attempt = 0;
+    'attempt: loop {
+        attempt += 1;
+        let (port, metrics) = (free_port(), free_port());
+        let cfg = dir.join("netray.toml");
+        std::fs::write(
         &cfg,
         format!(
             "[server]\nbind = \"127.0.0.1:{port}\"\nmetrics_bind = \"127.0.0.1:{metrics}\"\n\n[store]\nenabled = true\ndb_path = \"{}\"\n",
@@ -96,36 +101,45 @@ fn start(tag: &str) -> Server {
         ),
     )
     .unwrap();
-    let log = std::fs::File::create(dir.join("serve.log")).unwrap();
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_netray"));
-    cmd.args(["serve", cfg.to_str().unwrap()])
-        .env_clear()
-        .stdin(Stdio::null())
-        .stdout(log.try_clone().unwrap())
-        .stderr(log);
-    for key in ["PATH", "HOME"] {
-        if let Some(v) = std::env::var_os(key) {
-            cmd.env(key, v);
+        let log = std::fs::File::create(dir.join("serve.log")).unwrap();
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_netray"));
+        cmd.args(["serve", cfg.to_str().unwrap()])
+            .env_clear()
+            .stdin(Stdio::null())
+            .stdout(log.try_clone().unwrap())
+            .stderr(log);
+        for key in ["PATH", "HOME"] {
+            if let Some(v) = std::env::var_os(key) {
+                cmd.env(key, v);
+            }
         }
+        let mut child = Killed(cmd.spawn().unwrap());
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while Instant::now() < deadline {
+            if let Some(s) = child.0.try_wait().unwrap() {
+                if attempt < support::ATTEMPTS && support::bind_failed(&dir.join("serve.log")) {
+                    continue 'attempt;
+                }
+                panic!(
+                    "serve exited early ({s}): {}",
+                    std::fs::read_to_string(dir.join("serve.log")).unwrap_or_default()
+                );
+            }
+            if attempt < support::ATTEMPTS && support::bind_failed(&dir.join("serve.log")) {
+                continue 'attempt;
+            }
+            if support::listening(&dir.join("serve.log"))
+                && request(port, "GET", "netray.info", "/health").is_some_and(|r| r.status == 200)
+            {
+                return Server {
+                    port,
+                    _child: child,
+                };
+            }
+            std::thread::sleep(Duration::from_millis(200));
+        }
+        panic!("GET /health never answered 200 within 30 s");
     }
-    let mut child = Killed(cmd.spawn().unwrap());
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while Instant::now() < deadline {
-        if let Some(s) = child.0.try_wait().unwrap() {
-            panic!(
-                "serve exited early ({s}): {}",
-                std::fs::read_to_string(dir.join("serve.log")).unwrap_or_default()
-            );
-        }
-        if request(port, "GET", "netray.info", "/health").is_some_and(|r| r.status == 200) {
-            return Server {
-                port,
-                _child: child,
-            };
-        }
-        std::thread::sleep(Duration::from_millis(200));
-    }
-    panic!("GET /health never answered 200 within 30 s");
 }
 
 #[test]

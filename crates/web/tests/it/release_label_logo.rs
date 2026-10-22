@@ -63,8 +63,9 @@ fn r6_the_default_badge_label_is_netray() {
 }
 
 #[test]
-fn r6_the_og_card_label_is_netray() {
-    assert_eq!(netray_web::og::layout::DEFAULT_LABEL, "netray");
+fn r6_the_og_card_carries_no_lens_label() {
+    // v2-v1-remnants requirement 1 superseded "netray · netray.info": the default card carries
+    // no label, and its footer reads "netray.info".
     let svg = netray_web::og::render::svg_for_grade(
         "example.com",
         "A",
@@ -73,7 +74,7 @@ fn r6_the_og_card_label_is_netray() {
         SystemTime::UNIX_EPOCH,
         None,
     );
-    assert!(svg.contains("netray \u{00b7} netray.info"), "footer: {svg}");
+    assert!(svg.contains(">netray.info</text>"), "footer: {svg}");
     assert!(!svg.contains("lens"), "no lens label: {svg}");
 }
 

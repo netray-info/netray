@@ -9,8 +9,8 @@ use std::path::PathBuf;
 use netray_engine::{EvidencePath, Module, SectionOutcome};
 use netray_model::CheckResult;
 use netray_model::evidence::{Block, BlockId, Shape, Shape as S, Value, ValueType};
+use netray_tls::inspection::InspectResponse;
 use netray_tls::module::{REGISTER, translate_with_facts};
-use netray_tls::routes::InspectResponse;
 use netray_tls::{ModuleConfig, TlsModule, translate};
 use serde_json::{Value as Json, json};
 

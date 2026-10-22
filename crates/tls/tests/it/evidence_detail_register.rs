@@ -11,8 +11,8 @@ use netray_engine::SectionOutcome;
 use netray_engine::{EvidencePath, Module};
 use netray_model::evidence::Block;
 use netray_model::evidence::{ValueType, validate};
+use netray_tls::inspection::InspectResponse;
 use netray_tls::module::REGISTER;
-use netray_tls::routes::InspectResponse;
 use netray_tls::{ModuleConfig, TlsModule, translate};
 
 #[test]

@@ -13,7 +13,7 @@ They are not repeated here.
 |---|---|
 | `src/module.rs` | `TlsModule` (`Module` impl, `checks()`, `REGISTER`, `VOLATILE`) and `translate*`: the inspection response onto `tls.<id>` checks and blocks |
 | `src/inspector.rs` | `TlsInspector`: the API v1 / inspector-page path (port rules, per-client limiters, inspection) |
-| `src/routes.rs` | the inspection core despite its name: `resolve_target`, `filter_allowed`, `plan_*`, `inspect`, `InspectResponse`; no router |
+| `src/inspection.rs` | the inspection core: `resolve_target`, `filter_allowed`, `plan_*`, `inspect`, `InspectResponse` |
 | `src/backend.rs` | `TlsBackend`: resolve and handshake; tests install a stub |
 | `src/state.rs` | `AppState`: trust store, semaphores, DNS resolver, enrichment client |
 | `src/config.rs` | `ModuleConfig` (`[modules.tls]`) and the runtime `Config`: clamped to hard caps, zeros refused |
@@ -23,7 +23,7 @@ They are not repeated here.
 ## Working rules
 
 - **Check ids are fixed in `module.rs` `CHECKS`** (23). A new one also needs its catalogue texts (root CLAUDE.md) and a mapping in `translate`.
-- **One cost plan.** Handshakes and probes go through `routes::plan_budget`/`plan_counts`/`plan_cost`: cost is `ports * (inspected + probe_connections * probed)`. Over budget the plan inspects fewer addresses (first v4, first v6, then the rest; `select_representative_ips`) and probes fewer, each with a warning; the plan itself never refuses (a limiter still may). Keep the module and the API v1 path on these functions.
+- **One cost plan.** Handshakes and probes go through `inspection::plan_budget`/`plan_counts`/`plan_cost`: cost is `ports * (inspected + probe_connections * probed)`. Over budget the plan inspects fewer addresses (first v4, first v6, then the rest; `select_representative_ips`) and probes fewer, each with a warning; the plan itself never refuses (a limiter still may). Keep the module and the API v1 path on these functions.
 - **The module's budget** is `min(check_budget, per_target_burst)`; its per-target limiter is charged before a blocked-target refusal is returned (`TlsModule::measure`).
 - **Target policy** comes from `netray_common::target_policy` (`security/target_policy.rs`); every resolved address passes `filter_allowed` before any connection.
 - **`AcceptAnyCert`** (`tls/verifier.rs`, a local one in `tls/connect.rs`) is for connections to the inspected target only: the handshake and the HSTS/redirect check. Trust is judged afterwards against the trust store.

@@ -13,10 +13,10 @@ use crate::config::{Config, ModuleConfig};
 use crate::dns::CaaLookup;
 use crate::dns::https_record::ech_in_presentation;
 use crate::error::AppError;
-use crate::module::{tls_checks, translate, translate_with_facts_at};
-use crate::routes::{
+use crate::inspection::{
     CaaInfo, CaaSource, DnsContext, InspectResponse, PortResult, compute_consistency,
 };
+use crate::module::{tls_checks, translate, translate_with_facts_at};
 use crate::state::AppState;
 use crate::tls::ocsp::{OcspInfo, OcspRevocationResult};
 use crate::tls::probe::{ProbeOutcome, ProtocolProbes, Verdict};

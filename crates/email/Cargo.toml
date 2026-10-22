@@ -3,7 +3,7 @@ name = "netray-email"
 version.workspace = true
 edition.workspace = true
 license = "MIT"
-description = "Email security inspector for netray.info — DNS-only mail posture analysis"
+description = "The email module and inspector of netray: mail posture from DNS, MTA-STS and BIMI"
 
 [dependencies]
 netray-model = { workspace = true }
@@ -11,7 +11,7 @@ netray-engine = { workspace = true }
 # Web framework
 axum = { workspace = true, features = ["json"] }
 governor = { workspace = true }
-netray-common = { workspace = true, features = ["schema", "middleware", "enrichment", "fetch"] }
+netray-common = { workspace = true, features = ["schema", "enrichment", "fetch"] }
 
 # HTTP client (MTA-STS policy, BIMI logo)
 reqwest = { workspace = true, features = ["json", "rustls", "webpki-roots", "http2"] }

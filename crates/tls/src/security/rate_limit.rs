@@ -7,7 +7,7 @@
 //!
 //! Inspection cost is the number of connections a request opens: per port one handshake per
 //! inspected address plus `TlsBackend::probe_connections` per probed address
-//! (`routes::plan_budget`).
+//! (`inspection::plan_budget`).
 
 use std::net::IpAddr;
 use std::num::NonZeroU32;
