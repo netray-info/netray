@@ -225,9 +225,14 @@ fn caching(block: &Block, ctx: &ViewContext<'_>) -> Option<String> {
     if !etag.is_empty() && matches!(get("etag_weak"), Some(Value::Bool(true))) {
         etag.push(Cell::from("weak"));
     }
-    // The block keeps six named directives and max-age; a max-age alone still proves the header.
+    // A stored entry from before v2-backend-followups keeps six named directives beside max-age;
+    // a newer one lists every directive, max-age among them. A max-age alone still proves the
+    // header.
     let mut directives = cells_of(block, pairs, "directive", ctx);
-    if let Some(max_age) = get("max_age") {
+    let has_max_age = texts(pairs, "directive")
+        .iter()
+        .any(|d| d.as_str() == "max-age" || d.starts_with("max-age="));
+    if let Some(max_age) = get("max_age").filter(|_| !has_max_age) {
         directives.push(Cell::from(format!("max-age={}", format_value(max_age))));
     }
     let cache_control = if directives.is_empty() {
@@ -280,25 +285,32 @@ fn cdn(block: &Block, ctx: &ViewContext<'_>) -> Option<String> {
 /// `http.isolation` as three cells, COOP in the tone of the `http.coop` check; COEP and CORP
 /// are not graded and carry none.
 fn isolation(block: &Block, ctx: &ViewContext<'_>) -> Option<String> {
-    let pairs = claim(block, &["coop", "coep", "corp", "missing"])?;
-    let listed = texts(pairs, "missing");
+    let pairs = claim(block, &["coop", "coep", "corp", "unreadable", "missing"])?;
+    let missing = texts(pairs, "missing");
+    let unreadable = texts(pairs, "unreadable");
     const HEADERS: [(&str, &str); 3] = [
         ("coop", "cross-origin-opener-policy"),
         ("coep", "cross-origin-embedder-policy"),
         ("corp", "cross-origin-resource-policy"),
     ];
-    // A block the backend never writes (a header both received and missing, or an unknown name
-    // under `missing`) is not claimed: the generic block shows it as stored.
+    // A block the backend never writes (a header named twice among a value, `missing` and
+    // `unreadable`, or an unknown name under either) is not claimed: the generic block shows it
+    // as stored.
     let known = |name: &String| HEADERS.iter().any(|(_, wire)| wire == name);
     let contradicts = HEADERS.iter().any(|(key, wire)| {
-        pairs.iter().any(|(k, _)| k == key) && listed.iter().any(|name| name == wire)
+        let named = pairs.iter().filter(|(k, _)| k == key).count()
+            + missing.iter().filter(|name| name == wire).count()
+            + unreadable.iter().filter(|name| name == wire).count();
+        named > 1
     });
-    if contradicts || !listed.iter().all(known) {
+    if contradicts || !missing.iter().chain(&unreadable).all(known) {
         return None;
     }
-    let header = |label: &str, key: &str, _wire: &str, tone, mark_present: bool| {
+    let header = |label: &str, key: &str, wire: &str, tone, mark_present: bool| {
         let mut values = cells_of(block, pairs, key, ctx);
-        if values.is_empty() {
+        if values.is_empty() && unreadable.iter().any(|name| name == wire) {
+            values.push(Cell::from("unreadable"));
+        } else if values.is_empty() {
             values.push(Cell::from("missing"));
         } else if mark_present {
             values.push(Cell::from("present"));

@@ -80,8 +80,8 @@ of several ports carry each port's own checks beside the band port's.
 4. The `http.coop` check keeps its status for every input (warn for a missing or unreadable
    header, as today); for an unreadable header its finding is "Cross-Origin-Opener-Policy header is
    not readable as text"; the missing finding and every readable-value branch are unchanged.
-   After a JSON replay, which carries no record of unreadable headers, the block and finding read
-   as missing, as today.
+   After a JSON replay, which carries no record of unreadable headers, the block reads as missing
+   and the finding is the replayed V1 message, as today.
 5. The isolation view claims a block holding `unreadable` and shows "unreadable" (no tone for COEP
    and CORP; COOP in the `http.coop` tone) for that header; a block naming one header under two of
    `missing`, `unreadable` or a value, or an unknown name under `unreadable`, is not claimed.
@@ -152,8 +152,9 @@ GIVEN a finished two-port run and its shared copy WHEN both exports are rendered
   so the view's duration cell and existing readers keep working (implementer under the operator's
   autonomy mandate, 2026-10-22).
 - A one-time fingerprint change accepted: a domain whose Cache-Control held `max-age` or a
-  directive outside the six flags, or listed the flags in another order, stores a new entry on its
-  next run whose diff shows `http.caching` changed; the same holds for a site with an unreadable
+  directive outside the six flags, or repeated a directive, stores a new entry on its next run
+  whose diff shows `http.caching` changed (a different order alone does not: the canonical form
+  sorts repeated keys by value); the same holds for a site with an unreadable
   COOP/COEP/CORP (`missing` becomes `unreadable`). No grade changes (implementer under the
   operator's autonomy mandate, 2026-10-22).
 - `http.coop` keeps warn for an unreadable header and only its finding names the case: failing or
@@ -171,6 +172,10 @@ GIVEN a finished two-port run and its shared copy WHEN both exports are rendered
   the UI: they are Rust view logic, not templates, and without them a new entry would show max-age
   twice and an isolation block with `unreadable` would fall back to the generic block (implementer
   under the operator's autonomy mandate, 2026-10-22).
+
+- Phase 1 review: requirement 4's replay sentence and the fingerprint note above corrected to
+  what the code and the canonical form do (implementer under the operator's autonomy mandate,
+  2026-10-22).
 
 ## Open decisions
 

@@ -318,6 +318,17 @@ pub fn assemble_response(
                 ))
             })
             .collect(),
+        unreadable_headers: https
+            .headers
+            .keys()
+            .filter(|name| {
+                https
+                    .headers
+                    .get(*name)
+                    .is_some_and(|v| v.to_str().is_err())
+            })
+            .map(|name| name.as_str().to_lowercase())
+            .collect(),
     };
 
     // Run quality checks and update the report
