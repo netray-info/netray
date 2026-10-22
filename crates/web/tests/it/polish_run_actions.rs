@@ -152,7 +152,6 @@ async fn c11_evidence_view_head_wraps_h1_and_tools() {
         .unwrap();
     let app = evidence_router(EvidenceDeps {
         history: Arc::new(store),
-        v1: None,
     });
     let resp = app
         .oneshot(

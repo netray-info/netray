@@ -84,10 +84,7 @@ async fn c10_evidence_routes_never_write_to_the_store() {
     let before = snapshot(&pool).await;
     assert_eq!(before.0, 2);
 
-    let app = evidence_router(EvidenceDeps {
-        history: store,
-        v1: None,
-    });
+    let app = evidence_router(EvidenceDeps { history: store });
 
     // The first request must be the 200, so the test cannot pass before the feature exists.
     assert_eq!(status_of(&app, "/example.com/tls").await, StatusCode::OK);

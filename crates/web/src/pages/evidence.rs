@@ -19,7 +19,6 @@ use percent_encoding::utf8_percent_encode;
 use super::errors::LOCATION_SET;
 use super::headers::secure;
 use super::{Frame, PageHelp, export_slot, not_found, page, server_error};
-use crate::entries::V1Lookup;
 use crate::entries::render::gone;
 use crate::entries::well_formed;
 use crate::evidence::{entry_section, render_section};
@@ -29,7 +28,6 @@ use crate::export::{self, ExportInput};
 #[derive(Clone)]
 pub struct EvidenceDeps {
     pub history: Arc<HistoryStore>,
-    pub v1: Option<V1Lookup>,
 }
 
 #[derive(Template)]
@@ -211,30 +209,19 @@ async fn entry(
             server_error()
         }
         Ok(Some(entry)) => view(&entry, protocol, "public, max-age=3600"),
-        Ok(None) => {
-            if let Some(v1) = &deps.v1
-                && let Some(resp) = v1(id).await
-            {
-                return if resp.status().is_server_error() {
-                    server_error()
-                } else {
-                    not_found().await
-                };
-            }
-            match gone() {
-                Ok(html) => secure(
-                    (
-                        StatusCode::GONE,
-                        [
-                            (CONTENT_TYPE, "text/html; charset=utf-8"),
-                            (CACHE_CONTROL, "public, max-age=3600"),
-                        ],
-                        html,
-                    )
-                        .into_response(),
-                ),
-                Err(_) => server_error(),
-            }
-        }
+        Ok(None) => match gone() {
+            Ok(html) => secure(
+                (
+                    StatusCode::GONE,
+                    [
+                        (CONTENT_TYPE, "text/html; charset=utf-8"),
+                        (CACHE_CONTROL, "public, max-age=3600"),
+                    ],
+                    html,
+                )
+                    .into_response(),
+            ),
+            Err(_) => server_error(),
+        },
     }
 }

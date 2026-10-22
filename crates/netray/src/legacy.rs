@@ -87,11 +87,9 @@ const ROWS: &[(&str, &str, Fate)] = &[
         "ifconfig",
         Now("[api.ip] per_target_burst"),
     ),
-    (
-        "rate_limit.exempt_cidrs",
-        "ifconfig",
-        Now("[api.ip] exempt_cidrs"),
-    ),
+    // Exempted lens's calls to ifconfig; enrichment is in-process now, and `[api.ip]` has no
+    // exemption list.
+    ("rate_limit.exempt_cidrs", "ifconfig", Removed),
     ("rate_limit.per_ip", "beacon", Removed),
     ("scoring.profile_path", "lens", Now("[engine] profile_path")),
     ("history.enabled", "lens", Now("[store] enabled")),
@@ -137,7 +135,7 @@ const ROWS: &[(&str, &str, Fate)] = &[
     ),
     ("validation", "tlsight", Now("[modules.tls].validation")),
     ("quality", "tlsight", Now("[modules.tls].quality")),
-    ("enrichment", "spectra", Now("[modules.http].enrichment")),
+    ("enrichment", "spectra", InProcess),
     ("dnsbl", "beacon", Now("[modules.email].dnsbl")),
     ("http", "beacon", Now("[modules.email].http")),
     ("dkim", "beacon", Now("[modules.email].dkim")),

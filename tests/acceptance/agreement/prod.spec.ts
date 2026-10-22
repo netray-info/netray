@@ -21,7 +21,7 @@ async function get(request: APIRequestContext, path: string): Promise<string> {
   return response.text();
 }
 
-// TODO(v2-result-page): confirm selector. The grade letter is the `.grade__letter` of the
+// The grade letter is the `.grade__letter` of the
 // grade component (crates/web/templates/components/grade.html).
 function viewGrade(html: string): string {
   const match = html.match(/<span class="grade__letter">([^<]+)<\/span>/);
@@ -29,27 +29,29 @@ function viewGrade(html: string): string {
   return match![1].trim();
 }
 
-// TODO(v2-result-page): confirm selector, and scope it to the open-issues block once its
-// marker exists. The check-row component also renders passed checks and the evidence copies of
-// each issue (SDD §5, §5.8), so only warn and fail rows count, each once.
+// The check-row component (crates/web/templates/components/check_row.html) carries its tone on
+// the article (`data-tone`) and its check ID on its main column (`data-check`). It also renders
+// passed checks and the evidence copies of each issue, so only warn and fail rows count, each once.
 function viewIssues(html: string): string[] {
   const rows = [
-    ...html.matchAll(
-      /<span class="check-row__code">([^<]+)<\/span>\s*<span class="check-row__tone">([^<]+)<\/span>/g,
-    ),
+    ...html.matchAll(/<article class="check-row" data-tone="([^"]+)">[\s\S]*?data-check="([^"]+)"/g),
   ];
   const issues = rows
-    .map((m) => [m[1].trim(), m[2].trim()])
+    .map((m) => [m[2].trim(), m[1].trim()])
     .filter(([, tone]) => tone === 'warn' || tone === 'fail')
     .map(([code, tone]) => `${code} ${tone}`);
   return [...new Set(issues)].sort();
 }
 
-// TODO(v2-result-page): confirm selector. The entry's own address `/r/<id>` is what main's
-// entry view carries in `og:url`; the result and evidence views are expected to carry it too.
+// The entry a view shows: the entry page names it in `og:url`, an evidence view in its canonical
+// link `/r/<id>/<protocol>` (crates/web/src/pages/evidence.rs), the result page in its share link
+// `/r/<id>` (crates/web/templates/partials/result_share.html).
 function viewEntryId(html: string): string {
-  const match = html.match(/<meta property="og:url" content="[^"]*\/r\/([0-9A-Za-z]{8})"/);
-  expect(match, 'entry ID in og:url').not.toBeNull();
+  const match =
+    html.match(/<meta property="og:url" content="[^"]*\/r\/([0-9A-Za-z]{8})"/) ??
+    html.match(/<link rel="canonical" href="[^"]*\/r\/([0-9A-Za-z]{8})\//) ??
+    html.match(/href="\/r\/([0-9A-Za-z]{8})"/);
+  expect(match, 'entry ID in og:url, the canonical link or the share link').not.toBeNull();
   return match![1];
 }
 

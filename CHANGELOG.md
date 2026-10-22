@@ -93,7 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `rate_limit.per_ip_burst` | ifconfig | `[api.ip] per_ip_burst` |
 | `rate_limit.per_target_per_minute` | ifconfig | `[api.ip] per_target_per_minute` |
 | `rate_limit.per_target_burst` | ifconfig | `[api.ip] per_target_burst` |
-| `rate_limit.exempt_cidrs` | ifconfig | `[api.ip] exempt_cidrs` |
+| `rate_limit.exempt_cidrs` | ifconfig | removed |
 | `rate_limit.per_ip` | beacon | removed |
 | `scoring.profile_path` | lens | `[engine] profile_path` |
 | `history.enabled` | lens | `[store] enabled` |
@@ -115,7 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `circuit_breaker` | prism | `[modules.dns].circuit_breaker` |
 | `validation` | tlsight | `[modules.tls].validation` |
 | `quality` | tlsight | `[modules.tls].quality` |
-| `enrichment` | spectra | `[modules.http].enrichment` |
+| `enrichment` | spectra | removed: enrichment calls the in-process ip module |
 | `dnsbl` | beacon | `[modules.email].dnsbl` |
 | `http` | beacon | `[modules.email].http` |
 | `dkim` | beacon | `[modules.email].dkim` |

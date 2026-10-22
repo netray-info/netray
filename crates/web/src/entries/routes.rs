@@ -1,5 +1,3 @@
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -26,11 +24,6 @@ pub const NOT_FOUND_HTML: &str = r#"<!DOCTYPE html><html><head><title>Not found<
 const HTML: &str = "text/html; charset=utf-8";
 const CACHE: &str = "public, max-age=3600";
 
-/// V1 snapshot lookup handed in by lens: `None` when no live snapshot has the ID, `Some` with
-/// lens's complete V1 answer otherwise (the page, or its 500 for a failed lookup).
-pub type V1Lookup =
-    Arc<dyn Fn(String) -> Pin<Box<dyn Future<Output = Option<Response>> + Send>> + Send + Sync>;
-
 /// What an entry's OG card shows.
 pub struct EntryCard {
     pub domain: String,
@@ -46,7 +39,6 @@ pub type CardRenderer = Arc<dyn Fn(&EntryCard) -> Result<Vec<u8>, Box<Response>>
 #[derive(Clone)]
 pub struct EntriesDeps {
     pub history: Arc<HistoryStore>,
-    pub v1: Option<V1Lookup>,
     pub card: CardRenderer,
 }
 
@@ -122,14 +114,7 @@ async fn entry_page(
             metrics::counter!("netray_entry_views_total").increment(1);
             page(StatusCode::OK, render::entry(&entry_view(&entry)))
         }
-        Ok(None) => {
-            if let Some(v1) = &deps.v1
-                && let Some(resp) = v1(id).await
-            {
-                return resp;
-            }
-            page(StatusCode::GONE, render::gone())
-        }
+        Ok(None) => page(StatusCode::GONE, render::gone()),
     }
 }
 

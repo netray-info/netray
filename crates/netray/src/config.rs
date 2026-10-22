@@ -245,13 +245,15 @@ impl Config {
         Duration::from_millis(self.engine.resolve_timeout_ms)
     }
 
-    /// The module tables without the section windows, as the module registry reads them.
+    /// The module tables without the section windows, as the module registry reads them. A known
+    /// module's table left empty goes (the module runs on its defaults); an unknown one stays, so
+    /// the registry refuses it even when it held only its section window.
     pub fn module_tables(&self) -> BTreeMap<String, toml::Table> {
         let mut modules = self.modules.clone();
         for table in modules.values_mut() {
             table.remove("deadline_ms");
         }
-        modules.retain(|_, table| !table.is_empty());
+        modules.retain(|name, table| !table.is_empty() || !MODULES.contains(&name.as_str()));
         modules
     }
 

@@ -55,6 +55,11 @@ async fn send(app: &Router, host: &str, method: &str, path: &str) -> (u16, Optio
 const ROWS: &[(&str, &str, &str, u16, &str)] = &[
     ("lens.netray.info", "GET", "/r/abcd1234?x=1", 301, "https://netray.info/r/abcd1234?x=1"),
     ("lens.netray.info", "HEAD", "/r/abcd1234?x=1", 301, "https://netray.info/r/abcd1234?x=1"),
+    ("lens.netray.info", "GET", "/og/example.com.png", 301, "https://netray.info/og/example.com.png"),
+    // The apex serves /r/<id> (entries, 13j) and /og/<domain>.png (the OG card) itself.
+    ("netray.info", "GET", "/r/abcd1234", 200, "apex"),
+    ("netray.info", "GET", "/r/abcd1234/tls", 200, "apex"),
+    ("netray.info", "GET", "/og/example.com.png", 200, "apex"),
     ("lens.netray.info", "GET", "/x", 301, "https://netray.info/x"),
     ("lens.netray.info", "GET", "/docs", 301, "https://netray.info/docs"),
     ("lens.netray.info", "GET", "/api/check/example.com", 301, "https://netray.info/api/check/example.com"),

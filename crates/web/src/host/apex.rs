@@ -116,12 +116,10 @@ fn routes_with(state: ApexState, inspect: InspectDeps, api: ApiState) -> Router 
         Some(history) => {
             let entries = crate::entries::router(crate::entries::EntriesDeps {
                 history: history.clone(),
-                v1: None,
                 card: crate::pages::og::entry_card_renderer(&state),
             })
             .merge(crate::pages::evidence_router(crate::pages::EvidenceDeps {
                 history: history.clone(),
-                v1: None,
             }));
             let result = crate::pages::result::router(
                 crate::pages::result::ResultState::new(

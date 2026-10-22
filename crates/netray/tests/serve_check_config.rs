@@ -119,11 +119,109 @@ fn example_config_holds_every_table_and_key() {
         ("badges", &[]),
         ("og_cards", &[]),
         ("telemetry", &[]),
-        ("modules.dns", &["deadline_ms"]),
+        ("inspect.dns", &["deadline_ms", "max_concurrent"]),
+        ("inspect.tls", &["deadline_ms", "max_concurrent"]),
+        ("inspect.http", &["deadline_ms", "max_concurrent"]),
+        ("inspect.email", &["deadline_ms", "max_concurrent"]),
+        ("inspect.ip", &["deadline_ms", "max_concurrent"]),
+        // Each module's `ModuleConfig` (crates/<m>/src/config.rs), section by section, plus the
+        // section window `deadline_ms`.
+        ("modules.dns", &["deadline_ms", "servers"]),
+        (
+            "modules.dns.dns",
+            &[
+                "default_servers",
+                "allow_system_resolvers",
+                "allow_arbitrary_servers",
+            ],
+        ),
+        (
+            "modules.dns.limits",
+            &[
+                "per_target_per_minute",
+                "per_target_burst",
+                "max_timeout_secs",
+                "max_servers",
+            ],
+        ),
+        (
+            "modules.dns.circuit_breaker",
+            &[
+                "window_secs",
+                "cooldown_secs",
+                "failure_threshold",
+                "min_requests",
+            ],
+        ),
         ("modules.tls", &["deadline_ms"]),
+        (
+            "modules.tls.limits",
+            &[
+                "handshake_timeout_secs",
+                "request_timeout_secs",
+                "max_ports",
+                "max_concurrent_handshakes",
+                "max_ips_per_hostname",
+                "per_target_per_minute",
+                "per_target_burst",
+                "check_budget",
+            ],
+        ),
+        ("modules.tls.dns", &["timeout_secs"]),
+        (
+            "modules.tls.validation",
+            &[
+                "expiry_warning_days",
+                "expiry_critical_days",
+                "check_dane",
+                "check_caa",
+                "check_ct",
+                "custom_ca_dir",
+            ],
+        ),
+        (
+            "modules.tls.quality",
+            &["enabled", "http_check_timeout_secs", "skip_http_checks"],
+        ),
         ("modules.http", &["deadline_ms"]),
+        (
+            "modules.http.inspect",
+            &[
+                "request_timeout_secs",
+                "total_timeout_secs",
+                "max_redirects",
+                "user_agent",
+            ],
+        ),
+        (
+            "modules.http.limits",
+            &["per_target_per_minute", "per_target_burst"],
+        ),
         ("modules.email", &["deadline_ms"]),
-        ("modules.ip", &["deadline_ms"]),
+        ("modules.email.dns", &["resolvers", "timeout_ms"]),
+        ("modules.email.dnsbl", &["zones", "timeout_ms", "resolvers"]),
+        ("modules.email.http", &["timeout_ms"]),
+        ("modules.email.dkim", &["max_user_selectors"]),
+        ("modules.email.inspections", &["max_concurrent"]),
+        (
+            "modules.ip",
+            &[
+                "deadline_ms",
+                "geoip_city_db",
+                "geoip_asn_db",
+                "user_agent_regexes",
+                "tor_exit_nodes",
+                "feodo_botnet_ips",
+                "cins_army_ips",
+                "cloud_provider_ranges",
+                "vpn_ranges",
+                "datacenter_ranges",
+                "bot_ranges",
+                "spamhaus_drop",
+                "asn_patterns",
+                "asn_info",
+            ],
+        ),
     ];
     let mut missing = Vec::new();
     for (table, keys) in table_keys {

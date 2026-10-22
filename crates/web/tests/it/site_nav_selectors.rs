@@ -121,12 +121,8 @@ async fn app() -> (Router, Arc<StubRuns>, tempfile::TempDir) {
         calls: Mutex::new(vec![]),
     });
     let store = Arc::new(store);
-    let app = router(ResultState::new(store.clone(), runs.clone(), 300)).merge(evidence_router(
-        EvidenceDeps {
-            history: store,
-            v1: None,
-        },
-    ));
+    let app = router(ResultState::new(store.clone(), runs.clone(), 300))
+        .merge(evidence_router(EvidenceDeps { history: store }));
     (app, runs, dir)
 }
 

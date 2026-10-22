@@ -55,7 +55,6 @@ async fn c7_all_web_routers_merge_without_a_conflict_and_both_answer() {
     store.migrate().await.unwrap();
     let entries = router(EntriesDeps {
         history: Arc::new(store),
-        v1: None,
         card: Arc::new(|_: &EntryCard| Ok(Vec::new())),
     });
 

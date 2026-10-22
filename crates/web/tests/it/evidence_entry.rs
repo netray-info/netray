@@ -10,7 +10,6 @@ use netray_model::evidence::EVIDENCE_SCHEMA_VERSION;
 use netray_model::run::{Run, RunCheck, RunSection, SectionKind};
 use netray_model::{CheckId, Grade, Protocol, Status};
 use netray_store::{HistoryStore, Recorded};
-use netray_web::entries::V1Lookup;
 use netray_web::pages::{EvidenceDeps, evidence_router};
 use tower::ServiceExt;
 
@@ -58,8 +57,8 @@ async fn record(store: &HistoryStore, domain: &str) -> String {
     }
 }
 
-fn app(store: Arc<HistoryStore>, v1: Option<V1Lookup>) -> Router {
-    evidence_router(EvidenceDeps { history: store, v1 })
+fn app(store: Arc<HistoryStore>) -> Router {
+    evidence_router(EvidenceDeps { history: store })
 }
 
 async fn get(app: &Router, path: &str) -> (StatusCode, String) {
@@ -77,20 +76,16 @@ async fn get(app: &Router, path: &str) -> (StatusCode, String) {
 async fn c5_entry_evidence_route_answers_200_410_404_and_500() {
     let (store, _dir) = open().await;
     let id = record(&store, "a.example.com").await;
-    let v1_none: V1Lookup = Arc::new(|_| Box::pin(async { None }));
 
-    let (status, body) = get(&app(store.clone(), None), &format!("/r/{id}/email")).await;
+    let (status, body) = get(&app(store.clone()), &format!("/r/{id}/email")).await;
     assert_eq!(status, StatusCode::OK);
     assert!(body.contains("data-protocol=\"email\""), "{body}");
     assert!(body.contains(&format!("entry {id}")), "{body}");
 
-    let (status, _) = get(&app(store.clone(), None), "/r/AAAAAAAA/email").await;
-    assert_eq!(status, StatusCode::GONE, "no v1 lookup");
+    let (status, _) = get(&app(store.clone()), "/r/AAAAAAAA/email").await;
+    assert_eq!(status, StatusCode::GONE, "never-issued id");
 
-    let (status, _) = get(&app(store.clone(), Some(v1_none)), "/r/AAAAAAAA/email").await;
-    assert_eq!(status, StatusCode::GONE, "v1 lookup answering None");
-
-    let (status, _) = get(&app(store, None), "/r/abc/tls").await;
+    let (status, _) = get(&app(store), "/r/abc/tls").await;
     assert_eq!(status, StatusCode::NOT_FOUND, "malformed id");
 
     let (store, dir) = open().await;
@@ -100,6 +95,6 @@ async fn c5_entry_evidence_route_answers_200_410_404_and_500() {
         .execute(&pool)
         .await
         .unwrap();
-    let (status, _) = get(&app(store, None), "/r/AAAAAAAA/email").await;
+    let (status, _) = get(&app(store), "/r/AAAAAAAA/email").await;
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "failing store");
 }

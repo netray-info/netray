@@ -6,7 +6,5 @@ mod routes;
 pub mod view;
 
 pub(crate) use routes::well_formed;
-pub use routes::{
-    CardRenderer, EntriesDeps, EntryCard, NOT_FOUND_HTML, V1Lookup, privacy_router, router,
-};
+pub use routes::{CardRenderer, EntriesDeps, EntryCard, NOT_FOUND_HTML, privacy_router, router};
 pub use view::{EntryPageView, StatusCounts};

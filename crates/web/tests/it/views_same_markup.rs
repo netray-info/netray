@@ -234,7 +234,6 @@ async fn c4_c9_the_hsts_view_is_byte_identical_in_shared_page_entry_view_and_res
         &get(
             &evidence_router(EvidenceDeps {
                 history: store.clone(),
-                v1: None,
             }),
             &format!("/r/{id}/http"),
         )

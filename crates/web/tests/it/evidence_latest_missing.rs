@@ -70,10 +70,7 @@ async fn c4_no_entry_for_the_domain_answers_404_linking_the_domain_page() {
         for d in *domains {
             record(&store, d).await;
         }
-        let app: Router = evidence_router(EvidenceDeps {
-            history: store,
-            v1: None,
-        });
+        let app: Router = evidence_router(EvidenceDeps { history: store });
 
         let res = app
             .oneshot(

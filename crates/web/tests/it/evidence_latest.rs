@@ -55,7 +55,6 @@ async fn app_with_entry() -> (Router, String, tempfile::TempDir) {
     };
     let app = evidence_router(EvidenceDeps {
         history: Arc::new(store),
-        v1: None,
     });
     (app, id, dir)
 }
