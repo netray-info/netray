@@ -107,7 +107,7 @@ V24, V25, HTTP-UI V9, IP-UI V11, site-nav V2, V4, V6, V7, V9, V10, V14, V15.
    leaders pass labels. Rows are added as before (at least three); the placement is made at the
    narrowest plate. SDD §5.5 is amended in the same commit.
 10. **Wide facts.** A `facts_grid` cell whose values' display text (joined as rendered) is longer
-    than `FACT_WIDE_CHARS` (one public constant, 40) spans the grid's full width
+    than `FACT_WIDE_CHARS` (one public constant, 64: about two lines of a 240 px cell) spans the grid's full width
     (`data-wide`); the decision is one pure function in Rust, used by the template. Applies to
     every facts grid (TLS certificate, IP card).
 11. **Guides.** A guide's article (title, lede, prose, code, tool cards, related guides) reads in
@@ -165,7 +165,7 @@ GIVEN the stored email view of shop.example.com WHEN rendered THEN one section "
 GIVEN a check row with block links in the evidence section WHEN rendered THEN the links sit inside the row's card element.
 GIVEN a table block of three columns WHEN rendered THEN a `.evidence-block__swipe` follows the table; GIVEN a two-column table THEN none.
 GIVEN `email.bimi` with no fields WHEN rendered THEN the block reads "Nothing recorded."
-GIVEN a facts cell of 41 characters WHEN `wide` is asked THEN it is true; GIVEN 40 THEN false; GIVEN a chips cell whose joined names pass 40 THEN true.
+GIVEN a facts cell of 65 characters WHEN `wide` is asked THEN it is true; GIVEN 64 THEN false; GIVEN a chips cell whose joined names pass 64 THEN true.
 GIVEN a TLS certificate grid with a long SAN list WHEN rendered THEN its cell carries `data-wide`.
 GIVEN a guide WHEN rendered THEN its article sits in a `.guide-article` column whose stylesheet sets a 72ch maximum.
 
@@ -207,6 +207,10 @@ GIVEN every captured page at 390 px WHEN measured THEN the document is not wider
 - An empty block reads "Nothing recorded." as presentation of the absence; the block itself
   holds no placeholder (CLAUDE.md) (implementer under the operator's autonomy mandate,
   2026-10-22).
+- `FACT_WIDE_CHARS` is 64, not the drafted 40: at 40 the OCSP line, serial and SHA-1 went full
+  width too, leaving short cells alone on their rows; at 64 a value wraps to at most about two
+  lines of a 240 px cell before it spans the grid (implementer under the operator's autonomy
+  mandate, 2026-10-22).
 - The guide column uses a `ch` width, not a token: the gate tokens colours, radii, fonts and
   lines, and no board draws a guide (implementer under the operator's autonomy mandate,
   2026-10-22).

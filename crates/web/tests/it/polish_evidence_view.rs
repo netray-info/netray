@@ -138,9 +138,11 @@ fn anchors(html: &str) -> Vec<(String, String)> {
     html.split("<a ")
         .skip(1)
         .map(|a| {
-            let href = between(a, "href=\"", "\"")
-                .trim_start_matches("href=\"")
-                .trim_end_matches('"')
+            let href = a
+                .split("href=\"")
+                .nth(1)
+                .and_then(|r| r.split('"').next())
+                .unwrap_or_default()
                 .to_string();
             let label = a[a.find('>').unwrap() + 1..].split("</a>").next().unwrap();
             (href, label.trim().to_string())

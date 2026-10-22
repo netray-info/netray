@@ -27,3 +27,17 @@
 - G2: `static/inspector_shell.css` (phone run actions), `templates/pages/evidence.html` and `static/pages.css` (`.evidence-view__head`).
 - G3: `templates/partials/inspect_notice.html`, `src/pages/inspect.rs` (`NoticeFragment` tone and examples; `examples(tool)` shared with the shell; `notice(.., warn)`), `static/inspector_shell.css` (notice card).
 - G4: `templates/partials/inspect_band.html` (`.inspector-checks__card`), `static/inspector_shell.css` (card, phone header).
+
+## Phase 3 — Evidence view, facts grid and guides
+
+## Groups
+
+- G1: C1, C4, C5, C6, C7 (evidence view)
+- G2: C2, C8, C9 (wide facts)
+- G3: C3, C10 (guides)
+
+## Plan
+
+- G1: `src/explore.rs` (`ExploreLink::target`), `templates/pages/evidence.html` (Explore live section), `templates/partials/evidence_section.html` (`.evidence-section__rows` card), `src/components.rs` (`EvidenceShape::is_empty`, `swipes`), `templates/components/evidence_block.html`, `static/evidence_block.css`, `static/pages.css`.
+- G2: `src/components.rs` (`FACT_WIDE_CHARS`, `FactCell::wide`), `templates/components/facts_grid.html`, `static/facts_grid.css`.
+- G3: `templates/pages/guide.html` (`article.guide-article`), `static/pages.css`, `static/query_input.css` (phone tool card).

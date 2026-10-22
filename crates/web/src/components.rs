@@ -138,6 +138,28 @@ pub enum EvidenceShape {
 }
 
 impl EvidenceShape {
+    /// Whether the block holds no value: the card then says so instead of an empty body.
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Records(rows) => rows.is_empty(),
+            Self::Table { rows, .. } => rows.is_empty(),
+            Self::Chain(items) => items.is_empty(),
+            Self::Tree(items) => items.is_empty(),
+            Self::Fields(fields) => fields.is_empty(),
+            Self::Text(text) => text.is_empty(),
+        }
+    }
+
+    /// Whether the block is a table wide enough to scroll on a phone (three or more columns, or
+    /// records): the phone's swipe note goes under it (board M).
+    pub fn swipes(&self) -> bool {
+        match self {
+            Self::Records(_) => true,
+            Self::Table { columns, .. } => columns.len() >= 3,
+            _ => false,
+        }
+    }
+
     /// The `data-shape` value.
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -565,6 +587,23 @@ pub struct FactCell {
     pub values: Vec<Cell>,
     pub chips: bool,
     pub tone: Option<Tone>,
+}
+
+/// A facts cell whose values read longer than this many characters spans the grid's full width.
+pub const FACT_WIDE_CHARS: usize = 64;
+
+impl FactCell {
+    /// Whether the cell spans the grid's width: its values joined with ", " are longer than
+    /// `FACT_WIDE_CHARS` characters (a raw user agent, a long SAN list).
+    pub fn wide(&self) -> bool {
+        let chars: usize = self
+            .values
+            .iter()
+            .map(|v| v.text.chars().count())
+            .sum::<usize>()
+            + 2 * self.values.len().saturating_sub(1);
+        chars > FACT_WIDE_CHARS
+    }
 }
 
 /// A grid of labelled facts.

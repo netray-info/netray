@@ -190,6 +190,15 @@
   font-size: var(--font-size-label);
 }
 @media (max-width: 480px) {
+  .guide-tool .query-input__field {
+    flex-basis: 100%;
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+  .guide-tool .query-input__submit {
+    flex-basis: 100%;
+    min-height: 44px;
+  }
   /* the chooser wraps under the host field: its label returns above its toggles */
   .port-chooser__label {
     position: static;

@@ -124,7 +124,12 @@ fn c10_guide_article_measure_is_72ch() {
 
 #[test]
 fn c3_guide_tool_entry_stacks_on_a_phone() {
-    let regions = phone_regions(&pages_css());
+    // The gate keeps rules on query_input's classes in its own stylesheet.
+    let css = fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("static/query_input.css"),
+    )
+    .unwrap();
+    let regions = phone_regions(&css);
     let rows = [
         (".guide-tool .query-input__field", "flex-basis:100%"),
         (".guide-tool .query-input__submit", "flex-basis:100%"),

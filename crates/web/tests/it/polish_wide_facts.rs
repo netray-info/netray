@@ -24,32 +24,31 @@ fn cell_markup<'a>(html: &'a str, label: &str) -> &'a str {
 }
 
 #[test]
-fn wide_threshold_is_forty_chars() {
-    assert_eq!(FACT_WIDE_CHARS, 40);
+fn wide_threshold_is_sixty_four_chars() {
+    assert_eq!(FACT_WIDE_CHARS, 64);
 }
 
 #[test]
 fn wide_counts_chars_of_the_joined_texts() {
-    let v40 = "a".repeat(40);
-    let v41 = "a".repeat(41);
-    assert!(!cell("L", &[&v40], false).wide());
-    assert!(cell("L", &[&v41], false).wide());
-    // 41 two-byte chars: wide by chars, 40 two-byte chars (80 bytes): not wide
-    assert!(cell("L", &["é".repeat(41).as_str()], false).wide());
-    assert!(!cell("L", &["é".repeat(40).as_str()], false).wide());
-    // chips: "aaaaaaaaaaaaa, bbbbbbbbbbbbb, ccccccccccccc" = 13*3 + 2*2 = 43
-    let names = ["a".repeat(13), "b".repeat(13), "c".repeat(13)];
+    let n = FACT_WIDE_CHARS;
+    assert!(!cell("L", &["a".repeat(n).as_str()], false).wide());
+    assert!(cell("L", &["a".repeat(n + 1).as_str()], false).wide());
+    // n + 1 two-byte chars: wide by chars; n two-byte chars (2n bytes): not wide
+    assert!(cell("L", &["é".repeat(n + 1).as_str()], false).wide());
+    assert!(!cell("L", &["é".repeat(n).as_str()], false).wide());
+    // chips: three names of 21 chars joined with ", " = 63 + 4 = 67 > 64
+    let names = ["a".repeat(21), "b".repeat(21), "c".repeat(21)];
     let refs: Vec<&str> = names.iter().map(String::as_str).collect();
     assert!(cell("L", &refs, true).wide());
-    // 12*3 + 4 = 40: not wide
-    let names = ["a".repeat(12), "b".repeat(12), "c".repeat(12)];
+    // three names of 20 chars: 60 + 4 = 64, not wide
+    let names = ["a".repeat(20), "b".repeat(20), "c".repeat(20)];
     let refs: Vec<&str> = names.iter().map(String::as_str).collect();
     assert!(!cell("L", &refs, true).wide());
 }
 
 #[test]
 fn facts_grid_marks_only_wide_cells() {
-    let long = "x".repeat(41);
+    let long = "x".repeat(FACT_WIDE_CHARS + 1);
     let html = facts_grid(&FactsGridView {
         cells: vec![
             cell("Short", &["200"], false),

@@ -327,6 +327,9 @@ main .tool-card__tagline {
   font-weight: var(--font-weight-regular);
   letter-spacing: 0;
 }
+.guide-article {
+  max-width: 72ch;
+}
 .guide-lede {
   font-size: var(--font-size-h2);
 }
@@ -1313,6 +1316,35 @@ main td {
 }
 #evidence > .inspector-export {
   margin: var(--space-2) 0 0;
+}
+.evidence-section__rows {
+  margin: var(--space-3) 0;
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: var(--color-surface);
+}
+.evidence-section__rows > :first-child {
+  border-top: 0;
+}
+@media (max-width: 480px) {
+  .evidence-section__rows > .evidence-section__link {
+    margin-inline-start: var(--space-4);
+  }
+}
+.evidence-view__explore ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.evidence-view__explore a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
 }
 /* A check row's links to its blocks: small, under the row's text column. */
 .evidence-section__link {

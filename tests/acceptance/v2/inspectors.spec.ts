@@ -179,7 +179,7 @@ for (const protocol of PROTOCOLS) {
         }
 
         // explore-live links
-        const explore = await hrefs(page, '.evidence-view__explore');
+        const explore = await hrefs(page, '.evidence-view__explore a');
         expect(explore[0]).toBe(VIEW_LINK[protocol]);
         for (const row of ROW_LINKS[protocol] ?? []) expect(explore).toContain(row);
         for (const block of BLOCK_LINKS[protocol] ?? []) expect(explore).toContain(block);
@@ -246,7 +246,7 @@ for (const { tool } of INSPECTORS) {
 // C9
 test('C9: the email.mx row links to /inspect/tls?h=mx1.example.com:25', async ({ page }) => {
   await page.goto(`${lens}/${DOMAIN}/email`);
-  const explore = await hrefs(page, '.evidence-view__explore');
+  const explore = await hrefs(page, '.evidence-view__explore a');
   expect(explore).toContain('/inspect/tls?h=mx1.example.com:25');
 });
 

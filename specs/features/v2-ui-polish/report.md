@@ -103,13 +103,41 @@ Read: builder card with Types, Job (query pressed), Resolver; the +check note sh
 
 | id | criterion | status | test file |
 |---|---|---|---|
-| C1 | R8 the email evidence view at 390 px: explore links in one section named by inspector and query, row links inside the row card, swipe note under wide tables at phone width, Nothing recorded for an empty block, row cells on one baseline | open | |
-| C2 | R10 a facts cell longer than FACT_WIDE_CHARS spans the grid, decided by one pure Rust function | open | |
-| C3 | R11 a guide article reads in a 72ch column; at phone width a tool card stacks its field above a full-width submit | open | |
-| C4 | S the stored email view lists Explore live links named DNS shop.example.com MX, TLS mx1.shop.example.com:25, DNS _dmarc.shop.example.com TXT, DNS _mta-sts.shop.example.com TXT and no bare Explore live link | open | |
-| C5 | S a check row's block links sit inside the row's card element in the evidence section | open | |
-| C6 | S a three-column table block carries a swipe note after its table; a two-column one none | open | |
-| C7 | S email.bimi with no fields reads Nothing recorded. | open | |
-| C8 | S a facts cell of 41 characters is wide, 40 is not, a chips cell whose joined names pass 40 is wide | open | |
-| C9 | S a TLS certificate grid with a long SAN list marks that cell data-wide | open | |
-| C10 | S a guide article sits in a .guide-article column with a 72ch maximum | open | |
+| C1 | R8 the email evidence view at 390 px: explore links in one section named by inspector and query, row links inside the row card, swipe note under wide tables at phone width, Nothing recorded for an empty block, row cells on one baseline | green | crates/web/tests/it/polish_evidence_view.rs |
+| C2 | R10 a facts cell longer than FACT_WIDE_CHARS spans the grid, decided by one pure Rust function | green | crates/web/tests/it/polish_wide_facts.rs |
+| C3 | R11 a guide article reads in a 72ch column; at phone width a tool card stacks its field above a full-width submit | green | crates/web/tests/it/polish_guides.rs |
+| C4 | S the stored email view lists Explore live links named DNS shop.example.com MX, TLS mx1.shop.example.com:25, DNS _dmarc.shop.example.com TXT, DNS _mta-sts.shop.example.com TXT and no bare Explore live link | green | crates/web/tests/it/polish_evidence_view.rs |
+| C5 | S a check row's block links sit inside the row's card element in the evidence section | green | crates/web/tests/it/polish_evidence_view.rs |
+| C6 | S a three-column table block carries a swipe note after its table; a two-column one none | green | crates/web/tests/it/polish_evidence_view.rs |
+| C7 | S email.bimi with no fields reads Nothing recorded. | green | crates/web/tests/it/polish_evidence_view.rs |
+| C8 | S a facts cell of 65 characters is wide, 64 is not, a chips cell whose joined names pass 64 is wide | green | crates/web/tests/it/polish_wide_facts.rs |
+| C9 | S a TLS certificate grid with a long SAN list marks that cell data-wide | green | crates/web/tests/it/polish_wide_facts.rs |
+| C10 | S a guide article sits in a .guide-article column with a 72ch maximum | green | crates/web/tests/it/polish_guides.rs |
+
+Changed protected tests: `polish_evidence_view.rs` (the anchor helper read every href as empty), `polish_guides.rs` (the guide tool card's phone rules live in `query_input.css`, the component gate's owner of `.query-input__*`), `polish_wide_facts.rs` (threshold 64, relative to the constant).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 evidence view | 0 | orchestrator | 0 | 0 |
+| G2 wide facts | 0 | orchestrator | 0 | 0 |
+| G3 guides | 0 | orchestrator | 0 | 0 |
+
+### Behavioural verification
+
+```
+$ node shot.mjs p3/email http://127.0.0.1:18080/shop.example.com/email 1280,390 light,dark
+p3/email-390-light.png status 200 scrollWidth 390 viewport 390
+$ node shot.mjs p3/tls 'http://127.0.0.1:18080/inspect/tls?h=1.1.1.1:443' 1280,390 light,dark
+p3/tls-1280-light.png status 200 scrollWidth 1280 viewport 1280
+```
+Read: Explore live section with four named links; row links inside the rows card; "Nothing recorded." under BIMI; swipe notes under the four-column tables at 390 px; the certificate grid's Subject, Alternative names, Issuer, SHA-256 and SCT logs span the grid.
+
+### Review
+
+| class | finding | disposition |
+|---|---|---|
+| AMENDMENT | the acceptance suite read explore hrefs from `.evidence-view__explore`, now the section | repaired in phase: `tests/acceptance/v2/inspectors.spec.ts` reads `.evidence-view__explore a` |
+| AMENDMENT | the guide tool field rendered 62 px at phone width (content-box) | repaired in phase: `box-sizing: border-box` |
+| NIT | the card-closing guard in `polish_evidence_view.rs` cannot fail with check rows inside | kept: the template's rows loop and links loop are one loop inside the card |
