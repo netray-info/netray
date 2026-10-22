@@ -805,25 +805,16 @@ pub fn live_run(sections: &[SectionEvent]) -> Run {
         blocks: Vec::new(),
     };
     for event in sections {
-        let (outcome, reason) = match &event.outcome {
-            SectionOutcome::Measured { checks, evidence } => {
-                run.checks.extend(checks.iter().map(|c| RunCheck {
-                    id: c.id.clone(),
-                    status: c.status,
-                    findings: c.findings.clone(),
-                    evidence: c.evidence.clone(),
-                }));
-                run.blocks.extend(evidence.iter().cloned());
-                (SectionKind::Measured, None)
-            }
-            SectionOutcome::NotApplicable { reason } => {
-                (SectionKind::NotApplicable, Some(reason.clone()))
-            }
-            SectionOutcome::Incomplete { reason } => {
-                (SectionKind::Incomplete, Some(reason.clone()))
-            }
-            SectionOutcome::TimedOut => (SectionKind::TimedOut, None),
-        };
+        let (outcome, reason) = event.outcome.kind_and_reason();
+        if let SectionOutcome::Measured { checks, evidence } = &event.outcome {
+            run.checks.extend(checks.iter().map(|c| RunCheck {
+                id: c.id.clone(),
+                status: c.status,
+                findings: c.findings.clone(),
+                evidence: c.evidence.clone(),
+            }));
+            run.blocks.extend(evidence.iter().cloned());
+        }
         run.sections.push(RunSection {
             protocol: event.protocol,
             outcome,

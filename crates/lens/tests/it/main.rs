@@ -82,6 +82,8 @@ mod result_run_admission;
 mod scoring_regression;
 mod sdd_lens_badges_p1_c11_cache_coalesce;
 mod sdd_lens_badges_p2_c5_meta_badges;
+mod section_all_unmeasured;
+mod single_label_domain;
 mod snapshot_render;
 mod snapshot_routes;
 mod snapshot_store;

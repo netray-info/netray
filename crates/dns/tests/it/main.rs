@@ -22,5 +22,6 @@ mod module_input;
 mod parse_cursor;
 mod parse_system;
 mod production_fixture;
+mod query_reverse_system;
 mod result_cache;
 mod system_resolvers;
