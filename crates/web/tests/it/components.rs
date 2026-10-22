@@ -126,6 +126,7 @@ fn spectrum_renders_plate_lines_and_regions() {
         label: "Findings by position".into(),
         line_count: 2,
         rows: 1,
+        phone_rows: 1,
         bands: vec![
             SpectrumBand {
                 protocol: "dns".into(),
@@ -168,6 +169,8 @@ fn spectrum_renders_plate_lines_and_regions() {
                 row: 0,
                 x: 12.5,
                 width: 100.0,
+                phone_row: 0,
+                phone_width: 100.0,
             }],
         }],
         regions: vec![SpectrumRegion {

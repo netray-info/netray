@@ -49,15 +49,28 @@ fn covers(a: &Label, b: &Label) -> bool {
     b.leader > a.start + 0.5 && b.leader < a.start + a.width - 0.5
 }
 
-/// The pairs where a box at its leader covers the leader of a label in a higher row, or two boxes
-/// of one row overlap.
+/// Whether `a`'s text (its box less the 4 px padding before it) covers `b`'s leader.
+fn text_covers(a: &Label, b: &Label) -> bool {
+    b.leader > a.start + 4.0 + 0.5 && b.leader < a.start + a.width - 0.5
+}
+
+/// The pairs where a box at its leader covers the leader of a label in a higher row, a box pushed
+/// in from the edge covers one with its text, or two boxes of one row overlap.
 fn crossings(labels: &[Label]) -> Vec<String> {
     let mut out = Vec::new();
     for a in labels {
         for b in labels {
             let at_leader = (a.start - a.leader).abs() <= 1e-6;
-            if a.row < b.row && at_leader && covers(a, b) {
-                out.push(format!("{} (row {}) covers {} (row {})", a.text, a.row, b.text, b.row));
+            let crossed = if at_leader {
+                covers(a, b)
+            } else {
+                text_covers(a, b)
+            };
+            if a.row < b.row && crossed {
+                out.push(format!(
+                    "{} (row {}) covers {} (row {})",
+                    a.text, a.row, b.text, b.row
+                ));
             }
             if a.line < b.line
                 && a.row == b.row
@@ -77,7 +90,11 @@ fn c1_the_phone_placement_uses_the_phone_plate_and_caption() {
         .map(|i| LineInput {
             short: "DMARC".to_string(),
             group: 0,
-            tone: if i == 20 { LineTone::Fail } else { LineTone::Pass },
+            tone: if i == 20 {
+                LineTone::Fail
+            } else {
+                LineTone::Pass
+            },
         })
         .collect();
     let p = place_phone(&lines).unwrap();
@@ -137,7 +154,11 @@ fn c3_fixture_runs_clear_at_the_desktop_are_clear_at_the_phone() {
         for (k, run) in l.runs.iter().enumerate() {
             let phone = crossings(&run.phone_labels);
             let desktop = crossings(&run.labels);
-            assert_eq!(phone.is_empty(), desktop.is_empty(), "{name} run {k}: {phone:?}");
+            assert_eq!(
+                phone.is_empty(),
+                desktop.is_empty(),
+                "{name} run {k}: {phone:?}"
+            );
             if phone.is_empty() {
                 clear += 1;
             } else {
@@ -158,8 +179,13 @@ fn three_headers() -> RunInput<'static> {
             *status = Status::Pass;
         }
     }
-    for id in ["http.hsts", "http.x_frame_options", "http.x_content_type_options"] {
-        run.statuses.insert(CheckId::parse(id).unwrap(), Status::Warn);
+    for id in [
+        "http.hsts",
+        "http.x_frame_options",
+        "http.x_content_type_options",
+    ] {
+        run.statuses
+            .insert(CheckId::parse(id).unwrap(), Status::Warn);
     }
     run
 }
@@ -175,7 +201,11 @@ fn c7_the_desktop_placement_drawn_at_the_phone_crosses_where_the_phone_placement
         .map(|l| drawn_at_phone(l, l.text.chars().count()))
         .collect();
     assert_eq!(crossings(&drawn), ["HSTS (row 0) covers XFO (row 1)"]);
-    assert!(crossings(&run.phone_labels).is_empty(), "{:?}", run.phone_labels);
+    assert!(
+        crossings(&run.phone_labels).is_empty(),
+        "{:?}",
+        run.phone_labels
+    );
     assert_eq!(run.phone_labels.len(), 3);
 }
 
@@ -214,7 +244,10 @@ fn c4_the_component_draws_the_phone_placement() {
 
     let extra = l.runs[0].phone_rows.saturating_sub(3).to_string();
     let root = tags(&html, "spectrum")[0];
-    assert_eq!(style_value(root, "--label-extra-phone"), Some(extra.as_str()));
+    assert_eq!(
+        style_value(root, "--label-extra-phone"),
+        Some(extra.as_str())
+    );
 
     let labels = tags(&html, "spectrum__line-label");
     let leaders = tags(&html, "spectrum__leader");
@@ -223,8 +256,16 @@ fn c4_the_component_draws_the_phone_placement() {
         let code = l.lines[phone.line].id.to_string();
         assert_eq!(attr(label, "data-code"), Some(code.as_str()));
         let row = phone.row.to_string();
-        assert_eq!(style_value(label, "--row-phone"), Some(row.as_str()), "{label}");
-        assert_eq!(style_value(leader, "--row-phone"), Some(row.as_str()), "{leader}");
+        assert_eq!(
+            style_value(label, "--row-phone"),
+            Some(row.as_str()),
+            "{label}"
+        );
+        assert_eq!(
+            style_value(leader, "--row-phone"),
+            Some(row.as_str()),
+            "{leader}"
+        );
         let width = format!("{:.2}px", phone.width);
         assert_eq!(style_value(label, "--width-phone"), Some(width.as_str()));
         let x = format!("{:.4}%", phone.leader / phone_plate() * 100.0);
@@ -237,15 +278,20 @@ fn c5_the_slim_band_carries_no_phone_rows() {
     let runs = vec![fixture("example.com.json")];
     let inputs: Vec<RunInput> = runs.iter().map(layout_input_or_current).collect();
     let l = layout(&inputs[0], &[], catalogue(), W).unwrap();
-    let html = netray_web::components::spectrum_slim(&SpectrumView::from_layout(&l, "Checks", 0))
-        .unwrap();
-    assert!(html.contains("<div class=\"spectrum\" data-slim>"), "{html}");
+    let html =
+        netray_web::components::spectrum_slim(&SpectrumView::from_layout(&l, "Checks", 0)).unwrap();
+    assert!(
+        html.contains("<div class=\"spectrum\" data-slim>"),
+        "{html}"
+    );
 }
 
 /// The rules of the phone media query (`max-width: 480px`) in `spectrum.css`.
 fn phone_rules() -> String {
     let css = include_str!("../../static/spectrum.css");
-    let start = css.find("@media (max-width: 480px)").expect("phone media query");
+    let start = css
+        .find("@media (max-width: 480px)")
+        .expect("phone media query");
     css[start..].to_string()
 }
 
@@ -292,4 +338,3 @@ fn c6_the_phone_stylesheet_reads_the_phone_placement() {
         "{band}"
     );
 }
-

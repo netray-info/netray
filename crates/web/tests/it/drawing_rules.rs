@@ -95,6 +95,8 @@ fn label(code: &str, text: &str, tone: Tone, x: f64) -> SpectrumLabel {
         row: 0,
         x,
         width: 40.0,
+        phone_row: 0,
+        phone_width: 40.0,
     }
 }
 
@@ -111,6 +113,7 @@ fn fixed_view() -> SpectrumView {
         label: "Findings by position".into(),
         line_count: 5,
         rows: 1,
+        phone_rows: 1,
         bands: vec![
             band(
                 "dns",
@@ -340,6 +343,7 @@ fn spectrum_pass_and_unmeasured_lines_carry_no_short_name_above_the_plate() {
         label: "Findings by position".into(),
         line_count: 3,
         rows: 1,
+        phone_rows: 1,
         bands: vec![band(
             "dns",
             None,

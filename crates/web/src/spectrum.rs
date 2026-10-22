@@ -8,7 +8,10 @@ use netray_engine::catalogue::{Catalogue, CheckSpec};
 use netray_engine::profile::Profile;
 use netray_model::{CheckId, Protocol, Status};
 
-use crate::tokens::values::{FONT_SIZE_CAPTION, SPACE_1, SPECTRUM_LINE_PITCH_MIN};
+use crate::tokens::values::{
+    FONT_SIZE_CAPTION, FONT_SIZE_CAPTION_PHONE, LAYOUT_GUTTER_PHONE, LAYOUT_PHONE, SPACE_1,
+    SPECTRUM_LINE_PITCH_MIN,
+};
 
 const CHAR_WIDTH_EM: f64 = 0.62;
 const TOLERANCE: f64 = 1e-6;
@@ -81,7 +84,23 @@ pub fn line_pitch_min() -> f64 {
 
 /// Width of a label box of `chars` characters.
 pub fn label_width(chars: usize) -> f64 {
-    chars as f64 * CHAR_WIDTH_EM * px(FONT_SIZE_CAPTION) + px(SPACE_1)
+    box_width(chars, px(FONT_SIZE_CAPTION))
+}
+
+/// Width of a label box of `chars` characters at phone width (`font.size.captionPhone`).
+pub fn phone_label_width(chars: usize) -> f64 {
+    box_width(chars, px(FONT_SIZE_CAPTION_PHONE))
+}
+
+fn box_width(chars: usize, font: f64) -> f64 {
+    chars as f64 * CHAR_WIDTH_EM * font + px(SPACE_1)
+}
+
+/// The phone plate: the content width of the 390 px reference phone, `layout.phone` less two
+/// `layout.gutterPhone` (358 px). The phone plate never scrolls, so its pitch may fall below
+/// `spectrum.linePitchMin` (SDD §5.5 point 2).
+pub fn phone_plate() -> f64 {
+    px(LAYOUT_PHONE) - 2.0 * px(LAYOUT_GUTTER_PHONE)
 }
 
 fn overlaps(a: &Label, b: &Label) -> bool {
@@ -202,6 +221,34 @@ pub fn place(lines: &[LineInput], width: u32) -> Result<Placement, LayoutError> 
         (needed, min)
     };
 
+    Ok(place_on(lines, plate_width, pitch, label_width))
+}
+
+/// The placement of `lines` at the phone plate (`phone_plate`, its own pitch: the phone plate
+/// never scrolls, so the pitch may fall below `spectrum.linePitchMin`), boxes measured at
+/// `font.size.captionPhone` (SDD §5.5 point 2).
+pub fn place_phone(lines: &[LineInput]) -> Result<Placement, LayoutError> {
+    if lines.is_empty() {
+        return Err(LayoutError::NoLines);
+    }
+    let plate = phone_plate();
+    Ok(place_on(
+        lines,
+        plate,
+        plate / lines.len() as f64,
+        phone_label_width,
+    ))
+}
+
+/// The placement of non-empty `lines` on a plate `plate_width` px wide at `pitch`, label boxes
+/// `width(chars)` px wide.
+fn place_on(
+    lines: &[LineInput],
+    plate_width: f64,
+    pitch: f64,
+    width: fn(usize) -> f64,
+) -> Placement {
+    let n = lines.len();
     let xs: Vec<f64> = (0..n).map(|i| (i as f64 + 0.5) * pitch).collect();
 
     let mut groups: Vec<Group> = Vec::new();
@@ -227,7 +274,7 @@ pub fn place(lines: &[LineInput], width: u32) -> Result<Placement, LayoutError> 
         if !matches!(line.tone, LineTone::Warn | LineTone::Fail | LineTone::Fixed) {
             continue;
         }
-        let w = label_width(line.short.chars().count());
+        let w = width(line.short.chars().count());
         let x = xs[i];
         let start = if w > plate_width {
             0.0
@@ -251,8 +298,7 @@ pub fn place(lines: &[LineInput], width: u32) -> Result<Placement, LayoutError> 
     }
     let highest = labels.iter().map(|l| l.row).max().unwrap_or(0);
     labels.sort_by_key(|l| l.line);
-
-    Ok(Placement {
+    Placement {
         plate_width,
         pitch,
         xs,
@@ -260,7 +306,7 @@ pub fn place(lines: &[LineInput], width: u32) -> Result<Placement, LayoutError> 
         boundaries,
         labels,
         rows: MIN_ROWS.max(highest + 1),
-    })
+    }
 }
 
 /// Whether a protocol's section was measured in a run.
@@ -296,6 +342,9 @@ pub struct RunLayout {
     pub heights: Vec<f64>,
     pub labels: Vec<Label>,
     pub rows: usize,
+    /// The labels placed at the phone plate (`place_phone`), drawn at phone width.
+    pub phone_labels: Vec<Label>,
+    pub phone_rows: usize,
     pub sections: BTreeMap<Protocol, SectionState>,
 }
 
@@ -466,6 +515,7 @@ pub fn layout(
             })
             .collect();
         let placement = place(&line_inputs, width)?;
+        let phone = place_phone(&line_inputs)?;
         let sections = specs
             .iter()
             .map(|spec| (spec.protocol, section_state(run, spec.protocol)))
@@ -475,6 +525,8 @@ pub fn layout(
             tones,
             labels: placement.labels.clone(),
             rows: placement.rows,
+            phone_labels: phone.labels,
+            phone_rows: phone.rows,
             sections,
         });
         geometry.get_or_insert(placement);

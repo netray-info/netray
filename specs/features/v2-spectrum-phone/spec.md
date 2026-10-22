@@ -6,8 +6,8 @@ Created: 2026-10-22
 ## Goal
 
 The spectrum's labels are placed on the phone geometry as well as on the desktop one, so a label
-box at 390 px covers no neighbour's leader and overlaps no box of its row wherever the desktop
-placement is clear. Today `spectrum::layout` places labels once, on the 456 px plate at 11 px
+box at 390 px covers no neighbour's leader and overlaps no box of its row on the fixture runs
+whose desktop placement is clear. Today `spectrum::layout` places labels once, on the 456 px plate at 11 px
 captions, and the phone draws that placement on its 358 px plate at 10 px captions: the plate
 shrinks by 21 % and the boxes by 9 %, so boxes reach leaders and boxes they cleared on the
 desktop (v2-ui-polish R9, "at 390 DMARC's leader crosses MTA-STS").
@@ -45,9 +45,9 @@ desktop (v2-ui-polish R9, "at 390 DMARC's leader crosses MTA-STS").
    the phone caption), each leader rises to its phone row, and the label band is
    `spectrum.labelBand` plus one `spectrum.labelRow` per phone row beyond the third, where phone
    rows is the largest phone row count of any run. Wider, the drawing is unchanged.
-3. **No crossings where the desktop is clear.** A run whose desktop placement crosses no leader
-   and overlaps no box crosses none at the phone placement either, on every history fixture; the
-   SDD §5.5 is amended in the same commit as the code.
+3. **No crossings where the desktop is clear.** On every history fixture, a run whose desktop
+   placement crosses no leader and overlaps no box crosses none at the phone placement either;
+   the SDD §5.5 is amended in the same commit as the code.
 
 ### Acceptance
 
@@ -93,3 +93,19 @@ GIVEN the stylesheet WHEN read THEN at 480 px or narrower the label's bottom and
   the line order five) keeps the line-order fallback at both widths, by v2-ui-polish's decision.
   Raising the fallback threshold would stack every label of such a cluster above its neighbour;
   listed as a proposal (implementer under the operator's autonomy mandate, 2026-10-22).
+- A leader crossing is read against a label's text, its box less the 4 px padding: the
+  padding of a box at its leader is the gap between leader and text, and a box pushed in from
+  the right edge (frequent at the phone, where an 8-character label spans eight pitches) may have
+  a neighbour's leader pass through that padding (shop.example.com: DMARC beside MTA-STS, 3.2 px
+  left of the text). Placement is unchanged by this reading: at pitches above 4.5 px no other
+  leader falls into a box's padding (implementer under the operator's autonomy mandate,
+  2026-10-22).
+- Branch review (two AMENDMENTs, repaired in phase): "clear at the desktop means clear at the
+  phone" holds on the fixtures, not over every input. The phone geometry widens both §5.5
+  exemptions: a cluster can be dense at the phone only (Perms, COOP, MX, DKIM warning: the clear
+  placement needs four rows, line order three), and two boxes shifted in from the right edge can
+  cover each other's leaders (MTA-STS and TLS-RPT warning), which no row order clears. The reader
+  sampled 54,664 desktop-clear combinations: none draws worse at the phone placement than the
+  scaled desktop placement did. SDD §5.5 and requirement 3 are narrowed to that; changing the
+  rules at the phone (fallback threshold, right-aligned edge boxes) is a proposal (implementer
+  under the operator's autonomy mandate, 2026-10-22).
