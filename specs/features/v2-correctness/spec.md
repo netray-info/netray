@@ -1,7 +1,8 @@
 # Spec: v2-correctness
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-22
+Finished: 2026-10-22
 
 ## Goal
 
@@ -270,6 +271,9 @@ GIVEN the DNS inspector query `com NS` WHEN parsed THEN it is accepted.
   unmeasured once the zone's replacement answered (zone batches carry `source: "zone"`); RRSIGs are
   not re-read for TTL; a CAA climb cut off by the deadline makes `dns.caa` unmeasured. The SDD rows
   for requirements 3 to 7 landed in the phase 5 commit, not with their code; recorded, not rewritten.
+- Finish: distilled lessons written to CLAUDE.md without operator confirmation, and the three
+  deferred review rows left open, both under the operator's autonomy mandate (implementer,
+  2026-10-22).
 - A section with every check unmeasured is labelled `incomplete` without dropping its checks: the
   grade already treats it so, and the per-check findings say why (implementer under the operator's
   autonomy mandate, 2026-10-22).
