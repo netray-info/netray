@@ -31,6 +31,8 @@ mod probe_classify;
 mod probe_client_hello;
 mod probe_close_evidence;
 mod probe_evidence;
+mod probe_suite_alerts;
+mod probe_version_alerts;
 mod reachable_unmeasured;
 mod signature_verdict;
 mod translate_ports;
