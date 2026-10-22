@@ -47,11 +47,12 @@ routes() {
         echo "ip.netray.info|/$f/json"
     done
     # lens: crates/lens/src/lib.rs:155-161, reached through row 13a
-    for n in /api/check '/api/check/*' /api/meta /docs /api-docs/openapi.json; do
+    # and lens's /og/{domain_png} and /r/{shortid} with its sub-paths (crates/lens/src/routes.rs:1570-1573)
+    for n in /api/check '/api/check/*' /api/meta /docs /api-docs/openapi.json '/og/*' '/r/*'; do
         echo "lens.netray.info|$n"
     done
     # apex: lens's routes after the host redirect, and site/ rows 13l-n
-    for n in /api/check '/api/check/*' /api/meta /docs /docs/ /api-docs/openapi.json \
+    for n in /api/check '/api/check/*' /api/meta /docs /docs/ /api-docs/openapi.json '/og/*' '/r/*' \
              /tools /tools/ /api/ /api /api/index /api/dns /api/tls /api/http /api/email /api/ip /api/lens \
              /guide/lens; do
         echo "netray.info|$n"
