@@ -34,3 +34,55 @@ C6, C8 and C9 held before the change; their tests are kept as protection.
 ### Behavioural verification
 
 skipped: a binary built in the worktree has no egress, and the live email path is the domain run; the loopback responder tests drive the real `DnsResolver` over UDP and TCP. The live recheck of amazon.com and github.com SPF runs after the last DNS phase.
+
+## Phase 2 — DNS: the zone of a name below the apex
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R3: the zone is the name when its SOA is owned by it, else the closest ancestor (never single-label) with an SOA it owns; ancestor SOA lookups send no batch; an indefinite ancestor answer makes the zone checks unmeasured; all-negative keeps judging the name | green | crates/dns/src/api/check_zone_tests.rs |
+| C2 | R4: below the apex, dns.ns, dns.ns_lame and dns.ns_delegation judge the zone; NS at the zone is sent as an NS batch; the dns.ns block holds the zone's NS | green | crates/dns/src/api/check_zone_tests.rs |
+| C3 | R5: below the apex, the DNSSEC checks judge the zone's DNSKEY and DS, sent as batches; RRSIG/NSEC/NSEC3 stay the name's | green | crates/dns/src/api/check_zone_tests.rs |
+| C4 | R6: no CAA at the name climbs ancestors (never single-label) to the first CAA RRset, sent as a CAA batch and judged; none keeps the warning; an indefinite ancestor answer makes dns.caa unmeasured | green | crates/dns/src/api/check_zone_tests.rs |
+| C5 | GIVEN www.example.com without SOA and example.com with its SOA WHEN the zone is determined THEN example.com, and no SOA batch holds example.com's SOA | green | crates/dns/src/api/check_zone_tests.rs |
+| C6 | GIVEN example.com with its own SOA WHEN the zone is determined THEN example.com and no ancestor is queried | already_implemented | crates/dns/src/api/check_zone_tests.rs |
+| C7 | GIVEN a.b.example.com, b.example.com without SOA, example.com with SOA WHEN the zone is determined THEN example.com after two ancestor lookups, com never queried | green | crates/dns/src/api/check_zone_tests.rs |
+| C8 | GIVEN www.example.com without SOA and example.com SOA SERVFAIL on every resolver WHEN the check runs THEN the three NS and three DNSSEC checks are unmeasured naming the example.com SOA lookup | green | crates/dns/src/api/check_zone_tests.rs |
+| C9 | GIVEN www.example.com without NS and example.com NS ns1/ns2.example.net answering authoritatively WHEN the check runs THEN the NS checks pass, lame and consistency asked for example.com, the dns.ns block holds example.com's NS | green | crates/dns/src/api/check_zone_tests.rs |
+| C10 | GIVEN www.example.com with RRSIG/NSEC but no DNSKEY/DS and example.com signed (alg 13 KSK, matching DS) WHEN the check runs THEN dnssec, dnskey_algorithm, dnssec_rollover pass and the dnskey/ds blocks hold example.com's records | green | crates/dns/src/api/check_zone_tests.rs |
+| C11 | GIVEN www.example.com and example.com unsigned WHEN the check runs THEN dnssec warn "No DNSSEC records found", dnskey_algorithm and dnssec_rollover not_applicable "DNSSEC not deployed" | already_implemented | crates/dns/src/api/check_zone_tests.rs |
+| C12 | GIVEN www.example.com without CAA and example.com with 0 issue "ca.example.net" WHEN the check runs THEN dns.caa judges it and the block holds it owned by example.com | green | crates/dns/src/api/check_zone_tests.rs |
+| C13 | GIVEN a.b.example.com and b.example.com without CAA, example.com with CAA WHEN the check runs THEN CAA was looked up at b.example.com and example.com, never com | green | crates/dns/src/api/check_zone_tests.rs |
+| C14 | GIVEN no CAA on www.example.com and every ancestor to example.com WHEN the check runs THEN dns.caa warn "No CAA records found" | already_implemented | crates/dns/src/api/check_zone_tests.rs |
+| C15 | GIVEN no CAA at www.example.com and example.com's CAA lookup failing on every resolver WHEN the check runs THEN dns.caa unmeasured naming the example.com CAA lookup | green | crates/dns/src/api/check_zone_tests.rs |
+| C16 | GIVEN example.com, a zone apex, WHEN the check runs THEN checks and lookups equal today's (no ancestor lookup) | already_implemented | crates/dns/src/api/check_zone_tests.rs |
+| C17 | GIVEN www.xn--bcher-kva.example without SOA and xn--bcher-kva.example owning an SOA WHEN the zone is determined THEN it is xn--bcher-kva.example | green | crates/dns/src/api/check_zone_tests.rs |
+| C18 | GIVEN www.example.com CNAME example.net (NS, DNSKEY, DS of example.net answered at the name) and zone example.com WHEN the check runs THEN NS checks and DNSSEC lints read only example.com's records and raw NS queries go only to example.com's servers | green | crates/dns/src/api/check_zone_tests.rs |
+| C19 | GIVEN www.example.com whose own SOA lookup SERVFAILs everywhere WHEN the check runs THEN no ancestor is queried | green | crates/dns/src/api/check_zone_tests.rs |
+| C20 | GIVEN unregistered.example.co.uk NXDOMAIN everywhere and co.uk owning an SOA WHEN the check runs THEN co.uk is never queried and the NS checks judge the name | green | crates/dns/src/api/check_zone_tests.rs |
+| C21 | GIVEN a ten-label name below example.com and no SOA below example.com WHEN the zone is determined THEN at most 8 ancestors are queried | green | crates/dns/src/api/check_zone_tests.rs |
+
+C6, C11, C14 and C16 held before the change. Two fixture rows were corrected during the phase (`ADLC-Test-Change`): the RRSIG's key tag, and c12's Pass, since mhost's CAA lint warns on a lone `issue` record.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 1 (7 of 9 green; 2 fixture faults) | opus | 121219 | 298 |
+| G1 review fixes | 1 | opus | n/a | n/a |
+
+### Review
+
+- BLOCKER (fixed, c17): owner comparison used hickory's Unicode rendering; IDN zones were never found.
+- BLOCKER (fixed, c18): the name's NS, DNSKEY and DS (a CNAME target's) stayed beside the zone's; the zone's now replace them.
+- AMENDMENT (repaired in phase, c19): a failed SOA lookup at the name started a climb; it no longer does.
+- AMENDMENT (repaired in phase, c20): the climb could reach a public suffix's zone; it stops at the registrable domain.
+- AMENDMENT (repaired in phase, c21): the climb was bounded only by the label count, after the cost was charged; it stops after 8 ancestors.
+- DEFERRED (repaired): the zone phase ran outside the stream deadline; it is now bounded by it.
+- DEFERRED: a failed NS, DNSKEY or DS batch at the name still makes the zone checks unmeasured when the zone's lookups answered (conservative under Rule M).
+- NIT: a three-label apex without CAA climbs CAA once, as RFC 8659 asks.
+
+### Behavioural verification
+
+skipped here: a worktree binary has no egress; the live rerun of docs.github.com, www.ietf.org and www.isc.org runs after Phase 3 with the binary copied to main's path.

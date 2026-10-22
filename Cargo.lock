@@ -2990,6 +2990,7 @@ dependencies = [
  "netray-common",
  "netray-engine",
  "netray-model",
+ "psl",
  "rand 0.10.3",
  "rcgen",
  "reqwest",

@@ -881,12 +881,21 @@ fn check_evidence(check: &str, blocks: &[Block]) -> Vec<BlockId> {
 /// The finding of a batch that measured nothing: no lookups, or every lookup an error or a
 /// negative answer that is not definite. Names the record type, the causes and the resolvers.
 fn batch_error(batch: &BatchEvent) -> Option<String> {
-    let record_type = &batch.record_type;
-    if batch.lookups.is_empty() {
-        return Some(format!("{record_type} lookup failed: no resolver answered"));
-    }
+    lookup_error(&batch.record_type, batch.lookups.iter(), None)
+}
+
+/// [`batch_error`] over `lookups` of `record_type`, naming `owner` when given.
+pub(crate) fn lookup_error<'a>(
+    record_type: &str,
+    lookups: impl Iterator<Item = &'a Lookup>,
+    owner: Option<&str>,
+) -> Option<String> {
+    let subject = match owner {
+        Some(owner) => format!("{record_type} lookup of {owner}"),
+        None => format!("{record_type} lookup"),
+    };
     let mut causes: Vec<(String, Vec<String>)> = Vec::new();
-    for lookup in batch.lookups.iter() {
+    for lookup in lookups {
         let cause = match lookup.result() {
             LookupResult::Error(e) => e.to_string(),
             LookupResult::NxDomain(nx) if !nx.is_definite() => {
@@ -905,14 +914,14 @@ fn batch_error(batch: &BatchEvent) -> Option<String> {
             None => causes.push((cause, vec![server])),
         }
     }
+    if causes.is_empty() {
+        return Some(format!("{subject} failed: no resolver answered"));
+    }
     let causes: Vec<String> = causes
         .into_iter()
         .map(|(cause, servers)| format!("{cause} from {}", servers.join(", ")))
         .collect();
-    Some(format!(
-        "{record_type} lookup failed: {}",
-        causes.join("; ")
-    ))
+    Some(format!("{subject} failed: {}", causes.join("; ")))
 }
 
 /// A lint event as a single check carrying the worst verdict.

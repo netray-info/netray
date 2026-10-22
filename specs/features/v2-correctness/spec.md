@@ -65,9 +65,12 @@ single-label name in an OG card URL starts a domain run.
    prefix(es)"), whatever Info sub-checks it carries (`overlapping_cidrs` among them); the Info
    sub-checks stay in the category's sub-checks. `email.spf` is then `pass`.
 3. `run_check` determines the queried name's zone: the name is a zone apex when its SOA lookup
-   answers an SOA record owned by the name. Otherwise the zone is the closest ancestor, dropping
-   one label at a time and never reaching a single-label name, whose SOA lookup answers an SOA
-   record owned by it. Ancestor SOA lookups are sent as no batch and never reach the SOA batch.
+   answers an SOA record owned by the name (owners compared as A-labels). When the name's own SOA
+   lookup has no definite answer, nothing is climbed and the checks judge the name as before. Otherwise the zone is the closest ancestor, dropping
+   one label at a time, never above the name's registrable domain (public suffix list; never a
+   single-label name when the suffix is unknown) and at most 8 ancestors, whose SOA lookup answers
+   an SOA record owned by it. The climb ends at the stream deadline; a climb cut off there leaves
+   the zone unknown. Ancestor SOA lookups are sent as no batch and never reach the SOA batch.
    When an ancestor's SOA lookup gets no definite answer before the zone is found, the zone is
    unknown and the checks of requirements 4 and 5 are `unmeasured` naming the failed lookup. When
    no ancestor is a zone apex (every answer a definite negative), the checks judge the queried
@@ -75,6 +78,8 @@ single-label name in an OG card URL starts a domain run.
 4. For a name below its zone's apex, `dns.ns`, `dns.ns_lame` and `dns.ns_delegation` judge the
    zone: NS is looked up at the zone over the configured resolvers and sent as an `NS` batch, and
    the lame-delegation and delegation-consistency checks query the zone's nameservers for the zone.
+   The zone's NS, DNSKEY and DS lookups replace those at the queried name in what the checks read
+   (a name with a CNAME answers the target's records there).
    The `dns.ns` block then holds the zone's NS records under the zone's owner name.
 5. For a name below its zone's apex, `dns.dnssec`, `dns.dnskey_algorithm` and
    `dns.dnssec_rollover` judge the zone's DNSKEY and DS: both are looked up at the zone and sent
@@ -82,7 +87,7 @@ single-label name in an OG card URL starts a domain run.
    signed zone is then never "DNSSEC not deployed", and `dns.dnssec` never warns "RRSIG present but
    no DNSKEY records found" there.
 6. When the CAA lookup at the queried name answers no CAA record, `run_check` looks up CAA at each
-   ancestor in turn, never at a single-label name, until one answers CAA records; that RRset is
+   ancestor in turn, with the bounds of requirement 3, until one answers CAA records; that RRset is
    sent as a `CAA` batch and judged by `dns.caa`, whose block then holds it under the ancestor's
    owner name. No CAA anywhere keeps "No CAA records found". An ancestor lookup with no definite
    answer before an RRset is found makes `dns.caa` `unmeasured` naming it.
@@ -154,6 +159,11 @@ GIVEN a.b.example.com with no CAA, b.example.com with no CAA and example.com wit
 GIVEN www.example.com and every ancestor down to example.com without CAA WHEN the check runs THEN `dns.caa` is `warn` "No CAA records found", as today.
 GIVEN www.example.com without CAA and the CAA lookup of example.com failing on every resolver WHEN the check runs THEN `dns.caa` is `unmeasured` naming the example.com CAA lookup.
 GIVEN example.com, a zone apex, WHEN the check runs THEN the checks and the lookups made equal today's (no ancestor lookup).
+GIVEN www.xn--bcher-kva.example with no SOA and xn--bcher-kva.example answering an SOA it owns WHEN the zone is determined THEN it is xn--bcher-kva.example.
+GIVEN www.example.com with a CNAME to example.net, whose NS, DNSKEY and DS answer at the name, and example.com as the zone WHEN the check runs THEN the NS checks and the DNSSEC lints read only example.com's NS, DNSKEY and DS, and the raw NS queries go to example.com's nameservers only.
+GIVEN www.example.com whose own SOA lookup fails with SERVFAIL on every resolver WHEN the check runs THEN no ancestor is queried.
+GIVEN unregistered.example.co.uk (registrable domain example.co.uk) answering NXDOMAIN everywhere and co.uk owning an SOA WHEN the check runs THEN co.uk is never queried and the NS checks judge the name as before.
+GIVEN a name with ten labels below example.com and no SOA anywhere below example.com WHEN the zone is determined THEN at most 8 ancestors are queried.
 
 ## Phase 3 — DNS: TTLs from the authoritative servers
 
@@ -220,6 +230,12 @@ GIVEN the DNS inspector query `com NS` WHEN parsed THEN it is accepted.
 - Zone discovery uses SOA ownership, one SOA lookup per ancestor, and never queries a
   single-label name: an authority section is not exposed by mhost's lookups, and TLD records say
   nothing about the domain (implementer under the operator's autonomy mandate, 2026-10-22).
+- Review of phase 2 (implementer under the operator's autonomy mandate, 2026-10-22): the climb
+  stops at the registrable domain and after 8 ancestors (a registry's zone says nothing about an
+  unregistered name, and a 120-label name must not buy 240 uncharged lookups); a failed SOA lookup
+  at the name itself never starts a climb (Rule M); the zone's NS, DNSKEY and DS replace the name's,
+  which for a CNAME are the target's; owners compare as A-labels (IDN zones); the climb is bounded
+  by the stream deadline.
 - `dns.ttl` re-reads only records the resolvers show below 60 s: a cached TTL only counts down, so
   a high resolver TTL is never a false finding, while a low one may be; this keeps the extra
   queries to the records in doubt (implementer under the operator's autonomy mandate, 2026-10-22).

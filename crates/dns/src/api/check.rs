@@ -180,8 +180,9 @@ pub enum CheckEvent {
         code: &'static str,
         message: String,
     },
-    /// Nameservers of an NS check (`ns_lame`, `ns_delegation`) that did not answer, after the
-    /// lints; not part of the `/api/check` stream.
+    /// Findings of a check whose input did not answer, after the lints: the nameservers of an
+    /// NS check (`ns_lame`, `ns_delegation`) that did not answer, or the failed ancestor lookup
+    /// of a zone or CAA climb; not part of the `/api/check` stream.
     Unanswered {
         category: &'static str,
         silent: Vec<String>,
@@ -568,19 +569,8 @@ pub(crate) async fn run_check_on(
                     None => break,
                     Some((label, lookups, kind)) => {
                         completed += 1;
-                        let batch = BatchEvent {
-                            request_id: rid.clone(),
-                            record_type: label,
-                            lookups: lookups.clone(),
-                            completed,
-                            total: CHECK_TOTAL_STEPS,
-                            transport: None,
-                            source: None,
-                        };
-                        if enrichment_svc.is_some() {
-                            push_cached(&mut batch_events, "batch", &batch);
-                        }
-                        if tx.send(CheckEvent::Batch(batch)).await.is_err() {
+                        let cache = enrichment_svc.is_some().then_some(&mut batch_events);
+                        if !send_batch(&tx, &rid, &label, &lookups, completed, cache).await {
                             metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error").increment(1);
                             return;
                         }
@@ -605,6 +595,33 @@ pub(crate) async fn run_check_on(
                 return;
             }
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 1.25: the zone of the queried name and the CAA climb
+    // ------------------------------------------------------------------
+    let scope = LookupScope {
+        lookup: &lookup,
+        resolvers: &resolvers,
+        breaker_keys: &breaker_keys,
+        circuit_breakers: &circuit_breakers,
+        tx: &tx,
+        semaphore: &query_semaphore,
+    };
+    let zone = read_zone(&scope, &domain, &all_lookups, deadline).await;
+    for (rt, lookups) in zone.batches {
+        completed += 1;
+        let cache = enrichment_svc.is_some().then_some(&mut batch_events);
+        if !send_batch(&tx, &rid, &rt.to_string(), &lookups, completed, cache).await {
+            metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error")
+                .increment(1);
+            return;
+        }
+        let others: Vec<_> = all_lookups
+            .into_iter()
+            .filter(|l| l.query().record_type() != rt)
+            .collect();
+        all_lookups = Lookups::from(others).merge(lookups);
     }
 
     // Extract DMARC TXT strings for the dmarc lint.
@@ -641,8 +658,8 @@ pub(crate) async fn run_check_on(
     let query_timeout = Duration::from_secs(3);
     let unique = unique_records(&all_lookups);
     let (lame, delegation, mta_sts_results) = tokio::join!(
-        check_ns_lame_delegation(&unique, &domain, query_timeout, &raw_outbound),
-        check_ns_delegation_consistency(&unique, &domain, query_timeout, &raw_outbound),
+        check_ns_lame_delegation(&unique, &zone.judged, query_timeout, &raw_outbound),
+        check_ns_delegation_consistency(&unique, &zone.judged, query_timeout, &raw_outbound),
         check_mta_sts(&mta_sts_lookups, &domain, &unique, &outbound),
     );
 
@@ -696,7 +713,11 @@ pub(crate) async fn run_check_on(
             return;
         }
     }
-    for event in unanswered_events(&lame, &delegation) {
+    for event in zone
+        .unmeasured
+        .into_iter()
+        .chain(unanswered_events(&lame, &delegation))
+    {
         if tx.send(event).await.is_err() {
             metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error")
                 .increment(1);
@@ -832,6 +853,216 @@ async fn fan_out_lookup(
     }
 
     merged
+}
+
+/// Sends `lookups` as the batch of `record_type`, numbered `completed`, cached for the IP
+/// enrichment when `cache` is given. False when `tx` is closed.
+async fn send_batch(
+    tx: &mpsc::Sender<CheckEvent>,
+    rid: &str,
+    record_type: &str,
+    lookups: &Lookups,
+    completed: u32,
+    cache: Option<&mut Vec<CachedEvent>>,
+) -> bool {
+    let batch = BatchEvent {
+        request_id: rid.to_owned(),
+        record_type: record_type.to_owned(),
+        lookups: lookups.clone(),
+        completed,
+        total: CHECK_TOTAL_STEPS.max(completed),
+        transport: None,
+        source: None,
+    };
+    if let Some(cache) = cache {
+        push_cached(cache, "batch", &batch);
+    }
+    tx.send(CheckEvent::Batch(batch)).await.is_ok()
+}
+
+/// The lookup seam, resolvers and limits every check lookup goes through.
+struct LookupScope<'a> {
+    lookup: &'a Arc<dyn ResolverLookup>,
+    resolvers: &'a [Resolver],
+    breaker_keys: &'a [String],
+    circuit_breakers: &'a Arc<CircuitBreakerRegistry>,
+    tx: &'a mpsc::Sender<CheckEvent>,
+    semaphore: &'a Arc<Semaphore>,
+}
+
+impl LookupScope<'_> {
+    /// [`fan_out_lookup`] of `rt` at `name`.
+    async fn of(&self, name: &str, rt: RecordType) -> Lookups {
+        fan_out_lookup(
+            self.lookup,
+            name,
+            rt,
+            self.resolvers,
+            self.breaker_keys,
+            self.circuit_breakers,
+            self.tx,
+            self.semaphore,
+        )
+        .await
+    }
+}
+
+/// The checks that judge the zone of the queried name.
+const ZONE_CHECKS: [&str; 6] = [
+    "ns",
+    "ns_lame",
+    "ns_delegation",
+    "dnssec",
+    "dnskey_algorithm",
+    "dnssec_rollover",
+];
+
+/// What the zone of the queried name adds to a check: the name the lame-delegation and
+/// delegation-consistency checks ask for, the batches sent that replace the name's lookups of
+/// their type in the linted lookups (the zone's NS, DNSKEY and DS, an ancestor's CAA), and an
+/// `Unanswered` event per check whose zone or CAA climb ended on a failed lookup.
+struct ZoneReading {
+    judged: String,
+    batches: Vec<(RecordType, Lookups)>,
+    unmeasured: Vec<CheckEvent>,
+}
+
+/// The finding of a zone reading cut off by the stream deadline.
+const ZONE_DEADLINE: &str = "zone lookup exceeded the stream deadline";
+
+/// Most ancestors a zone or CAA climb asks.
+const MAX_ANCESTORS: usize = 8;
+
+/// The zone of `domain` and its CAA climb, read after the lookups at `domain` itself and bounded
+/// by `deadline`. An apex owning its SOA, a name whose SOA lookup got no definite answer and a
+/// name holding CAA records add no lookup.
+async fn read_zone(
+    scope: &LookupScope<'_>,
+    domain: &str,
+    lookups: &Lookups,
+    deadline: tokio::time::Instant,
+) -> ZoneReading {
+    let zone = async {
+        if owns(lookups, domain, RecordType::SOA)
+            || lookup_failure(lookups, RecordType::SOA, domain).is_some()
+        {
+            return Ok(None);
+        }
+        let Some((zone, _)) = climb(scope, domain, RecordType::SOA, |l, ancestor| {
+            owns(l, ancestor, RecordType::SOA)
+        })
+        .await?
+        else {
+            return Ok(None);
+        };
+        let (ns, dnskey, ds) = tokio::join!(
+            scope.of(&zone, RecordType::NS),
+            scope.of(&zone, RecordType::DNSKEY),
+            scope.of(&zone, RecordType::DS),
+        );
+        Ok(Some((zone, ns, dnskey, ds)))
+    };
+    let caa = async {
+        if !lookups.records_by_type(RecordType::CAA).is_empty()
+            || lookup_failure(lookups, RecordType::CAA, domain).is_some()
+        {
+            return Ok(None);
+        }
+        climb(scope, domain, RecordType::CAA, |l, _| {
+            !l.records_by_type(RecordType::CAA).is_empty()
+        })
+        .await
+    };
+    let (zone, caa) = tokio::join!(
+        tokio::time::timeout_at(deadline, zone),
+        tokio::time::timeout_at(deadline, caa),
+    );
+
+    let mut reading = ZoneReading {
+        judged: domain.to_owned(),
+        batches: Vec::new(),
+        unmeasured: Vec::new(),
+    };
+    match zone.unwrap_or_else(|_| Err(ZONE_DEADLINE.to_owned())) {
+        Ok(None) => {}
+        Ok(Some((zone, ns, dnskey, ds))) => {
+            reading.batches.extend([
+                (RecordType::NS, ns),
+                (RecordType::DNSKEY, dnskey),
+                (RecordType::DS, ds),
+            ]);
+            reading.judged = zone;
+        }
+        Err(finding) => reading
+            .unmeasured
+            .extend(ZONE_CHECKS.iter().map(|check| unmeasured(check, &finding))),
+    }
+    match caa.unwrap_or(Ok(None)) {
+        Ok(None) => {}
+        Ok(Some((_, lookups))) => reading.batches.push((RecordType::CAA, lookups)),
+        Err(finding) => reading.unmeasured.push(unmeasured("caa", &finding)),
+    }
+    reading
+}
+
+/// The closest ancestor of `domain` whose `rt` lookup `found` accepts, with that lookup; `None`
+/// when none of [`ancestors`] does. An ancestor lookup with no definite answer before then ends
+/// the climb with its finding.
+async fn climb(
+    scope: &LookupScope<'_>,
+    domain: &str,
+    rt: RecordType,
+    found: impl Fn(&Lookups, &str) -> bool,
+) -> Result<Option<(String, Lookups)>, String> {
+    for ancestor in ancestors(domain) {
+        let lookups = scope.of(&ancestor, rt).await;
+        if found(&lookups, &ancestor) {
+            return Ok(Some((ancestor, lookups)));
+        }
+        if let Some(finding) = lookup_failure(&lookups, rt, &ancestor) {
+            return Err(finding);
+        }
+    }
+    Ok(None)
+}
+
+/// The ancestors of `domain`, closest first, at most [`MAX_ANCESTORS`]: never above its
+/// registrable domain, or a single-label name when the public suffix list gives none.
+fn ancestors(domain: &str) -> Vec<String> {
+    let domain = domain.trim_end_matches('.').to_ascii_lowercase();
+    let floor = psl::domain_str(&domain).map_or(2, |d| d.split('.').count());
+    let labels: Vec<&str> = domain.split('.').collect();
+    (1..=labels.len().saturating_sub(floor))
+        .take(MAX_ANCESTORS)
+        .map(|first| labels[first..].join("."))
+        .collect()
+}
+
+/// Whether `lookups` hold an `rt` record owned by `name`, compared as A-labels.
+fn owns(lookups: &Lookups, name: &str, rt: RecordType) -> bool {
+    let name = name.trim_end_matches('.');
+    lookups.records_by_type(rt).iter().any(|record| {
+        record
+            .name()
+            .to_ascii()
+            .trim_end_matches('.')
+            .eq_ignore_ascii_case(name)
+    })
+}
+
+/// The finding of the `rt` lookups of `name` in `lookups` when none got a definite answer.
+fn lookup_failure(lookups: &Lookups, rt: RecordType, name: &str) -> Option<String> {
+    let of_type = lookups.iter().filter(|l| l.query().record_type() == rt);
+    crate::module::lookup_error(&rt.to_string(), of_type, Some(name))
+}
+
+/// The event that makes `category` unmeasured with `finding`.
+fn unmeasured(category: &'static str, finding: &str) -> CheckEvent {
+    CheckEvent::Unanswered {
+        category,
+        silent: vec![finding.to_owned()],
+        none_answered: true,
+    }
 }
 
 /// Maps a lint result onto the shared model status (a function: `CheckResult` is foreign).
