@@ -19,6 +19,7 @@ carries no deploy instructions for third parties (policy: `CONTRIBUTING.md`).
 | `crates/common` | `netray-common`, shared Rust (workspace member, not published) |
 | `crates/{model,engine}` | V2 core (`specs/sdd/v2.md` §3): `netray-model` the check vocabulary, no workspace dependency; `netray-engine` the `Module`/`FactsProvider` traits, depends on `netray-model` only (`tests/repo/test_engine_names_no_module.sh`). Each V1 crate maps its status word onto `netray_model::Status` once |
 | `crates/netray` | the binary: `netray serve [<config>]`, the only subcommand, with `--check-config <path>` (exit 0 `config ok: <path>`, exit 1 with the error); one `netray.toml` (`netray.example.toml`) |
+| `docs/` | references for the code as it is (`ip-enrichment.md`); the crates keep no `docs/`, `specs/`, `ROADMAP.md` or `SECURITY.md` (`tests/repo/test_crate_docs.sh`) |
 | `tests/repo` | repository structure checks (`just test-repo`), one script per check |
 | `tests/acceptance` | Playwright suite against a deployed environment (own `package-lock.json`) |
 | `specs/rules`, `specs/features` | engineering rules; feature specs |
