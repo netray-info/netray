@@ -71,6 +71,7 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - Never edit another feature's `specs/features/<name>/` on a feature branch: `adlc next` refuses two features. Supersede old decisions in the new spec's decision log.
 - A cost above a limiter's burst never passes: refuse it as input (`CostExceedsLimit`, API v1 `INVALID_INPUT`) against the stored bursts before charging, never as `429`.
 - Adding a field to a protected test's struct literal still needs `ADLC-Test-Change`: the gate's tamper check flags any change.
+- `adlc verify` runs no tamper check: after a rename or move that touches protected tests, run `adlc check` and add one `ADLC-Test-Change` per listed file.
 - `serve` refuses to start while any legacy-prefixed variable is set (`LENS_`, `NETRAY_<SVC>_`, the codenames'): pass extra keys to `acceptance-local` as `ACCEPTANCE_ENV="NETRAY_…"`.
 - Node 26 defines a global `localStorage` that shadows happy-dom's: an island test installs its own storage, as `islands/test/theme.test.ts`'s `useStorage` does.
 - The colour gate reads any island-test string holding `;` as CSS: write a newline in test markup as `\n`, never `&#10;` (`field` became a colour).

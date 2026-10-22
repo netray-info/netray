@@ -1,7 +1,8 @@
 # Spec: v2-v1-remnants
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-22
+Finished: 2026-10-22
 
 ## Goal
 
@@ -195,6 +196,11 @@ GIVEN the cleaned tree WHEN it runs THEN it passes, and `cargo build --workspace
   healthy server of a parallel test on the same port is never mistaken for its own. The same
   retry goes into all ten serve-spawning tests (implementer under the operator's autonomy
   mandate, 2026-10-22).
+
+- Finish: one CLAUDE.md bullet written without operator confirmation (run `adlc check` after a
+  rename that touches protected tests), no solutions note, no check to build; deferred
+  v2-v1-remnants/review-1 dropped as fixed in 4cb501a1, review-2 left open, under the operator's
+  autonomy mandate (implementer, 2026-10-22).
 
 ## Open decisions
 
