@@ -2117,6 +2117,10 @@ mod ns_outbound_tests;
 mod zone_tests;
 
 #[cfg(test)]
+#[path = "check_ttl_tests.rs"]
+mod ttl_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
