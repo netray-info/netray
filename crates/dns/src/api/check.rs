@@ -378,8 +378,8 @@ async fn stream_check_events(
     while let Some(event) = events.recv().await {
         let event = match event {
             CheckEvent::Batch(batch) => {
-                push_cached(&mut cached_events, "batch", &batch);
-                let mut v = serde_json::to_value(&batch).unwrap_or(serde_json::Value::Null);
+                let mut v = wire_batch(&batch);
+                push_cached(&mut cached_events, "batch", &v);
                 record_format::enrich_lookups_json(&mut v, &batch.record_type);
                 Event::default()
                     .event("batch")
@@ -433,6 +433,18 @@ async fn stream_check_events(
             return;
         }
     }
+}
+
+/// A batch as prism's stream and result cache carry it: the internal [`ZONE_SOURCE`] marker is
+/// left out, so the V1 wire is unchanged.
+fn wire_batch(batch: &BatchEvent) -> serde_json::Value {
+    let mut v = serde_json::to_value(batch).unwrap_or(serde_json::Value::Null);
+    if batch.source.as_deref() == Some(ZONE_SOURCE)
+        && let Some(map) = v.as_object_mut()
+    {
+        map.remove("source");
+    }
+    v
 }
 
 fn push_cached(cached: &mut Vec<CachedEvent>, event_type: &str, payload: &impl Serialize) {
@@ -904,7 +916,7 @@ async fn send_batch(
         source: source.map(str::to_owned),
     };
     if let Some(cache) = cache {
-        push_cached(cache, "batch", &batch);
+        push_cached(cache, "batch", &wire_batch(&batch));
     }
     tx.send(CheckEvent::Batch(batch)).await.is_ok()
 }
@@ -1316,15 +1328,21 @@ async fn authoritative_ttls(
     pairs
         .iter()
         .zip(answers)
-        .filter_map(|((name, rt), answer)| {
-            let (ttl, server) = answer?;
-            let lookups = with_ttl(unique, name, *rt, ttl, server);
-            (!lookups.is_empty()).then(|| (*rt, Lookups::new(lookups)))
+        .filter_map(|((name, rt), answer)| answer.map(|answer| (name, *rt, answer)))
+        .flat_map(|(name, rt, (ttl, server))| {
+            // The RRset's RRSIGs carry its TTL (RFC 4034 §3): they go in an RRSIG batch, so the
+            // signature of a re-read RRset is not judged on its cached remainder.
+            let rrset = with_ttl(unique, name, rt, None, ttl, server);
+            let rrsigs = with_ttl(unique, name, RecordType::RRSIG, Some(rt), ttl, server);
+            [(rt, rrset), (RecordType::RRSIG, rrsigs)]
         })
+        .filter(|(_, lookups)| !lookups.is_empty())
+        .map(|(rt, lookups)| (rt, Lookups::new(lookups)))
         .collect()
 }
 
-/// Every lookup in `lookups` holding records of (`name`, `rt`), reduced to those
+/// Every lookup in `lookups` holding records of (`name`, `rt`) (with `covering`, only RRSIGs
+/// covering that type), reduced to those
 /// records, each carrying `ttl`, as answered by `server`. The TTL belongs to the RRset
 /// (RFC 2181 §5.2), so it covers records the authoritative answer did not repeat, such as a
 /// rotating address set.
@@ -1332,15 +1350,22 @@ fn with_ttl(
     lookups: &Lookups,
     name: &str,
     rt: RecordType,
+    covering: Option<RecordType>,
     ttl: u32,
     server: SocketAddr,
 ) -> Vec<mhost::resolver::Lookup> {
     use serde_json::Value;
 
     let rtype = rt.to_string();
+    let covered = covering.map(|c| c.to_string());
     let owned = |rec: &Value| {
         rec["type"].as_str() == Some(rtype.as_str())
             && rec["name"].as_str().is_some_and(|n| same_name(n, name))
+            && covered.as_deref().is_none_or(|c| {
+                rec.pointer("/data/RRSIG/type_covered")
+                    .and_then(Value::as_str)
+                    == Some(c)
+            })
     };
     // Every lookup, whatever its query type: `unique_records` keeps a record in the first
     // lookup that carried it (a CNAME in the A lookup, glue in the NS lookup).
