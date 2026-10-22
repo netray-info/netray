@@ -19,8 +19,8 @@ use netray_model::evidence::{
     Block, BlockId, Shape, Value, ValueType, check_evidence_rule, validate,
 };
 use netray_model::{CheckResult, Status};
+use netray_tls::inspection::InspectResponse;
 use netray_tls::module::{REGISTER, translate_with_facts};
-use netray_tls::routes::InspectResponse;
 use netray_tls::{ModuleConfig, TlsModule, translate};
 use serde_json::{Value as Json, json};
 

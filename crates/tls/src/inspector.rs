@@ -9,7 +9,7 @@ use utoipa::ToSchema;
 
 use crate::error::AppError;
 use crate::input::{self, ParsedInput, Target};
-use crate::routes::{self, InspectRequest, InspectResponse};
+use crate::inspection::{self, InspectRequest, InspectResponse};
 use crate::security::RateLimitState;
 use crate::state::AppState;
 
@@ -170,8 +170,8 @@ impl TlsInspector {
             "inspect start"
         );
 
-        let ips = routes::resolve_target(state, &parsed.target).await?;
-        let allowed_ips = routes::filter_allowed(
+        let ips = inspection::resolve_target(state, &parsed.target).await?;
+        let allowed_ips = inspection::filter_allowed(
             ips,
             config.limits.allow_blocked_targets,
             &hostname_str,
@@ -189,7 +189,7 @@ impl TlsInspector {
         // port count beyond a burst still plans one address and is refused as
         // `CostExceedsLimit` without a charge; probes are capped, never refused.
         let budget = limits.remaining_budget(client_ip);
-        let plan = routes::plan_budget(
+        let plan = inspection::plan_budget(
             &allowed_ips,
             parsed.ports.len(),
             budget,
@@ -207,7 +207,7 @@ impl TlsInspector {
             return Err(e);
         }
 
-        routes::inspect(
+        inspection::inspect(
             state,
             &config,
             InspectRequest {

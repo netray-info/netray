@@ -306,13 +306,13 @@ impl InspectJobs {
         limiters.prune_if_due();
         // One address on every port with its probes, as the plan charges it; a port count beyond
         // the burst still costs the ports alone and is answered by the job start.
-        let (inspected, probed) = netray_tls::routes::plan_counts(
+        let (inspected, probed) = netray_tls::inspection::plan_counts(
             1,
             parsed.ports.len(),
             limiters.remaining_budget(client),
             inspector.probe_connections(),
         );
-        let cost = netray_tls::routes::plan_cost(
+        let cost = netray_tls::inspection::plan_cost(
             parsed.ports.len(),
             inspected,
             probed,

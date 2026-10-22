@@ -74,3 +74,38 @@ PASS: crate docs describe V2 modules
 | group | coder runs | green by | tokens | seconds |
 |---|---|---|---|---|
 | G1 docs, manifests, record files | 1 | implementer, no coder: prose and file moves | 0 | 0 |
+
+## Phase 3 — Dead code
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R10: netray_common::ecosystem and ::metrics deleted, serde_json a dev-dependency only | green | tests/repo/test_v1_remnants.sh |
+| C2 | R11: no module crate re-exports RequestId or enables the middleware feature | green | tests/repo/test_v1_remnants.sh |
+| C3 | R12: crates/tls/src/routes.rs is crates/tls/src/inspection.rs, every user renamed | green | tests/repo/test_v1_remnants.sh |
+| C4 | R13: test_v1_remnants.sh fails while 10 to 12 do not hold | green | tests/repo/test_v1_remnants.sh |
+| C5 | today's tree fails the check naming each remnant | green | tests/repo/test_v1_remnants.sh |
+| C6 | the cleaned tree passes it, the workspace builds with all targets and the gate passes | green | tests/repo/test_v1_remnants.sh |
+
+### Behavioural verification
+
+```
+$ cargo build --workspace --all-targets --all-features   # finished, no new warning
+$ bash tests/repo/test_v1_remnants.sh
+PASS: test_v1_remnants
+```
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 common, tls rename, re-exports | 1 | implementer, no coder: deletions and a mechanical rename | 0 | 0 |
+
+### Review
+
+- BLOCKER (fixed, second pass clean): `netray-dns` also re-exported `netray_common::middleware::request_id` as `request_id_middleware` (no user); with the feature dropped, `cargo check -p netray-dns` failed alone while the unified gate passed. The re-export is gone; `cargo check -p <crate>` and `--tests --features testing` pass for dns, tls, http and email, `-p netray-common --tests` with and without `--all-features`.
+- AMENDMENT (phase 3, repaired): `test_v1_remnants.sh` passed when `cargo metadata` failed; it now fails when the scan produced nothing (`PATH=/usr/bin:/bin` gives "cargo metadata produced nothing").
+- AMENDMENT (phase 3, repaired): the check did not test the `middleware` feature; it now reads each module crate's `netray-common` features from `cargo metadata` (adding it back to tls fails the check).
+- AMENDMENT (phase 3, repaired): `crates/common/README.md` and `CLAUDE.md` named the deleted `ecosystem` and `metrics` modules and `EcosystemConfig`.
+- NIT (repaired): `tests/repo/test_config_strict.sh`'s scope comment named `EcosystemConfig` and the gone `BackendConfig`.

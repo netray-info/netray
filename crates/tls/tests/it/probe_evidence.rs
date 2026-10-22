@@ -13,8 +13,8 @@ use std::path::PathBuf;
 
 use netray_engine::{Module, SectionOutcome};
 use netray_model::evidence::{Block, Shape, Value, validate};
+use netray_tls::inspection::InspectResponse;
 use netray_tls::module::{REGISTER, translate_ports};
-use netray_tls::routes::InspectResponse;
 use netray_tls::tls::probe::{ProbeOutcome, ProtocolProbes, Verdict};
 use netray_tls::{ModuleConfig, TlsModule, translate};
 use serde_json::{Value as Json, json};

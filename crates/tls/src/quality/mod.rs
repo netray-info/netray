@@ -4,7 +4,7 @@ pub mod types;
 
 pub use types::{HealthCheck, PortQualityResult, QualityResult, RedirectInfo};
 
-use crate::routes::ConsistencyResult;
+use crate::inspection::ConsistencyResult;
 use crate::tls::IpInspectionResult;
 use crate::validate::CheckStatus;
 

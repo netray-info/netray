@@ -31,4 +31,3 @@ pub use job::{
     EmailSummary, InspectSlots,
 };
 pub use module::{EmailModule, translate};
-pub use netray_common::middleware::RequestId;

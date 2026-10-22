@@ -9,7 +9,7 @@ description = "The DNS module and inspector of netray, powered by mhost"
 netray-model = { workspace = true }
 netray-engine = { workspace = true }
 mhost = { workspace = true, features = ["dot", "doh"] }
-netray-common = { workspace = true, features = ["schema", "middleware", "enrichment", "fetch"] }
+netray-common = { workspace = true, features = ["schema", "enrichment", "fetch"] }
 
 # Web framework
 axum = { workspace = true, features = ["json"] }

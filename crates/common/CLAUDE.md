@@ -19,7 +19,7 @@ they are not repeated here. Module table: [`README.md`](README.md).
 - **`config::load` / `load_with_env`** is the only loader: precedence env > TOML file > serde
   defaults, key separator `__`, `<NAME>_CONFIG` is never a key. The binary loads with prefix
   `NETRAY_` and calls `refuse_legacy_prefix` for retired prefixes. Config structs defined here
-  (`TelemetryConfig`, `EcosystemConfig`) carry `deny_unknown_fields`.
+  (`TelemetryConfig`) carry `deny_unknown_fields`.
 - **`IpExtractor`**: an empty trusted-proxy list ignores every proxy header; bare IPs are
   promoted to `/32` or `/128`; invalid entries are skipped with a warning; `X-Forwarded-For` is
   walked right to left, skipping trusted proxies. `CF-Connecting-IP` is never read.

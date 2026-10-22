@@ -1,7 +1,7 @@
 // V2 Phase 4, requirements 13 and C4: the TLS module, its config and the pure translation moved
 // from lens's `backends/tls.rs`. Needs `required-features = ["testing"]` on this test target,
 // `netray-engine` and `toml` as dev-dependencies of netray-tls, and `Deserialize` on
-// `routes::InspectResponse` and everything it contains (it is Serialize-only today; `input_mode`
+// `inspection::InspectResponse` and everything it contains (it is Serialize-only today; `input_mode`
 // is `&'static str` and must become a deserializable type, e.g. `String`).
 
 use std::path::PathBuf;
@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use netray_engine::{Domain, Facts, Module, RunContext, RunOptions, SectionOutcome};
 use netray_model::evidence::{Block, Shape, Value as EvValue};
 use netray_model::{Protocol, Status};
-use netray_tls::routes::InspectResponse;
+use netray_tls::inspection::InspectResponse;
 use netray_tls::{ModuleConfig, TlsModule, testing, translate};
 use serde_json::Value;
 

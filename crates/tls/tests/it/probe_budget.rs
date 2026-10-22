@@ -7,7 +7,7 @@
 use std::net::IpAddr;
 
 use netray_tls::backend::{LiveBackend, TlsBackend};
-use netray_tls::routes::plan_budget;
+use netray_tls::inspection::plan_budget;
 
 fn public(n: u8) -> IpAddr {
     IpAddr::from([192, 0, 2, n])

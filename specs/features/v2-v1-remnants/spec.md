@@ -86,8 +86,9 @@ back.
    V1 name in a crate-level doc comment.
 10. `netray_common::ecosystem` and `netray_common::metrics` are deleted; `serde_json` is a
     dev-dependency of `netray-common` only.
-11. `netray_tls::RequestId` is gone and `netray-tls` no longer enables `netray-common`'s
-    `middleware` feature.
+11. `netray_tls::RequestId` is gone, as are the same unused re-exports `netray_dns::RequestId`,
+    `netray_http::RequestId` and `netray_email::RequestId`; none of the four module crates enables
+    `netray-common`'s `middleware` feature any more.
 12. `crates/tls/src/routes.rs` is `crates/tls/src/inspection.rs` (module `netray_tls::inspection`);
     every user, `crates/tls/CLAUDE.md` included, names the new path.
 13. `tests/repo/test_v1_remnants.sh` fails while 10 to 12 do not hold.
@@ -139,7 +140,7 @@ GIVEN the cleaned tree WHEN `crates/ip/README.md` is read THEN its classificatio
 
 ### Test Scenarios
 
-GIVEN today's tree WHEN `tests/repo/test_v1_remnants.sh` runs THEN it fails naming `ecosystem`, `metrics`, `RequestId` and `routes.rs`.
+GIVEN today's tree WHEN `tests/repo/test_v1_remnants.sh` runs THEN it fails naming `ecosystem`, `metrics`, the `serde_json` dependency, the four `RequestId` re-exports and `routes.rs`.
 GIVEN the cleaned tree WHEN it runs THEN it passes, and `cargo build --workspace --all-targets` and the gate pass.
 
 ## Decision log
@@ -174,6 +175,11 @@ GIVEN the cleaned tree WHEN it runs THEN it passes, and `cargo build --workspace
 - `inspection.rs` over `inspect.rs` or `plan.rs`: the file holds the whole TLS inspection (target
   resolution, the cost plan, the run and its response types), and `inspector.rs` beside it holds
   the inspector seam (implementer under the operator's autonomy mandate, 2026-10-22).
+
+- The `RequestId` re-exports of `netray-dns`, `netray-http` and `netray-email` go with
+  `netray-tls`'s, with `netray-dns`'s `request_id_middleware` re-export: the same dead lines,
+  no user in the workspace, and the `middleware` feature each crate enabled only for them (implementer under the operator's autonomy
+  mandate, 2026-10-22).
 
 ## Open decisions
 

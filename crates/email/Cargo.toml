@@ -11,7 +11,7 @@ netray-engine = { workspace = true }
 # Web framework
 axum = { workspace = true, features = ["json"] }
 governor = { workspace = true }
-netray-common = { workspace = true, features = ["schema", "middleware", "enrichment", "fetch"] }
+netray-common = { workspace = true, features = ["schema", "enrichment", "fetch"] }
 
 # HTTP client (MTA-STS policy, BIMI logo)
 reqwest = { workspace = true, features = ["json", "rustls", "webpki-roots", "http2"] }

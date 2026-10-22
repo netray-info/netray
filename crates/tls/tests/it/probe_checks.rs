@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use netray_engine::profile::Profiles;
 use netray_engine::{SectionEvent, SectionOutcome, catalogue, score};
 use netray_model::{CheckResult, Protocol, Status};
-use netray_tls::routes::InspectResponse;
+use netray_tls::inspection::InspectResponse;
 use netray_tls::tls::probe::{ProbeOutcome, ProtocolProbes, Verdict};
 use netray_tls::translate;
 use serde_json::{Value as Json, json};

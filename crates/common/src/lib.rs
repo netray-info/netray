@@ -25,7 +25,6 @@ pub mod config;
 #[cfg(feature = "cors")]
 pub mod cors;
 pub mod domain;
-pub mod ecosystem;
 #[cfg(feature = "enrichment")]
 pub mod enrichment;
 pub mod error;
@@ -33,7 +32,6 @@ pub mod error;
 pub mod fetch;
 pub mod ip_extract;
 pub mod ip_filter;
-pub mod metrics;
 #[cfg(feature = "middleware")]
 pub mod middleware;
 pub mod prefetch;

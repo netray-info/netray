@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use netray_engine::{Module, SectionOutcome};
 use netray_model::{CheckResult, Status};
-use netray_tls::routes::InspectResponse;
+use netray_tls::inspection::InspectResponse;
 use netray_tls::{ModuleConfig, TlsModule, translate};
 use serde_json::{Value, json};
 
