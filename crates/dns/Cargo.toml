@@ -111,6 +111,7 @@ reqwest = { workspace = true, features = ["rustls"] }
 rcgen = "0.14"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 tokio-rustls = "0.26"
+tokio = { workspace = true, features = ["full", "test-util"] }
 
 [[test]]
 name = "job_blocks"

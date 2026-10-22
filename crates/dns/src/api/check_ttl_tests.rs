@@ -325,6 +325,8 @@ async fn c5_recursive_ttl_of_300_makes_no_authoritative_lookup() {
 enum Rd {
     A(&'static str),
     Cname(&'static str),
+    /// A signature over the apex A set; served by the recursive stub only.
+    Rrsig,
 }
 
 impl Rd {
@@ -332,6 +334,15 @@ impl Rd {
         match self {
             Rd::A(ip) => ("A", json!({ "A": ip })),
             Rd::Cname(target) => ("CNAME", json!({ "CNAME": target })),
+            Rd::Rrsig => (
+                "RRSIG",
+                json!({ "RRSIG": {
+                    "type_covered": "A", "algorithm": "EcdsaP256Sha256", "labels": 2,
+                    "original_ttl": 29, "expiration": 4_102_444_800u64,
+                    "inception": 1_700_000_000u64, "key_tag": 2371,
+                    "signer_name": "example.com.", "signature": "c2ln"
+                }}),
+            ),
         }
     }
 
@@ -341,6 +352,7 @@ impl Rd {
             Rd::Cname(target) => RData::CNAME(hickory_proto::rr::rdata::CNAME(
                 Name::from_ascii(target).unwrap(),
             )),
+            Rd::Rrsig => unreachable!("an RRSIG is served by the recursive stub only"),
         }
     }
 }
@@ -729,5 +741,58 @@ async fn c9_cname_target_outside_the_zone_is_not_asked_at_the_nameservers() {
     assert!(
         findings.iter().any(|f| f.contains("20s")),
         "finding must carry 20s: {findings:?}"
+    );
+}
+
+/// C10: the RRSIG of a signed apex carries the signature's own TTL; no RRSIG query for the apex
+/// reaches a nameserver address, on either seam.
+#[tokio::test]
+async fn c10_rrsig_is_not_reread_for_ttl() {
+    let apex = |ttl, rd| Rr {
+        owner: "example.com.",
+        ttl,
+        rd,
+    };
+    let ran = run_world(World {
+        domain: "example.com",
+        zone: "example.com",
+        ns: EXAMPLE_NS.to_vec(),
+        recursive: vec![
+            answer(
+                "example.com",
+                RecordType::A,
+                vec![apex(29, Rd::A("192.0.2.10"))],
+            ),
+            answer("example.com", RecordType::RRSIG, vec![apex(29, Rd::Rrsig)]),
+        ],
+        authoritative: vec![answer(
+            "example.com",
+            RecordType::A,
+            vec![apex(60, Rd::A("192.0.2.10"))],
+        )],
+    })
+    .await;
+
+    let raw = ran.sender.sent().iter().any(|s| {
+        s.record_type == RecordType::RRSIG
+            && same_name(&s.name.to_ascii(), "example.com")
+            && NS_ADDRS.contains(&s.server.ip().to_string().as_str())
+    });
+    let seam = ran
+        .asked
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|(server, name, rtype)| {
+            rtype == "RRSIG" && name == "example.com" && NS_ADDRS.iter().any(|a| server.contains(a))
+        });
+    assert!(
+        !raw,
+        "no RRSIG query for example.com may reach a nameserver (raw seam)"
+    );
+    assert!(
+        !seam,
+        "no RRSIG query for example.com may reach a nameserver (lookup seam)"
     );
 }

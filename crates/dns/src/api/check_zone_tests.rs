@@ -49,6 +49,8 @@ enum Answer {
 struct Zones {
     answers: Vec<((String, String), Answer)>,
     asked: Mutex<Vec<(String, String)>>,
+    /// Lookups that answer only after this long (tokio's clock).
+    delays: Vec<((String, String), std::time::Duration)>,
 }
 
 impl Zones {
@@ -71,6 +73,11 @@ impl Zones {
     fn servfail(mut self, name: &str, rtype: &str) -> Self {
         self.answers
             .push(((key(name), rtype.to_owned()), Answer::ServFail));
+        self
+    }
+
+    fn delayed(mut self, name: &str, rtype: &str, by: std::time::Duration) -> Self {
+        self.delays.push(((key(name), rtype.to_owned()), by));
         self
     }
 
@@ -98,12 +105,20 @@ impl ResolverLookup for ZonesLookup {
     ) -> futures::future::BoxFuture<'static, ResolverResult<Lookups>> {
         let name_server = resolver.name();
         let zones = Arc::clone(&self.0);
+        let mut delay = std::time::Duration::ZERO;
         let lookups: Vec<Json> = query
             .into_uni_queries()
             .into_iter()
             .map(|uni| {
                 let name = uni.name().to_ascii();
                 let rtype = uni.record_type().to_string();
+                if let Some((_, by)) = zones
+                    .delays
+                    .iter()
+                    .find(|((n, t), _)| *n == key(&name) && *t == rtype)
+                {
+                    delay = delay.max(*by);
+                }
                 zones
                     .asked
                     .lock()
@@ -158,7 +173,12 @@ impl ResolverLookup for ZonesLookup {
             .collect();
         let decoded: Lookups =
             serde_json::from_value(json!({ "lookups": lookups })).expect("zone lookups decode");
-        Box::pin(async move { Ok(decoded) })
+        Box::pin(async move {
+            if !delay.is_zero() {
+                tokio::time::sleep(delay).await;
+            }
+            Ok(decoded)
+        })
     }
 }
 
@@ -776,5 +796,46 @@ async fn c21_ancestor_climb_is_bounded() {
         ancestors.len() <= 8,
         "{} ancestor SOA lookups: {ancestors:?}",
         ancestors.len()
+    );
+}
+
+/// C22: a failed NS lookup at the queried name (a batch for www.example.com) does not hide the
+/// zone's own NS answer: the NS checks still judge example.com.
+#[tokio::test]
+async fn c22_failed_name_ns_batch_does_not_hide_the_zone() {
+    let zones = Zones::default()
+        .with("example.com", "SOA", vec![soa()])
+        .with(
+            "example.com",
+            "NS",
+            vec![ns("ns1.example.net."), ns("ns2.example.net.")],
+        )
+        .servfail("www.example.com", "NS");
+    let ran = run("www.example.com", zones).await;
+
+    for check in NS_CHECKS {
+        let (status, findings) = ran.check(check);
+        assert_ne!(status, Status::Unmeasured, "dns.{check}: {findings:?}");
+    }
+}
+
+/// C23: a CAA climb cut by the stream deadline is unmeasured, never "No CAA records found".
+/// The paused clock runs the 30 s deadline instantly.
+#[tokio::test(start_paused = true)]
+async fn c23_caa_climb_cut_by_the_deadline_is_unmeasured() {
+    let zones = Zones::default()
+        .with("example.com", "SOA", vec![soa()])
+        .delayed(
+            "example.com",
+            "CAA",
+            std::time::Duration::from_secs(super::STREAM_TIMEOUT_SECS * 2),
+        );
+    let ran = run("www.example.com", zones).await;
+
+    let (status, findings) = ran.check("caa");
+    assert_eq!(status, Status::Unmeasured, "{findings:?}");
+    assert!(
+        findings.iter().any(|f| f.contains("deadline")),
+        "the finding must name the deadline: {findings:?}"
     );
 }
