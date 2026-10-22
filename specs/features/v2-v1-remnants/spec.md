@@ -181,6 +181,13 @@ GIVEN the cleaned tree WHEN it runs THEN it passes, and `cargo build --workspace
   no user in the workspace, and the `middleware` feature each crate enabled only for them (implementer under the operator's autonomy
   mandate, 2026-10-22).
 
+- Review of e2bb5899..a29fecfb: its two BLOCKERs (the TLS test renames without
+  `ADLC-Test-Change`, `user_agent_regexes` called optional in `docs/ip-enrichment.md`), the
+  spec reader's MAJOR (the remnants check read only tracked paths for requirement 12) and the
+  MINOR (pathspec `*` crossing directories) are fixed on this branch over splitting the change:
+  each is a few lines inside this feature's scope (implementer under the operator's autonomy
+  mandate, 2026-10-22).
+
 ## Open decisions
 
 None.

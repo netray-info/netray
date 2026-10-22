@@ -109,3 +109,10 @@ PASS: test_v1_remnants
 - AMENDMENT (phase 3, repaired): the check did not test the `middleware` feature; it now reads each module crate's `netray-common` features from `cargo metadata` (adding it back to tls fails the check).
 - AMENDMENT (phase 3, repaired): `crates/common/README.md` and `CLAUDE.md` named the deleted `ecosystem` and `metrics` modules and `EcosystemConfig`.
 - NIT (repaired): `tests/repo/test_config_strict.sh`'s scope comment named `EcosystemConfig` and the gone `BackendConfig`.
+
+## Review fixes (after e2bb5899..a29fecfb)
+
+- The 19 TLS test files the module rename touched carry `ADLC-Test-Change` trailers; `adlc check` no longer lists them.
+- `docs/ip-enrichment.md`: `user_agent_regexes` must load when configured (load error at startup, the whole previous data kept on reload).
+- `tests/repo/test_v1_remnants.sh` reads `crates/tls/src/lib.rs` (`pub mod inspection;`, no `routes` or `#[path]`), `crates/tls/CLAUDE.md` and the old module path in the tls and web crates; `#[path = "inspection.rs"] pub mod routes;` and `src/routes.rs` in CLAUDE.md each fail it.
+- `tests/repo/test_crate_docs.sh` matches record files with `:(glob)` pathspecs, so only `crates/<crate>/docs/` and `specs/` count.
