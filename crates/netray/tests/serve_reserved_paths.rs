@@ -1,6 +1,8 @@
 //! v2-cutover Phase 2, C10: every reserved segment and root file of SDD §5.1 never reaches
 //! the result page. The result page is what the apex answers for `GET /example.com`.
 
+mod support;
+
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::process::{Child, Command, Stdio};
@@ -61,43 +63,56 @@ fn reserved_segments_and_root_files_never_reach_the_result_page() {
         ),
     )
     .unwrap();
-    let (port, metrics) = (free_port(), free_port());
-    let log = std::fs::File::create(dir.join("serve.log")).unwrap();
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_netray"));
-    cmd.args(["serve", cfg.to_str().unwrap()])
-        .env_clear()
-        .stdin(Stdio::null())
-        .env("NETRAY_SERVER__BIND", format!("127.0.0.1:{port}"))
-        .env(
-            "NETRAY_SERVER__METRICS_BIND",
-            format!("127.0.0.1:{metrics}"),
-        )
-        .stdout(log.try_clone().unwrap())
-        .stderr(log);
-    for key in ["PATH", "HOME"] {
-        if let Some(v) = std::env::var_os(key) {
-            cmd.env(key, v);
+    let mut attempt = 0;
+    let (port, _child) = 'attempt: loop {
+        attempt += 1;
+        let (port, metrics) = (free_port(), free_port());
+        let log = std::fs::File::create(dir.join("serve.log")).unwrap();
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_netray"));
+        cmd.args(["serve", cfg.to_str().unwrap()])
+            .env_clear()
+            .stdin(Stdio::null())
+            .env("NETRAY_SERVER__BIND", format!("127.0.0.1:{port}"))
+            .env(
+                "NETRAY_SERVER__METRICS_BIND",
+                format!("127.0.0.1:{metrics}"),
+            )
+            .stdout(log.try_clone().unwrap())
+            .stderr(log);
+        for key in ["PATH", "HOME"] {
+            if let Some(v) = std::env::var_os(key) {
+                cmd.env(key, v);
+            }
         }
-    }
-    let mut child = Killed(cmd.spawn().unwrap());
+        let mut child = Killed(cmd.spawn().unwrap());
 
-    let deadline = Instant::now() + Duration::from_secs(30);
-    loop {
-        if let Some(s) = child.0.try_wait().unwrap() {
-            panic!(
-                "serve exited early ({s}): {}",
-                std::fs::read_to_string(dir.join("serve.log")).unwrap_or_default()
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            if let Some(s) = child.0.try_wait().unwrap() {
+                if attempt < support::ATTEMPTS && support::bind_failed(&dir.join("serve.log")) {
+                    continue 'attempt;
+                }
+                panic!(
+                    "serve exited early ({s}): {}",
+                    std::fs::read_to_string(dir.join("serve.log")).unwrap_or_default()
+                );
+            }
+            if attempt < support::ATTEMPTS && support::bind_failed(&dir.join("serve.log")) {
+                continue 'attempt;
+            }
+            if support::listening(&dir.join("serve.log"))
+                && get(port, "/health").is_some_and(|(st, _)| st == 200)
+            {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "GET /health never answered 200 within 30 s"
             );
+            std::thread::sleep(Duration::from_millis(200));
         }
-        if get(port, "/health").is_some_and(|(st, _)| st == 200) {
-            break;
-        }
-        assert!(
-            Instant::now() < deadline,
-            "GET /health never answered 200 within 30 s"
-        );
-        std::thread::sleep(Duration::from_millis(200));
-    }
+        break (port, child);
+    };
 
     let (ref_status, ref_body) = get(port, "/example.com").expect("GET /example.com");
     assert_eq!(ref_status, 200, "reference /example.com status");

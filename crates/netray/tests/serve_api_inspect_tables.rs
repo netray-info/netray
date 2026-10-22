@@ -1,6 +1,8 @@
 //! v2-cutover Phase 1 (requirement 9, C15, C18 second half): `netray.toml` carries the `[api]`
 //! and `[inspect.*]` tables, each key under its own `validate()` rule, and the values reach serve.
 
+mod support;
+
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
@@ -138,34 +140,46 @@ fn get_status(port: u16, path: &str) -> Option<String> {
 fn serve_and_get(tag: &str, extra: &str, path: &str) -> String {
     let dir = scratch(tag);
     let cfg = config(&dir, extra);
-    let (port, metrics) = (free_port(), free_port());
-    let log = std::fs::File::create(dir.join("serve.log")).unwrap();
-    let mut child = Killed(
-        command(&["serve", cfg.to_str().unwrap()])
-            .env("NETRAY_SERVER__BIND", format!("127.0.0.1:{port}"))
-            .env(
-                "NETRAY_SERVER__METRICS_BIND",
-                format!("127.0.0.1:{metrics}"),
-            )
-            .stdout(log.try_clone().unwrap())
-            .stderr(log)
-            .spawn()
-            .unwrap(),
-    );
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while Instant::now() < deadline {
-        if let Some(s) = child.0.try_wait().unwrap() {
-            panic!(
-                "serve exited early ({s}): {}",
-                std::fs::read_to_string(dir.join("serve.log")).unwrap_or_default()
-            );
+    let mut attempt = 0;
+    'attempt: loop {
+        attempt += 1;
+        let (port, metrics) = (free_port(), free_port());
+        let log = std::fs::File::create(dir.join("serve.log")).unwrap();
+        let mut child = Killed(
+            command(&["serve", cfg.to_str().unwrap()])
+                .env("NETRAY_SERVER__BIND", format!("127.0.0.1:{port}"))
+                .env(
+                    "NETRAY_SERVER__METRICS_BIND",
+                    format!("127.0.0.1:{metrics}"),
+                )
+                .stdout(log.try_clone().unwrap())
+                .stderr(log)
+                .spawn()
+                .unwrap(),
+        );
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while Instant::now() < deadline {
+            if let Some(s) = child.0.try_wait().unwrap() {
+                if attempt < support::ATTEMPTS && support::bind_failed(&dir.join("serve.log")) {
+                    continue 'attempt;
+                }
+                panic!(
+                    "serve exited early ({s}): {}",
+                    std::fs::read_to_string(dir.join("serve.log")).unwrap_or_default()
+                );
+            }
+            if attempt < support::ATTEMPTS && support::bind_failed(&dir.join("serve.log")) {
+                continue 'attempt;
+            }
+            if support::listening(&dir.join("serve.log"))
+                && get_status(port, "/health").is_some_and(|l| l.contains(" 200"))
+            {
+                return get_status(port, path).expect("status line");
+            }
+            std::thread::sleep(Duration::from_millis(200));
         }
-        if get_status(port, "/health").is_some_and(|l| l.contains(" 200")) {
-            return get_status(port, path).expect("status line");
-        }
-        std::thread::sleep(Duration::from_millis(200));
+        panic!("serve never answered /health within 30 s");
     }
-    panic!("serve never answered /health within 30 s");
 }
 
 #[test]
