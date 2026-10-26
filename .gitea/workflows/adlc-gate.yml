@@ -1,0 +1,92 @@
+# adlc-gate.yml — the gate as a CI check. Copy this file into .gitea/workflows/ (the syntax is
+# GitHub Actions compatible) and set these variables and one secret, on the repository or once for
+# its owner (user or organisation; every repository of that owner inherits them):
+#
+#   ADLC_REPOSITORY    (variable, required) the owner/name of the adlc repository on this forge; the
+#                      workflow clones it and builds the binary with `just build`, so no download
+#                      server is involved.
+#   ADLC_REPO_TOKEN    (secret, required) a token that may read ADLC_REPOSITORY.
+#   ADLC_ADVISORY      (variable, optional) any non-empty value switches shadow mode on: the gate
+#                      prints its verdict and exits 0, so the runs of a week can be read before a
+#                      refusal holds anything. Remove the variable to let the gate decide.
+#
+# ADLC_REF below is the adlc tag this workflow builds, so CI runs the version the local hooks run.
+# `adlc init` writes it from its own version (the default branch when that is no tag), `adlc init
+# --update` rewrites it, and `adlc audit` reports it only when it is older than the binary's
+# GateSince, newer than the binary, or no tag.
+#
+# The receipt of every run is uploaded as an artefact, refused or not, so the verdict can be read
+# back; .adlc/measurements/gate.jsonl travels with it when the repository records gate runs.
+name: adlc-gate
+
+env:
+  ADLC_REF: v0.11.0
+
+on:
+  push:
+    branches: [main]   # your default branch
+  pull_request:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the tamper baseline is the merge base with the default branch; a shallow clone has none
+
+      # Pinned: without --tag the installer asks api.github.com for the latest release, which a
+      # shared runner address is refused (403). Keep the tag in step with the developer machine.
+      - name: install just
+        run: curl -fsSL https://just.systems/install.sh | bash -s -- --tag 1.58.0 --to /usr/local/bin
+
+      # Cloned outside the workspace: a clone inside it is found by every test that walks the
+      # checkout under test. The header is the one actions/checkout authenticates with.
+      - name: check out adlc
+        env:
+          ADLC_REPOSITORY: ${{ vars.ADLC_REPOSITORY }}
+          ADLC_REPO_TOKEN: ${{ secrets.ADLC_REPO_TOKEN }}
+        run: |
+          auth=$(printf 'x-access-token:%s' "$ADLC_REPO_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$auth"
+          git -c http.extraHeader="AUTHORIZATION: basic $auth" clone --depth 1 --branch "$ADLC_REF" \
+            "$GITHUB_SERVER_URL/$ADLC_REPOSITORY.git" "$RUNNER_TEMP/adlc-src"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ runner.temp }}/adlc-src/go.mod
+          cache: false
+
+      - name: build adlc
+        run: |
+          just --justfile "$RUNNER_TEMP/adlc-src/justfile" --working-directory "$RUNNER_TEMP/adlc-src" build
+          echo "$RUNNER_TEMP/adlc-src/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/adlc-src/bin/adlc" version
+
+      # The repository's own toolchain: add here the setup steps its contract needs (a Python, a
+      # Node, uv). The step after them runs the justfile's `adlc-setup` recipe, when there is one,
+      # to install what a fresh checkout lacks.
+      - name: repository setup
+        run: |
+          if just --summary | tr ' ' '\n' | grep -qx adlc-setup; then just adlc-setup; fi
+
+      - name: verify
+        run: adlc verify --out receipt.json
+
+      - name: gate
+        if: always()
+        env:
+          ADLC_ADVISORY: ${{ vars.ADLC_ADVISORY }}
+        run: adlc gate --ci --receipt receipt.json ${ADLC_ADVISORY:+--advisory}
+
+      # v3, not v4: upload-artifact v4 needs GitHub's artifact service, which Gitea does not offer.
+      - name: receipt artefact
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: adlc-receipt
+          if-no-files-found: ignore
+          path: |
+            receipt.json
+            .adlc/measurements/gate.jsonl
