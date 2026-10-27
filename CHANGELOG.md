@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-10-27
+
 **0.30.0 is the breaking release of V2: one process, one config, and every V1 API and app gone.** `netray serve` serves the apex, `dns.`, `tls.`, `http.`, `ip.`, `email.`, `lens.` and `mta-sts.` by `Host` from one `netray.toml`. It carries SDD Phases 2, 3, 4, 4a and 5 together; 0.27.0, 0.28.0 and 0.29.0 are not released. The operator's migration is the configuration table under Changed; `netray serve --check-config <path>` checks a migrated file.
 
 **Grades change (scoring profile v5).** `dns.https_svcb` warns instead of failing when a domain publishes no HTTPS or SVCB record; a malformed record already warned, so the check no longer fails at all, and a failed lookup stays unmeasured. Profile v5 carries v4's weights and marks the change: the first v5 run of each domain is a new history entry. A domain without the record gains about 0.6 to 0.7 points, which moves some letters (B to A, C to B). The diff's grade split cannot attribute the change to the profile, because a stored v4 run keeps its stored `fail`. A legacy-version probe (SSLv3, TLS 1.0, TLS 1.1, TLS 1.2) answered with a TLS alert that refuses the ClientHello (close_notify, or a fatal unexpected_message, handshake_failure, illegal_parameter, decode_error, protocol_version, insufficient_security, inappropriate_fallback or unrecognized_name) has refused that version: nginx answers SSLv3 with `unrecognized_name`, and such servers move `tls.legacy_versions` from unmeasured to a verdict and their run from incomplete to graded. An internal_error or a timeout still leaves the probe unanswered.

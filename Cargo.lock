@@ -2618,7 +2618,7 @@ checksum = "27b02d87554356db9e9a873add8782d4ea6e3e58ea071a9adb9a2e8ddb884a8b"
 
 [[package]]
 name = "netray"
-version = "0.26.0"
+version = "0.30.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -2647,7 +2647,7 @@ dependencies = [
 
 [[package]]
 name = "netray-common"
-version = "0.26.0"
+version = "0.30.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -2684,7 +2684,7 @@ dependencies = [
 
 [[package]]
 name = "netray-dns"
-version = "0.26.0"
+version = "0.30.0"
 dependencies = [
  "axum",
  "chrono",
@@ -2719,7 +2719,7 @@ dependencies = [
 
 [[package]]
 name = "netray-email"
-version = "0.26.0"
+version = "0.30.0"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -2751,7 +2751,7 @@ dependencies = [
 
 [[package]]
 name = "netray-engine"
-version = "0.26.0"
+version = "0.30.0"
 dependencies = [
  "futures",
  "netray-model",
@@ -2766,7 +2766,7 @@ dependencies = [
 
 [[package]]
 name = "netray-http"
-version = "0.26.0"
+version = "0.30.0"
 dependencies = [
  "axum",
  "chrono",
@@ -2790,7 +2790,7 @@ dependencies = [
 
 [[package]]
 name = "netray-ip"
-version = "0.26.0"
+version = "0.30.0"
 dependencies = [
  "arc-swap",
  "axum",
@@ -2821,7 +2821,7 @@ dependencies = [
 
 [[package]]
 name = "netray-model"
-version = "0.26.0"
+version = "0.30.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2831,7 +2831,7 @@ dependencies = [
 
 [[package]]
 name = "netray-store"
-version = "0.26.0"
+version = "0.30.0"
 dependencies = [
  "metrics",
  "metrics-util",
@@ -2846,7 +2846,7 @@ dependencies = [
 
 [[package]]
 name = "netray-tls"
-version = "0.26.0"
+version = "0.30.0"
 dependencies = [
  "arc-swap",
  "axum",
@@ -2885,7 +2885,7 @@ dependencies = [
 
 [[package]]
 name = "netray-web"
-version = "0.26.0"
+version = "0.30.0"
 dependencies = [
  "askama",
  "axum",
