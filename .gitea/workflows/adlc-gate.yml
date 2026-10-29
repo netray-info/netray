@@ -20,7 +20,7 @@
 name: adlc-gate
 
 env:
-  ADLC_REF: v0.12.0
+  ADLC_REF: v0.12.1
 
 on:
   push:
