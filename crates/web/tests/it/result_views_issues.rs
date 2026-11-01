@@ -102,12 +102,12 @@ fn issues_by_owner_hold_each_warn_and_fail_once_with_catalogue_texts() {
     assert_eq!(dnssec.view.title, "DNSSEC signed");
     assert_eq!(
         dnssec.view.body,
-        "The zone is not DNSSEC-signed, or its DNSSEC records are inconsistent, use weak algorithms or carry expired signatures."
+        "The zone is not DNSSEC-signed, is signed but not anchored in its parent zone (DNSKEY records without a DS record at the parent), or its DNSSEC records are inconsistent, use weak algorithms or carry expired signatures."
     );
     assert_eq!(
         dnssec.view.fix.as_deref(),
         Some(
-            "Enable DNSSEC signing at the DNS provider, have its DS record published at the registrar and keep the signatures current."
+            "Enable DNSSEC signing at the DNS provider, have its DS record published at the registrar (a signed zone without a DS at the parent counts as unsigned) and keep the signatures current."
         )
     );
     assert_eq!(dnssec.view.guide_href.as_deref(), Some("/guide/dnssec"));

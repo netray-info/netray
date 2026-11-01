@@ -822,6 +822,19 @@ pub fn translate(events: &[CheckEvent]) -> SectionOutcome {
         }
     }
 
+    // With DNSKEY records present, a rollover lint of NotFound is a lone KSK without DS: no
+    // rollover applies, and `dns.dnssec` judges the missing anchor.
+    for check in &mut checks {
+        if check.name == "dnssec_rollover" && check.verdict == Verdict::NotFound {
+            check.verdict = Verdict::Skip;
+            check.messages.clear();
+            check.messages.push(
+                "No rollover applies: a single KSK without a DS record (dns.dnssec judges the missing anchor)"
+                    .to_string(),
+            );
+        }
+    }
+
     // A domain without an HTTPS or SVCB record warns, as a malformed record does (SDD S44); a
     // failed lookup is already unmeasured above.
     for check in &mut checks {

@@ -104,6 +104,7 @@ struct Row {
 }
 
 const NO_DNSSEC: &str = "Warning: No DNSSEC records found: domain is not DNSSEC-signed, DNS responses cannot be authenticated";
+const NO_DS: &str = "Failed: Zone publishes DNSKEY records but the parent zone returns no DS record: the zone is signed but not anchored in its parent zone, so validating resolvers treat it as unsigned";
 const NS_MX_OK: &str = "Ok: No NS/MX records with excessively high TTL";
 
 #[test]
@@ -117,7 +118,7 @@ fn lint_results_table() {
     };
 
     let rows = vec![
-        // C14: DNSKEY answered, no RRSIG anywhere.
+        // C14: DNSKEY answered, no RRSIG anywhere, no DS: signed but not anchored.
         Row {
             name: "C14 signed zone answered to a stub lookup",
             lookups: lookups(signed_zone(one)),
@@ -125,6 +126,7 @@ fn lint_results_table() {
                 "Ok: Domain has DNSSEC records: DNSKEY",
                 "Ok: Found 1 KSK(s) and 1 ZSK(s)",
                 "Ok: Algorithm ECDSA P-256/SHA-256 is secure",
+                NO_DS,
             ],
             ttl: &["Ok: No records with TTL below 60s", NS_MX_OK],
         },
@@ -146,6 +148,7 @@ fn lint_results_table() {
                 "Ok: Domain has DNSSEC records: DNSKEY",
                 "Ok: Found 1 KSK(s) and 1 ZSK(s)",
                 "Ok: Algorithm ECDSA P-256/SHA-256 is secure",
+                NO_DS,
             ],
             ttl: &["Ok: No records with TTL below 60s", NS_MX_OK],
         },

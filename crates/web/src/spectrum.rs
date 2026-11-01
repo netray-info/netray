@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use netray_engine::catalogue::{Catalogue, CheckSpec};
 use netray_engine::profile::Profile;
-use netray_model::{CheckId, Protocol, Status};
+use netray_model::{CheckId, Grade, Protocol, Status};
 
 use crate::tokens::values::{
     FONT_SIZE_CAPTION, FONT_SIZE_CAPTION_PHONE, LAYOUT_GUTTER_PHONE, LAYOUT_PHONE, SPACE_1,
@@ -357,6 +357,8 @@ pub struct Layout {
     pub groups: Vec<Group>,
     pub boundaries: Vec<f64>,
     pub runs: Vec<RunLayout>,
+    /// The run's section grades, filled only by `plate::card_layout`.
+    pub grades: Vec<(Protocol, Grade)>,
 }
 
 /// The effective state of a protocol's section in a run: the supplied state (absent is Measured),
@@ -550,6 +552,7 @@ pub fn layout(
         groups: geometry.groups,
         boundaries: geometry.boundaries,
         runs,
+        grades: Vec::new(),
     })
 }
 

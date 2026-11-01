@@ -96,6 +96,7 @@ fn embedded_catalogue_holds_the_57_checks_of_the_sdd_and_tls_versions_coop() {
         );
         for (name, v) in [
             ("title", &e.title),
+            ("checks", &e.checks),
             ("finding", &e.finding),
             ("impact", &e.impact),
             ("fix_hint", &e.fix_hint),
@@ -122,6 +123,7 @@ fn entry(id: &str, short: &str, impact: Option<&str>, owner: &str) -> String {
         .unwrap_or_default();
     format!(
         "[[check]]\nid = \"{id}\"\nprotocol = \"tls\"\ntitle = \"Chain trusted\"\n\
+         checks = \"Verifies the chain.\"\n\
          finding = \"The chain does not validate.\"\n{impact}fix_hint = \"Install the intermediate.\"\n\
          fix_owner = \"{owner}\"\nseverity = \"high\"\nsource = \"RFC 5280\"\n\
          guide = \"chain-trusted\"\nshort = \"{short}\"\n"

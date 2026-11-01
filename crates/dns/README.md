@@ -32,7 +32,8 @@ over them and maps its results onto these catalogue ids (`crates/engine/catalogu
 
 The pipeline's email categories are dropped; email is judged by the email module. A check whose
 input lookup failed is `unmeasured`; without DNSKEY records, `dns.dnskey_algorithm` and
-`dns.dnssec_rollover` are not applicable.
+`dns.dnssec_rollover` are not applicable. A signed zone without a parent DS fails `dns.dnssec`,
+and a lone KSK without DS leaves `dns.dnssec_rollover` not applicable.
 
 ## Evidence
 

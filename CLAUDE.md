@@ -117,7 +117,7 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **A volatile row path also covers `<key>#<n>` repeats** (`canonical.rs` `row_covers`): key repeated table rows `#<n>`, never join them into one cell.
 - **A check outside the verdict is evidence, not a catalogue ID.** The profile refuses weight 0 and every ID needs a weight (SDD §3.8); COOP/COEP/CORP live in `http.isolation`.
 - **beacon goldens are literal scenarios**: a new one must carry every sub-check the checks emit for its records (FCrDNS one per IP, `single_mx`, `no_ipv6`, DMARC `no_ruf`).
-- **A new check id needs its texts in the catalogue**: `crates/engine/catalogue/checks.toml` (the pages read titles, fix hints, owners and guide links from it). A catalogue text (`finding`, `fix_hint`, `fix_owner`) describes every warn and fail branch of the check's code: read the check before writing it.
+- **A new check id needs its texts in the catalogue**: `crates/engine/catalogue/checks.toml` (the pages read titles, fix hints, owners and guide links from it). A catalogue text (`finding`, `fix_hint`, `fix_owner`) describes every warn and fail branch of the check's code, and `checks` only what its pass branch guarantees: read the check before writing it.
 - **tlsight's `summary` judges OCSP, CAA and DANE from the first handshake over all ports**: a per-port verdict reads the port's own data (`module::port_wide`).
 - **`TlsParams.starttls` is a port label, not an upgrade**: only SMTP is upgraded (`tls/connect.rs`); `CertInfo.is_expired` truncates to whole days.
 - **Augment a request before its limit and cost checks**, never after: `+dnssec` once added DNSKEY and DS past `max_record_types`, running 12 types under a limit of 10.
@@ -155,6 +155,9 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **askama 0.16 closes every `{% call %}` with `{% endcall %}`**; without it the component macro does not compile.
 - **askama 0.16 escapes `'&<>"` as `&#39;` `&#38;` `&#60;` `&#62;` `&#34;`**: a test over rendered text compares that form.
 - **Pages show values through `evidence::display_value`**; `format_value` stays raw for exports, compact tables, links and explore.
+- **A row link on the stored result page uses `Links::Entry`**: `Links::Live` anchors (`#ev-…`) exist only on the live run page.
+- **A change to the social card's drawing bumps `CARD_RENDERING_VERSION`** (`og/layout.rs`): both card ETags carry it, or clients revalidate the old card to 304.
+- **A DNS lint's `NotFound` becomes `Status::Fail`** (`crates/dns/src/module.rs`): a not-applicable result is turned into `Verdict::Skip` there, never left as `NotFound`.
 - **A protocol view (`crates/web/src/pages/views/`) claims a block only when it renders every key**; each view adds `views_nothing_lost.rs` rows with distinct display texts.
 - **A part view (`views::render_part`) claims a whole inspector part**: its fragment replaces the first claimed block; DNS reads `dns.answers`/`dns.servers` from `netray_dns::*_page_blocks`.
 - **Count a DNS query's types with `netray_dns::parser::named_record_types`**, never raw tokens: the parser drops duplicates, resolves aliases (KEY is DNSKEY) and adds defaults.

@@ -248,6 +248,15 @@ pub fn clean_count(run: &Run, catalogue: &Catalogue) -> usize {
 /// Every check that is not an open issue: pass, not applicable, not tested, unmeasured, each in
 /// catalogue order; a warn or fail the catalogue no longer knows comes last.
 pub fn passed_checks(run: &Run, catalogue: &Catalogue) -> Vec<CheckRowView> {
+    passed_checks_with(run, catalogue, &Links::Live)
+}
+
+/// `passed_checks` with the evidence links of `links`: a stored page links its entry's panels.
+pub fn passed_checks_with(
+    run: &Run,
+    catalogue: &Catalogue,
+    links: &Links<'_>,
+) -> Vec<CheckRowView> {
     let mut rows: Vec<((usize, usize), CheckRowView)> = Vec::new();
     for (pos, check) in run.checks.iter().enumerate() {
         let spec_at = index_of(catalogue, &check.id);
@@ -270,6 +279,16 @@ pub fn passed_checks(run: &Run, catalogue: &Catalogue) -> Vec<CheckRowView> {
             Status::NotTested => String::new(),
             _ => check.findings.join("; "),
         };
+        let pass_spec = spec_at
+            .filter(|_| check.status == Status::Pass)
+            .map(|i| &catalogue.entries()[i]);
+        let body = match pass_spec {
+            Some(spec) if check.findings.is_empty() => {
+                format!("{} If it failed: {}", spec.checks, spec.impact)
+            }
+            Some(spec) => format!("{} If it failed: {} {body}", spec.checks, spec.impact),
+            None => body,
+        };
         rows.push((
             (rank, spec_at.unwrap_or(pos)),
             CheckRowView {
@@ -284,8 +303,8 @@ pub fn passed_checks(run: &Run, catalogue: &Catalogue) -> Vec<CheckRowView> {
                 body,
                 fix: None,
                 meta: spec_at.map(|i| meta_text(&catalogue.entries()[i])),
-                evidence_href: None,
-                guide_href: None,
+                evidence_href: pass_spec.map(|_| evidence_href(check, links)),
+                guide_href: pass_spec.map(|spec| spec.guide.clone()),
             },
         ));
     }
@@ -474,7 +493,14 @@ pub fn section_name(protocol: Protocol) -> &'static str {
 
 /// The run title of `entry`, the `ordinal`-th of its domain (the first is 1) when that is
 /// known: ordinal, time, check count, profile, the duration when known, "cached" and "first run".
-pub fn run_title(entry: &Entry, ordinal: Option<usize>, cached: bool) -> RunLineView {
+/// `unchanged` (`created_at`, `last_seen_at`) puts the dates of an identical re-check in place of
+/// "first run".
+pub fn run_title(
+    entry: &Entry,
+    ordinal: Option<usize>,
+    cached: bool,
+    unchanged: Option<(i64, i64)>,
+) -> RunLineView {
     let checks = entry.run.checks.len();
     let mut parts: Vec<String> = ordinal.map(|n| format!("Run {n}")).into_iter().collect();
     parts.extend([
@@ -488,7 +514,10 @@ pub fn run_title(entry: &Entry, ordinal: Option<usize>, cached: bool) -> RunLine
     if cached {
         parts.push("cached".to_string());
     }
-    if ordinal == Some(1) {
+    if let Some((created_at, last_seen_at)) = unchanged {
+        parts.push(format!("unchanged since {}", run_date(created_at)));
+        parts.push(format!("last checked {}", run_date(last_seen_at)));
+    } else if ordinal == Some(1) {
         parts.push("first run".to_string());
     }
     RunLineView { parts }

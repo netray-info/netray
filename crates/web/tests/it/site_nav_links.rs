@@ -62,8 +62,8 @@ async fn c2_guide_links_and_forms_are_apex_relative() {
     for g in guides::GUIDES {
         // The header logo links to the apex (v2-release-cleanup requirement 7).
         let html = without_canonical(&page(&format!("/guide/{}", g.slug)).await).replacen(
-            r#"<a href="https://netray.info/"><img"#,
-            "<a><img",
+            r#"<a href="https://netray.info/"><svg"#,
+            "<a><svg",
             1,
         );
         assert!(

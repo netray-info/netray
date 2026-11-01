@@ -53,7 +53,7 @@ fn check_id_and_block_id_schemas_are_strings() {
 }
 
 #[test]
-fn check_spec_serialises_exactly_its_eleven_fields() {
+fn check_spec_serialises_exactly_its_twelve_fields() {
     let spec = &netray_engine::catalogue().entries()[0];
     let v = serde_json::to_value(spec).unwrap();
     let mut keys: Vec<&str> = v.as_object().unwrap().keys().map(String::as_str).collect();
@@ -61,6 +61,7 @@ fn check_spec_serialises_exactly_its_eleven_fields() {
     assert_eq!(
         keys,
         [
+            "checks",
             "fix_hint",
             "fix_owner",
             "finding",

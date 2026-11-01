@@ -976,6 +976,8 @@ fn stored_shown(
         true,
     )?;
     let chosen: Vec<&Entry> = entries.iter().take(SHOWN).collect();
+    let unchanged = matches!(recorded, Some(Recorded::Identical { .. }))
+        || (recorded.is_none() && entry.last_seen_at > entry.created_at);
     let mut since: BTreeMap<CheckId, String> = BTreeMap::new();
     if ordinal_known {
         for check in &entry.run.checks {
@@ -991,19 +993,45 @@ fn stored_shown(
                 })
                 .collect();
             if let Some(text) = views::since_text(&statuses, 1) {
+                let text = if unchanged && text == "first run" {
+                    format!("since {}", views::run_date(entry.created_at))
+                } else {
+                    text
+                };
                 since.insert(check.id.clone(), text);
             }
         }
     }
-    let diff = match recorded {
-        Some(recorded) => views::recorded_diff_view(recorded, Some(entry), cat),
-        None => views::diff_view(entry.diff.as_ref(), cat),
+    let diff = if unchanged {
+        let identical = Recorded::Identical {
+            id: entry.id.clone(),
+        };
+        let mut diff = views::recorded_diff_view(&identical, Some(entry), cat);
+        if entry.diff.is_none() {
+            diff.block.note = Some(format!(
+                "unchanged since {}",
+                views::run_date(entry.created_at)
+            ));
+        }
+        if let Some(note) = diff.block.note.take() {
+            diff.block.note = Some(format!(
+                "{note}; last checked {}",
+                views::run_date(entry.last_seen_at)
+            ));
+        }
+        diff
+    } else {
+        match recorded {
+            Some(recorded) => views::recorded_diff_view(recorded, Some(entry), cat),
+            None => views::diff_view(entry.diff.as_ref(), cat),
+        }
     };
     let ordinal = ordinal_known.then_some(entries.len());
-    let first = match ordinal {
-        Some(n) => n == 1,
-        None => matches!(recorded, Some(Recorded::First { .. })),
-    };
+    let first = !unchanged
+        && match ordinal {
+            Some(n) => n == 1,
+            None => matches!(recorded, Some(Recorded::First { .. })),
+        };
     let diff_heading = match ordinal {
         Some(n) => since_heading(n - 1),
         None => Some("Since the previous run".to_string()),
@@ -1015,7 +1043,12 @@ fn stored_shown(
             score.as_ref().and_then(|s| shown_score(entry, s)),
         )),
         date: Some(views::run_date(entry.created_at)),
-        run_line: RunLineBody::Title(views::run_title(entry, ordinal, cached)),
+        run_line: RunLineBody::Title(views::run_title(
+            entry,
+            ordinal,
+            cached,
+            unchanged.then_some((entry.created_at, entry.last_seen_at)),
+        )),
         share: entry.run.complete.then(|| entry.id.clone()),
         plate,
         trace,
@@ -1037,7 +1070,7 @@ fn stored_shown(
             &since,
         ),
         clean: views::clean_count(&entry.run, cat),
-        passed: views::passed_checks(&entry.run, cat),
+        passed: views::passed_checks_with(&entry.run, cat, &Links::Entry(&entry.id)),
         evidence: panels(&entry.run, &entry.domain, Some(&entry.id)),
         recorded: true,
         recheck: true,

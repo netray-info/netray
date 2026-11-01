@@ -10,10 +10,15 @@
   margin: 0 auto;
   padding: var(--space-4) var(--layout-gutter);
 }
-.page-header img {
+.page-header__logo {
   display: block;
   height: 2.5rem;
   width: auto;
+  color: var(--color-ink);
+}
+.page-header__logo text {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-logo);
 }
 .page-tagline {
   flex: 1 1 auto;
@@ -914,7 +919,7 @@ main td {
     min-height: 44px;
     margin-inline-end: auto;
   }
-  .page-header img {
+  .page-header__logo {
     height: 33px;
   }
   .page-tagline {

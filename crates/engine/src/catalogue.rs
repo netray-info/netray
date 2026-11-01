@@ -19,6 +19,8 @@ pub struct CheckSpec {
     pub id: CheckId,
     pub protocol: Protocol,
     pub title: String,
+    /// One positive sentence: what the check verifies.
+    pub checks: String,
     pub finding: String,
     pub impact: String,
     pub fix_hint: String,
@@ -58,6 +60,7 @@ struct RawCheck {
     id: Option<String>,
     protocol: Option<String>,
     title: Option<String>,
+    checks: Option<String>,
     finding: Option<String>,
     impact: Option<String>,
     fix_hint: Option<String>,
@@ -113,6 +116,7 @@ impl RawCheck {
         }
         Ok(CheckSpec {
             title: field(&raw_id, "title", self.title)?,
+            checks: field(&raw_id, "checks", self.checks)?,
             finding: field(&raw_id, "finding", self.finding)?,
             impact: field(&raw_id, "impact", self.impact)?,
             fix_hint: field(&raw_id, "fix_hint", self.fix_hint)?,
