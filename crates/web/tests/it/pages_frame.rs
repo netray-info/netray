@@ -102,7 +102,7 @@ fn assert_frame(page: &str, html: &str) {
     once(page, html, "href=\"/static/app.css\"");
     once(page, html, "href=\"/static/favicon.svg\"");
     once(page, html, "<header");
-    once(page, html, "<img src=\"/static/logo.svg\" alt=\"netray\">");
+    once(page, html, "<svg class=\"page-header__logo\"");
     once(page, html, "data-island=\"theme\"");
     once(page, html, "<main");
     once(page, html, "<footer");
@@ -116,7 +116,7 @@ fn assert_frame(page: &str, html: &str) {
     // Header: logo inside a link to the apex (v2-release-cleanup requirement 7), theme button,
     // nav links.
     let header = slice(page, html, "<header", "</header>");
-    let img = pos(page, header, "<img src=\"/static/logo.svg\"");
+    let img = pos(page, header, "<svg class=\"page-header__logo\"");
     let before_img = &header[..img];
     let anchor = before_img
         .rfind("<a ")
@@ -281,13 +281,13 @@ async fn netray_web_frame_body() -> String {
     String::from_utf8(res.into_body().collect().await.unwrap().to_bytes().to_vec()).unwrap()
 }
 
-/// The logo SVG has only a viewBox, so an `<img>` of it has no intrinsic width and collapses
-/// in the flex header unless the stylesheet sizes it (screenshot review, phase 4).
+/// The inline logo SVG has only a viewBox, so it has no intrinsic width and collapses in the
+/// flex header unless the stylesheet sizes it (screenshot review, phase 4).
 #[test]
 fn header_logo_is_sized_by_the_stylesheet() {
     let css = include_str!("../../static/pages.css");
     let at = css
-        .find(".page-header img")
+        .find(".page-header__logo {")
         .expect("pages.css styles the header logo");
     let body = &css[at..at + css[at..].find('}').unwrap()];
     assert!(

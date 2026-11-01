@@ -82,7 +82,7 @@ async fn header_holds_wordmark_tagline_and_nav_ending_in_theme_button() {
 
     // C27: no absolute URL anywhere in the header but the logo's link to the apex
     // (v2-release-cleanup requirement 7: on an inspector host the logo leads to the apex).
-    let logo = r#"<a href="https://netray.info/"><img src="/static/logo.svg""#;
+    let logo = r#"<a href="https://netray.info/"><svg class="page-header__logo""#;
     assert!(
         header.contains(logo),
         "the logo links to the apex: {header}"

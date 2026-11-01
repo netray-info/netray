@@ -62,10 +62,11 @@ async fn get(path: &str) -> (StatusCode, Value) {
     )
 }
 
-const KEYS: [&str; 11] = [
+const KEYS: [&str; 12] = [
     "id",
     "protocol",
     "title",
+    "checks",
     "finding",
     "impact",
     "fix_hint",
@@ -77,7 +78,7 @@ const KEYS: [&str; 11] = [
 ];
 
 #[tokio::test]
-async fn catalogue_lists_every_check_in_file_order_with_eleven_fields() {
+async fn catalogue_lists_every_check_in_file_order_with_twelve_fields() {
     let file: toml::Table =
         toml::from_str(include_str!("../../../engine/catalogue/checks.toml")).unwrap();
     let expected = file["check"].as_array().unwrap();

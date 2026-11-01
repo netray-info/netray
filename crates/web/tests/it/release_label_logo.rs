@@ -16,7 +16,7 @@ use netray_web::host::{HostRouters, build, probes, router};
 use tower::ServiceExt;
 
 const BROWSER: &str = "Mozilla/5.0 (X11; Linux x86_64) Gecko/20100101 Firefox/130.0";
-const LOGO: &str = r#"<a href="https://netray.info/"><img src="/static/logo.svg""#;
+const LOGO: &str = r#"<a href="https://netray.info/"><svg class="page-header__logo""#;
 
 fn hosts() -> Router {
     let apex = build(
@@ -97,7 +97,7 @@ async fn r7_the_logo_links_to_the_apex_on_apex_pages() {
         assert_eq!(status, StatusCode::OK, "{path}");
         assert!(body.contains(LOGO), "{path}: logo must link to the apex");
         assert!(
-            !body.contains(r#"<a href="/"><img"#),
+            !body.contains(r#"<a href="/"><svg"#),
             "{path}: a host-relative logo link remains"
         );
     }

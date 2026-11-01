@@ -205,7 +205,7 @@ async fn entry_card_matching_if_none_match_answers_304() {
 }
 
 #[test]
-fn svg_for_entry_is_the_v1_card_without_the_score_line() {
+fn svg_for_entry_is_the_v1_card_with_a_plate() {
     use netray_web::og::layout::DEFAULT_LABEL;
     use netray_web::og::render::{format_utc_timestamp, svg_for_entry, svg_for_grade};
 
@@ -219,10 +219,6 @@ fn svg_for_entry_is_the_v1_card_without_the_score_line() {
     assert!(entry.contains(&format_utc_timestamp(t)));
     assert!(!entry.contains('%'));
 
-    let e: Vec<&str> = entry.lines().collect();
-    let g: Vec<&str> = v1.lines().collect();
-    assert_eq!(e.len(), g.len(), "same layout, same number of lines");
-    let differing: Vec<usize> = (0..e.len()).filter(|&i| e[i] != g[i]).collect();
-    assert_eq!(differing.len(), 1, "only the score line differs");
-    assert!(g[differing[0]].contains("95.0%"));
+    // A card with a plate shows protocol grades and no percentage: both render identically.
+    assert_eq!(entry, v1, "a plated v1 card is the entry card");
 }

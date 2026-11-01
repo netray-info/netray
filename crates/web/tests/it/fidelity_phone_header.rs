@@ -204,7 +204,7 @@ fn phone_header_collapses_to_menu_box() {
     assert_ne!(p(".page-menu__button", "display"), "none");
     assert_eq!(p(".page-menu:not([open]) .page-nav", "display"), "none");
     assert_eq!(p(".page-tagline", "display"), "none");
-    assert_eq!(p(".page-header img", "height"), "33px");
+    assert_eq!(p(".page-header__logo", "height"), "33px");
 }
 
 #[test]
