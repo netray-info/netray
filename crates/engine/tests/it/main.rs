@@ -3,6 +3,7 @@
 //! goes here and gets its `mod` line; `tests/repo/test_test_binaries.sh` holds the layout.
 
 mod catalogue;
+mod catalogue_checks_text;
 mod catalogue_for_protocol;
 mod domain_run_ip_enrichment_errors;
 mod domain_run_model_status;
