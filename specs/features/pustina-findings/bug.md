@@ -64,7 +64,7 @@ ds=$(jq '[.. | objects | select(.id=="dns.ds" and has("shape"))][0].shape.data |
 id=$(jq -r .id <<<"$e")
 r() { echo "RED $1"; red=1; }
 [ "$ds" = 0 ] && [ "$(st dns.dnssec)" = pass ] && r "1 dns.dnssec pass with empty dns.ds"
-jq -e '[.. | objects | select(.id=="dns.dnssec_rollover" and has("status"))][0].findings // [] | any(test("not yet published"))' <<<"$e" >/dev/null && [ "$ds" = 0 ] && r "2 rollover reads a missing DS as a rollover"
+[ "$ds" = 0 ] && [ "$(st dns.dnssec_rollover)" != not_applicable ] && r "2 rollover reads a missing DS as a rollover"
 grep -q '<img src="/static/logo.svg"' <<<"$p" && r "3 header logo is an <img>, blind to data-theme"
 [ "$(jq '.last_seen_at > .created_at' <<<"$e")" = true ] && grep -q 'First run recorded' <<<"$p" && r "4 unchanged re-check shown as first run"
 [ "$(sed -n '/class="clean-bar/,/<\/details>/p' <<<"$p" | grep -c '/guide/')" = 0 ] && r "5 pass lines carry no guide link"

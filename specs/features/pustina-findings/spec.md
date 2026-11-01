@@ -45,8 +45,9 @@ and is not patched here: the DS rule is added on netray's side of the lint.
    recording.
 6. Every catalogue check carries a positive one-sentence `checks` text ("what it verifies"); the
    completeness test fails on a missing or empty one. Each passing row shows that sentence and the
-   check's `impact` sentence as its body (followed by any findings), plus `guide →` and
-   `evidence →` links built as for attention rows.
+   check's `impact` sentence, introduced as `If it failed:`, as its body (followed by any
+   findings), plus `guide →` and `evidence →` links built as for attention rows; on a stored
+   page they link the entry's evidence as attention rows do.
 7. The social card `/r/<id>/og.png` and `/og/<domain>.png` use the light tokens for background,
    text and the spectrum strip, and the former score slot shows the protocol grades
    (`DNS A+ · TLS A+ · …`) of the run. `specs/sdd/v2.md` §card text is amended to match.
@@ -73,7 +74,7 @@ GIVEN any page WHEN it is served THEN its header contains an inline `<svg>` logo
 GIVEN a stored entry for a domain WHEN a re-check records `Identical` and the result page is served THEN it says "unchanged since <created_at>" and contains neither "first run" nor "First run recorded.".
 GIVEN no stored entry WHEN the first check is recorded THEN the page still shows "First run recorded.".
 GIVEN the catalogue WHEN a check lacks `checks` THEN the completeness test fails.
-GIVEN a run with passing checks WHEN the result page is served THEN every row in the clean list has a non-empty body, a `/guide/` link and an evidence link.
+GIVEN a run with passing checks WHEN the result page is served THEN every passing row in the clean list has a non-empty body (the `checks` sentence, then "If it failed:" and the `impact` sentence), a `/guide/` link and an evidence link that resolves on that page.
 GIVEN a stored entry WHEN `/r/<id>/og.png` is fetched THEN the top-left pixel is the light background token and the image contains the protocol grades text in its SVG source.
 
 ## Decision log
@@ -85,6 +86,8 @@ GIVEN a stored entry WHEN `/r/<id>/og.png` is fetched THEN the top-left pixel is
 - Light card over the specified dark card: operator decision 2026-11-01; the SDD text changes with it.
 - New catalogue field over showing `impact` alone: `impact` is phrased as the risk and reads wrong on a pass line (operator decision 2026-11-01).
 - One block for all six symptoms: operator decision 2026-11-01.
+- Amended after review 2026-11-01 (operator choice A): a bare `impact` sentence on a pass row states the harm as fact, so it is introduced as `If it failed:`; the clean-list scenario covers passing rows only (N/A, not-tested and unmeasured rows keep their reasons); the loop's symptom 2 asserts `dns.dnssec_rollover` is `not_applicable` with an empty DS set instead of grepping one phrase.
+- Unchanged re-check of a one-entry domain drops the first-state note too (R5); the plain `/og/<domain>.png` card without a plate shows the protocol grades like the entry card (R7); the card's grade letter and the logo glyph size take tokens valid for the light card and every viewport.
 
 ## Open decisions
 
