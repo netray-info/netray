@@ -67,3 +67,7 @@ og top-left rgb [247, 248, 250]
 ```
 
 Symptoms 1, 2 and 4 need live DNS of a signed zone without DS and a recorded `Identical` re-check; a fresh local binary has no network, so they are covered by `dnssec_anchor_lints`, `dnssec_rollover_status`, `unchanged_recheck` and `result_pass_and_unchanged_copy`. C1 (the loop against production) is checked after deploy.
+
+### Checks to build
+
+none: overclaiming copy needs a reading of each check's pass branch; no fixed pattern catches it.
