@@ -1062,7 +1062,7 @@ checks,ip.reputation,fix,
       <h3 class="check-row__title">Nameserver redundancy</h3>
       
     </div>
-    <p class="check-row__body">The domain has at least two nameservers, so one failing does not take the zone offline. With a single nameserver, its outage takes the whole domain offline.</p>
+    <p class="check-row__body">The domain has at least two nameservers, so one failing does not take the zone offline. If it failed: With a single nameserver, its outage takes the whole domain offline.</p>
     
     <p class="check-row__meta"><span>DNS · RFC 2182</span><a class="check-row__link" href="/r/ENTRY0/dns">evidence →</a><a class="check-row__link" href="/guide/record-types">guide →</a></p>
   </div>
@@ -1080,7 +1080,7 @@ checks,ip.reputation,fix,
       <h3 class="check-row__title">Chain trusted</h3>
       
     </div>
-    <p class="check-row__body">The served certificate chain builds to a trust anchor in the public trust stores. Browsers show a security warning and block the site.</p>
+    <p class="check-row__body">The served certificate chain builds to a trust anchor in the public trust stores. If it failed: Browsers show a security warning and block the site.</p>
     
     <p class="check-row__meta"><span>TLS · RFC 5280</span><a class="check-row__link" href="/r/ENTRY0/tls">evidence →</a><a class="check-row__link" href="/guide/certificate-chain">guide →</a></p>
   </div>
@@ -1098,7 +1098,7 @@ checks,ip.reputation,fix,
       <h3 class="check-row__title">HSTS</h3>
       
     </div>
-    <p class="check-row__body">HTTPS responses carry a Strict-Transport-Security header with a max-age of at least one year. Browsers may fall back to HTTP, which leaves visitors open to SSL stripping.</p>
+    <p class="check-row__body">HTTPS responses carry a Strict-Transport-Security header with a max-age of at least one year. If it failed: Browsers may fall back to HTTP, which leaves visitors open to SSL stripping.</p>
     
     <p class="check-row__meta"><span>HTTP · RFC 6797</span><a class="check-row__link" href="/r/ENTRY0/http">evidence →</a><a class="check-row__link" href="/guide/hsts">guide →</a></p>
   </div>
@@ -1116,7 +1116,7 @@ checks,ip.reputation,fix,
       <h3 class="check-row__title">SPF</h3>
       
     </div>
-    <p class="check-row__body">The domain publishes a valid SPF record that names the servers allowed to send its mail. Others can send mail in the domain&#39;s name, and legitimate mail may be rejected.</p>
+    <p class="check-row__body">The domain publishes a valid SPF record that names the servers allowed to send its mail. If it failed: Others can send mail in the domain&#39;s name, and legitimate mail may be rejected.</p>
     
     <p class="check-row__meta"><span>Email · RFC 7208</span><a class="check-row__link" href="/r/ENTRY0/email">evidence →</a><a class="check-row__link" href="/guide/email-auth">guide →</a></p>
   </div>
@@ -1134,7 +1134,7 @@ checks,ip.reputation,fix,
       <h3 class="check-row__title">IP reputation</h3>
       
     </div>
-    <p class="check-row__body">None of the domain&#39;s addresses is listed by Spamhaus or flagged as a Tor exit, command-and-control host or VPN endpoint. Flagged addresses are blocked or throttled by mail receivers, firewalls and CDNs.</p>
+    <p class="check-row__body">None of the domain&#39;s addresses is listed by Spamhaus or flagged as a Tor exit, command-and-control host or VPN endpoint. If it failed: Flagged addresses are blocked or throttled by mail receivers, firewalls and CDNs.</p>
     
     <p class="check-row__meta"><span>IP · RFC 5782</span><a class="check-row__link" href="/r/ENTRY0/ip">evidence →</a><a class="check-row__link" href="/guide/ip-enrichment">guide →</a></p>
   </div>

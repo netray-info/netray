@@ -114,9 +114,9 @@ fn svg_unknown_grade_renders_question_mark() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn svg_score_shown_for_known_grade() {
+fn svg_score_hidden_for_known_grade() {
     let svg = svg_for_grade("example.com", "A", "lens", 91.7, ts(), None);
-    assert!(svg.contains("91.7%"), "score must appear for known grade");
+    assert!(!svg.contains('%'), "the card shows no percentage");
 }
 
 #[test]

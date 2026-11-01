@@ -180,7 +180,7 @@ fn mock() -> BadgeCheckFn {
 }
 
 #[tokio::test]
-async fn an_admitted_run_after_a_stale_head_answers_the_plain_card() {
+async fn an_admitted_run_after_a_stale_head_answers_a_card_with_its_plate() {
     let dir = tempfile::tempdir().unwrap();
     let (mut state, history) = state_with_history(&dir).await;
     state.badge_check_fn = Some(mock());
@@ -216,7 +216,7 @@ async fn an_admitted_run_after_a_stale_head_answers_the_plain_card() {
         svg_to_png(&svg, state.font_db.clone()).unwrap()
     };
     assert!(
-        body == plain(before) || body == plain(after),
-        "an admitted run's card carries no plate"
+        body != plain(before) && body != plain(after),
+        "an admitted run's card carries its plate (protocol grades), not the plain card"
     );
 }
