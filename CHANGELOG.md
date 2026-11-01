@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+**Verdicts change (no profile change).** A zone that publishes DNSKEY records while its parent returns no DS record fails `dns.dnssec` ("signed but not anchored in its parent zone"): validating resolvers treat it as unsigned, and it no longer passes. `dns.dnssec_rollover` is not applicable for a zone with a single KSK and no DS at all, instead of warning that a new KSK is not yet published; a DS without a matching DNSKEY still fails it, and with more than one KSK or at least one DS a KSK without DS still warns. The first run of an affected domain is a new history entry.
+
+### Added
+
+- **Pass rows explain themselves.** Every catalogue check carries a `checks` sentence saying what a pass verified; a passing row shows it, then `If it failed:` and the check's impact sentence, with `guide →` and `evidence →` links like an attention row. `GET /api/v1/catalogue` serves the field, and the OpenAPI `CheckSpec` lists it as required.
+
+### Changed
+
+- **Unchanged re-checks.** A re-check whose result equals the stored entry reads "unchanged since <date> · last checked <date>" instead of "first run"; "First run recorded." appears only on a domain's first recording.
+- **Header logo.** The logo is inline SVG coloured by the page tokens, so it follows both the OS colour scheme and the theme toggle.
+- **Social card.** `/r/<id>/og.png` and `/og/<domain>.png` use the light palette; the former score slot shows the run's protocol grades (`DNS A+ · TLS A · …`) and no card prints a percentage. A scored admitted run's card on `/og/<domain>.png` (complete, or graded by a hard fail) carries the run's plate; an unscored run keeps the plain `?` card. Both card ETags carry a rendering version, so a cached dark card is not revalidated.
+
 ## [0.30.0] - 2026-10-27
 
 **0.30.0 is the breaking release of V2: one process, one config, and every V1 API and app gone.** `netray serve` serves the apex, `dns.`, `tls.`, `http.`, `ip.`, `email.`, `lens.` and `mta-sts.` by `Host` from one `netray.toml`. It carries SDD Phases 2, 3, 4, 4a and 5 together; 0.27.0, 0.28.0 and 0.29.0 are not released. The operator's migration is the configuration table under Changed; `netray serve --check-config <path>` checks a migrated file.
