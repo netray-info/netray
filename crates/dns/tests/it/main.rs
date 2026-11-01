@@ -5,6 +5,7 @@
 mod contract;
 mod contract_golden;
 mod dnssec_anchor_lints;
+mod dnssec_rollover_status;
 mod evidence;
 mod evidence_records;
 mod facts_blocks;
