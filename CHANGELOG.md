@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-11-01
+
 **Verdicts change (no profile change).** A zone that publishes DNSKEY records while its parent returns no DS record fails `dns.dnssec` ("signed but not anchored in its parent zone"): validating resolvers treat it as unsigned, and it no longer passes. `dns.dnssec_rollover` is not applicable for a zone with a single KSK and no DS at all, instead of warning that a new KSK is not yet published; a DS without a matching DNSKEY still fails it, and with more than one KSK or at least one DS a KSK without DS still warns. The first run of an affected domain is a new history entry.
 
 ### Added
