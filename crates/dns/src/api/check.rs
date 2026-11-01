@@ -1193,6 +1193,18 @@ fn without_rrsigs(lookups: &Lookups) -> Lookups {
     Lookups::new(kept)
 }
 
+/// mhost's DNSSEC check plus the anchor: a zone that publishes DNSKEY records while its parent
+/// returns no DS record is signed but not anchored, so validating resolvers treat it as unsigned.
+fn check_dnssec_anchored(lookups: &Lookups) -> Vec<CheckResult> {
+    let mut results = check_dnssec(lookups);
+    if !lookups.dnskey().is_empty() && lookups.ds().is_empty() {
+        results.push(CheckResult::Failed(
+            "Zone publishes DNSKEY records but the parent zone returns no DS record: the zone is signed but not anchored in its parent zone, so validating resolvers treat it as unsigned".to_owned(),
+        ));
+    }
+    results
+}
+
 /// The synchronous record lints in emit order, run over the unique records of all resolvers,
 /// each category's lines deduplicated.
 pub fn lint_lookups(lookups: &Lookups) -> Vec<(&'static str, Vec<CheckResult>)> {
@@ -1201,7 +1213,7 @@ pub fn lint_lookups(lookups: &Lookups) -> Vec<(&'static str, Vec<CheckResult>)> 
     vec![
         ("caa", check_caa(lookups)),
         ("cname_apex", check_cname_apex(lookups)),
-        ("dnssec", check_dnssec(lookups)),
+        ("dnssec", check_dnssec_anchored(lookups)),
         ("dnskey_algorithm", check_dnskey_algorithms(lookups)),
         ("dnssec_rollover", check_dnssec_rollover(lookups)),
         ("https_svcb", check_https_svcb_mode(lookups)),
@@ -1614,7 +1626,9 @@ fn judge_ns_consistency(
 }
 
 /// DNSSEC rollover detection: check for multiple KSKs, orphaned DS records (DS
-/// with no matching DNSKEY key tag), and new KSKs that have no DS record yet.
+/// with no matching DNSKEY key tag), and new KSKs that have no DS record yet. A lone KSK
+/// without any DS record is no rollover (`dns.dnssec` fails the missing anchor), so it is
+/// not applicable here.
 fn check_dnssec_rollover(lookups: &Lookups) -> Vec<CheckResult> {
     let dnskeys = lookups.dnskey();
     let ds_records = lookups.ds();
@@ -1637,6 +1651,10 @@ fn check_dnssec_rollover(lookups: &Lookups) -> Vec<CheckResult> {
         .collect();
 
     let ds_tags: Vec<u16> = ds_records.iter().map(|d| d.key_tag()).collect();
+
+    if ksk_tags.len() == 1 && ds_records.is_empty() {
+        return vec![CheckResult::NotFound()];
+    }
 
     let mut results = Vec::new();
 

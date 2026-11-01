@@ -42,7 +42,10 @@ fn compute_etag(
     score_pct: f64,
     plate: Option<&str>,
 ) -> String {
-    let mut input = format!("{domain}\x00{grade}\x00{label}\x00{score_pct:.1}");
+    let mut input = format!(
+        "{}\x00{domain}\x00{grade}\x00{label}\x00{score_pct:.1}",
+        crate::og::layout::CARD_RENDERING_VERSION
+    );
     if let Some(plate) = plate {
         input.push('\x00');
         input.push_str(plate);
@@ -156,7 +159,11 @@ pub async fn og_handler(
         return AppError::Internal("check run ended without a result".to_string()).into_response();
     };
     let score = &published.output.score;
-    let run_card = Card::new(&score.grade, score.overall_percentage, SystemTime::now());
+    let mut run_card = Card::new(&score.grade, score.overall_percentage, SystemTime::now());
+    // A scored run (complete, or graded by a hard fail) shows its plate; an unscored one stays `?`.
+    if score.complete || score.hard_fail_triggered {
+        run_card.plate = Some(card_plate(&card_layout(&published.run, None)));
+    }
     if score.complete {
         return og_response(&state, &req_headers, &domain, &label, &run_card, true);
     }

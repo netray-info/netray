@@ -760,6 +760,10 @@
       "CheckSpec": {
         "description": "One catalogue entry.",
         "properties": {
+          "checks": {
+            "description": "One positive sentence: what the check verifies.",
+            "type": "string"
+          },
           "finding": {
             "type": "string"
           },
@@ -798,6 +802,7 @@
           "id",
           "protocol",
           "title",
+          "checks",
           "finding",
           "impact",
           "fix_hint",
@@ -6482,7 +6487,7 @@
       "name": "MIT"
     },
     "title": "netray API",
-    "version": "0.26.0"
+    "version": "0.30.0"
   },
   "openapi": "3.1.0",
   "paths": {

@@ -3,12 +3,11 @@ use std::time::SystemTime;
 
 use fontdb::Database;
 
-use crate::badge::palette::color_for_grade;
 use crate::og::layout::{
     BG_COLOR, CANVAS_H, CANVAS_W, DOMAIN_BASELINE_Y, DOMAIN_COLOR, DOMAIN_FONT_SIZE,
     DOMAIN_MAX_CHARS, FOOTER_BASELINE_Y, FOOTER_COLOR, FOOTER_FONT_SIZE, GRADE_BASELINE_Y,
-    GRADE_CENTER_X, GRADE_FONT_SIZE, PLATE_X, PLATE_Y, RIGHT_X, SCORE_BASELINE_Y, SCORE_FONT_SIZE,
-    SEP_COLOR, SEP_X2, SEP_Y, TIMESTAMP_BASELINE_Y, TIMESTAMP_FONT_SIZE, UNKNOWN_GRADE_COLOR,
+    GRADE_CENTER_X, GRADE_FONT_SIZE, PLATE_X, PLATE_Y, RIGHT_X, SEP_COLOR, SEP_X2, SEP_Y,
+    TIMESTAMP_BASELINE_Y, TIMESTAMP_FONT_SIZE, grade_color,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -51,11 +50,11 @@ pub fn svg_for_grade(
     domain: &str,
     grade: &str,
     label: &str,
-    score_pct: f64,
+    _score_pct: f64,
     checked_at: SystemTime,
     plate: Option<&str>,
 ) -> String {
-    card_svg(domain, grade, label, Some(score_pct), checked_at, plate)
+    card_svg(domain, grade, label, checked_at, plate)
 }
 
 pub fn svg_for_entry(
@@ -65,14 +64,13 @@ pub fn svg_for_entry(
     recorded_at: SystemTime,
     plate: &str,
 ) -> String {
-    card_svg(domain, grade, label, None, recorded_at, Some(plate))
+    card_svg(domain, grade, label, recorded_at, Some(plate))
 }
 
 fn card_svg(
     domain: &str,
     grade: &str,
     label: &str,
-    score_pct: Option<f64>,
     checked_at: SystemTime,
     plate: Option<&str>,
 ) -> String {
@@ -80,19 +78,10 @@ fn card_svg(
         "A+" | "A" | "B" | "C" | "D" | "F" => grade,
         _ => "?",
     };
-    let grade_color = if grade_letter == "?" {
-        UNKNOWN_GRADE_COLOR
-    } else {
-        color_for_grade(grade)
-    };
+    let grade_color = grade_color(grade_letter);
 
     let domain_display = xml_escape(&truncate_domain(domain));
     let grade_display = xml_escape(grade_letter);
-
-    let score_display = match score_pct {
-        Some(pct) if grade_letter != "?" => format!("{pct:.1}%"),
-        _ => String::new(),
-    };
 
     let timestamp_display = format_utc_timestamp(checked_at);
 
@@ -112,7 +101,6 @@ fn card_svg(
   <text x="{GRADE_CENTER_X}" y="{GRADE_BASELINE_Y}" text-anchor="middle" font-family="Inter" font-size="{GRADE_FONT_SIZE}" font-weight="700" fill="{grade_color}">{grade_display}</text>
   <text x="{RIGHT_X}" y="{DOMAIN_BASELINE_Y}" font-family="Inter" font-size="{DOMAIN_FONT_SIZE}" font-weight="400" fill="{DOMAIN_COLOR}">{domain_display}</text>
   <line x1="{RIGHT_X}" y1="{SEP_Y}" x2="{SEP_X2}" y2="{SEP_Y}" stroke="{SEP_COLOR}" stroke-width="2"/>
-  <text x="{RIGHT_X}" y="{SCORE_BASELINE_Y}" font-family="Inter" font-size="{SCORE_FONT_SIZE}" font-weight="700" fill="{grade_color}">{score_display}</text>
   <text x="{RIGHT_X}" y="{TIMESTAMP_BASELINE_Y}" font-family="Inter" font-size="{TIMESTAMP_FONT_SIZE}" font-weight="400" fill="{FOOTER_COLOR}">{timestamp_display}</text>
   <text x="{RIGHT_X}" y="{FOOTER_BASELINE_Y}" font-family="Inter" font-size="{FOOTER_FONT_SIZE}" font-weight="400" fill="{FOOTER_COLOR}">{footer_text}</text>
 </svg>"#
@@ -249,12 +237,9 @@ mod tests {
     }
 
     #[test]
-    fn svg_score_shown_for_known_grade() {
+    fn svg_score_hidden_for_known_grade() {
         let svg = svg_for_grade("example.com", "A", "lens", 91.7, ts(), None);
-        assert!(
-            svg.contains("91.7%"),
-            "score percentage should appear in SVG"
-        );
+        assert!(!svg.contains('%'), "the card shows no percentage");
     }
 
     #[test]

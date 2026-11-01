@@ -142,7 +142,10 @@ async fn entry_card(
         Ok(Some(entry)) => entry,
     };
     let letter = grade_letter(entry.grade);
-    let etag = format!("\"{id}-{letter}\"");
+    let etag = format!(
+        "\"{id}-{letter}-c{}\"",
+        crate::og::layout::CARD_RENDERING_VERSION
+    );
     if headers
         .get(IF_NONE_MATCH)
         .and_then(|v| v.to_str().ok())

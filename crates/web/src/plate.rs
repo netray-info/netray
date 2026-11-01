@@ -1,19 +1,25 @@
 //! The OG card's plate (spec v2-result-page, Phase 7, requirement 29): the page's spectrum
-//! layout of a stored run drawn as one SVG group in the dark theme's literal colours, since the
+//! layout of a stored run drawn as one SVG group in the light theme's literal colours, since the
 //! card's renderer has no CSS variables. Pure; lens places the group with a transform.
 
 use std::fmt::Write;
 
 use netray_engine::catalogue::catalogue;
+use netray_engine::domain_run::grade_label;
+use netray_engine::history::score_run;
+use netray_engine::profile::Profiles;
+use netray_engine::scoring::grade_for;
 use netray_model::run::Run;
 
-use crate::pages::result::views::layout_input_or_current;
+use crate::og::layout::{GRADES_FONT_SIZE, PLATE_X, PLATE_Y, RIGHT_X, SCORE_BASELINE_Y};
+use crate::pages::result::views::{layout_input_or_current, section_name};
 use crate::spectrum::{self, Layout, LineTone, px};
 use crate::tokens::values::{
-    COLOR_DARK_BG, COLOR_DARK_GRID, COLOR_DARK_PLATE, COLOR_DARK_PLATE_BORDER, FONT_SIZE_LABEL,
-    LINE_FAIL, LINE_HAIR, LINE_PASS, LINE_WARN, SPECTRUM_LABEL_LEADER, SPECTRUM_LABEL_ROW,
-    STATUS_DARK_FAIL_MARK, STATUS_DARK_FAIL_TEXT, STATUS_DARK_FIX_MARK, STATUS_DARK_FIX_TEXT,
-    STATUS_DARK_PASS_MARK, STATUS_DARK_UNTESTED_MARK, STATUS_DARK_WARN_MARK, STATUS_DARK_WARN_TEXT,
+    COLOR_LIGHT_BG, COLOR_LIGHT_GRID, COLOR_LIGHT_INK, COLOR_LIGHT_PLATE, COLOR_LIGHT_PLATE_BORDER,
+    FONT_SIZE_LABEL, LINE_FAIL, LINE_HAIR, LINE_PASS, LINE_WARN, SPECTRUM_LABEL_LEADER,
+    SPECTRUM_LABEL_ROW, STATUS_LIGHT_FAIL_MARK, STATUS_LIGHT_FAIL_TEXT, STATUS_LIGHT_FIX_MARK,
+    STATUS_LIGHT_FIX_TEXT, STATUS_LIGHT_PASS_MARK, STATUS_LIGHT_UNTESTED_MARK,
+    STATUS_LIGHT_WARN_MARK, STATUS_LIGHT_WARN_TEXT,
 };
 
 /// The card's plate width in px (requirement 29).
@@ -33,8 +39,15 @@ pub fn card_layout(run: &Run, predecessor: Option<&Run>) -> Layout {
         .map(layout_input_or_current)
         .into_iter()
         .collect();
-    spectrum::layout(&current, &older, catalogue(), CARD_PLATE_WIDTH)
-        .expect("the catalogue has lines")
+    let mut layout = spectrum::layout(&current, &older, catalogue(), CARD_PLATE_WIDTH)
+        .expect("the catalogue has lines");
+    let profile = Profiles::get(run.profile_version).unwrap_or_else(Profiles::current);
+    layout.grades = score_run(run, profile)
+        .sections
+        .iter()
+        .map(|(protocol, section)| (*protocol, grade_for(profile, section.percentage)))
+        .collect();
+    layout
 }
 
 fn tone_name(tone: LineTone) -> &'static str {
@@ -49,19 +62,19 @@ fn tone_name(tone: LineTone) -> &'static str {
 
 fn mark(tone: LineTone) -> (&'static str, &'static str) {
     match tone {
-        LineTone::Pass => (STATUS_DARK_PASS_MARK, LINE_PASS),
-        LineTone::Warn => (STATUS_DARK_WARN_MARK, LINE_WARN),
-        LineTone::Fail => (STATUS_DARK_FAIL_MARK, LINE_FAIL),
-        LineTone::Fixed => (STATUS_DARK_FIX_MARK, LINE_PASS),
-        LineTone::Muted => (STATUS_DARK_UNTESTED_MARK, LINE_HAIR),
+        LineTone::Pass => (STATUS_LIGHT_PASS_MARK, LINE_PASS),
+        LineTone::Warn => (STATUS_LIGHT_WARN_MARK, LINE_WARN),
+        LineTone::Fail => (STATUS_LIGHT_FAIL_MARK, LINE_FAIL),
+        LineTone::Fixed => (STATUS_LIGHT_FIX_MARK, LINE_PASS),
+        LineTone::Muted => (STATUS_LIGHT_UNTESTED_MARK, LINE_HAIR),
     }
 }
 
 fn text_colour(tone: LineTone) -> &'static str {
     match tone {
-        LineTone::Fail => STATUS_DARK_FAIL_TEXT,
-        LineTone::Fixed => STATUS_DARK_FIX_TEXT,
-        _ => STATUS_DARK_WARN_TEXT,
+        LineTone::Fail => STATUS_LIGHT_FAIL_TEXT,
+        LineTone::Fixed => STATUS_LIGHT_FIX_TEXT,
+        _ => STATUS_LIGHT_WARN_TEXT,
     }
 }
 
@@ -78,13 +91,13 @@ pub fn card_plate(layout: &Layout) -> String {
     let mut out = String::from("<g class=\"plate\">");
     let _ = write!(
         out,
-        "<rect class=\"plate__frame\" x=\"0\" y=\"0\" width=\"{width:.2}\" height=\"{height:.2}\" fill=\"{COLOR_DARK_PLATE}\" stroke=\"{COLOR_DARK_PLATE_BORDER}\" stroke-width=\"{}\"/>",
+        "<rect class=\"plate__frame\" x=\"0\" y=\"0\" width=\"{width:.2}\" height=\"{height:.2}\" fill=\"{COLOR_LIGHT_PLATE}\" stroke=\"{COLOR_LIGHT_PLATE_BORDER}\" stroke-width=\"{}\"/>",
         px(LINE_HAIR)
     );
     for b in &layout.boundaries {
         let _ = write!(
             out,
-            "<line class=\"plate__boundary\" x1=\"{b:.2}\" x2=\"{b:.2}\" y1=\"0\" y2=\"{height:.2}\" stroke=\"{COLOR_DARK_GRID}\" stroke-width=\"{}\"/>",
+            "<line class=\"plate__boundary\" x1=\"{b:.2}\" x2=\"{b:.2}\" y1=\"0\" y2=\"{height:.2}\" stroke=\"{COLOR_LIGHT_GRID}\" stroke-width=\"{}\"/>",
             px(LINE_HAIR)
         );
     }
@@ -133,7 +146,7 @@ pub fn card_plate(layout: &Layout) -> String {
         let rise = leader + label.row as f64 * row;
         let _ = write!(
             out,
-            "<rect class=\"plate__backing\" x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{label_size:.2}\" fill=\"{COLOR_DARK_BG}\"/>",
+            "<rect class=\"plate__backing\" x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{label_size:.2}\" fill=\"{COLOR_LIGHT_BG}\"/>",
             label.start,
             -rise - label_size,
             label.width
@@ -147,6 +160,21 @@ pub fn card_plate(layout: &Layout) -> String {
             -rise - LABEL_BASELINE_GAP,
             text_colour(tone),
             escape(&label.text)
+        );
+    }
+    if !layout.grades.is_empty() {
+        let grades = layout
+            .grades
+            .iter()
+            .map(|(protocol, grade)| format!("{} {}", section_name(*protocol), grade_label(*grade)))
+            .collect::<Vec<_>>()
+            .join(" \u{b7} ");
+        let _ = write!(
+            out,
+            "<text class=\"plate__grades\" x=\"{}\" y=\"{}\" font-family=\"Inter\" font-size=\"{GRADES_FONT_SIZE}\" font-weight=\"700\" fill=\"{COLOR_LIGHT_INK}\">{}</text>",
+            RIGHT_X - PLATE_X,
+            SCORE_BASELINE_Y - PLATE_Y,
+            escape(&grades)
         );
     }
     out.push_str("</g>");
