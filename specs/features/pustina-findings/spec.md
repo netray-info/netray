@@ -74,7 +74,7 @@ GIVEN any page WHEN it is served THEN its header contains an inline `<svg>` logo
 GIVEN a stored entry for a domain WHEN a re-check records `Identical` and the result page is served THEN it says "unchanged since <created_at>" and contains neither "first run" nor "First run recorded.".
 GIVEN no stored entry WHEN the first check is recorded THEN the page still shows "First run recorded.".
 GIVEN the catalogue WHEN a check lacks `checks` THEN the completeness test fails.
-GIVEN a run with passing checks WHEN the result page is served THEN every passing row in the clean list has a non-empty body (the `checks` sentence, then "If it failed:" and the `impact` sentence), a `/guide/` link and an evidence link that resolves on that page.
+GIVEN a run with passing checks WHEN the result page is served THEN every passing row in the clean list has a non-empty body (the `checks` sentence, then "If it failed:" and the `impact` sentence), a `/guide/` link and an evidence link built as for that page's attention rows.
 GIVEN a stored entry WHEN `/r/<id>/og.png` is fetched THEN the top-left pixel is the light background token and the image contains the protocol grades text in its SVG source.
 
 ## Decision log
