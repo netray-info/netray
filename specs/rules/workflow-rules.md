@@ -67,6 +67,7 @@ jobs:
 - R-J4: `permissions` is `contents: read` and `packages: read` (the GeoIP data image), nothing else.
 - R-J5: `ci.yml` produces no artifacts and makes no external change.
 - R-J7: The checkout fetches the full history (`fetch-depth: 0`): `check-sitemap` dates every page by its last commit, which a shallow clone does not have.
+- Note: the check job compiles the workspace tests once (`check` runs `test-rust` in place of `test-rust-offline`) and links them with mold: a warm-cache run took 5m34s, `just check` 4m21s (test-repo 1m19s, test compile 1m18s; run 39286874346, was 27m30s in 39227670650). `timeout-minutes` is 20, leaving room for a cold rust-cache. A change to the job's `CARGO*`/`RUST*` env changes the rust-cache key: expect one cold run.
 - R-J6: Advisory scans (RUSTSEC, `npm audit`, `cargo-deny check advisories`) never gate push or pull request. A new advisory in a transitive dependency must not block an unrelated merge or hotfix; it is triaged on its own cadence (§6). Deterministic checks (`cargo-deny check bans licenses sources`) belong to `just check`.
 
 ---

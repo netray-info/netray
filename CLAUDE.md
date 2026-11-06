@@ -2,186 +2,79 @@
 
 ## What this is
 
-The netray.info monorepo (public, MIT): one process, `netray serve`, built from one Cargo + npm
-workspace. It serves the apex and every inspector host by `Host`: netray-web (pages, API v1,
-islands), netray-engine and netray-store over five module crates.
-`README.md` is the human entry point; `specs/features/monorepo-p1/spec.md` records how the separate
-repositories became this one. netray.info is the only supported deployment, and the repository
-carries no deploy instructions for third parties (policy: `CONTRIBUTING.md`).
+The netray.info monorepo (public, MIT): one process, `netray serve`, from one Cargo + npm workspace,
+serving the apex and every inspector host by `Host`. `README.md` is the human entry point.
+netray.info is the only supported deployment; no deploy instructions for third parties (`CONTRIBUTING.md`).
+The adlc working rules (receipt, baseline trailer, test changes, review) are in `AGENTS.md`.
+
+Area rules load with the files they cover: `crates/web/CLAUDE.md` (pages, API v1, islands, gate,
+design boards, admission, store), `crates/{dns,tls,http,email,ip,common}/CLAUDE.md`,
+`tests/acceptance/CLAUDE.md`.
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `crates/{dns,tls,http,email,ip}` | the module crates: each a `Module` with its inspector functions and module config; no router, no frontend |
+| `crates/{dns,tls,http,email,ip}` | module crates: a `Module`, inspector functions, module config; no router, listener or `main.rs` |
 | `crates/web` | `netray-web`: host routing, pages, templates, islands (`crates/web/islands`, the one npm package), API v1, admission, badge, OG card |
 | `crates/store` | `netray-store`: the history (`history.db`) |
-| `crates/common` | `netray-common`, shared Rust (workspace member, not published) |
-| `crates/{model,engine}` | V2 core (`specs/sdd/v2.md` §3): `netray-model` the check vocabulary, no workspace dependency; `netray-engine` the `Module`/`FactsProvider` traits, depends on `netray-model` only (`tests/repo/test_engine_names_no_module.sh`). Each V1 crate maps its status word onto `netray_model::Status` once |
-| `crates/netray` | the binary: `netray serve [<config>]`, the only subcommand, with `--check-config <path>` (exit 0 `config ok: <path>`, exit 1 with the error); one `netray.toml` (`netray.example.toml`) |
-| `docs/` | references for the code as it is (`ip-enrichment.md`); the crates keep no `docs/`, `specs/`, `ROADMAP.md` or `SECURITY.md` (`tests/repo/test_crate_docs.sh`) |
+| `crates/common` | `netray-common`, shared Rust |
+| `crates/{model,engine}` | V2 core (`specs/sdd/v2.md` §3): `netray-model` the check vocabulary; `netray-engine` the `Module`/`FactsProvider` traits. Each V1 crate maps its status onto `netray_model::Status` once |
+| `crates/netray` | the binary and composition root: `netray serve [<config>]`, `--check-config <path>`; builds registry and store, hands them to netray-web |
 | `tests/repo` | repository structure checks (`just test-repo`), one script per check |
-| `tests/acceptance` | Playwright suite against a deployed environment (own `package-lock.json`) |
-| `specs/rules`, `specs/features` | engineering rules; feature specs |
-| `specs/sdd/v2.md` | the V2 SDD, this repository's own: amend it in the same commit as the code that changes what it says. Its token source is `crates/web/tokens.json`. PRD, reviews and baseline stay private; cite them as "(private)" |
+| `tests/acceptance` | Playwright suite against a deployed environment |
+| `specs/sdd/v2.md` | the V2 SDD: amend it in the same commit as the code that changes what it says. Token source `crates/web/tokens.json`. PRD, reviews and baseline are private; cite them as "(private)" |
+
+Site content lives in netray-web (`site/` was deleted by v2-cutover; parity fixtures in `crates/web/tests/fixtures/v1-site/`): guide prose `crates/web/templates/pages/guides/`, titles `crates/web/src/pages/guides.rs`, compare rows `crates/web/compare.toml`.
 
 ## Verbs and the gate
 
-All verbs live in the root `justfile`; no crate or package has its own `justfile` or `Makefile`.
+All verbs live in the root `justfile` (`just --list`); no crate has its own `justfile` or `Makefile`.
 
-- `just adlc-setup` first in a fresh checkout: netray-web embeds the islands bundle (`crates/web/islands/dist`).
-- `just adlc-verify` is the gate: offline, no browser. `just check` adds the full Rust suite.
-- Read `adlc verify`'s `verified:` or `refuted:` line; piped into `tail`, the exit status is `tail`'s, and a refuted gate looks green.
-- `openapi_responses` needs a 2xx and a non-2xx case per documented operation: a new v1 route adds both; a 2xx needing state runs its producer first (`{dnskey}`).
-- `just build`, `just image`, `just acceptance` (network + browser), `just release X.Y.Z` (never pushes).
-- The published image never contains data files (GeoLite2 licence); `netray serve` gets `/netray/data` from the deployment's mount.
-- `just check` runs `cargo deny check bans licenses sources`; `just adlc-setup` installs cargo-deny when it is missing.
-- CI (`ci.yml`) and the release (`release.yml`) follow `specs/rules/workflow-rules.md`: one image, exact version tags, no deploy step.
-- Data: `just ifconfig-data` / `just test-ifconfig-data` (GeoIP), `just tlsight-data` (CAA table, committed).
-- **Integration tests go into `crates/<c>/tests/it/`** as a module with a `mod` line in `tests/it/main.rs`: each merged crate links one test binary `it` (web, engine, model, store, dns, tls, email, http, common). A file stays its own target only with `required-features`, `harness = false`, or a reason in `tests/repo/test_test_binaries.sh`. Run one with `cargo test -p <crate> --test it <module>`; shared helpers live in `tests/it/<name>/mod.rs`, used as `use crate::<name>;`.
-- Run tests that depend on feature unification with `--workspace`; `cargo test -p <crate>` resolves features for that crate alone and passes where the binary is wrong.
-- Write no file into the worktree while `adlc verify` runs: its `cargo fmt --check` reads untracked files too and refutes the receipt.
-- `tests/repo/*` read `git ls-files`: stage new and deleted files before running them.
-- `just design-check` needs the private canvas: its export serves boards as sandboxed blob: iframes; reach them with Playwright's `contentFrame()`, never `iframe.contentDocument`.
-- `cargo run -p netray-web --example dns_stub [port]` serves the DNS inspector over the offline stub: local DNS is blocked, so screenshot DNS views from it.
-- A board's interpolated text sits in a `span.sc-interp`: select its parent with `:has(> span:text-is(…))`, and write a regex digit as `\\\\d` in the manifest's JSON text (Playwright's selector parser unescapes once more).
-- The design fixtures' stored grades must equal `score_run`'s, or the score guard hides the score on every gated page.
-- A board span in a flex column can read `height: auto` in the export: measure a one-line text through its container's height ("title column height").
-- The gate's 1 px typography tolerance cannot tell 11 from 12 px: pin a board size through its own token, never a label token a `*Phone` value lowers.
-- A Playwright test serving fixtures from its own process spawns children with async `spawn`: `spawnSync` blocks the event loop and the fixture server never answers.
-- A repo check over Cargo dependencies reads `cargo metadata`, never the TOML text: renames, dotted keys and inline tables escape a text scan.
-- The gate's clippy runs without `--all-targets`; a narrower command with `--all-targets` hits old test-code lints the gate never sees.
-- `metrics_util` 0.20's `Snapshotter::snapshot()` swaps every value to 0 on read: read once, accumulate across reads, or render a `PrometheusRecorder`.
-- A `describe_*!` alone renders no HELP line: also register the metric at startup.
-- The DNS module charges domain runs and their facts stage no per-target limit: admission bounds them (SDD S44); direct DNS jobs keep `[api.dns]`'s limits.
-- hickory renders `xn--` labels as Unicode in `Name::to_string()` and in mhost's serialised lookups: compare owner names as A-labels (`to_ascii()`, `check.rs` `same_name`).
-- A DNS check judges a name below its zone apex by its zone (`check.rs` `read_zone`); a zone batch carries `source: "zone"` in memory only, `wire_batch` strips it from prism's stream.
-- hickory 0.26 `Name::eq` compares `is_fqdn`: a live query name without the trailing dot never equals a wire record name; never compare owners against the query name.
-- `tests/repo/test_workflows.sh` checks the workflows' shape, not their behaviour; a workflow change is verified by its first CI run or release tag.
-- CI's check job compiles the workspace tests once (`check` runs `test-rust` in place of `test-rust-offline`) and links them with mold: a warm-cache run took 5m34s, `just check` 4m21s (test-repo 1m19s, test compile 1m18s; run 39286874346, was 27m30s in 39227670650); `timeout-minutes` is 20, leaving room for a cold rust-cache. A change to the job's `CARGO*`/`RUST*` env changes the rust-cache key: expect one cold run.
-- The `ifconfig-rs-data` image also carries tracked files (`asn_patterns.toml`): never copy it over `crates/ip/data/`.
-- `adlc feature start` branches from `origin/main`: with unpushed commits on local `main`, fast-forward the new feature branch to `main` before writing the spec.
-- The apex records a run after its response: a test reading `history.db` or the record-error counter after a response polls with a bound or awaits `state.runs.drain()`.
-- Admission starts one run per domain per 60 s on tokio's clock: a second run of one domain in a test needs `common::pass_throttle()` (current_thread) or another domain.
-- A paused tokio clock times out sqlx pool acquires and auto-advances through deadlines while the runtime idles on the store: never `start_paused` with a `HistoryStore`; `pause()` only after the store work is drained (`result_run_c15`).
-- governor's `check` spends a token whatever follows: take a keyed limiter after every refusal that must cost nothing.
-- A refusal test over the badge or OG route asserts no run started: an incomplete run renders the same `?` and short Cache-Control as a refusal.
-- Never wrap self-timed work in an outer timeout at the same deadline: it races the inner timers and drops answers. Bound the wait by the deadline, the work by the time left plus a grace.
-- Probe slots go to the first addresses whose handshake succeeded, decided per address (`SlotBoard`), never behind a port-wide barrier: one SYN-dropping address would push the TLS section past its window.
-- Never edit another feature's `specs/features/<name>/` on a feature branch: `adlc next` refuses two features. Supersede old decisions in the new spec's decision log.
-- A cost above a limiter's burst never passes: refuse it as input (`CostExceedsLimit`, API v1 `INVALID_INPUT`) against the stored bursts before charging, never as `429`.
-- Adding a field to a protected test's struct literal still needs `ADLC-Test-Change`: the gate's tamper check flags any change.
-- `adlc verify` runs no tamper check: after a rename or move that touches protected tests, run `adlc check` and add one `ADLC-Test-Change` per listed file.
-- `serve` refuses to start while any legacy-prefixed variable is set (`LENS_`, `NETRAY_<SVC>_`, the codenames'): pass extra keys to `acceptance-local` as `ACCEPTANCE_ENV="NETRAY_…"`.
-- Node 26 defines a global `localStorage` that shadows happy-dom's: an island test installs its own storage, as `islands/test/theme.test.ts`'s `useStorage` does.
-- The colour gate reads any island-test string holding `;` as CSS: write a newline in test markup as `\n`, never `&#10;` (`field` became a colour).
-- Island fixture goldens embed server text verbatim: keep it LF; a CRLF golden turns into LF on commit and fails CI.
-- A golden over live-run markup carries the wall clock: normalise it (`NOW` in `crates/web/tests/it/result_islands_fixtures.rs`), or the golden breaks at midnight.
-- A new line in `result_evidence.html` changes every islands fixture: put a conditional on an existing line, then regenerate with `UPDATE_GOLDEN=1`.
-- `HistoryStore::sweep` always keeps the head's predecessor: a swept-predecessor test needs a third entry as head.
-- A profile version that only adds checks re-scores a stored run to its old grade (`score_section` skips unweighted ids): the diff's grade split puts their effect on the domain step.
-- A new profile version moves the current-profile pins (`profile.rs`, `schema_derives.rs`, `scoring_regression.rs`, `api_reads.rs`) and every history fixture's `profile_version`: regenerate fixtures, never hand-edit.
-- Judge a new graded header in `crates/http/src/module.rs`, not by changing `inspect/security.rs`: spectra's V1 wire serialises each `security.*.status`.
-- A freshly built binary path (a cargo example) gets no network locally; replay its bytes from `python3` to check a live host.
-- `just design-check`'s live TLS boards need network: copy the build to the main checkout's `target/debug/netray` (back up, `rm`, `cp`, restore) and pass `NETRAY_BIN` to it.
-- Never put `|` in a `report.md` criteria cell, even in backticks: `adlc next` splits cells on it and keeps the phase open.
-
-The adlc working rules (receipt, baseline trailer, test changes, review) are in `AGENTS.md`.
+- `just adlc-setup` first in a fresh checkout: netray-web embeds the islands bundle.
+- `just adlc-verify` is the gate (offline, no browser); `just check` adds the full Rust suite.
+- Read `adlc verify`'s `verified:`/`refuted:` line; piped into `tail`, a refuted gate looks green.
+- Write no file into the worktree while `adlc verify` runs: `cargo fmt --check` reads untracked files.
+- `adlc verify` runs no tamper check: after a rename or move of protected tests, run `adlc check` and add one `ADLC-Test-Change` per listed file.
+- `adlc feature start` branches from `origin/main`: with unpushed commits on `main`, fast-forward the branch first.
+- Never edit another feature's `specs/features/<name>/` on a feature branch; supersede old decisions in the new spec's decision log.
+- `report.md`: criteria statuses are `green`, `already_implemented`, `test-unwritable`; never a `|` in a criteria cell, even in backticks. Otherwise `adlc next` stays on implement.
+- Integration tests: a module in `crates/<c>/tests/it/` (`test_test_binaries.sh`); run with `cargo test -p <crate> --test it <module>`.
+- Tests that depend on feature unification run with `--workspace`; `-p <crate>` resolves features for that crate alone.
+- `required-features = ["testing"]` tests need `--features testing`, or they are skipped.
+- The gate's clippy runs without `--all-targets`; adding it surfaces old test-code lints the gate never sees.
+- `tests/repo/*` read `git ls-files`: stage new and deleted files first. `start_bg` (`tests/repo/lib/netray.sh`) never in a subshell.
+- A repo check over Cargo dependencies reads `cargo metadata`, never the TOML text. A purity guard is an allowlist, never a blocklist.
+- `tests/repo/test_workflows.sh` checks shape only; a workflow change is verified by its first CI run or release tag.
+- A freshly built binary (a cargo example) gets no network locally; replay its bytes from `python3` to check a live host.
 
 ## Conventions
 
-- **One workspace version.** Every crate inherits `[workspace.package] version`; only `just release` changes it.
-- **Module crates and one composition root.** A module crate holds its `Module`, inspector functions and module config, and no router, listener or `main.rs`; `crates/netray` builds the registry and the store and hands them to netray-web.
-- **One config, `netray.toml`.** One loader (`netray_common::config::load`), prefix `NETRAY_` (`NETRAY_SERVER__BIND`), `NETRAY_CONFIG` names the file. `crates/netray/src/config.rs` refuses the legacy prefixes (`LENS_`, `NETRAY_{DNS,TLS,HTTP,EMAIL,IP}_`, `PRISM_`, `TLSIGHT_`, `SPECTRA_`, `BEACON_`, `IFCONFIG_`) through `refuse_legacy_prefix`, and `crates/netray/src/legacy.rs` refuses old file keys naming their destination; the CHANGELOG 0.30.0 table mirrors it.
-- A new `NETRAY_` variable a script exports reaches `serve` as a config key and stops it: list it in `TOOL_VARS` (`crates/netray/src/config.rs`).
-- **One config loader.** Config loads only through `netray_common::config::load`; every config struct carries `deny_unknown_fields` (`tests/repo/test_config_strict.sh`).
-- **Contract goldens.** `tests/fixtures/contracts/` holds each backend's response as written by its own tests (`contract_golden`); netray-web's run tests read them. A module shape change fails its golden test: regenerate with `UPDATE_GOLDEN=1 cargo test -p <crate> --test it contract_golden` (netray-ip: `--lib contract_golden`), commit, and keep `run_golden` green.
-- **Run goldens.** `tests/fixtures/contracts/lens-*.json` pin a run's verdicts; `crates/web/tests/it/run_golden.rs` compares against them and rewrites nothing, so a moved row is a hand edit under `ADLC-Test-Change` naming its requirement.
-- **History fixtures are recomputed, never hand-set.** Change a fixture's evidence, never a status, then run `UPDATE_FIXTURES=1 cargo test -p netray-web --test it every_history_fixture` until stable and `just design-check`.
-- **A recorded run has no caller DKIM selectors**: a fixture's DKIM key sits under `default` or a provider selector, or the rebuild never finds it.
-- **prism's package is `netray-dns`.** Run `cargo test -p netray-dns`, not `-p prism` or `-p mhost-prism`.
-- **beacon orders verdicts** Skip < Info < Pass < Warn < Fail; a category with only Info sub-checks is not applicable to the run, except `email.mx` (pass, Info as findings) and `email.dnsbl` (pass when one zone answered). A category carrying the `unmeasured` sub-check is `unmeasured`.
-- **A failed lookup is never an answer** (Rule M, `specs/features/v2-unmeasured/spec.md`): SERVFAIL, REFUSED, timeout or a policy-refused redirect is `unmeasured`; only NXDOMAIN/NODATA or a wrong answer from the target is a measured fail.
-- **An address lookup has two halves.** Keep the answered half and report the failed one (`AddressLookup { ips, error }`); never fail the whole lookup on one family.
-- **`netray_dns::parser::parse` is no domain validation**: it lowercases the first token and checks no syntax; validate names with `netray_common::domain::validate`.
-- **The email resolver group runs with `retries(0)`**: `lookup_on` re-sends a failure once and retries a truncated UDP answer once over its TCP twin; never re-enable mhost's retries there.
-- **An unguessable key comes from `Uuid::new_v4()`**: a v7's last 48 bits hold 16 counter bits shared by every key of one millisecond.
-- **TLS expiry reads `expired`, not the day count**: `days_remaining` truncates toward zero, so a leaf lapsed within the day stores 0 days and `expired` true.
-- **A block id with an IPv6 address needs brackets** (`tls.chain@[2001:db8::1]:443`): `BlockId::parse` refuses a bare one, and test fixtures built with `format!` hit it.
-- **An island that reads the inspector's host field re-reads it before acting**: the shell fills and restores the field (chips, history, back/forward) without an input event.
-- **Never derive a verdict from a finding's detail text.** Carry it in a structured marker (e.g. SPF `spf_incomplete` with `ipv4`/`ipv6`/`both`/`any`).
-- **An evidence block holds the fact that decided its check.** Omit unknowns; never publish a placeholder (`0`, `""`, a guessed TTL). `check_evidence_rule` and each module's `validate` test enforce it.
-- **Module crates' `required-features = ["testing"]` tests need `--features testing`**: `cargo test -p netray-email --features testing --test evidence`; without it they are skipped or refused.
-- **A new volatile path changes every stored fingerprint**: the next run of each domain stores an entry with an empty diff (`crates/store/src/lib.rs` compares the stored fingerprint).
-- **A volatile key never decides presence.** A block or sibling key that exists only beside a volatile key flaps the fingerprint: make the block unconditional or the sibling volatile (`http.caching`).
-- **A volatile row path also covers `<key>#<n>` repeats** (`canonical.rs` `row_covers`): key repeated table rows `#<n>`, never join them into one cell.
-- **A check outside the verdict is evidence, not a catalogue ID.** The profile refuses weight 0 and every ID needs a weight (SDD §3.8); COOP/COEP/CORP live in `http.isolation`.
-- **beacon goldens are literal scenarios**: a new one must carry every sub-check the checks emit for its records (FCrDNS one per IP, `single_mx`, `no_ipv6`, DMARC `no_ruf`).
-- **A new check id needs its texts in the catalogue**: `crates/engine/catalogue/checks.toml` (the pages read titles, fix hints, owners and guide links from it). A catalogue text (`finding`, `fix_hint`, `fix_owner`) describes every warn and fail branch of the check's code, and `checks` only what its pass branch guarantees: read the check before writing it.
-- **tlsight's `summary` judges OCSP, CAA and DANE from the first handshake over all ports**: a per-port verdict reads the port's own data (`module::port_wide`).
-- **`TlsParams.starttls` is a port label, not an upgrade**: only SMTP is upgraded (`tls/connect.rs`); `CertInfo.is_expired` truncates to whole days.
-- **Augment a request before its limit and cost checks**, never after: `+dnssec` once added DNSKEY and DS past `max_record_types`, running 12 types under a limit of 10.
-- **Domain input is the UTS #46 A-label** (`netray_common::domain::validate`): `bücher.de` answers `xn--bcher-kva.de`; a refused-character test needs a URL-forbidden code point (`\`, space, `%`).
-- **Narrowing a check moves its hard fail.** When a check stops failing on a condition, confirm the condition still reaches a hard fail or weight in the profile (`tls.hostname_match` left `chain_trusted`).
-- **Release notes trace to code.** Check each `CHANGELOG.md` claim against the code at the release commit, not against specs or the SDD (changelog-0-25-0: six wrong claims).
-- **report.md criteria statuses** are `green`, `already_implemented` or `test-unwritable`; any other keeps `adlc next` on implement. Drop a criterion whose scenario left the spec.
-- **A page never fetches `/badge/<domain>.svg` unasked**: the apex starts a run for a stale head on that request; previews carry `data-src` until the dialog opens.
-- **The score under the letter goes through `views::score_number`**: rounding half up crosses a grade threshold, a plain floor loses exact integers to float error.
-- **Startup rejects are checked.** A new startup `.expect`/`panic!` on a config value needs a `validate()` rule and a `startup_rejects` row in `tests/repo/test_check_config.sh`.
-- **Data files are checked at startup, not by `--check-config`.** Data files named in config (`[modules.ip]`'s GeoIP databases) are read at `netray serve` startup; the config check parses the table and its keys only.
-- **Layer order**, outermost first: concurrency limit, `request_id`, security headers, CORS, body limit, trace, compression — so preflights and 413s carry the request id and headers.
-- **`start_bg` never in a subshell**: the EXIT trap of `tests/repo/lib/netray.sh` kills only PIDs recorded in the parent shell.
-- **`just acceptance-local`** starts one `netray serve` on a free port with apex `localhost` (`LOCAL_URL`, `LOCAL_APEX`; inspector hosts `<tool>.localhost`); never assume 8000 or 8080 are free. It first seeds a temporary `history.db` from `tests/acceptance/fixtures/history/` (`cargo run -p netray-store --example seed`); a fixture is `{"domain","age_seconds","run"}` with a complete run holding every catalogue ID once, never an absolute time. Spec paths given to it run in place of the default list; `@live` tests run only with `--grep @live`.
-- **Acceptance specs read `/api/v1` once per worker** (a module-level cache): a read per test hits API v1's per-client limit and answers `429` mid-suite.
-- **A too-wide evidence table scrolls inside `.evidence-block`** (`overflow-x: auto`); never `overflow-wrap: anywhere` on table cells: it shrinks min-content and breaks short tokens at 1280 px.
-- **Test invalid input through the router**, not the handler: extractor rejections (invalid UTF-8) and unmatched paths answer before the handler runs; in axum 0.8 `/x/{*rest}` conflicts with `/x/{id}`, while a static segment beside a catch-all (`/r/{id}/og.png` with `/r/{id}/{*rest}`) does not.
-- **Review the paths a contract fix wakes up.** When real data first reaches a code path, it may never have run before (lens `detect_no_mx` read every MX `fail` as "no MX").
-- **Timer-run scripts fail closed**: write every file atomically (temp in the same dir, then `mv`), clean only their own files (`*.tmp.$$`, a per-run dir), and are tested with stubs that behave like the real tool (`curl` without `-f` saves the error page, exit 0).
-- **Shared dependencies** go in `[workspace.dependencies]` once two crates use them.
-- **Every production `impl DomainRuns` overrides `start_with`**: the default drops DKIM selectors (`tests/repo/test_domain_runs_selectors.sh`).
-- **An inspector under `/api/v1` runs on its module's `[modules.<x>]` state**; `[api.<x>]` holds only per-client limits (email adds its slots). Never build a second inspector state.
-- **An ip answer validates, then checks the seam, then charges**: a 400 or 503 costs no limiter; charge the per-IP limiter only through `charge_caller` (it feeds `X-RateLimit-Remaining` via a task-local).
-- **`netray_web::api::ip_host` serves `ip.`'s V1 paths** (`/country`, `/json`, `/ip/cidr` ...) and hands every other request back; the cutover mounts it before `ip_successor`.
-- **The IP inspector renders blocks, not the lookup document**: `ip.lookup` (card) and `ip.headers` (GET caller only); the IP view claims `ip.addresses` only to append the MaxMind attribution.
-- **Compose each new inspector onto the finished v1 document** (`api/compose.rs`, one step per part): composing it with the earlier parts renames a committed component and fails `openapi_contract`.
-- **A golden over prism's routes zeroes `latency_ms` and sorts hash-map-ordered lists** (authcompare's servers); capture it twice before committing.
-- **Outbound fetches of user- or domain-controlled URLs** go only through `netray_common::fetch`; never build a `reqwest::Client` for them. Checking and pinning live in its DNS resolver; reqwest keeps redirect handling.
-- **An HTTP header value that is not text never reaches `headers`, `raw_headers` or `dump_headers`**: read its presence from `InspectResponse.unreadable_headers` (first line, as `security.*` reads it).
-- **`FetchOptions::new` follows no redirect**: a test that follows one sets `max_redirects`.
-- **rcgen is 0.14**: sign with `Issuer::from_params(&ca_params, &ca_key)`, not 0.13's three-argument `signed_by`.
-- **Features unify.** A dependency feature one crate enables reaches every module in the `netray` binary; select behaviour at runtime, never with `cfg!(feature)`.
-- **Crate docs** point at the root verbs and `netray serve`, never at per-crate build commands.
-- **Deployment policy wording** lives only in `CONTRIBUTING.md`; `tests/repo/test_no_self_host.sh` rejects it anywhere else outside history.
-- **askama 0.16 closes every `{% call %}` with `{% endcall %}`**; without it the component macro does not compile.
-- **askama 0.16 escapes `'&<>"` as `&#39;` `&#38;` `&#60;` `&#62;` `&#34;`**: a test over rendered text compares that form.
-- **Pages show values through `evidence::display_value`**; `format_value` stays raw for exports, compact tables, links and explore.
-- **A row link on the stored result page uses `Links::Entry`**: `Links::Live` anchors (`#ev-…`) exist only on the live run page.
-- **A change to the social card's drawing bumps `CARD_RENDERING_VERSION`** (`og/layout.rs`): both card ETags carry it, or clients revalidate the old card to 304.
-- **A DNS lint's `NotFound` becomes `Status::Fail`** (`crates/dns/src/module.rs`): a not-applicable result is turned into `Verdict::Skip` there, never left as `NotFound`.
-- **A protocol view (`crates/web/src/pages/views/`) claims a block only when it renders every key**; each view adds `views_nothing_lost.rs` rows with distinct display texts.
-- **A part view (`views::render_part`) claims a whole inspector part**: its fragment replaces the first claimed block; DNS reads `dns.answers`/`dns.servers` from `netray_dns::*_page_blocks`.
-- **Count a DNS query's types with `netray_dns::parser::named_record_types`**, never raw tokens: the parser drops duplicates, resolves aliases (KEY is DNSKEY) and adds defaults.
-- **The CSS gate refuses literal font sizes and colours**: add a token to `crates/web/tokens.json` (build.rs emits the variable).
-- **An optional element in a golden-tested template opens with `{%- if %}`**, so the markup without it stays byte-identical (`result_header.html`'s `dkim_selectors` field).
-- **A `base.html` block default compiles against every child**: put frame-struct fields only inside blocks a struct-less child overrides (v2-entries' pages override `meta`).
-- **Stub a third-party API with a body captured from the live endpoint**, never the shape the code reads (status island: the event feed answers `results`, not `data`).
-- **A purity guard is an allowlist.** `tests/repo/test_spectrum_module.sh` admits named imports, std paths and macros; a blocklist of I/O names let print macros and `std::process` through.
-- **Spectrum labels are placed twice**: desktop (`labels`) and phone (`phone_labels`, 358 px plate); the phone media query in `spectrum.css` overrides the inline desktop geometry with `!important`, so a new label style needs its phone twin.
-- **The spectrum follows the grade.** `spectrum::layout` mutes a section with a weighted unmeasured check and sums M over the profile, as `scoring.rs` does; change both together.
-- **No `Router` word in `crates/web/src` outside `entries/`, `pages/`, `api/`**, comments included: `tests/repo/test_web_crate.sh` greps the text.
-- **`pages/inspect.rs` and `pages/inspect/` name no module crate** (`tests/it/inspect_seam.rs`): reach module data through `api::jobs` helpers or a seam trait (`DnsResults`).
-- **Inspector parts stream in completion order**: a test reads each part's own `inspect-part-<n>` fragment, never stream order, and a bare `handshake` also matches `tls.handshake@` ids.
-- **Page tests assert a component by its markup** (`class="diff-block"`), never the bare class name: netray-web's pages inline every component stylesheet.
-- **A new table inside `main` inherits `main th, main td`** (muted cells, a bottom rule): override colour and borders in its own rules.
-- **A browser breaks after a hyphen**: to break a domain only at its dots, wrap each label in an inline-block box (`.result-hero__label`).
-- **Identifier-valued CSS properties** (`grid-area`, `transition`) go into `IDENTIFIER_PROPERTIES` in `crates/web/src/gate.rs`, or the gate refuses colour words in them.
-- **Absolute URLs come from `pages::ORIGIN`**; in-page links are apex-relative (`/inspect/<tool>`), except the header logo, which links to `ORIGIN` so inspector hosts reach the apex. `tests/repo/test_no_absolute_apex.sh` refuses a `netray.info` literal in `crates/web/{templates,src,islands/src}`.
-- **The gate keeps a component's classes in its own stylesheet**: a page rule on `.check-row` or `.query-input__*` goes into that component's CSS or uses a structural selector (`.card > :first-child`).
-- **A design board with `wait` marks its always-rendered elements `"shell": true`**: without a non-shell element on the page the board is `no state`, so a timed-out run never passes.
-- **The gate's colour words include CSS system colours** (`menu`, `canvas`, `field`): an island or class named so is refused as a colour literal (the header menu island is `nav-menu`). A class starting `grade-` belongs to the grade component (the home legend is `score-key`).
-- **The expired-entry page inlines its sheet** (`entries/render.rs` `stylesheet`): a frame rule it needs (the footer) lives in `pages.css`, which that sheet appends.
-- **A design board state behind a control** is measured with the manifest's `click` (`{"board": …, "page": …}`): board M's menu sheet, the open Inspectors menu.
-- **Site content lives in netray-web** (`site/` was deleted by v2-cutover; the V2 parity tests keep its pages under `crates/web/tests/fixtures/v1-site/`): guide prose to `crates/web/templates/pages/guides/`, guide titles and descriptions to `crates/web/src/pages/guides.rs`, compare rows to `crates/web/compare.toml`.
+- One workspace version (`[workspace.package]`); only `just release` changes it. Shared dependencies go in `[workspace.dependencies]` once two crates use them.
+- One config, `netray.toml` (`netray.example.toml`), one loader `netray_common::config::load`, prefix `NETRAY_` (`NETRAY_SERVER__BIND`), `NETRAY_CONFIG` names the file.
+- A `NETRAY_` variable a script exports reaches `serve` as a config key and stops it: list it in `TOOL_VARS` (`crates/netray/src/config.rs`). `serve` refuses legacy-prefixed variables too.
+- Startup rejects are checked: a new startup `.expect`/`panic!` on a config value needs a `validate()` rule and a `startup_rejects` row in `tests/repo/test_check_config.sh`. Data files (GeoIP) are read at `serve` startup, not by `--check-config`.
+- Features unify across the `netray` binary: select behaviour at runtime, never with `cfg!(feature)`.
+- Outbound fetches of user- or domain-controlled URLs go only through `netray_common::fetch`.
+- Never wrap self-timed work in an outer timeout at the same deadline: bound the wait by the deadline, the work by the time left plus a grace.
+- Augment a request before its limit and cost checks, never after.
+- Domain input is the UTS #46 A-label (`netray_common::domain::validate`); a refused-character test needs a URL-forbidden code point (`\`, space, `%`).
+- A failed lookup is never an answer (Rule M, `specs/features/v2-unmeasured/spec.md`): SERVFAIL, REFUSED, timeout or a policy-refused redirect is `unmeasured`; only NXDOMAIN/NODATA or a wrong answer is a measured fail.
+- An address lookup has two halves: keep the answered one, report the failed one (`AddressLookup { ips, error }`).
+- Never derive a verdict from a finding's detail text; carry a structured marker (SPF `spf_incomplete`).
+- An evidence block holds the fact that decided its check; omit unknowns, never a placeholder (`0`, `""`, a guessed TTL).
+- A new check id needs its texts in `crates/engine/catalogue/checks.toml`: `finding`/`fix_hint`/`fix_owner` describe every warn and fail branch, `checks` only what the pass branch guarantees. Read the check first.
+- A check outside the verdict is evidence, not a catalogue ID (the profile refuses weight 0).
+- Narrowing a check moves its hard fail: confirm the condition still reaches a fail or weight in the profile.
+- A new volatile path changes every stored fingerprint (next run stores an empty diff). A volatile key never decides presence: make the block unconditional or the sibling volatile. A volatile row path covers `<key>#<n>` repeats; never join rows into one cell.
+- A profile version that only adds checks re-scores a stored run to its old grade. A new profile version moves the current-profile pins (`profile.rs`, `schema_derives.rs`, `scoring_regression.rs`, `api_reads.rs`) and every history fixture's `profile_version`: regenerate, never hand-edit.
+- Contract goldens (`tests/fixtures/contracts/`): a module shape change fails its golden; regenerate with `UPDATE_GOLDEN=1 cargo test -p <crate> --test it contract_golden` (netray-ip: `--lib`), commit, keep `run_golden` green.
+- Run goldens (`tests/fixtures/contracts/lens-*.json`) are never rewritten: a moved row is a hand edit under `ADLC-Test-Change` naming its requirement.
+- History fixtures are recomputed: change evidence, never a status, then `UPDATE_FIXTURES=1 cargo test -p netray-web --test it every_history_fixture` until stable, and `just design-check`.
+- When real data first reaches a code path after a contract fix, review that path: it may never have run.
+- Timer-run scripts fail closed: atomic writes (temp in the same dir, then `mv`), clean only their own files, tested with stubs that behave like the real tool.
+- Release notes trace to code: check each `CHANGELOG.md` claim against the code at the release commit.
+- Crate docs point at the root verbs and `netray serve`, never at per-crate build commands.
 
 ## Rules
 
