@@ -1,8 +1,7 @@
 # CLAUDE.md -- netray-email
 
-The email module of `netray serve` (V1 codename beacon). Repo-wide rules, including the email
-ones (verdict order, goldens, `--features testing`, DKIM selectors in recorded runs), are in the
-root [`CLAUDE.md`](../../CLAUDE.md); this file holds only what is specific to this crate.
+The email module of `netray serve` (V1 codename beacon). Repo-wide rules: the root
+[`CLAUDE.md`](../../CLAUDE.md); recorded-run DKIM fixtures: [`crates/web/CLAUDE.md`](../web/CLAUDE.md).
 [`README.md`](README.md) lists the check ids and config keys.
 
 ## Layout
@@ -19,6 +18,13 @@ root [`CLAUDE.md`](../../CLAUDE.md); this file holds only what is specific to th
 
 ## Working rules
 
+- **Verdict order** Skip < Info < Pass < Warn < Fail; a category with only Info sub-checks is not
+  applicable, except `email.mx` (pass, Info as findings) and `email.dnsbl` (pass when one zone
+  answered). A category carrying the `unmeasured` sub-check is `unmeasured`.
+- **Goldens are literal scenarios**: a new one carries every sub-check the checks emit for its
+  records (FCrDNS one per IP, `single_mx`, `no_ipv6`, DMARC `no_ruf`).
+- **The resolver group runs with `retries(0)`**: `lookup_on` re-sends a failure once and retries a
+  truncated UDP answer once over TCP; never re-enable mhost's retries.
 - **Three phases.** `run_all_checks` runs phase 0 (domain-only checks) in parallel, phase 1
   (MX-dependent checks) in parallel after phase 0 has drained, then phase 2 (cross-validation and
   grade) sequentially; each phase uses a `JoinSet`. Results travel as `SseEvent`s over an mpsc

@@ -2,9 +2,8 @@
 
 The IP module of `netray serve` and the in-process IP enrichment of the other modules; formerly the
 standalone service ifconfig-rs. What it is, its API and its config keys: [README.md](README.md).
-The repository-wide rules, including the ip rules for `ip_host`, `[api.ip]` charging, the IP
-inspector's blocks and the data image, are in the root [CLAUDE.md](../../CLAUDE.md); they are not
-repeated here.
+Repository-wide rules: the root [CLAUDE.md](../../CLAUDE.md); `ip_host`, `[api.ip]` charging and
+the IP inspector's blocks: [`crates/web/CLAUDE.md`](../web/CLAUDE.md).
 
 ## Layout
 
@@ -21,6 +20,8 @@ repeated here.
 
 ## Rules
 
+- **The `ifconfig-rs-data` image also carries tracked files** (`asn_patterns.toml`): never copy it
+  over `crates/ip/data/`.
 - **The binary enforces the required data, not the crate.** `IpModule::new` loads with no GeoIP
   database and with a missing optional list (`tests/module_data.rs`); `crates/netray/src/registry.rs`
   refuses a `[modules.ip]` without `geoip_city_db` and `geoip_asn_db` or with a missing file.

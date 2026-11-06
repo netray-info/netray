@@ -27,6 +27,7 @@ they are not repeated here. Module table: [`README.md`](README.md).
   `enrichment::is_private_ip` delegate to it. A new refused range goes there only.
 - **Outbound fetches** of user- or domain-controlled URLs go through `fetch`; it takes
   `ClientSettings`, never a reqwest builder, so no caller can route around the checking resolver.
+  `FetchOptions::new` follows no redirect: a test that follows one sets `max_redirects`.
 - **Errors**: each caller defines its own error type and implements `ApiError`;
   `build_error_response` is for callers that log themselves.
 - **Rate-limit and HTTP metrics** take a `metrics_prefix`: `{prefix}_rate_limit_hits_total`

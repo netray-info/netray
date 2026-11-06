@@ -1,9 +1,8 @@
 # CLAUDE.md -- netray-http
 
 The HTTP module of `netray serve` (V1 codename spectra): a library, no binary. What it measures,
-its checks and its config keys are in `README.md`. Repo-wide rules, including the http-specific
-ones (graded headers judged in `src/module.rs`, `http.isolation`, volatile paths, contract
-goldens), live in the root [CLAUDE.md](../../CLAUDE.md) and are not repeated here.
+its checks and its config keys are in `README.md`. Repo-wide rules (volatile paths, contract
+goldens): the root [CLAUDE.md](../../CLAUDE.md).
 
 ## Layout
 
@@ -21,6 +20,10 @@ goldens), live in the root [CLAUDE.md](../../CLAUDE.md) and are not repeated her
 
 ## Rules
 
+- Judge a new graded header in `src/module.rs`, not by changing `inspect/security.rs`: the V1 wire
+  serialises each `security.*.status`. COOP/COEP/CORP are evidence in `http.isolation`, not catalogue IDs.
+- A header value that is not text never reaches `headers`, `raw_headers` or `dump_headers`: read
+  its presence from `InspectResponse.unreadable_headers` (as `security.*` does).
 - `CheckStatus` orders Pass < Skip < Warn < Fail; `Skip` maps to `NotApplicable`.
 - Limits are charged before any DNS resolution, in the module (`measure`) and in the job
   (`inspect_url`).

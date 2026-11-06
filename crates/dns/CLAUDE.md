@@ -1,10 +1,9 @@
 # CLAUDE.md — netray-dns
 
 The DNS module of `netray serve` (V1 codename prism): `DnsModule` (engine `Module` and
-`FactsProvider`) and the `DnsJobs` netray-web runs. Repo-wide rules, verbs and the gate are in the
-root [CLAUDE.md](../../CLAUDE.md); module-level rules already stated there (Rule M, the catalogue,
-`--features testing`, `named_record_types`, `parser::parse` is no validation, the DNS goldens) are
-not repeated here. What the module measures and reads: [README.md](README.md).
+`FactsProvider`) and the `DnsJobs` netray-web runs; package `netray-dns` (`cargo test -p netray-dns`).
+Repo-wide rules, verbs and the gate: the root [CLAUDE.md](../../CLAUDE.md). What the module
+measures and reads: [README.md](README.md).
 
 ## Working rules
 
@@ -47,3 +46,13 @@ not repeated here. What the module measures and reads: [README.md](README.md).
 - [`specs/rules/architecture-rules.md`](../../specs/rules/architecture-rules.md) when changing
   config, errors, rate limits or the jobs' protocol.
 - [`specs/rules/logging-rules.md`](../../specs/rules/logging-rules.md) when changing log targets.
+
+## Names, zones, parsing
+
+- **`netray_dns::parser::parse` is no domain validation**: it lowercases the first token and checks no syntax; validate names with `netray_common::domain::validate`.
+- **Count a query's types with `parser::named_record_types`**, never raw tokens: the parser drops duplicates, resolves aliases (KEY is DNSKEY) and adds defaults.
+- **hickory renders `xn--` labels as Unicode** in `Name::to_string()` and in mhost's serialised lookups: compare owner names as A-labels (`to_ascii()`, `check.rs` `same_name`).
+- **hickory 0.26 `Name::eq` compares `is_fqdn`**: a query name without the trailing dot never equals a wire record name; never compare owners against the query name.
+- **A check judges a name below its zone apex by its zone** (`check.rs` `read_zone`); a zone batch carries `source: "zone"` in memory only, `wire_batch` strips it from the stream.
+- **A lint's `NotFound` becomes `Status::Fail`** (`src/module.rs`): turn a not-applicable result into `Verdict::Skip` there.
+- **Domain runs and their facts stage have no per-target limit**: admission bounds them (SDD S44); direct DNS jobs keep `[api.dns]`'s limits.

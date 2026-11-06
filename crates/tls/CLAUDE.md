@@ -3,9 +3,7 @@
 The TLS module of `netray serve` (V1 codename tlsight): a library holding the engine module
 `TlsModule` and the inspector netray-web runs for API v1 and `/inspect/tls`. `README.md` lists
 its exports, check ids and config keys. Repo-wide rules, verbs and the gate are in the root
-[`CLAUDE.md`](../../CLAUDE.md); it already holds the TLS rules on `expired` vs `days_remaining`,
-STARTTLS, port-wide OCSP/CAA/DANE, block ids with IPv6, probe slots and `tls.hostname_match`.
-They are not repeated here.
+[`CLAUDE.md`](../../CLAUDE.md).
 
 ## Layout
 
@@ -30,3 +28,11 @@ They are not repeated here.
 - **Trust store**: `webpki-roots` plus the `*.pem`/`*.crt` files of `validation.custom_ca_dir`, built once in `AppState::new`; `check_startup` refuses a `custom_ca_dir` that is not a directory.
 - **CAA issuer matching** (`validate/caa_compliance.rs`): the CAA `issue` domain is looked up in the table `build.rs` generates from `data/caa_domains.tsv`; the CA name matches the issuer DN by normalized containment or a shared word of at least 6 characters. An unknown CAA domain does not match. Refresh the table with `just tlsight-data` when CAs are added or renamed.
 - **`hsts` and `https_redirect`** are quality checks inside the inspection response (`quality/mod.rs`), not module check ids.
+
+- **Expiry reads `expired`, not the day count**: `days_remaining` and `CertInfo.is_expired` truncate toward zero, so a leaf lapsed within the day stores 0 days and `expired` true.
+- **`TlsParams.starttls` is a port label, not an upgrade**: only SMTP is upgraded (`tls/connect.rs`).
+- **`summary` judges OCSP, CAA and DANE from the first handshake over all ports**: a per-port verdict reads the port's own data (`module::port_wide`).
+- **Probe slots go to the first addresses whose handshake succeeded**, per address (`SlotBoard`), never behind a port-wide barrier: one SYN-dropping address would delay the section past its window.
+- **A block id with an IPv6 address needs brackets** (`tls.chain@[2001:db8::1]:443`): `BlockId::parse` refuses a bare one, and `format!`-built fixtures hit it.
+- **`tls.hostname_match` was narrowed once and left `chain_trusted`**: when narrowing a check, confirm its condition still reaches a hard fail.
+- **rcgen is 0.14**: sign with `Issuer::from_params(&ca_params, &ca_key)`, not 0.13's `signed_by`.
