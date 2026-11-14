@@ -5,6 +5,7 @@ ignore = [
     "RUSTSEC-2024-0436",
 
     # sqlx pulls the affected crate; no fix released yet.
+    # Expires: 2027-01-13 (revisit the sqlx cap then).
     "RUSTSEC-2026-0459",
 
     # askama template engine advisory, not reachable.
