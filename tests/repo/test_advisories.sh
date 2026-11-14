@@ -14,7 +14,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 1
 
-EXPECTED_IGNORES="RUSTSEC-2024-0436"
+EXPECTED_IGNORES="RUSTSEC-2024-0436 RUSTSEC-2026-0459 RUSTSEC-2026-0374 RUSTSEC-2024-0449"
 
 fails=0
 fail() { echo "FAIL: $1"; fails=1; }
@@ -65,6 +65,15 @@ check_ignores() {
       RUSTSEC-2026-0118|RUSTSEC-2026-0119)
         echo "$comment" | grep -qF '0.26.1' && echo "$comment" | grep -qi 'mhost' \
           || { echo "FAIL: $file: $id comment must mention 0.26.1 and mhost"; rc=1; } ;;
+      RUSTSEC-2026-0459)
+        echo "$comment" | grep -qi 'sqlx' \
+          || { echo "FAIL: $file: $id comment must mention sqlx"; rc=1; } ;;
+      RUSTSEC-2026-0374)
+        echo "$comment" | grep -qi 'askama' \
+          || { echo "FAIL: $file: $id comment must mention askama"; rc=1; } ;;
+      RUSTSEC-2024-0449)
+        echo "$comment" | grep -qi 'uaparser' && echo "$comment" | grep -qi 'serde_yaml' \
+          || { echo "FAIL: $file: $id comment must mention uaparser and serde_yaml"; rc=1; } ;;
     esac
   done <<< "$parsed"
   return $rc
@@ -112,9 +121,30 @@ check_lock() {
   return $rc
 }
 
+# check_floors FILE: every package of each name below must be at or above its floor;
+# a name with no package fails.
+check_floors() {
+  local lock=$1 rc=0 spec name floor v n
+  for spec in rustls:0.23.46 rustls-webpki:0.103.16 webpki-roots:1.0.10 \
+              webpki-root-certs:1.0.10 tokio:1.53.3 rustix:1.1.6; do
+    name=${spec%%:*}; floor=${spec##*:}; n=0
+    while read -r v; do
+      [ -n "$v" ] || continue
+      n=$((n + 1))
+      if [ "$(printf '%s\n%s\n' "$v" "$floor" | sort -t. -k1,1n -k2,2n -k3,3n | head -1)" != "$floor" ]; then
+        echo "FAIL: $lock: $name $v is older than $floor"; rc=1
+      fi
+    done < <(awk -v n="$name" '$0 == "name = \"" n "\"" { f = 1; next }
+      f && /^version = / { v = $3; gsub(/"/, "", v); print v; f = 0 }' "$lock")
+    [ "$n" -gt 0 ] || { echo "FAIL: $lock has no $name package"; rc=1; }
+  done
+  return $rc
+}
+
 # The checks run on the real files.
 check_ignores deny.toml "$EXPECTED_IGNORES" || fails=1
 check_lock Cargo.lock || fails=1
+check_floors Cargo.lock || fails=1
 grep -qE '^rust-version[ \t]*=[ \t]*"1\.88"' crates/common/Cargo.toml \
   || fail "crates/common/Cargo.toml does not declare rust-version = \"1.88\""
 
@@ -123,6 +153,40 @@ fixture=tests/repo/fixtures/advisories/deny-missing-comment.toml
 out=$(check_ignores "$fixture" "$EXPECTED_IGNORES" 2>&1); frc=$?
 if [ "$frc" -eq 0 ] || ! echo "$out" | grep -q 'RUSTSEC-2024-0436 has no comment'; then
   fail "the comment check did not report the uncommented ID in $fixture"
+  echo "$out"
+fi
+
+# C11: a RUSTSEC-2026-0459 comment without sqlx must fail and name the ID.
+fixture=tests/repo/fixtures/advisories/deny-0459-no-sqlx.toml
+out=$(check_ignores "$fixture" "$EXPECTED_IGNORES" 2>&1); frc=$?
+if [ "$frc" -eq 0 ] || ! echo "$out" | grep -q 'RUSTSEC-2026-0459'; then
+  fail "the keyword check did not reject the 0459 comment without sqlx in $fixture"
+  echo "$out"
+fi
+
+# C11: four IDs with correct keywords pass.
+fixture=tests/repo/fixtures/advisories/deny-all-correct.toml
+out=$(check_ignores "$fixture" "$EXPECTED_IGNORES" 2>&1) \
+  || { fail "the keyword check rejected the correct fixture $fixture"; echo "$out"; }
+
+# C7: rustls 0.23.45 must fail and be named.
+fixture=tests/repo/fixtures/advisories/lock-rustls-old.lock
+out=$(check_floors "$fixture" 2>&1); frc=$?
+if [ "$frc" -eq 0 ] || ! echo "$out" | grep -q 'rustls 0.23.45'; then
+  fail "the floor check did not report rustls 0.23.45 in $fixture"
+  echo "$out"
+fi
+
+# C8: every floor met passes.
+fixture=tests/repo/fixtures/advisories/lock-floors-met.lock
+out=$(check_floors "$fixture" 2>&1) \
+  || { fail "the floor check rejected the met fixture $fixture"; echo "$out"; }
+
+# C9: no rustix package fails and names rustix.
+fixture=tests/repo/fixtures/advisories/lock-no-rustix.lock
+out=$(check_floors "$fixture" 2>&1); frc=$?
+if [ "$frc" -eq 0 ] || ! echo "$out" | grep -q 'rustix'; then
+  fail "the floor check did not report the missing rustix in $fixture"
   echo "$out"
 fi
 
