@@ -2,9 +2,19 @@
 # One Rust toolchain version everywhere (spec release-toolchain-pin, requirements 1-6):
 # rust-toolchain.toml channel, the Dockerfile builder tag, its RUSTUP_TOOLCHAIN, the CI
 # `toolchain:` values and the two docs that name the version must agree. Offline, no docker.
+# Optional first argument: the repository root to check (default: this repository); an empty or
+# non-directory root exits 1 before any check runs.
 # Prints one line per failed check; exit 1 if any failed.
 set -uo pipefail
-cd "$(dirname "$0")/../.." || exit 1
+if [ "$#" -ge 1 ]; then
+    if [ -z "$1" ] || [ ! -d "$1" ]; then
+        echo "FAIL: root '$1' is not a directory"
+        exit 1
+    fi
+    cd "$1" || exit 1
+else
+    cd "$(dirname "$0")/../.." || exit 1
+fi
 
 fails=()
 fail() { fails+=("FAIL: $1"); }

@@ -232,11 +232,12 @@ fixture=tests/repo/fixtures/advisories/lock-floors-met.lock
 out=$(check_floors "$fixture" 2>&1) \
   || { fail "the floor check rejected the met fixture $fixture"; echo "$out"; }
 
-# C9: no rustix package fails and names rustix.
+# C9: no rustix package fails with the missing-package message (the bare name would
+# also match the fixture path).
 fixture=tests/repo/fixtures/advisories/lock-no-rustix.lock
 out=$(check_floors "$fixture" 2>&1); frc=$?
-if [ "$frc" -eq 0 ] || ! echo "$out" | grep -q 'rustix'; then
-  fail "the floor check did not report the missing rustix in $fixture"
+if [ "$frc" -eq 0 ] || ! echo "$out" | grep -q 'has no rustix package'; then
+  fail "the floor check did not report 'has no rustix package' in $fixture"
   echo "$out"
 fi
 
@@ -250,6 +251,14 @@ fixture=tests/repo/fixtures/advisories/lock-npm-no-mocker.json
 out=$(check_npm_floors "$fixture" 2>&1); frc=$?
 if [ "$frc" -eq 0 ] || ! echo "$out" | grep -q '@vitest/mocker'; then
   fail "the npm floor check did not report the missing @vitest/mocker in $fixture"
+  echo "$out"
+fi
+
+# happy-dom 20.14.5 fails and is named with its floor.
+fixture=tests/repo/fixtures/advisories/lock-npm-happy-dom-below.json
+out=$(check_npm_floors "$fixture" 2>&1); frc=$?
+if [ "$frc" -eq 0 ] || ! echo "$out" | grep -q 'happy-dom 20.14.5 is older than 21.0.4'; then
+  fail "the npm floor check did not report happy-dom 20.14.5 in $fixture"
   echo "$out"
 fi
 
