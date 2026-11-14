@@ -38,3 +38,32 @@ specs/features/release-toolchain-pin/reader.p1.md: blockers=0 amendments=0 major
 `docker build --progress=plain --no-cache -t netray:pin-check .` (the `just image` command): exit 0; `grep -ciE 'rustup|syncing channel|downloading component|installing component'` over the build log: 0.
 `docker run --rm --entrypoint netray netray:pin-check --version`: `netray 0.31.1`.
 In `clux/muslrust:1.99.1-stable-2026-11-03` with a `channel = "1.99.1"` toolchain file, `RUSTUP_TOOLCHAIN=stable rustc --version`: `rustc 1.99.1 (58cf8f9c3 2026-10-13)`.
+
+## Phase 2 — Expiry on the sqlx advisory ignore
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R7 deny.toml 0459 comment ends with Expires: 2027-01-13, reason kept, no blank line | green | tests/repo/test_advisories.sh |
+| C2 | R8 test_advisories.sh requires Expires: YYYY-MM-DD on 0459, no clock, EXPECTED_IGNORES unchanged, deny-all-correct.toml gains Expires | green | tests/repo/test_advisories.sh |
+| C3 | S1 cargo deny check advisories parses deny.toml, 0459 ignored | test-unwritable | behavioural verification (network, not offline) |
+| C4 | S2 the tree: test_advisories.sh exits 0 | green | tests/repo/test_advisories.sh |
+| C5 | S3 fixture 0459 with sqlx, no Expires: fails naming RUSTSEC-2026-0459 | green | tests/repo/test_advisories.sh |
+| C6 | S4 fixture 0459 Expires: 2020-01-01: passes | green | tests/repo/test_advisories.sh |
+| C7 | S5 other three IDs without Expires: pass | green | tests/repo/test_advisories.sh |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 1 | sonnet | 15546 | 9 |
+
+### Reader
+
+none: review reads this range
+
+### Behavioural verification
+
+`cargo deny check advisories` (cargo-deny 0.20.2): `advisories ok`, so `deny.toml` parses with the `Expires:` comment line and `RUSTSEC-2026-0459` stays ignored.
+`bash tests/repo/test_advisories.sh`: `PASS: advisories ignore list, lockfile and rust-version`.
