@@ -141,7 +141,36 @@ check_floors() {
   return $rc
 }
 
+# check_npm_floors FILE: every node_modules/<name> entry of an npm lockfile (v3) must be
+# at or above its floor; a name with no entry fails.
+check_npm_floors() {
+  node -e '
+    const [file, ...specs] = process.argv.slice(1);
+    const lock = JSON.parse(require("fs").readFileSync(file, "utf8"));
+    const older = (a, b) => {
+      const x = a.split(/[-+]/)[0].split(".").map(Number), y = b.split(".").map(Number);
+      for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== y[i]) return (x[i] || 0) < y[i]; }
+      return false;
+    };
+    let rc = 0;
+    for (const spec of specs) {
+      const i = spec.lastIndexOf(":"), name = spec.slice(0, i), floor = spec.slice(i + 1);
+      const keys = Object.keys(lock.packages || {}).filter(
+        (k) => k === "node_modules/" + name || k.endsWith("/node_modules/" + name));
+      if (keys.length === 0) { console.log("FAIL: " + file + " has no " + name + " package"); rc = 1; }
+      for (const k of keys) {
+        const v = lock.packages[k].version;
+        if (older(v, floor)) {
+          console.log("FAIL: " + file + ": " + name + " " + v + " is older than " + floor); rc = 1;
+        }
+      }
+    }
+    process.exit(rc);
+  ' "$1" happy-dom:21.0.4 vitest:4.1.12 @vitest/mocker:4.1.12
+}
+
 # The checks run on the real files.
+check_npm_floors package-lock.json || fails=1
 check_ignores deny.toml "$EXPECTED_IGNORES" || fails=1
 check_lock Cargo.lock || fails=1
 check_floors Cargo.lock || fails=1
@@ -187,6 +216,19 @@ fixture=tests/repo/fixtures/advisories/lock-no-rustix.lock
 out=$(check_floors "$fixture" 2>&1); frc=$?
 if [ "$frc" -eq 0 ] || ! echo "$out" | grep -q 'rustix'; then
   fail "the floor check did not report the missing rustix in $fixture"
+  echo "$out"
+fi
+
+# npm floors met pass.
+fixture=tests/repo/fixtures/advisories/lock-npm-floors-met.json
+out=$(check_npm_floors "$fixture" 2>&1) \
+  || { fail "the npm floor check rejected the met fixture $fixture"; echo "$out"; }
+
+# No @vitest/mocker entry fails and names it.
+fixture=tests/repo/fixtures/advisories/lock-npm-no-mocker.json
+out=$(check_npm_floors "$fixture" 2>&1); frc=$?
+if [ "$frc" -eq 0 ] || ! echo "$out" | grep -q '@vitest/mocker'; then
+  fail "the npm floor check did not report the missing @vitest/mocker in $fixture"
   echo "$out"
 fi
 
