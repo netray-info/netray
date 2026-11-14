@@ -1,7 +1,8 @@
 # Spec: audit-advisories-2026-11
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-11-14
+Finished: 2026-11-14
 
 ## Goal
 
