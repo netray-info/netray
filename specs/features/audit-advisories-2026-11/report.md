@@ -45,3 +45,46 @@ PASS: advisories ignore list, lockfile and rust-version
 $ bash tests/repo/test_check_config.sh   # netray serve --check-config crates/netray/netray.example.toml from a fresh build
 PASS: test_check_config
 ```
+
+## Phase 2 — npm advisories
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R6: islands package.json declares happy-dom ^21.0.4 and vitest ^4.1.12; test_islands_package.sh requires happy-dom ^21; package-lock resolves at or above; npm audit 0; npm test passes | green | tests/repo/test_islands_package.sh |
+| C2 | R7: test_advisories.sh fails when package-lock.json resolves happy-dom below 21.0.4 or vitest or @vitest/mocker below 4.1.12, or one is absent; reads node_modules/<name> keys with node -e | green | tests/repo/test_advisories.sh |
+| C3 | Scenario: test_advisories.sh fails today naming happy-dom 20.14.5 and vitest 4.1.11 | green | tests/repo/test_advisories.sh |
+| C4 | Scenario: a package-lock copy with happy-dom 21.0.4, vitest 4.1.12, @vitest/mocker 4.1.12 passes the npm floor check | green | tests/repo/test_advisories.sh |
+| C5 | Scenario: a package-lock copy with no @vitest/mocker fails naming @vitest/mocker | green | tests/repo/test_advisories.sh |
+| C6 | Scenario: full npm audit at the root reports 0 vulnerabilities | test-unwritable | — |
+| C7 | Scenario: the islands npm test passes | already_implemented | crates/web/islands/test |
+| C8 | Scenario: test_islands_package.sh passes with ^21.0.4 and a package.json copy with ^20.14.5 fails it | green | tests/repo/test_islands_package.sh |
+| C9 | Scenario: after adlc-setup a fresh netray build runs serve --check-config on the example config with exit 0 | already_implemented | tests/repo/test_check_config.sh |
+| C10 | Scenario: just adlc-verify is verified | test-unwritable | — |
+
+Notes: C6 needs the npm registry and C10 is the last phase's `adlc verify`; both are behavioural (below). C7 is held by the existing islands suite (46 files, 266 tests) that the gate runs. C9 is held by `tests/repo/test_check_config.sh`.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 1 | sonnet | 21180 | 24 |
+| G2 | 0 | behavioural, no file | 0 | 0 |
+
+### Reader
+
+none: review reads this range
+
+### Behavioural verification
+
+```
+$ npm audit
+found 0 vulnerabilities
+$ npm test --workspaces --if-present
+Tests  266 passed (266)   (exit 0)
+$ just adlc-setup && cargo build -p netray && bash tests/repo/test_check_config.sh
+dist/islands.js  33.1kb ... PASS: test_check_config
+$ bash tests/repo/test_islands_package.sh
+PASS: islands package and its dist check
+```
