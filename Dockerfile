@@ -4,7 +4,9 @@ COPY . .
 RUN --mount=type=cache,target=/root/.npm npm ci
 RUN npm run build --workspaces --if-present
 
-FROM clux/muslrust:stable AS builder
+FROM clux/muslrust:1.99.1-stable-2026-11-03 AS builder
+# Keep the image's installed toolchain (musl target) instead of letting rust-toolchain.toml trigger a rustup install.
+ENV RUSTUP_TOOLCHAIN=stable
 WORKDIR /build
 # `.dockerignore` prunes target/, node_modules/, the islands' dist/ and .git/.
 COPY . .
