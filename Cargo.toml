@@ -74,3 +74,7 @@ sha2 = "0.10"
 base64 = "0.22"
 sqlx = "0.8"
 nanoid = "0.4"
+
+# Line tables keep backtraces and panics readable; full debug info (the default) makes every worktree's target/ several times larger.
+[profile.dev]
+debug = "line-tables-only"
