@@ -23,6 +23,22 @@ ignore = [
     # paste is unmaintained; it arrives via utoipa-axum, used by lens, and is a
     # build-time proc-macro only.
     "RUSTSEC-2024-0436",
+
+    # libsqlite3-sys (C SQLite WAL information disclosure) arrives via
+    # sqlx-sqlite, used by sqlx in netray-store and netray-web. No sqlx release
+    # allows libsqlite3-sys >= 0.39 (sqlx-sqlite 0.9 caps it below 0.38). The
+    # disclosure needs local access to history.db. Revisit when sqlx lifts its cap.
+    "RUSTSEC-2026-0459",
+
+    # basic-toml is unmaintained; it arrives via askama_derive, used by askama
+    # in netray-web, and is a build-time proc-macro only.
+    "RUSTSEC-2026-0374",
+
+    # unsafe-libyaml is unmaintained; it arrives via serde_yaml 0.9 under
+    # uaparser in netray-ip, which parses only the operator-fetched uap-core
+    # regexes.yaml at startup, and via serde_yaml_ng (netray-ip's serde_yaml),
+    # which serializes only netray's own response values.
+    "RUSTSEC-2024-0449",
 ]
 
 [sources]
