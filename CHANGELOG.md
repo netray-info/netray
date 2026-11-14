@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Release builds are reproducible.** Rust 1.99.1 is pinned in `rust-toolchain.toml`, in the Docker builder (`clux/muslrust:1.99.1-stable-2026-11-03`) and in `ci.yml`; `tests/repo/test_toolchain_pin.sh` fails on drift. The unpinned `stable` channel made the v0.31.1 release build fail while rustup updated to Rust 1.100.0, so v0.31.1 has no image; this release carries its dependency and advisory changes.
+
+### Changed
+
+- `deny.toml` notes an expiry date (2027-01-13) on the RUSTSEC-2026-0459 ignore; `tests/repo/test_advisories.sh` requires it.
+
 ## [0.31.1] - 2026-11-14
 
 ### Security
