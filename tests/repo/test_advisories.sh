@@ -8,6 +8,9 @@
 #   7. every hickory-proto and hickory-net package in Cargo.lock is >= 0.26.1
 #   8. Cargo.lock has no rustybuzz or ttf-parser package (resvg/usvg 0.48, fontdb 0.24)
 #   6. the comment check can fail: it is run over a fixture with one uncommented ID
+#   9. the RUSTSEC-2026-0459 comment carries an `Expires: YYYY-MM-DD` date (format only,
+#      no calendar check, no clock); fixtures cover a missing date (fails), a past date
+#      (passes) and the other IDs needing none
 #
 # Phase 2 tightens EXPECTED_IGNORES to the three hickory/paste-free remainder;
 # edit only that variable (ADLC-Test-Change).
@@ -67,7 +70,9 @@ check_ignores() {
           || { echo "FAIL: $file: $id comment must mention 0.26.1 and mhost"; rc=1; } ;;
       RUSTSEC-2026-0459)
         echo "$comment" | grep -qi 'sqlx' \
-          || { echo "FAIL: $file: $id comment must mention sqlx"; rc=1; } ;;
+          || { echo "FAIL: $file: $id comment must mention sqlx"; rc=1; }
+        echo "$comment" | grep -qE 'Expires: [0-9]{4}-[0-9]{2}-[0-9]{2}' \
+          || { echo "FAIL: $file: $id comment needs an Expires: YYYY-MM-DD date"; rc=1; } ;;
       RUSTSEC-2026-0374)
         echo "$comment" | grep -qi 'askama' \
           || { echo "FAIL: $file: $id comment must mention askama"; rc=1; } ;;
@@ -197,6 +202,22 @@ fi
 fixture=tests/repo/fixtures/advisories/deny-all-correct.toml
 out=$(check_ignores "$fixture" "$EXPECTED_IGNORES" 2>&1) \
   || { fail "the keyword check rejected the correct fixture $fixture"; echo "$out"; }
+
+# C5: a RUSTSEC-2026-0459 comment with sqlx but no Expires date must fail and name the ID.
+fixture=tests/repo/fixtures/advisories/deny-0459-no-expires.toml
+out=$(check_ignores "$fixture" "$EXPECTED_IGNORES" 2>&1); frc=$?
+if [ "$frc" -eq 0 ] || ! echo "$out" | grep -q 'RUSTSEC-2026-0459'; then
+  fail "the Expires check did not reject the 0459 comment without a date in $fixture"
+  echo "$out"
+fi
+
+# C6: a past Expires date still passes (format only, no clock comparison).
+fixture=tests/repo/fixtures/advisories/deny-0459-expired.toml
+out=$(check_ignores "$fixture" "$EXPECTED_IGNORES" 2>&1) \
+  || { fail "the Expires check rejected the past-dated fixture $fixture"; echo "$out"; }
+
+# C7: deny-all-correct.toml (C11 above) passes although its other three IDs carry no
+# Expires, so only RUSTSEC-2026-0459 needs one.
 
 # C7: rustls 0.23.45 must fail and be named.
 fixture=tests/repo/fixtures/advisories/lock-rustls-old.lock

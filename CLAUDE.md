@@ -75,6 +75,7 @@ All verbs live in the root `justfile` (`just --list`); no crate has its own `jus
 - When real data first reaches a code path after a contract fix, review that path: it may never have run.
 - Timer-run scripts fail closed: atomic writes (temp in the same dir, then `mv`), clean only their own files, tested with stubs that behave like the real tool.
 - Release notes trace to code: check each `CHANGELOG.md` claim against the code at the release commit.
+- A Rust bump moves `rust-toolchain.toml`, the dated `clux/muslrust` builder tag and `ci.yml` together (`test_toolchain_pin.sh`); the builder keeps `RUSTUP_TOOLCHAIN=stable`.
 - Crate docs point at the root verbs and `netray serve`, never at per-crate build commands.
 
 ## Rules

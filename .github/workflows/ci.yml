@@ -25,7 +25,7 @@ jobs:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # v1
         with:
-          toolchain: stable
+          toolchain: 1.99.1
           components: rustfmt, clippy
       # mold as the system linker (the action links /usr/bin/ld to it): no RUSTFLAGS, so the cache key stays.
       - uses: rui314/setup-mold@339e96b4ff1f3bd865856ba4cbbe8818a7acb038 # v1

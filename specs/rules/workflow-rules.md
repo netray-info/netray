@@ -108,5 +108,5 @@ One image, `ghcr.io/netray-info/netray`, built natively for arm64 on `ubuntu-24.
 ## §6 Actions and Scheduled Scans
 
 - R-A1: Every action is pinned to a full commit SHA with the version as a comment: `uses: actions/checkout@<sha> # v4.2.2`. No exemptions: floating refs (`@stable`, `@v2`, `@main`) are forbidden.
-- R-A2: Node is `22`. The Rust toolchain is `stable` with `rustfmt` and `clippy`, matching `rust-toolchain.toml`.
+- R-A2: Node is `22`. The Rust toolchain is `1.99.1` with `rustfmt` and `clippy`, matching `rust-toolchain.toml`, the Dockerfile builder tag and `ci.yml`, enforced by `tests/repo/test_toolchain_pin.sh`.
 - R-A3: Scheduled scans — advisories and production acceptance — do not run from this public repository: GitHub disables scheduled workflows in public repositories after 60 days without activity. They run from a private repository.

@@ -4,7 +4,7 @@ Shared library of the `netray` binary (used by `netray-web`, `netray-engine`, th
 and `crates/netray`). Workspace rules, verbs and the gate: the root [`CLAUDE.md`](../../CLAUDE.md);
 they are not repeated here. Module table: [`README.md`](README.md).
 
-- Edition 2024 (workspace), `rust-version = "1.88"` in `Cargo.toml`; the toolchain is `stable`
+- Edition 2024 (workspace), `rust-version = "1.88"` in `Cargo.toml`; the toolchain is `1.99.1`
   (`rust-toolchain.toml`). CI is the root `.github/workflows/` (`ci.yml`, `release.yml`).
 - Version comes from `[workspace.package]`; the crate has no release of its own, changes go to
   the root `CHANGELOG.md`.
