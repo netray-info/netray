@@ -12,6 +12,8 @@ const out = [];
 const bad = m => out.push("FAIL: " + m);
 const rd = f => fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")) : null;
 
+const happyDomOk = v => /^\^21(\.|$)/.test(v || "");
+
 const root = rd("package.json");
 if (!(root.workspaces || []).includes("crates/web/islands")) bad("root package.json workspaces lacks crates/web/islands");
 
@@ -26,7 +28,9 @@ else {
   if (!/^\d+\.\d+\.\d+$/.test(dev.esbuild || "")) bad(`esbuild must be one exact version, got ${dev.esbuild}`);
   if (!/^\^6(\.|$)/.test(dev.typescript || "")) bad(`typescript must be ^6, got ${dev.typescript}`);
   if (!/^\^4(\.|$)/.test(dev.vitest || "")) bad(`vitest must be ^4, got ${dev.vitest}`);
-  if (!/^\^20(\.|$)/.test(dev["happy-dom"] || "")) bad(`happy-dom must be ^20, got ${dev["happy-dom"]}`);
+  if (!happyDomOk(dev["happy-dom"])) bad(`happy-dom must be ^21, got ${dev["happy-dom"]}`);
+  const old = { devDependencies: { "happy-dom": "^20.14.5" } };
+  if (happyDomOk(old.devDependencies["happy-dom"])) bad("happy-dom check accepts the fixture declaring ^20.14.5");
   const s = p.scripts || {};
   const b = s.build || "";
   if (!(/esbuild/.test(b) && /src\/main\.ts/.test(b) && /dist\/islands\.js/.test(b) && /--bundle/.test(b) && /--minify/.test(b) && /--format=esm/.test(b)))

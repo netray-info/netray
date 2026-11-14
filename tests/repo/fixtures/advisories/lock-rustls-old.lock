@@ -1,0 +1,24 @@
+[[package]]
+name = "rustls"
+version = "0.23.45"
+
+[[package]]
+name = "rustls-webpki"
+version = "0.103.16"
+
+[[package]]
+name = "webpki-roots"
+version = "1.0.10"
+
+[[package]]
+name = "webpki-root-certs"
+version = "1.0.10"
+
+[[package]]
+name = "tokio"
+version = "1.53.3"
+
+[[package]]
+name = "rustix"
+version = "1.1.6"
+

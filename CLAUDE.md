@@ -45,6 +45,7 @@ All verbs live in the root `justfile` (`just --list`); no crate has its own `jus
 - The gate's clippy runs without `--all-targets`; adding it surfaces old test-code lints the gate never sees.
 - `tests/repo/*` read `git ls-files`: stage new and deleted files first. `start_bg` (`tests/repo/lib/netray.sh`) never in a subshell.
 - A repo check over Cargo dependencies reads `cargo metadata`, never the TOML text. A purity guard is an allowlist, never a blocklist.
+- A frontend dev-dependency major bump also moves its pin in `tests/repo/test_islands_package.sh` (protected: `ADLC-Test-Change`).
 - `tests/repo/test_workflows.sh` checks shape only; a workflow change is verified by its first CI run or release tag.
 - A freshly built binary (a cargo example) gets no network locally; replay its bytes from `python3` to check a live host.
 

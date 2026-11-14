@@ -1,0 +1,16 @@
+# Fixture for test_advisories.sh: four IDs each with a comment, but the
+# RUSTSEC-2026-0459 comment does not name its dependency path.
+[advisories]
+ignore = [
+    # utoipa pulls an unmaintained crate.
+    "RUSTSEC-2024-0436",
+
+    # A vulnerable database driver; no fix released yet.
+    "RUSTSEC-2026-0459",
+
+    # askama template engine advisory, not reachable.
+    "RUSTSEC-2026-0374",
+
+    # uaparser depends on the unmaintained serde_yaml.
+    "RUSTSEC-2024-0449",
+]

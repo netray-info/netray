@@ -1,0 +1,10 @@
+{
+  "name": "fixture",
+  "lockfileVersion": 3,
+  "packages": {
+    "": { "name": "fixture" },
+    "node_modules/happy-dom": { "version": "21.0.4" },
+    "node_modules/vitest": { "version": "4.1.12" },
+    "node_modules/@vitest/mocker": { "version": "4.1.12" }
+  }
+}
