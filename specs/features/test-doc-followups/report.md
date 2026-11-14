@@ -41,3 +41,7 @@ $ bash tests/repo/test_toolchain_pin.sh ""          -> FAIL: root '' is not a di
 $ bash tests/repo/test_toolchain_pin_selftest.sh   -> PASS: toolchain_pin check behaves (rc=0)
 mutation: awk `if (in_b) exit` removed -> FAIL: env_other_stage: expected failure for ENV in another stage only
 ```
+
+### Checks to build
+
+- A `tests/repo/*_selftest.sh` never copies the `tests/repo/test_*.sh` it exercises into its fixture repos; it runs the real script with a root argument (a copy hid the missing root override of release-toolchain-pin R5). Pattern: `cp` of a `tests/repo/test_*.sh` path in a selftest; check would live in `tests/repo/test_selftests_run_real_script.sh`.
